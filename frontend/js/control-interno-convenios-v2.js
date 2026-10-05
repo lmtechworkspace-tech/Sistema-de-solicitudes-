@@ -302,6 +302,10 @@
   // corre en el servidor; esta pantalla pregunta por su avance cada 2 s y, al
   // terminar, sus cuotas pasan por la misma revisión de abajo antes de aplicar.
   var robot_ = { trabajo: null, estado: '', paso: '', inicio: 0, resultado: null, cliente: '', rut: '' };
+  // Por lote (2026-10-05): varios clientes seguidos. Las claves viven solo en esta
+  // pestaña mientras se escriben; al enviar se borran y el servidor se las pasa al PC.
+  var modo_ = 'uno';
+  var lote_ = { filas: [{ cliente: '', rut: '' }], claves: [''], id: null, estado: null, aplicados: {}, actual: null };
   // El robot corre en un PC de la oficina (la TGR rechaza al servidor): ¿está conectado?
   var oficina_ = null, oficinaT_ = 0;
   function consultarOficina(repintar) {
@@ -399,6 +403,12 @@
     }, 2000);
   }
   function robotHtml() {
+    var ocupadoLote = !!(lote_.id && !(lote_.estado && lote_.estado.terminado));
+    var selector = '<div class="cv-modo">' + U.segmento([{ id: 'uno', texto: 'Un cliente' }, { id: 'varios', texto: 'Varios clientes' }], modo_, 'js-cv-modo') + '</div>';
+    if (modo_ === 'varios' || ocupadoLote) return oficinaHtml() + selector + loteHtml();
+    return selector + robotUnoHtml();
+  }
+  function robotUnoHtml() {
     var corriendo = robot_.estado === 'EN_CURSO', dis = corriendo ? ' disabled' : '';
     var r = robot_.resultado, estado = '';
     if (corriendo) estado = aviso('info', 'reloj', '<b>' + txt(robot_.paso || 'Trabajando') + '…</b> ' + Math.round((Date.now() - robot_.inicio) / 1000) + ' s. Puede tardar 1 a 2 minutos; no cierres esta pestaña.');
@@ -412,6 +422,148 @@
       U.campo('Clave Tributaria', '<input class="sx2-input js-cv-rob-clave" type="password" autocomplete="new-password" spellcheck="false"' + dis + '>') + '</div>' +
       U.boton({ texto: corriendo ? 'Revisando…' : 'Revisar en la TGR', icono: 'rayo', variante: 'primario', clase: 'js-cv-rob-ir', deshabilitado: corriendo }) + estado;
   }
+  // --- Varios clientes -----------------------------------------------------------------------
+  var ESTADO_LOTE = { EN_CURSO: ['En curso', 'info'], LISTO: ['Listo', 'ok'], DETENIDO: ['Se detuvo', 'critico'], VENCIDO: ['Sin datos', 'neutro'] };
+  function loteHtml() {
+    var max = (oficina_ && oficina_.lote_max) || 15;
+    var corriendo = !!(lote_.id && !(lote_.estado && lote_.estado.terminado));
+    var viejo = oficina_ && !oficina_.en_servidor && oficina_.conectado && !oficina_.lote
+      ? aviso('alerta', 'alerta', 'El programa del PC de la oficina es de una versión anterior: <b>reinícialo</b> (Ctrl+C y volver a abrirlo) para revisar varios clientes.') : '';
+    if (lote_.id) return viejo + loteProgresoHtml(corriendo);
+    var clientes = (lista_ && lista_.clientes) || [];
+    var filas = lote_.filas.map(function (fl, i) {
+      return '<tr data-i="' + i + '"><td>' + '<input class="sx2-input js-cv-lote-cliente" list="cv-dl-lote" value="' + U.esc(fl.cliente) + '" placeholder="Busca por nombre o RUT" autocomplete="off" aria-label="Cliente ' + (i + 1) + '"></td>' +
+        '<td><input class="sx2-input js-cv-lote-rut" value="' + U.esc(fl.rut) + '" placeholder="76123456-7" autocomplete="off" aria-label="RUT de ingreso ' + (i + 1) + '"></td>' +
+        '<td><input class="sx2-input js-cv-lote-clave" type="password" autocomplete="new-password" spellcheck="false" value="' + U.esc(lote_.claves[i] || '') + '" aria-label="Clave Tributaria ' + (i + 1) + '"></td>' +
+        '<td>' + U.boton({ soloIcono: true, icono: 'basura', titulo: 'Quitar la fila', variante: 'fantasma', sm: true, clase: 'js-cv-lote-quitar' }) + '</td></tr>';
+    }).join('');
+    var listas = lote_.filas.filter(function (fl) { return fl.rut && fl.rut.trim(); }).length;
+    return viejo + '<p class="sx2-tenue" style="margin:0 0 10px">Escribe el RUT y la Clave Tributaria de cada cliente. El robot los revisa <b>uno tras otro</b>, con una pausa de 20 segundos entre cada uno para no alertar a la TGR, y detiene el lote si la TGR bloquea o pide un CAPTCHA. <b>Las claves no se guardan</b>: se usan una vez y se borran.</p>' +
+      '<div class="sx2-tabla-wrap"><table class="sx2-tabla cv-lote"><thead><tr><th>Cliente</th><th>RUT de ingreso</th><th>Clave Tributaria</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
+      '<datalist id="cv-dl-lote">' + clientes.map(function (k) { return '<option value="' + U.esc(etiquetaCliente(k)) + '"></option>'; }).join('') + '</datalist>' +
+      '<div class="cv-lote__acc">' + U.boton({ texto: 'Agregar fila', icono: 'nueva', variante: 'fantasma', sm: true, clase: 'js-cv-lote-fila', deshabilitado: lote_.filas.length >= max }) +
+        U.boton({ texto: 'Agregar los clientes con convenio', icono: 'equipo', variante: 'fantasma', sm: true, clase: 'js-cv-lote-convenios' }) +
+        '<span style="flex:1"></span>' + U.boton({ texto: 'Revisar ' + (listas === 1 ? '1 cliente' : listas + ' clientes'), icono: 'rayo', variante: 'primario', clase: 'js-cv-lote-ir', deshabilitado: !listas }) + '</div>' +
+      '<p class="sx2-tenue" style="font-size:.8125rem;margin:6px 0 0">Hasta ' + max + ' clientes por lote. Con 10 clientes tarda unos 10 a 20 minutos: puedes seguir trabajando en otra pestaña.</p>';
+  }
+  function finLoteHtml(items) {
+    var conConv = items.filter(function (t) { return t.estado === 'LISTO' && t.resultado && t.resultado.convenios && t.resultado.convenios.length; }).length;
+    var sinRevisar = items.filter(function (t) { return t.estado !== 'LISTO'; }).length;
+    var partes = [];
+    if (conConv) partes.push(conConv === 1 ? '1 cliente trajo convenios: revísalo y aplícalo.' : conConv + ' clientes trajeron convenios: revisa y aplica cada uno.');
+    else partes.push('Ningún cliente trajo convenios para aplicar.');
+    if (sinRevisar) partes.push(sinRevisar === 1 ? '1 no se pudo revisar: mira dónde se detuvo.' : sinRevisar + ' no se pudieron revisar: mira dónde se detuvo cada uno.');
+    return aviso(sinRevisar && !conConv ? 'alerta' : 'ok', sinRevisar && !conConv ? 'alerta' : 'check', '<b>Lote terminado.</b> ' + partes.join(' '));
+  }
+  function loteProgresoHtml(corriendo) {
+    var e = lote_.estado, items = e ? e.items : [];
+    var listos = items.filter(function (t) { return t.estado !== 'EN_CURSO'; }).length;
+    var cab = corriendo
+      ? aviso('info', 'reloj', '<b>Revisando ' + (items.length || '') + ' clientes…</b> ' + listos + ' de ' + items.length + ' terminados. No cierres esta pestaña; al terminar cada uno aparece aquí para revisarlo y aplicarlo.')
+      : finLoteHtml(items);
+    var filas = items.map(function (t, i) {
+      var est = ESTADO_LOTE[t.estado] || ESTADO_LOTE.VENCIDO;
+      var r = t.resultado || {};
+      var nombre = t.cliente ? t.cliente.nombre : 'RUT ' + t.rut;
+      var sub = t.cliente ? t.rut || '' : 'no está en el catálogo';
+      var detalle = t.estado === 'EN_CURSO' ? txt(t.paso || '') : txt(r.mensaje || '');
+      var accion = '';
+      if (t.estado === 'LISTO' && r.convenios && r.convenios.length) accion = lote_.aplicados[i] ? U.badge('Aplicado', 'ok') : U.boton({ texto: 'Revisar y aplicar', icono: 'lupa', sm: true, variante: lote_.actual === i ? 'primario' : 'secundario', clase: 'js-cv-lote-aplicar', datos: { i: i } });
+      return '<li class="cv-lote__it"><div><strong>' + txt(nombre) + '</strong> <span class="sx2-tenue">' + txt(sub) + '</span><br><span class="cv-lote__det">' + detalle + '</span>' +
+        (t.estado === 'DETENIDO' ? diagnosticoHtml(r.diagnostico) : '') + '</div><div class="cv-lote__der">' + U.badge(est[0], est[1]) + accion + '</div></li>';
+    }).join('');
+    return cab + '<ol class="cv-lote__lista">' + filas + '</ol>' + (corriendo ? '' : U.boton({ texto: 'Nuevo lote', icono: 'nueva', sm: true, clase: 'js-cv-lote-nuevo' }));
+  }
+  function leerLoteDom() {
+    var raiz = x_.raiz();
+    raiz.querySelectorAll('.cv-lote tbody tr').forEach(function (tr) {
+      var i = Number(tr.getAttribute('data-i'));
+      if (!lote_.filas[i]) return;
+      lote_.filas[i].cliente = tr.querySelector('.js-cv-lote-cliente').value.trim();
+      lote_.filas[i].rut = tr.querySelector('.js-cv-lote-rut').value.trim();
+      lote_.claves[i] = tr.querySelector('.js-cv-lote-clave').value;
+    });
+  }
+  function agregarConvenios() {
+    leerLoteDom();
+    var max = (oficina_ && oficina_.lote_max) || 15;
+    var ya = {};
+    lote_.filas.forEach(function (fl) { var c = clientePorEtiqueta(fl.cliente); if (c) ya[c.cliente_id] = true; });
+    // Quita las filas vacías y agrega cada cliente con un convenio vigente (una vez).
+    var keep = [], claves = [];
+    lote_.filas.forEach(function (fl, i) { if (fl.cliente || fl.rut || lote_.claves[i]) { keep.push(fl); claves.push(lote_.claves[i] || ''); } });
+    var n = 0;
+    ((lista_ && lista_.convenios) || []).filter(function (c) { return c.estado !== 'TERMINADO' && c.estado !== 'CADUCADO' && c.cliente_id; }).forEach(function (c) {
+      if (ya[c.cliente_id] || keep.length >= max) return;
+      var k = ((lista_ && lista_.clientes) || []).filter(function (x) { return x.cliente_id === c.cliente_id; })[0];
+      if (!k) return;
+      ya[c.cliente_id] = true;
+      keep.push({ cliente: etiquetaCliente(k), rut: k.rut ? String(k.rut).replace(/\./g, '') : '' });
+      claves.push('');
+      n++;
+    });
+    if (!keep.length) { keep.push({ cliente: '', rut: '' }); claves.push(''); }
+    lote_.filas = keep; lote_.claves = claves;
+    PY.aviso(n ? 'Se agregaron ' + n + (n === 1 ? ' cliente.' : ' clientes.') + ' Escribe la clave de cada uno.' : 'No hay más clientes con convenio para agregar.', n ? 'exito' : 'info');
+    pintarRecibir();
+  }
+  function iniciarLote() {
+    leerLoteDom();
+    var clientes = [];
+    for (var i = 0; i < lote_.filas.length; i++) {
+      var fl = lote_.filas[i], clave = lote_.claves[i] || '';
+      if (!fl.rut && !fl.cliente && !clave) continue;
+      if (!fl.rut) { PY.aviso('Fila ' + (i + 1) + ': escribe el RUT con que el cliente entra al SII.', 'error'); return; }
+      if (!clave) { PY.aviso('Fila ' + (i + 1) + ': escribe la Clave Tributaria.', 'error'); return; }
+      var c = clientePorEtiqueta(fl.cliente);
+      clientes.push({ cliente_id: c ? c.cliente_id : '', rut: fl.rut, clave: clave });
+    }
+    if (!clientes.length) { PY.aviso('Agrega al menos un cliente.', 'error'); return; }
+    // Desde aquí las claves ya no están en la pantalla.
+    lote_.claves = lote_.filas.map(function () { return ''; });
+    x_.raiz().querySelectorAll('.js-cv-lote-clave').forEach(function (inp) { inp.value = ''; });
+    api('robotTgrLote', { clientes: clientes }).then(function (r) {
+      clientes.forEach(function (c) { c.clave = ''; });
+      if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo iniciar el lote.', 'error'); consultarOficina(true); return; }
+      lote_.id = r.data.lote_id; lote_.estado = null; lote_.aplicados = {}; lote_.actual = null;
+      pintarRecibir();
+      seguirLote();
+    });
+  }
+  function seguirLote() {
+    var id = lote_.id;
+    setTimeout(function () {
+      if (!id || lote_.id !== id) return;
+      api('robotTgrEstadoLote', { lote_id: id }).then(function (r) {
+        if (lote_.id !== id) return;
+        if (!r || !r.ok) { PY.aviso((r && r.message) || 'Se perdió el contacto con el lote.', 'error'); lote_.estado = lote_.estado ? Object.assign(lote_.estado, { terminado: true }) : { terminado: true, items: [] }; repintarSiRecibir(); return; }
+        lote_.estado = r.data;
+        // No se repinta mientras se revisa un cliente del lote (para no perder lo que se está mirando).
+        if (!recibido_ || rec_.hecho) repintarSiRecibir(); else actualizarProgreso();
+        if (!r.data.terminado) seguirLote(); else consultarOficina(false);
+      });
+    }, 3000);
+  }
+  /** Repinta solo la lista del lote (sin tocar la revisión que está abierta abajo). */
+  function actualizarProgreso() {
+    var card = x_.raiz().querySelector('.cv-robot');
+    var lst = card && card.querySelector('.cv-lote__lista');
+    if (!lst) return;
+    var tmp = document.createElement('div');
+    tmp.innerHTML = loteProgresoHtml(!(lote_.estado && lote_.estado.terminado));
+    var nueva = tmp.querySelector('.cv-lote__lista');
+    if (nueva) lst.replaceWith(nueva);
+  }
+  function revisarDelLote(i) {
+    var t = lote_.estado && lote_.estado.items[i];
+    if (!t || !t.resultado || !t.resultado.texto) return;
+    var k = t.cliente ? ((lista_ && lista_.clientes) || []).filter(function (x) { return x.cliente_id === t.cliente.cliente_id; })[0] : null;
+    lote_.actual = i;
+    recibido_ = { texto: t.resultado.texto, pagina: 'el robot TGR (' + (t.cliente ? t.cliente.nombre : 'RUT ' + t.rut) + ')', t: Date.now(), fuente: 'tgr', origen: 'robot' };
+    rec_ = { prev: null, crear: {}, asignar: {}, cliente: k ? etiquetaCliente(k) : '', error: '', hecho: null };
+    revisarRecibido();
+  }
+
   function diagnosticoHtml(dg) {
     if (!dg || (!dg.captura && !dg.url)) return '';
     return '<details class="cv-diag"><summary>Ver dónde se detuvo el robot</summary>' + (dg.url ? '<p class="sx2-tenue">' + txt(dg.url) + '</p>' : '') +
@@ -503,6 +655,7 @@
       if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo aplicar.', 'error'); return; }
       rec_.hecho = r.data;
       rec_.prev = r.data;
+      if (lote_.actual !== null) { lote_.aplicados[lote_.actual] = true; lote_.actual = null; }
       PY.aviso(r.data.message, (r.data.errores || []).length ? 'info' : 'exito');
       api('listarConveniosTGR', {}).then(function (l) { if (l && l.ok) lista_ = l.data; pintarRecibir(); });
     });
@@ -516,6 +669,19 @@
     if (t.closest('.js-cv-recargar')) { lista_ = null; vistaLista(); return; }
     if (t.closest('.js-cv-recibir')) { x_.irAItem('conv:tgr'); return; }
     if (t.closest('.js-cv-rob-ir')) { iniciarRobot(); return; }
+    if ((b = t.closest('.js-cv-modo'))) { if (modo_ === 'varios') leerLoteDom(); modo_ = b.getAttribute('data-id'); pintarRecibir(); return; }
+    if (t.closest('.js-cv-lote-fila')) { leerLoteDom(); lote_.filas.push({ cliente: '', rut: '' }); lote_.claves.push(''); pintarRecibir(); return; }
+    if ((b = t.closest('.js-cv-lote-quitar'))) {
+      leerLoteDom();
+      var iq = Number(b.closest('tr').getAttribute('data-i'));
+      lote_.filas.splice(iq, 1); lote_.claves.splice(iq, 1);
+      if (!lote_.filas.length) { lote_.filas.push({ cliente: '', rut: '' }); lote_.claves.push(''); }
+      pintarRecibir(); return;
+    }
+    if (t.closest('.js-cv-lote-convenios')) { agregarConvenios(); return; }
+    if (t.closest('.js-cv-lote-ir')) { iniciarLote(); return; }
+    if ((b = t.closest('.js-cv-lote-aplicar'))) { revisarDelLote(Number(b.getAttribute('data-i'))); return; }
+    if (t.closest('.js-cv-lote-nuevo')) { lote_ = { filas: [{ cliente: '', rut: '' }], claves: [''], id: null, estado: null, aplicados: {}, actual: null }; pintarRecibir(); return; }
     if (t.closest('.js-cv-oficina')) { abrirOficina(); return; }
     if (t.closest('.js-cv-marcador')) { ev.preventDefault(); PY.aviso('Arrástralo a la barra de marcadores; se usa en la página de la TGR.', 'info'); return; }
     if (t.closest('.js-cv-volver-lista')) { x_.irAItem('conv'); return; }
@@ -566,6 +732,14 @@
       return;
     }
     if (t.classList.contains('js-cv-rob-rut')) { robot_.rut = t.value.trim(); return; }
+    if (t.classList.contains('js-cv-lote-cliente')) {
+      // Al elegir el cliente, su RUT del catálogo.
+      var cl = clientePorEtiqueta(t.value.trim()), tr = t.closest('tr'), ir = tr && tr.querySelector('.js-cv-lote-rut');
+      if (cl && cl.rut && ir && !ir.value.trim()) ir.value = String(cl.rut).replace(/\./g, '');
+      leerLoteDom();
+      return;
+    }
+    if (t.classList.contains('js-cv-lote-rut') || t.classList.contains('js-cv-lote-clave')) { leerLoteDom(); var bi = x_.raiz().querySelector('.js-cv-lote-ir'); if (bi) { var n = lote_.filas.filter(function (fl) { return fl.rut; }).length; bi.disabled = !n; bi.lastChild.textContent = 'Revisar ' + (n === 1 ? '1 cliente' : n + ' clientes'); } return; }
     if (t.classList.contains('js-cv-rec-asignar')) {
       var v = t.value.trim(), k = t.getAttribute('data-k');
       var cv = ((lista_ && lista_.convenios) || []).filter(function (x) { return etiquetaConvenio(x) === v; })[0];

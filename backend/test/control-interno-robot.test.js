@@ -166,6 +166,77 @@ test('robot de la oficina: llave como hash, toma la revisión, avisa su avance y
   RB._reiniciar();
 });
 
+test('por lote: uno tras otro, la clave no queda y un CAPTCHA detiene el resto', async () => {
+  const db = crear();
+  agregarFila_(db, 'CAT_CLIENTES', { cliente_id: 'CLI-2', razon_social: 'Inversiones Provial Ltda', rut: '77.111.222-3', codigo_cliente: 'HP-002', contacto: '', correo: '', telefono: '', representante_legal: '', direccion: '', estado: 'ACTIVO', bloqueo: '', activo: true });
+  RB._reiniciar();
+  const vistos = [];
+  RB._usar(async (datos) => {
+    vistos.push(datos.rut + ':' + datos.clave);
+    if (datos.rut === '77111222-3') return { estado: 'CAPTCHA', mensaje: 'La TGR pidió un CAPTCHA.', convenios: [] };
+    return { estado: 'OK', mensaje: '1 convenio leído.', convenios: [{ resolucion: '60225', cuotas: CUOTAS }] };
+  });
+  try {
+    // Validaciones: hasta 15, RUT y clave en cada fila, sin repetir.
+    assert.match(RB.revisarLote(db, { clientes: [] }, FRANCISCA).message, /al menos un cliente/);
+    assert.match(RB.revisarLote(db, { clientes: Array.from({ length: 16 }, () => ({ rut: '76123456-7', clave: 'x' })) }, FRANCISCA).message, /Hasta 15/);
+    const malo = { clientes: [{ rut: '76123456-7', clave: CLAVE }, { rut: '76123456-7', clave: 'otra' }] };
+    assert.match(RB.revisarLote(db, malo, FRANCISCA).message, /ya está en el lote/);
+    assert.equal(malo.clientes[0].clave, '', 'un rechazo también borra las claves de la petición');
+    assert.ok(rechazado(RB.revisarLote(db, { clientes: [{ rut: '76123456-7', clave: CLAVE }] }, LECTORA)), 'solo lectura no lo usa');
+
+    const data = { clientes: [{ cliente_id: 'CLI-1', rut: '76.123.456-7', clave: CLAVE }, { cliente_id: 'CLI-2', rut: '77111222-3', clave: 'Clave-Dos' }, { rut: '78999888-1', clave: 'Clave-Tres' }] };
+    const r = RB.revisarLote(db, data, FRANCISCA);
+    assert.equal(r.ok, true, r.message);
+    assert.ok(data.clientes.every((c) => c.clave === ''), 'la petición ya no retiene ninguna clave');
+    assert.equal(RB.revisar(db, { rut: '76123456-7', clave: 'x' }, FRANCISCA).ocupado, true, 'mientras corre el lote, ocupado');
+    await RB._esperarLote(r.lote_id);
+    assert.deepEqual(vistos, ['76123456-7:' + CLAVE, '77111222-3:Clave-Dos'], 'en orden; el tercero no se intentó');
+    const e = RB.estadoLote(db, { lote_id: r.lote_id }, FRANCISCA);
+    assert.equal(e.terminado, true);
+    assert.deepEqual(e.items.map((x) => [x.rut, x.estado, x.resultado.estado]), [['76123456-7', 'LISTO', 'OK'], ['77111222-3', 'DETENIDO', 'CAPTCHA'], ['78999888-1', 'DETENIDO', 'DETENIDO']]);
+    assert.match(e.items[2].resultado.mensaje, /el lote se detuvo porque la TGR pidió un CAPTCHA/);
+    assert.match(e.items[0].resultado.texto, /Folio N°: 60225/);
+    assert.ok(!JSON.stringify(e).includes(CLAVE) && !JSON.stringify(e).includes('Clave-Dos'), 'ninguna clave en el estado');
+    const hist = CI.consultar_(db, 'CI_HISTORIAL', { registro_id: 'ROBOT_TGR' }).map((h) => h.detalle).join(' | ');
+    assert.ok(!hist.includes(CLAVE) && !hist.includes('Clave-Dos'), 'ni en el historial');
+    assert.equal(RB.general(db, {}, FRANCISCA).ocupado, false, 'al terminar, libre');
+    assert.ok(rechazado(RB.estadoLote(db, { lote_id: r.lote_id }, conModulo('otra@homepymes.cl'))), 'el lote ajeno no se ve');
+  } finally { RB._usar(); RB._reiniciar(); }
+});
+
+test('por lote con el robot de la oficina: solo lo toma un programa que sabe de lotes', async () => {
+  const db = crear();
+  RB._reiniciar();
+  const c = RB.crearAgente(db, { nombre: 'PC Luis' }, ADM);
+  // Un programa antiguo (sin capacidades) está conectado: el lote no se inicia y se explica por qué.
+  const viejo = RB.agenteTomar(db, { agente_token: c.llave });
+  assert.equal(RB.general(db, {}, FRANCISCA).lote, false);
+  const r0 = RB.revisarLote(db, { clientes: [{ rut: '76123456-7', clave: CLAVE }] }, FRANCISCA);
+  assert.equal(r0.sin_lote, true);
+  RB._reiniciar();
+  const c2 = RB.crearAgente(db, { nombre: 'PC Luis' }, ADM);
+  const espera = RB.agenteTomar(db, { agente_token: c2.llave, capacidades: 'lote' });
+  assert.equal(RB.general(db, {}, FRANCISCA).lote, true);
+  const r = RB.revisarLote(db, { clientes: [{ cliente_id: 'CLI-1', rut: '76123456-7', clave: CLAVE }, { rut: '78999888-1', clave: 'Clave-Tres' }] }, FRANCISCA);
+  assert.equal(r.ok, true, r.message);
+  const tomado = await espera;
+  assert.deepEqual(tomado.lote.trabajos.map((t) => [t.rut, t.clave]), [['76123456-7', CLAVE], ['78999888-1', 'Clave-Tres']]);
+  assert.equal(tomado.lote.pausa_ms, 20000);
+  let e = RB.estadoLote(db, { lote_id: r.lote_id }, FRANCISCA);
+  assert.ok(!JSON.stringify(e).includes(CLAVE), 'entregado el lote, el servidor ya no tiene claves');
+  assert.match(e.items[1].paso, /En cola \(2 de 2\)/);
+  const [t1, t2] = tomado.lote.trabajos;
+  assert.equal(RB.agenteEntregar(db, { agente_token: c2.llave, trabajo_id: t1.trabajo_id, resultado: { estado: 'OK', mensaje: '1 convenio leído.', convenios: [{ resolucion: '60225', cuotas: CUOTAS }] } }).ok, true);
+  assert.equal(RB.general(db, {}, FRANCISCA).ocupado, true, 'falta uno: sigue ocupado');
+  assert.equal(RB.agenteEntregar(db, { agente_token: c2.llave, trabajo_id: t2.trabajo_id, resultado: { estado: 'OK', mensaje: 'El cliente no tiene convenios vigentes en la TGR.', convenios: [] } }).ok, true);
+  e = RB.estadoLote(db, { lote_id: r.lote_id }, FRANCISCA);
+  assert.deepEqual([e.terminado, e.items[0].estado, e.items[1].estado], [true, 'LISTO', 'LISTO']);
+  assert.equal(RB.general(db, {}, FRANCISCA).ocupado, false);
+  RB._reiniciar();
+  void viejo;
+});
+
 // --- De punta a punta, con el navegador real y un sitio de prueba ---------------------------
 const RUTA = PdfChromium.rutaChrome();
 const sinNavegador = !RUTA || process.env.CI ? 'sin navegador local (o en CI)' : false;

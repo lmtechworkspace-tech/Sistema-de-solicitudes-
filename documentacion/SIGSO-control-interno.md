@@ -231,6 +231,22 @@ oficina (`backend/herramientas/robot-oficina/agente.js`, ver su LEEME).
   ver el navegador en el piloto. Probado de punta a punta en local (servidor +
   TGR falsa + agente real).
 
+#### Revisión por lote y arranque con Windows (2026-10-05)
+
+- **Varios clientes** (`robotTgrLote` / `robotTgrEstadoLote`): hasta 15 filas
+  (RUT + clave, sin RUT repetido). Se entrega el lote completo a un agente que
+  anuncia `capacidades: 'lote'` (uno antiguo no lo recibe: SIGSO pide
+  reiniciarlo). El agente los revisa uno tras otro con 20 s de pausa; ante
+  CAPTCHA o bloqueo detiene el resto ("No se revisó…"). Las claves se borran de
+  la petición incluso si se rechaza, y del servidor apenas el agente toma el
+  lote. Mientras corre, el robot queda ocupado para revisiones sueltas. Cada
+  resultado se revisa y aplica a mano, como el de un cliente.
+- **Arranque con Windows**: `agente.js instalar-inicio` deja `SIGSO Robot TGR.vbs`
+  en la carpeta Inicio del usuario; abre sin ventana un `robot-oficina.cmd` que
+  relanza el agente a los 30 s si se cae. Candado `robot-oficina.lock` (una sola
+  instancia), registro `robot-oficina.log` (1 MB, sin claves). `estado` y
+  `quitar-inicio` para revisar y deshacer. Sin permisos de administrador.
+
 ### Lo mismo para el SII: F29 y Registro de Compras y Ventas (2026-10-01)
 
 Un solo marcador **Enviar a SIGSO** sirve para la TGR y el SII: abre (o reutiliza)

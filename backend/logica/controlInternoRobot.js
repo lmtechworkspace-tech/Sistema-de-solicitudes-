@@ -22,6 +22,13 @@
  * va a la base, al historial ni a logs. El agente la usa una vez y la suelta.
  *
  * Un robot a la vez para todo SIGSO. Los trabajos viven en memoria 30 min.
+ *
+ * POR LOTE (2026-10-05): la persona escribe varios clientes (RUT y clave de
+ * cada uno) y el PC los recorre uno tras otro, con una pausa entre cada uno
+ * para no parecer un ataque. El lote completo se le entrega al PC de una vez:
+ * las claves salen de la memoria del servidor en ese momento. Si la TGR
+ * bloquea o pide CAPTCHA, el PC detiene el resto del lote. Solo lo toma un
+ * programa del PC que diga que sabe trabajar por lote (uno antiguo no).
  */
 
 const crypto = require('node:crypto');
@@ -35,6 +42,8 @@ const ESPERA_AGENTE_MS = 20 * 1000;      // la consulta del agente queda abierta
 const CONECTADO_MS = 45 * 1000;          // sin señal en este tiempo = desconectado
 const TOMA_MAX_MS = 25 * 1000;           // si nadie toma la revisión, se cancela
 const TRABAJO_MAX_MS = 5 * 60 * 1000;    // si el agente no entrega, se da por perdida
+const LOTE_MAX = 15;                      // clientes por lote
+const PAUSA_LOTE_MS = 20 * 1000;          // entre un cliente y el siguiente (no saturar la TGR)
 
 const trabajos_ = new Map();
 let enCurso_ = null;
@@ -42,6 +51,9 @@ let revisor_ = null;                      // inyectado en tests
 const pendientes_ = [];                   // trabajos esperando agente
 const esperando_ = [];                    // consultas de agentes abiertas
 const senales_ = new Map();               // agente_id -> último contacto (ms)
+const capacidades_ = new Map();           // agente_id -> ['lote'] (lo que dice saber su programa)
+const lotes_ = new Map();                 // lote_id -> { lote_id, email, trabajos: [id], pendiente, inicio }
+const lotesPendientes_ = [];              // lotes esperando un PC que sepa trabajar por lote
 
 function email_(ctx) { return String((ctx && ctx.email) || '').toLowerCase(); }
 function permiso_(db, ctx, que) { return CI.matrizConPermiso_(db, ctx, 'CONVENIOS', que); }
@@ -71,6 +83,10 @@ function terminar_(db, t, r, contexto) {
   t.estado = ok ? 'LISTO' : 'DETENIDO';
   t.fin = new Date().toISOString();
   if (enCurso_ === t.trabajo_id) enCurso_ = null;
+  if (t.lote_id && enCurso_ === 'lote:' + t.lote_id) {
+    const l = lotes_.get(t.lote_id);
+    if (!l || l.trabajos.every((id) => { const x = trabajos_.get(id); return !x || x.estado !== 'EN_CURSO'; })) enCurso_ = null;
+  }
   // Constancia de uso: quién revisó a qué cliente, desde dónde y cómo terminó (nunca la clave).
   try {
     CI.historial_(db, 'ROBOT_TGR', 'REVISION', (t.cliente ? t.cliente.nombre + ' · ' : '') + 'RUT ' + t.rut + (t.agente ? ' · ' + t.agente : '') + ' · ' + t.resultado.estado +
@@ -158,6 +174,111 @@ function tomar_(t, agente) {
   t.paso = 'El robot de la oficina tomó la revisión';
 }
 
+function soportaLote_(agenteId) { return (capacidades_.get(agenteId) || []).includes('lote'); }
+function cancelarLote_(db, l, estadoFin, mensaje) {
+  l.pendiente = false;
+  l.trabajos.forEach((id) => { const t = trabajos_.get(id); if (t && t.estado === 'EN_CURSO') { t.clave = ''; terminar_(db, t, { estado: estadoFin, mensaje }, { email: t.email }); if (t._fin) t._fin(); } });
+}
+function paraAgenteLote_(l) {
+  return { lote_id: l.lote_id, pausa_ms: PAUSA_LOTE_MS, trabajos: l.trabajos.map((id) => { const t = trabajos_.get(id); return { trabajo_id: id, rut: t.rut, clave: t.clave }; }) };
+}
+function tomarLote_(l, agente) {
+  l.pendiente = false;
+  l.trabajos.forEach((id, i) => { const t = trabajos_.get(id); tomar_(t, agente); t.paso = i ? 'En cola (' + (i + 1) + ' de ' + l.trabajos.length + ')' : 'El robot de la oficina tomó el lote'; });
+}
+function soltarClavesLote_(l) { l.trabajos.forEach((id) => { const t = trabajos_.get(id); if (t) t.clave = ''; }); }
+
+/**
+ * Revisión por lote. data: { clientes: [{ cliente_id?, rut, clave }] } (hasta 15).
+ * Mismas reglas que una revisión: la clave no se guarda; el lote entero se le
+ * entrega al PC y desde ese momento el servidor no tiene ninguna clave.
+ */
+function revisarLote(db, data, contexto) {
+  const x = permiso_(db, contexto, 'registra');
+  if (x.error) return x.error;
+  const lista = Array.isArray(data && data.clientes) ? data.clientes : [];
+  const borrar = () => lista.forEach((c) => { if (c) c.clave = ''; });
+  if (!lista.length) return { ok: false, message: 'Agrega al menos un cliente.' };
+  if (lista.length > LOTE_MAX) { borrar(); return { ok: false, message: 'Hasta ' + LOTE_MAX + ' clientes por lote.' }; }
+  const catalogo = CI.clientes_(db);
+  const items = [];
+  for (let i = 0; i < lista.length; i++) {
+    const c = lista[i] || {};
+    const rut = Robot.rutFormulario_(c.rut);
+    if (!rut) { borrar(); return { ok: false, fila: i, message: 'Fila ' + (i + 1) + ': escribe el RUT con que el cliente entra al SII.' }; }
+    if (typeof c.clave !== 'string' || !c.clave || c.clave.length > 64) { borrar(); return { ok: false, fila: i, message: 'Fila ' + (i + 1) + ': escribe la Clave Tributaria.' }; }
+    let cliente = null;
+    if (c.cliente_id) {
+      const k = catalogo.find((y) => y.cliente_id === String(c.cliente_id));
+      if (!k) { borrar(); return { ok: false, fila: i, message: 'Fila ' + (i + 1) + ': el cliente no está en el catálogo.' }; }
+      cliente = { cliente_id: k.cliente_id, nombre: k.nombre, rut: k.rut };
+    }
+    if (items.some((y) => y.rut === rut)) { borrar(); return { ok: false, fila: i, message: 'Fila ' + (i + 1) + ': ese RUT ya está en el lote.' }; }
+    items.push({ rut, clave: c.clave, cliente });
+  }
+  if (enCurso_) { borrar(); return { ok: false, ocupado: true, message: 'El robot está revisando otro cliente o lote. Espera que termine y vuelve a intentar.' }; }
+  const con = conectados_(db);
+  if (!enServidor_() && !con.length) { borrar(); return { ok: false, sin_agente: true, message: 'El robot de la oficina no está conectado: enciende el programa en el PC de la oficina.' }; }
+  if (!enServidor_() && !con.some((a) => soportaLote_(a.agente_id))) { borrar(); return { ok: false, sin_lote: true, message: 'El programa del PC de la oficina es de una versión anterior: reinícialo (Ctrl+C y volver a abrirlo) para revisar varios clientes.' }; }
+
+  const lote = { lote_id: crypto.randomUUID(), email: email_(contexto), trabajos: [], pendiente: true, inicio: new Date().toISOString() };
+  items.forEach((it, i) => {
+    const t = { trabajo_id: crypto.randomUUID(), lote_id: lote.lote_id, email: lote.email, cliente: it.cliente, rut: it.rut, estado: 'EN_CURSO', paso: 'Esperando al robot de la oficina', inicio: lote.inicio, fin: '', resultado: null, agente: '', clave: it.clave };
+    t.promesa = new Promise((fin) => { t._fin = fin; });
+    trabajos_.set(t.trabajo_id, t);
+    lote.trabajos.push(t.trabajo_id);
+    // Cada cliente tiene su propio plazo: el del lugar que ocupa en la fila.
+    const v = setTimeout(() => { if (t.estado === 'EN_CURSO') { t.clave = ''; terminar_(db, t, { estado: 'SIN_RESPUESTA', mensaje: 'El robot de la oficina no terminó esta revisión a tiempo.' }, contexto); t._fin(); } }, (i + 1) * (TRABAJO_MAX_MS + PAUSA_LOTE_MS));
+    if (v.unref) v.unref();
+  });
+  borrar();
+  items.forEach((it) => { it.clave = ''; });
+  lotes_.set(lote.lote_id, lote);
+  enCurso_ = 'lote:' + lote.lote_id;
+
+  if (enServidor_()) {
+    // Pruebas (o servidor con robot): se recorre aquí mismo, uno tras otro.
+    lote.pendiente = false;
+    const revisor = revisor_ || Robot.revisarCliente;
+    lote.promesa = lote.trabajos.reduce((p, id) => p.then(() => {
+      const t = trabajos_.get(id);
+      if (!t || t.estado !== 'EN_CURSO') return null;
+      const clave = t.clave; t.clave = '';
+      return Promise.resolve().then(() => revisor({ rut: t.rut, clave }, { alPaso: (q) => { t.paso = String(q || '').slice(0, 120); } }))
+        .then((r) => { terminar_(db, t, r, contexto); t._fin(); if (r && (r.estado === 'BLOQUEADO' || r.estado === 'CAPTCHA')) cancelarLote_(db, lote, 'DETENIDO', 'No se revisó: el lote se detuvo porque la TGR ' + (r.estado === 'CAPTCHA' ? 'pidió un CAPTCHA' : 'rechazó el acceso') + '.'); })
+        .catch((e) => { terminar_(db, t, { estado: 'ERROR', mensaje: 'El robot falló: ' + String((e && e.message) || e).slice(0, 200) }, contexto); t._fin(); });
+    }), Promise.resolve());
+    return { ok: true, lote_id: lote.lote_id, trabajos: lote.trabajos };
+  }
+  lotesPendientes_.push(lote.lote_id);
+  despacharLote_();
+  const v1 = setTimeout(() => { if (lote.pendiente) { const i = lotesPendientes_.indexOf(lote.lote_id); if (i !== -1) lotesPendientes_.splice(i, 1); cancelarLote_(db, lote, 'SIN_AGENTE', 'El robot de la oficina no tomó el lote: puede estar apagado o sin internet.'); } }, TOMA_MAX_MS);
+  if (v1.unref) v1.unref();
+  return { ok: true, lote_id: lote.lote_id, trabajos: lote.trabajos };
+}
+function despacharLote_() {
+  for (let i = 0; i < esperando_.length && lotesPendientes_.length; i++) {
+    const w = esperando_[i];
+    if (!soportaLote_(w.agente.agente_id)) continue;
+    const l = lotes_.get(lotesPendientes_.shift());
+    if (!l || !l.pendiente) { i--; continue; }
+    esperando_.splice(i, 1); i--;
+    tomarLote_(l, w.agente);
+    w.responder({ lote: paraAgenteLote_(l) });
+    soltarClavesLote_(l);
+  }
+}
+/** Avance de un lote: cada cliente con su estado (solo quien lo inició, o un ADM). */
+function estadoLote(db, data, contexto) {
+  const x = permiso_(db, contexto, 've');
+  if (x.error) return x.error;
+  const l = lotes_.get(String((data && data.lote_id) || ''));
+  if (!l) return { ok: false, message: 'Ese lote ya no está disponible (se guarda 30 minutos).' };
+  if (l.email !== email_(contexto) && !(contexto && contexto.rol === 'ADM')) return { _forbidden: true, message: 'Este lote lo inició otra persona.' };
+  const items = l.trabajos.map((id) => { const t = trabajos_.get(id); return t ? { trabajo_id: id, estado: t.estado, paso: t.paso, cliente: t.cliente, rut: t.rut, fin: t.fin, resultado: t.resultado } : { trabajo_id: id, estado: 'VENCIDO' }; });
+  return { ok: true, lote_id: l.lote_id, inicio: l.inicio, terminado: items.every((t) => t.estado !== 'EN_CURSO'), items };
+}
+
 /** Avance de una revisión (solo quien la inició, o un ADM). */
 function estado(db, data, contexto) {
   const x = permiso_(db, contexto, 've');
@@ -173,7 +294,8 @@ function general(db, data, contexto) {
   const x = permiso_(db, contexto, 've');
   if (x.error) return x.error;
   const con = conectados_(db);
-  return { ok: true, en_servidor: enServidor_(), conectado: con.length > 0, agentes_conectados: con.map((a) => a.nombre), ocupado: !!enCurso_ };
+  return { ok: true, en_servidor: enServidor_(), conectado: con.length > 0, agentes_conectados: con.map((a) => a.nombre), ocupado: !!enCurso_,
+    lote: enServidor_() || con.some((a) => soportaLote_(a.agente_id)), lote_max: LOTE_MAX };
 }
 
 // --- agentes (equipos de la oficina) -------------------------------------------------------
@@ -228,6 +350,17 @@ function agenteTomar(db, data) {
   const a = agentePorLlave_(db, data && data.agente_token);
   if (!a) return SIN_LLAVE;
   senal_(db, a);
+  capacidades_.set(a.agente_id, String((data && data.capacidades) || '').split(',').map((c) => c.trim()).filter(Boolean));
+  if (soportaLote_(a.agente_id)) {
+    while (lotesPendientes_.length) {
+      const l = lotes_.get(lotesPendientes_.shift());
+      if (!l || !l.pendiente) continue;
+      tomarLote_(l, a);
+      const r = { lote: paraAgenteLote_(l) };
+      soltarClavesLote_(l);
+      return r;
+    }
+  }
   const id = pendientes_.shift();
   const t = id ? trabajos_.get(id) : null;
   if (t && t.pendiente) {
@@ -239,6 +372,7 @@ function agenteTomar(db, data) {
   return new Promise((responder) => {
     const w = { agente: a, responder };
     esperando_.push(w);
+    despacharLote_();
     const v = setTimeout(() => { const i = esperando_.indexOf(w); if (i !== -1) { esperando_.splice(i, 1); senal_(db, a); responder({ trabajo: null }); } }, ESPERA_AGENTE_MS);
     if (v.unref) v.unref();
   });
@@ -268,6 +402,7 @@ function agenteEntregar(db, data) {
 // Solo para tests.
 function _usar(revisor) { revisor_ = revisor || null; }
 function _esperar(id) { const t = trabajos_.get(id); return t ? t.promesa : Promise.resolve(); }
-function _reiniciar() { trabajos_.clear(); enCurso_ = null; pendientes_.length = 0; esperando_.length = 0; senales_.clear(); revisor_ = null; }
+function _reiniciar() { trabajos_.clear(); enCurso_ = null; pendientes_.length = 0; esperando_.length = 0; senales_.clear(); revisor_ = null; capacidades_.clear(); lotes_.clear(); lotesPendientes_.length = 0; }
+function _esperarLote(id) { const l = lotes_.get(id); return l ? Promise.all(l.trabajos.map((t) => _esperar(t))).then(() => l.promesa) : Promise.resolve(); }
 
-module.exports = { revisar, estado, general, listarAgentes, crearAgente, revocarAgente, agenteTomar, agentePaso, agenteEntregar, _usar, _esperar, _reiniciar };
+module.exports = { revisarLote, estadoLote, _esperarLote, revisar, estado, general, listarAgentes, crearAgente, revocarAgente, agenteTomar, agentePaso, agenteEntregar, _usar, _esperar, _reiniciar };

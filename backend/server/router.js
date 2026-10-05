@@ -586,6 +586,9 @@ const ACCIONES = {
   recibirTGR: (db, data, contexto) => ControlInternoConvenios.recibirTGR(db, data, contexto),
   robotTgrRevisar: (db, data, contexto) => ControlInternoRobot.revisar(db, data, contexto),
   robotTgrEstado: (db, data, contexto) => ControlInternoRobot.estado(db, data, contexto),
+  // Revisión por lote (2026-10-05): varios clientes seguidos, las claves no se guardan.
+  robotTgrLote: (db, data, contexto) => ControlInternoRobot.revisarLote(db, data, contexto),
+  robotTgrEstadoLote: (db, data, contexto) => ControlInternoRobot.estadoLote(db, data, contexto),
   robotTgrGeneral: (db, data, contexto) => ControlInternoRobot.general(db, data, contexto),
   robotAgentes: (db, data, contexto) => ControlInternoRobot.listarAgentes(db, data, contexto),
   robotAgenteCrear: (db, data, contexto) => ControlInternoRobot.crearAgente(db, data, contexto),

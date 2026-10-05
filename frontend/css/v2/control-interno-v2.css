@@ -194,3 +194,15 @@ textarea.ci2-editor { height: auto; min-width: 260px; resize: vertical; }
 .cv-llave { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
 .cv-llave code { flex: 1; min-width: 0; overflow-wrap: anywhere; padding: 8px 10px; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio-sm); background: var(--sx-superficie-2, var(--sx-superficie)); font-size: .8125rem; }
 .cv-cmd { margin: 0; padding: 10px 12px; border-radius: var(--sx-radio-sm); background: var(--sx-superficie-2, var(--sx-superficie)); border: 1px solid var(--sx-borde); font-size: .8125rem; white-space: pre-wrap; }
+
+/* Robot TGR por lote (2026-10-05) */
+.cv-modo { margin: 0 0 12px; }
+.cv-lote td { padding: 4px; vertical-align: middle; }
+.cv-lote .sx2-input { min-width: 140px; }
+.cv-lote__acc { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.cv-lote__lista { list-style: none; margin: 12px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cv-lote__it { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 12px; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio-sm); background: var(--sx-superficie); }
+.cv-lote__it > div:first-child { min-width: 0; }
+.cv-lote__det { font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.cv-lote__der { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; flex: none; }
+@media (max-width: 640px) { .cv-lote__it { flex-direction: column; } .cv-lote__der { justify-content: flex-start; } }
