@@ -264,11 +264,11 @@ function contabilidad_(db, periodo, ctx) {
     estado: reincidentes.length ? 'alerta' : 'ok', serie: [], meta_texto: '0', definicion: 'Clientes con el F29 atrasado 3 meses o más de los últimos 12.',
     explicacion: reincidentes.length ? 'Se atrasan casi siempre: ' + reincidentes.slice(0, 3).map((x) => x.cliente + ' (' + x.meses_tarde + ' de 12)').join(', ') + (reincidentes.length > 3 ? ' y ' + (reincidentes.length - 3) + ' más' : '') + '.' : 'Ningún cliente se atrasa de forma repetida.' }));
 
-  if (reincidentes.length) alertas.push({ nivel: 'alerta', area: 'Contabilidad', clave: 'f29_reincidentes', titulo: 'Clientes que se atrasan con el IVA casi todos los meses',
+  if (reincidentes.length) alertas.push({ nivel: 'alerta', area: 'Contabilidad', clave: 'f29_reincidentes', breve: plural_(reincidentes.length, 'cliente', 'clientes'), titulo: 'Clientes que se atrasan con el IVA casi todos los meses',
     cifra: plural_(reincidentes.length, 'cliente', 'clientes'), que_pasa: reincidentes.slice(0, 3).map((x) => x.cliente + ' (' + x.meses_tarde + ' de 12 meses)').join(', ') + '.',
     por_que: 'El atraso se repite en los mismos clientes; en el resto el IVA sale a tiempo.', impacto: 'Multas e intereses del SII al cliente y reclamos hacia HomePymes.',
     decision: 'Reunión con estos clientes para fijar una fecha de entrega de información, o cambiar sus condiciones.' });
-  if (k.estado === 'critico' || (k.estado === 'alerta' && nT - nR > 0)) alertas.push({ nivel: k.estado === 'critico' ? 'critico' : 'alerta', area: 'Contabilidad', clave: 'f29_a_tiempo', titulo: 'IVA declarado fuera de plazo',
+  if (k.estado === 'critico' || (k.estado === 'alerta' && nT - nR > 0)) alertas.push({ nivel: k.estado === 'critico' ? 'critico' : 'alerta', area: 'Contabilidad', clave: 'f29_a_tiempo', breve: nT + ' de ' + nD + ' fuera de plazo', titulo: 'IVA declarado fuera de plazo',
     cifra: nT + ' de ' + nD, que_pasa: k.explicacion, por_que: plural_(nT - nR, 'atraso es de un cliente', 'atrasos son de clientes') + ' que normalmente cumple' + (nT - nR === 1 ? '' : 'n') + '.', impacto: 'Multas e intereses al cliente.', decision: 'Revisar qué pasó en el cierre del mes y reforzar el calendario.' });
 
   // --- IVA pagado en el mes: el del F29 que venció (contexto) --------------------------------------
@@ -296,7 +296,7 @@ function contabilidad_(db, periodo, ctx) {
   kpis.push(indicador_({ clave: 'atraso_contable', nombre: 'Clientes con contabilidad atrasada', unidad: 'clientes', formato: 'num', sentido: 'menor', valor: atrasados.length,
     estado: atrasados.length ? 'alerta' : 'ok', serie: [], meta_texto: '0', definicion: 'Clientes con 2 meses o más sin cerrar en los últimos 6.',
     explicacion: atrasados.length ? atrasados.length + ' clientes acumulan meses sin cerrar' + (atrasados[0] ? '; el más atrasado es ' + atrasados[0].cliente + ' (' + atrasados[0].meses_pendientes + ' meses).' : '.') : 'Ningún cliente acumula meses sin cerrar.' }));
-  if (kc.estado === 'critico' || kc.estado === 'alerta') alertas.push({ nivel: kc.estado, area: 'Contabilidad', clave: 'avance_contable', titulo: 'La contabilización mensual se está atrasando',
+  if (kc.estado === 'critico' || kc.estado === 'alerta') alertas.push({ nivel: kc.estado, area: 'Contabilidad', clave: 'avance_contable', breve: plural_(detalle.contabilizacion_pendiente_mes.length, 'cliente sin cerrar', 'clientes sin cerrar'), titulo: 'La contabilización mensual se está atrasando',
     cifra: d_(kc.valor) + ' % · ' + atrasados.length + ' clientes con meses acumulados', que_pasa: kc.explicacion,
     por_que: kc.racha_empeora >= 3 ? 'Empeora ' + kc.racha_empeora + ' meses seguidos: el área no alcanza a cerrar todos los clientes cada mes.' : 'Hay clientes sin cerrar al término del mes.',
     impacto: 'Balances y declaraciones sin respaldo contable al día; riesgo ante el SII y en la Renta.', decision: 'Plan de puesta al día por cliente y revisar la carga del área.' });
@@ -343,7 +343,7 @@ function contabilidad_(db, periodo, ctx) {
     estado: !confiableNotif ? 'info' : (delAnio.length ? 'alerta' : 'ok'), confiable: confiableNotif, tema: 'Convenios y SII', meta_texto: '0 con más de 30 días', definicion: 'Notificaciones y anotaciones sin marcar como resueltas.',
     explicacion: vig.length + ' vigentes (' + delAnio.length + ' de ' + anio + '); solo ' + resueltas + ' de ' + notif.length + ' están marcadas como resueltas.' + (!confiableNotif ? ' La columna «resuelta» casi no se usa: la cifra no es confiable hasta que se revisen.' : '') }));
   if (!confiableNotif) (detalle.calidad_area = detalle.calidad_area || []).push({ matriz: 'Notificaciones y anotaciones SII', ultimo_mes: '', problema: 'Solo ' + resueltas + ' de ' + notif.length + ' están marcadas como resueltas: no se sabe cuáles siguen abiertas. Para medirlo, marcar las resueltas.' });
-  if (delAnio.length && confiableNotif) alertas.push({ nivel: 'alerta', area: 'Contabilidad', clave: 'notificaciones_sii', titulo: 'Notificaciones del SII sin resolver',
+  if (delAnio.length && confiableNotif) alertas.push({ nivel: 'alerta', area: 'Contabilidad', clave: 'notificaciones_sii', breve: plural_(delAnio.length, 'abierta', 'abiertas') + ' de ' + anio, titulo: 'Notificaciones del SII sin resolver',
     cifra: vig.length + ' vigentes · ' + delAnio.length + ' de ' + anio, que_pasa: 'Hay notificaciones y anotaciones del SII de este año que no figuran como resueltas.',
     por_que: confiableNotif ? 'Siguen abiertas en la matriz.' : 'La columna «resuelta» casi no se usa: no se sabe cuáles siguen abiertas de verdad.',
     impacto: 'Giros, bloqueos de timbraje o multas a los clientes.', decision: 'Revisar las de ' + anio + ' en una sola pasada y marcarlas al cerrarlas.' });
@@ -403,7 +403,7 @@ function rrhh_(db, periodo, ctx) {
   kpis.push(indicador_({ clave: 'rle_pendiente', nombre: 'Registros ante la DT fuera de plazo', unidad: 'registros', formato: 'num', sentido: 'menor', valor: totRle, serie: [],
     estado: totRle ? 'critico' : 'ok', meta_texto: '0', definicion: 'Contratos y finiquitos del RLE pendientes desde el mes anterior o antes (plazo legal: 3 a 15 días hábiles).',
     explicacion: totRle ? rlePend[1].pendientes + ' finiquitos y ' + rlePend[0].pendientes + ' contratos siguen pendientes de registro' + (rlePend[1].desde ? ' (finiquitos desde ' + rlePend[1].desde + ')' : '') + '. O el registro está atrasado o se hace y no se anota: en los dos casos no se puede demostrar ante una fiscalización.' : 'Sin registros pendientes fuera de plazo.' }));
-  if (totRle) alertas.push({ nivel: 'critico', area: 'Recursos Humanos', clave: 'rle_pendiente', titulo: 'Registro Electrónico Laboral (DT) atrasado',
+  if (totRle) alertas.push({ nivel: 'critico', area: 'Recursos Humanos', clave: 'rle_pendiente', breve: plural_(totRle, 'registro pendiente', 'registros pendientes'), titulo: 'Registro Electrónico Laboral (DT) atrasado',
     cifra: rlePend[1].pendientes + ' finiquitos (' + rlePend[1].clientes + ' clientes) · ' + rlePend[0].pendientes + ' contratos (' + rlePend[0].clientes + ' clientes)',
     que_pasa: 'Hay contratos y términos sin registro ante la DT' + (rlePend[0].desde ? ', los más antiguos desde ' + [rlePend[0].desde, rlePend[1].desde].filter(Boolean).sort()[0] : '') + '. La ley da 15 días hábiles para un contrato y de 3 a 10 para un término.',
     por_que: 'Las matrices RLE tienen pendientes de meses anteriores sin cerrar.', impacto: 'Multa de la DT al cliente y reclamo hacia HomePymes.', decision: 'Confirmar con RR.HH. el estado real esta semana y fijar un responsable del RLE.' });
@@ -423,7 +423,7 @@ function rrhh_(db, periodo, ctx) {
   if (e12 && s12 / e12 > 1.5) kr.estado = kr.estado === 'ok' ? 'alerta' : kr.estado;
   if (ctx.preliminar) { kr.preliminar = true; kr.explicacion += ' (El mes informado todavía se está registrando.)'; }
   kpis.push(kr);
-  if (e12 && s12 / e12 > 1.5) alertas.push({ nivel: 'alerta', area: 'Recursos Humanos', clave: 'salidas_por_entrada', titulo: 'Los clientes están reduciendo dotación',
+  if (e12 && s12 / e12 > 1.5) alertas.push({ nivel: 'alerta', area: 'Recursos Humanos', clave: 'salidas_por_entrada', breve: d_(s12 / e12) + ' salidas por cada entrada', titulo: 'Los clientes están reduciendo dotación',
     cifra: s12 + ' finiquitos vs ' + e12 + ' contratos en 12 meses', que_pasa: 'Por cada trabajador que entra salen ' + d_(s12 / e12) + '.',
     por_que: 'Es una señal comercial temprana: los clientes se achican, sobre todo en construcción.', impacto: 'Menos liquidaciones y menos ingresos por cliente.', decision: 'Revisar con Ventas los clientes que más bajaron y la estrategia de retención.' });
   const caus = {};
@@ -479,7 +479,7 @@ function cobranzas_(db, periodo, ctx) {
     : millones_(montoVencido) + ' vencidos de ' + millones_(porCobrar) + ' por cobrar (' + d_(pct_(montoVencido, porCobrar)) + ' %), en ' + detalle.morosos.length + ' clientes. ' +
       (detalle.morosos[0] ? 'El mayor es ' + detalle.morosos[0].cliente + ' (' + millones_(detalle.morosos[0].saldo_vencido) + ', ' + detalle.morosos[0].dias_max + ' días).' : '');
   kpis.push(k);
-  if (k.estado !== 'ok') alertas.push({ nivel: k.estado, area: 'Facturación y Cobranzas', clave: 'cartera_vencida', titulo: 'Clientes con facturas vencidas',
+  if (k.estado !== 'ok') alertas.push({ nivel: k.estado, area: 'Facturación y Cobranzas', clave: 'cartera_vencida', breve: millones_(montoVencido) + ' vencidos', titulo: 'Clientes con facturas vencidas',
     cifra: millones_(montoVencido) + ' · ' + detalle.morosos.length + ' clientes', que_pasa: k.explicacion,
     por_que: detalle.morosos.some((x) => x.dias_max > 90) ? 'Hay deudas de más de 90 días: la probabilidad de cobrarlas baja con el tiempo.' : 'Facturas que pasaron su fecha de vencimiento sin pago.',
     impacto: 'Menos caja para operar y riesgo de incobrables.', decision: 'Gestión de cobro a los mayores deudores y evaluar suspender servicios a los de más de 90 días.' });
@@ -532,7 +532,7 @@ function transversal_(db, depto, periodo, ctx) {
     kc.estado = 'alerta';
     let peorMes = null, peor = 0;
     for (let i = 1; i < serieCli.length - (preliminar ? 1 : 0); i++) { const d = (serieCli[i].valor || 0) - (serieCli[i - 1].valor || 0); if (d < peor) { peor = d; peorMes = serieCli[i].periodo; } }
-    alertas.push({ nivel: 'alerta', area: (DEPARTAMENTOS.find((d) => d.clave === depto) || {}).nombre, clave: 'clientes_activos', titulo: 'Bajan los clientes atendidos',
+    alertas.push({ nivel: 'alerta', area: (DEPARTAMENTOS.find((d) => d.clave === depto) || {}).nombre, clave: 'clientes_activos', breve: caida + ' % en un año', titulo: 'Bajan los clientes atendidos',
       cifra: miles_(prom3Ant) + ' → ' + miles_(prom3) + ' (' + caida + ' %) en un año', que_pasa: 'De ' + rango + ' el área atendió ' + miles_(prom3) + ' clientes al mes en promedio; en los mismos meses del año pasado, ' + miles_(prom3Ant) + '.',
       por_que: peorMes ? 'La mayor baja fue en ' + mesAnio_(peorMes) + ' (' + plural_(-peor, 'cliente', 'clientes') + ' menos). Hay que confirmar si son bajas reales o trabajo que se dejó de registrar.' : 'Menos clientes con trabajo registrado cada mes.',
       impacto: 'Menos ingresos si son bajas reales.', decision: 'Revisar con Ventas y Administración qué clientes se fueron y por qué.' });
@@ -550,7 +550,7 @@ function transversal_(db, depto, periodo, ctx) {
     kpis.push(indicador_({ clave: 'dependencia', nombre: 'Trabajo en una sola persona', unidad: '%', formato: 'pct', sentido: 'menor', valor: p, serie: [], estado: p > 60 ? 'alerta' : 'ok',
       meta_texto: '≤ 60 %', definicion: '% de los registros del área (con responsable) hechos por la persona con más carga, en 12 meses.', extra: { email: top[0] },
       explicacion: 'Una persona hizo el ' + d_(p) + ' % de los ' + miles_(tot) + ' registros del área en 12 meses.' + (p > 60 ? ' Si se ausenta, el cierre del mes queda sin respaldo.' : '') }));
-    if (p > 60) alertas.push({ nivel: 'alerta', area: (DEPARTAMENTOS.find((d) => d.clave === depto) || {}).nombre, clave: 'dependencia', titulo: 'El área depende de una sola persona',
+    if (p > 60) alertas.push({ nivel: 'alerta', area: (DEPARTAMENTOS.find((d) => d.clave === depto) || {}).nombre, clave: 'dependencia', breve: d_(p) + ' % del trabajo', titulo: 'El área depende de una sola persona',
       cifra: d_(p) + ' % de los registros', que_pasa: 'Una persona hizo ' + miles_(top[1]) + ' de ' + miles_(tot) + ' registros en 12 meses.', persona: top[0],
       por_que: 'No hay una segunda persona que haga el mismo trabajo.', impacto: 'Si se ausenta, los cierres del mes quedan sin respaldo.', decision: 'Designar y capacitar a una persona de respaldo.' });
   }
@@ -602,6 +602,35 @@ const TEMAS = {
   cartera_vencida: 'Cobranza', cobrado: 'Cobranza', facturado_hp: 'Cobranza', dias_cobro: 'Cobranza',
   dependencia: 'Equipo y Agenda', recordatorios_a_tiempo: 'Equipo y Agenda', clientes_sin_respuesta: 'Equipo y Agenda'
 };
+// La PORTADA del reporte (2026-10-04, auditoría · etapa 2): lo que se entiende en 30 segundos.
+const CLAVE_PORTADA = {
+  CONTABILIDAD: ['f29_a_tiempo', 'avance_contable', 'convenios_vencidos', 'facturacion'],
+  RRHH: ['liquidaciones', 'rle_pendiente', 'salidas_por_entrada', 'clientes_activos'],
+  COBRANZAS: ['cartera_vencida', 'cobrado', 'facturado_hp', 'dias_cobro']
+};
+/** El valor de un indicador en texto (97 %, $115,6 MM, 1,8×, 341). */
+function valorTxt_(k) {
+  if (k.valor === null || k.valor === undefined) return k.estado === 'en_curso' ? 'en curso' : 'sin dato';
+  if (k.formato === 'pct') return d_(k.valor) + ' %';
+  if (k.formato === 'monto') return millones_(k.valor);
+  if (k.formato === 'ratio') return d_(k.valor) + '×';
+  return miles_(k.valor);
+}
+function minuscula_(t) { t = String(t || ''); return /^[A-ZÁÉÍÓÚÑ0-9]{2}/.test(t) ? t : t.charAt(0).toLowerCase() + t.slice(1); }
+/**
+ * Titular escrito del mes (una frase con lo bueno primero y lo que requiere
+ * atención), las 4 cifras clave del área, las 3 alertas que piden decisión y
+ * lo que va bien.
+ */
+function portada_(depto, kpis, alertas) {
+  const cifras = (CLAVE_PORTADA[depto] || []).filter((c) => kpis.some((k) => k.clave === c));
+  const ok = kpis.filter((k) => k.estado === 'ok');
+  const pos = ok.find((k) => cifras.includes(k.clave)) || ok[0];
+  const neg = alertas.slice(0, 2).map((a) => a.titulo + (a.breve ? ' (' + a.breve + ')' : ''));
+  const titular = (neg.length ? 'Lo más urgente: ' + neg[0] + '.' + (neg[1] ? ' Le sigue: ' + neg[1] + '.' : '') : 'Sin alertas en el mes.') +
+    (pos ? ' Va bien: ' + pos.nombre + ' (' + valorTxt_(pos) + ').' : '');
+  return { titular, cifras, decisiones: alertas.slice(0, 3).map((a) => a.clave), bien: ok.slice(0, 4).map((k) => k.nombre + ': ' + valorTxt_(k)) };
+}
 function conTema_(kpis) { kpis.forEach((k) => { k.tema = TEMAS[k.clave] || k.tema || 'Otros'; }); return kpis; }
 
 function contexto_(db, periodo) {
@@ -620,7 +649,8 @@ function calcularArea_(db, depto, periodo, ctx) {
   if (depto === 'COBRANZAS') {
     const x = cobranzas_(db, periodo, c);
     const nivel = x.sin_datos ? 'sin_datos' : (x.alertas.some((a) => a.nivel === 'critico') ? 'critico' : (x.alertas.length ? 'alerta' : 'ok'));
-    return { depto, nombre: dep.nombre, periodo, periodo_texto: mesAnio_(periodo), con_indicadores: !x.sin_datos, semaforo: nivel, kpis: conTema_(x.kpis), alertas: x.alertas, detalle: x.detalle };
+    return { depto, nombre: dep.nombre, periodo, periodo_texto: mesAnio_(periodo), con_indicadores: !x.sin_datos, semaforo: nivel, kpis: conTema_(x.kpis), alertas: x.alertas, detalle: x.detalle,
+      portada: x.sin_datos ? { titular: 'Todavía no hay facturas registradas en la matriz de cobranza: cuando se carguen, aquí se verá la cartera y lo cobrado.', cifras: [], decisiones: [], bien: [] } : portada_(depto, x.kpis, x.alertas) };
   }
   const partes = [depto === 'CONTABILIDAD' ? contabilidad_(db, periodo, c) : rrhh_(db, periodo, c), transversal_(db, depto, periodo, c)];
   const kpis = [].concat(...partes.map((x) => x.kpis));
@@ -630,7 +660,7 @@ function calcularArea_(db, depto, periodo, ctx) {
   detalle.calidad = [].concat(...partes.map((x) => x.detalle.calidad_area || []), partes[1].detalle.calidad || []);
   delete detalle.calidad_area;
   const nivel = alertas.some((a) => a.nivel === 'critico') ? 'critico' : (alertas.length ? 'alerta' : 'ok');
-  return { depto, nombre: dep.nombre, periodo, periodo_texto: mesAnio_(periodo), con_indicadores: true, semaforo: nivel, kpis: conTema_(kpis), alertas, detalle };
+  return { depto, nombre: dep.nombre, periodo, periodo_texto: mesAnio_(periodo), con_indicadores: true, semaforo: nivel, kpis: conTema_(kpis), alertas, detalle, portada: portada_(depto, kpis, alertas) };
 }
 
 /** Acción: indicadores de un área (con los permisos del área). */
@@ -666,4 +696,4 @@ function ejecutivo_(db, periodo) {
   };
 }
 
-module.exports = { calcularArea_, ejecutivo_, area, contexto_, vencimiento_, diasHabiles_, num_, TIENE_INDICADORES };
+module.exports = { portada_, valorTxt_, calcularArea_, ejecutivo_, area, contexto_, vencimiento_, diasHabiles_, num_, TIENE_INDICADORES };

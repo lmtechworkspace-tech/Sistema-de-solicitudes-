@@ -139,18 +139,166 @@
     d = d || {};
     return DETALLES.map(function (x) { return tabla(x[1], x[2], d[x[0]]); }).join('');
   }
-  /** El bloque completo de un área: alertas primero, indicadores, gráficos y detalle. */
+
+  // =========================================================================================
+  // El reporte en TRES CAPAS (2026-10-04, auditoría · etapa 2):
+  //  1. portada   una pantalla: titular del mes, 4 cifras clave, lo que pide decisión, lo que va bien
+  //  2. temas     los indicadores agrupados en pestañas; cada uno abre su detalle al lado
+  //  3. anexo     todas las tablas y la calidad del dato, cerrado (completo al imprimir)
+  // =========================================================================================
+  // Qué tablas respaldan cada indicador (se muestran en su panel, no al final).
+  var DET_DE = {
+    f29_a_tiempo: ['f29_atrasos_mes'], f29_sin_registro: ['f29_sin_registro'], f29_reincidentes: ['f29_reincidentes'],
+    avance_contable: ['contabilizacion_pendiente_mes', 'contabilizacion_atrasada'], atraso_contable: ['contabilizacion_atrasada'],
+    facturacion: ['facturacion_top'], concentracion: ['facturacion_top'], convenios_vencidos: ['convenios_vencidos'], notificaciones_sii: ['notificaciones_abiertas'],
+    rle_pendiente: ['rle_pendiente'], anexos_pendientes: [], liquidaciones: ['liquidaciones_por_cliente'], salidas_por_entrada: ['causales'],
+    cartera_vencida: ['morosos'], clientes_sin_respuesta: ['clientes_sin_respuesta'], dependencia: ['carga_por_persona']
+  };
+  var DET_EXTRA = {
+    contabilizacion_pendiente_mes: ['Clientes sin cerrar la contabilización del mes', [{ t: 'Cliente', v: 'cliente' }, { t: 'Situación', v: 'situacion' }]],
+    carga_por_persona: ['Registros por persona (12 meses)', [{ t: 'Persona', v: function (f) { return persona(f.email); } }, { t: 'Registros', v: 'registros', num: true }, { t: '%', v: function (f) { return f.participacion + ' %'; }, num: true }]]
+  };
+  function persona(e) {
+    if (!e) return '—';
+    if (/^txt:/.test(e)) return e.slice(4).toLowerCase().replace(/(^|\s)\S/g, function (m) { return m.toUpperCase(); });
+    return window.PYv2 && PYv2.persona ? PYv2.persona(e).nombre : e;
+  }
+  function defTabla(clave) {
+    var x = DETALLES.filter(function (d) { return d[0] === clave; })[0];
+    return x ? [x[1], x[2]] : DET_EXTRA[clave] || null;
+  }
+  var REG = {}, nReg = 0;
+  function kDe(r, clave) { return (r.kpis || []).filter(function (k) { return k.clave === clave; })[0] || null; }
+  /** Diferencia contra el mes anterior, en palabras cortas (↑ 3 pts). */
+  function diferencia(k) {
+    if (k.preliminar) return 'cifra preliminar';
+    if (k.valor === null || k.valor === undefined || k.anterior === null || k.anterior === undefined) return '';
+    var d = k.valor - k.anterior;
+    if (Math.abs(d) < 1e-9) return '= mes anterior';
+    var txtD = k.formato === 'pct' ? n1(Math.abs(d)) + (Math.abs(Math.abs(d) - 1) < 1e-9 ? ' pt' : ' pts') : valor(k, Math.abs(d));
+    var bueno = k.sentido === 'menor' ? d < 0 : (k.sentido === 'mayor' ? d > 0 : null);
+    return '<span class="ip-dif' + (bueno === true ? ' ip-dif--bien' : (bueno === false ? ' ip-dif--mal' : '')) + '">' + (d > 0 ? '↑ ' : '↓ ') + U.esc(txtD) + '</span> vs mes anterior';
+  }
+  function portadaDe(r) {
+    if (r.portada) return r.portada;
+    // Reportes congelados antes de la portada: se arma con lo que hay.
+    var g = (r.kpis || []).filter(function (k) { return k.gerencia; }).slice(0, 4).map(function (k) { return k.clave; });
+    return { titular: '', cifras: g, decisiones: (r.alertas || []).slice(0, 3).map(function (a) { return a.clave; }), bien: [] };
+  }
+  function grande(k, id) {
+    return '<button type="button" class="ip-cifra ip-cifra--' + U.esc(k.estado) + ' js-ip-ver" data-ind="' + id + '" data-k="' + U.esc(k.clave) + '">' +
+      '<span class="ip-cifra__cab"><span class="ip-cifra__nom">' + txt(k.nombre) + '</span>' + chip(k.estado) + '</span>' +
+      (k.mide ? '<span class="ip-cifra__mide">' + txt(k.mide) + '</span>' : '') +
+      '<span class="ip-cifra__v">' + txt(valor(k, k.valor)) + '</span>' +
+      '<span class="ip-cifra__pie">' + (k.meta_texto ? '<span>Meta ' + txt(k.meta_texto) + '</span>' : '') + '<span>' + diferencia(k) + '</span></span>' +
+      linea(k.serie || []) + '</button>';
+  }
+  function portada(r, id) {
+    var p = portadaDe(r);
+    var cifras = p.cifras.map(function (c) { return kDe(r, c); }).filter(Boolean);
+    var alertas = p.decisiones.map(function (c) { return (r.alertas || []).filter(function (a) { return a.clave === c; })[0]; }).filter(Boolean);
+    var nCal = ((r.detalle || {}).calidad || []).length;
+    return '<section class="ip-portada sx2-entra">' +
+      (p.titular ? '<p class="ip-titular">' + txt(p.titular) + '</p>' : '') +
+      (cifras.length ? '<div class="ip-cifras">' + cifras.map(function (k) { return grande(k, id); }).join('') + '</div>' : '') +
+      '<div class="ip-dos"><div class="ip-bloque"><h3 class="ip-h">Requiere decisión</h3>' +
+        (alertas.length ? '<ul class="ip-decs">' + alertas.map(function (a) {
+          return '<li class="ip-dec ip-dec--' + U.esc(a.nivel) + '"><div><strong>' + txt(a.titulo) + '</strong><span class="ip-dec__cifra">' + txt(a.breve || a.cifra || '') + '</span>' +
+            (a.decision ? '<span class="ip-dec__sug"><b>Sugerido:</b> ' + txt(a.decision) + '</span>' : '') + '</div>' +
+            (kDe(r, a.clave) ? '<button type="button" class="sx2-enlace js-ip-ver" data-ind="' + id + '" data-k="' + U.esc(a.clave) + '">Ver por qué' + U.ico('derecha', 14) + '</button>' : '') + '</li>';
+        }).join('') + '</ul>' + ((r.alertas || []).length > alertas.length ? '<p class="ip-nota">Y ' + ((r.alertas || []).length - alertas.length) + ' más para vigilar en las pestañas de abajo.</p>' : '')
+          : '<p class="ind-ok">' + U.ico('check', 16) + ' Nada que requiera decisión este mes.</p>') + '</div>' +
+      '<div class="ip-bloque"><h3 class="ip-h">Va bien</h3>' + (p.bien.length ? '<ul class="ip-bien">' + p.bien.map(function (b) { return '<li>' + U.ico('check', 14) + '<span>' + txt(b) + '</span></li>'; }).join('') + '</ul>' : '<p class="ip-nota">Ningún indicador en meta este mes.</p>') +
+        (nCal ? '<h3 class="ip-h">Calidad del dato</h3><p class="ip-nota">' + nCal + (nCal === 1 ? ' punto' : ' puntos') + ' por corregir para que las cifras sean confiables. <button type="button" class="sx2-enlace js-ip-anexo" data-ind="' + id + '">Ver en el anexo</button></p>' : '') +
+      '</div></div></section>';
+  }
+  function mini(k, id) {
+    return '<button type="button" class="ip-mini ip-mini--' + U.esc(k.estado) + ' js-ip-ver" data-ind="' + id + '" data-k="' + U.esc(k.clave) + '">' +
+      '<span class="ip-mini__cab"><span class="ip-mini__nom">' + txt(k.nombre) + '</span>' + chip(k.estado) + '</span>' +
+      '<span class="ip-mini__fila"><span class="ip-mini__v">' + txt(valor(k, k.valor)) + '</span>' + linea(k.serie || []) + '</span>' +
+      '<span class="ip-mini__exp">' + txt(k.explicacion || k.nota || '') + '</span><span class="ip-mini__ver">Ver detalle' + U.ico('derecha', 13) + '</span></button>';
+  }
+  function temas(r, id) {
+    var orden = [], por = {};
+    (r.kpis || []).forEach(function (k) { var t = k.tema || 'Otros'; if (!por[t]) { por[t] = []; orden.push(t); } por[t].push(k); });
+    if (!orden.length) return '';
+    var malos = function (t) { return por[t].filter(function (k) { return k.estado === 'alerta' || k.estado === 'critico'; }).length; };
+    return '<section class="ip-temas sx2-entra"><h2 class="rp2-sub">Indicadores por tema</h2>' +
+      '<div class="ip-tabs" role="tablist">' + orden.map(function (t, i) {
+        var m = malos(t);
+        return '<button type="button" role="tab" class="ip-tab js-ip-tab" data-ind="' + id + '" data-t="' + i + '" aria-selected="' + (i === 0 ? 'true' : 'false') + '">' + txt(t) +
+          '<span class="ip-tab__n' + (m ? ' ip-tab__n--mal' : '') + '">' + (m || por[t].length) + '</span></button>';
+      }).join('') + '</div>' +
+      orden.map(function (t, i) { return '<div class="ip-panel" role="tabpanel" data-t="' + i + '"' + (i ? ' hidden' : '') + '><h3 class="ip-panel__tit">' + txt(t) + '</h3><div class="ip-minis">' + por[t].map(function (k) { return mini(k, id); }).join('') + '</div></div>'; }).join('') +
+      '</section>';
+  }
+  function anexo(r, id) {
+    var d = r.detalle || {};
+    var tablas = DETALLES.map(function (x) { return tabla(x[1], x[2], d[x[0]]); }).join('') +
+      Object.keys(DET_EXTRA).map(function (c) { return tabla(DET_EXTRA[c][0], DET_EXTRA[c][1], d[c]); }).join('');
+    var n = DETALLES.concat(Object.keys(DET_EXTRA).map(function (c) { return [c]; })).filter(function (x) { return (d[x[0]] || []).length; }).length;
+    if (!n) return '';
+    return '<section class="ip-anexo-sec"><button type="button" class="ip-anexo-btn js-ip-anexo" data-ind="' + id + '" aria-expanded="false">' + U.ico('tabla', 16) +
+      '<span><strong>Anexo</strong> · ' + n + (n === 1 ? ' tabla' : ' tablas') + ' con el detalle, incluida la calidad del dato</span>' + U.ico('abajo', 16) + '</button>' +
+      '<div class="ip-anexo" hidden><div class="ind-detalles">' + tablas + '</div></div></section>';
+  }
+  /** El panel lateral de un indicador: su gráfico grande, la comparación, por qué y las tablas que lo respaldan. */
+  function panelIndicador(r, k) {
+    var a = (r.alertas || []).filter(function (x) { return x.clave === k.clave; })[0];
+    var comp = [['Este mes', valor(k, k.valor)], ['Mes anterior', k.anterior == null ? '—' : valor(k, k.anterior)], ['Promedio 12 meses', k.promedio_12 == null ? '—' : valor(k, k.promedio_12)],
+      ['Hace un año', k.anio_anterior == null ? '—' : valor(k, k.anio_anterior)], ['Meta', k.meta_texto || '—']];
+    var tablas = (DET_DE[k.clave] || []).map(function (c) { var t = defTabla(c); return t ? tablaCompleta(t[0], t[1], (r.detalle || {})[c]) : ''; }).join('');
+    var g = grafico(k);
+    return '<div class="ip-det">' +
+      '<div class="ip-det__v"><span>' + txt(valor(k, k.valor)) + '</span>' + chip(k.estado) + '</div>' +
+      '<dl class="ip-comp">' + comp.filter(function (c, i) { return i === 0 || c[1] !== '—'; }).map(function (c) { return '<div><dt>' + txt(c[0]) + '</dt><dd>' + txt(c[1]) + '</dd></div>'; }).join('') + '</dl>' +
+      (g ? '<figure class="ind-fig ip-det__fig"><figcaption><strong>Últimos 12 meses</strong>' + (k.preliminar ? '<span>El último mes todavía se registra (punteado).</span>' : '') + '</figcaption>' + g + '</figure>' : '') +
+      '<p class="ip-det__exp">' + txt(k.explicacion || k.nota || '') + '</p>' +
+      (a ? alerta(a.que_pasa === k.explicacion ? Object.assign({}, a, { que_pasa: '' }) : a) : '') + tablas +
+      (k.definicion ? '<p class="ip-det__def"><b>Cómo se calcula:</b> ' + txt(k.definicion) + '</p>' : '') + '</div>';
+  }
+  function tablaCompleta(titulo, columnas, filas) {
+    if (!filas || !filas.length) return '';
+    return '<section class="ind-tabla"><h3>' + txt(titulo) + ' <small class="sx2-tenue">(' + filas.length + ')</small></h3><div class="sx2-tabla-wrap"><table class="sx2-tabla"><thead><tr>' +
+      columnas.map(function (c) { return '<th' + (c.num ? ' class="sx2-num"' : '') + '>' + txt(c.t) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      filas.slice(0, 200).map(function (f) { return '<tr>' + columnas.map(function (c) { var v = typeof c.v === 'function' ? c.v(f) : f[c.v]; return '<td' + (c.num ? ' class="sx2-num"' : '') + '>' + txt(v) + '</td>'; }).join('') + '</tr>'; }).join('') +
+      '</tbody></table></div></section>';
+  }
+  /** El bloque completo de un área, en tres capas. opts.sinPortada: solo temas y anexo. */
   function bloqueArea(r, opts) {
     opts = opts || {};
     if (!r || !r.con_indicadores) return '';
-    var alertas = r.alertas || [];
-    var conGraf = (r.kpis || []).filter(function (k) { return (k.serie || []).length >= 2; });
-    return '<section class="ind-area">' +
-      (alertas.length ? '<h2 class="rp2-sub">Requiere atención</h2><div class="ind-alertas">' + alertas.map(alerta).join('') + '</div>' : '<p class="ind-ok">' + U.ico('check', 16) + ' Sin alertas en el mes.</p>') +
-      '<h2 class="rp2-sub">Indicadores del mes</h2><div class="ind-kpis">' + (r.kpis || []).map(tarjeta).join('') + '</div>' +
-      (conGraf.length ? '<h2 class="rp2-sub">Tendencia de 12 meses</h2><div class="ind-figs">' + conGraf.map(figura).join('') + '</div>' : '') +
-      (opts.sinDetalle ? '' : '<h2 class="rp2-sub">Detalle</h2><div class="ind-detalles">' + detalle(r.detalle) + '</div>') + '</section>';
+    var id = 'i' + (++nReg);
+    REG[id] = r;
+    return '<section class="ind-area" data-ind="' + id + '">' + (opts.sinPortada ? '' : portada(r, id)) + temas(r, id) + (opts.sinDetalle ? '' : anexo(r, id)) + '</section>';
   }
+  function bloquePortada(r) { if (!r || !r.con_indicadores) return ''; var id = 'i' + (++nReg); REG[id] = r; return '<div data-ind="' + id + '">' + portada(r, id) + '</div>'; }
 
-  window.SigsoIndicadores = { tarjeta: tarjeta, grafico: grafico, figura: figura, alerta: alerta, tabla: tabla, detalle: detalle, bloqueArea: bloqueArea, valor: valor, chip: chip, ESTADO_TXT: ESTADO_TXT };
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('.js-ip-ver, .js-ip-tab, .js-ip-anexo');
+    if (!b) return;
+    var r = REG[b.getAttribute('data-ind')];
+    if (!r) return;
+    var raiz = document.querySelector('.ind-area[data-ind="' + b.getAttribute('data-ind') + '"]') || b.closest('[data-ind]');
+    if (b.classList.contains('js-ip-tab')) {
+      var t = b.getAttribute('data-t'), sec = b.closest('.ip-temas');
+      sec.querySelectorAll('.js-ip-tab').forEach(function (x) { x.setAttribute('aria-selected', x === b ? 'true' : 'false'); });
+      sec.querySelectorAll('.ip-panel').forEach(function (p) { p.hidden = p.getAttribute('data-t') !== t; });
+      return;
+    }
+    if (b.classList.contains('js-ip-anexo')) {
+      var ax = (raiz && raiz.querySelector('.ip-anexo')) || (b.closest('.rp2-documento, .ci2') || document).querySelector('.ip-anexo');
+      if (!ax) return;
+      var btn = ax.parentNode.querySelector('.ip-anexo-btn');
+      if (b === btn) { ax.hidden = !ax.hidden; btn.setAttribute('aria-expanded', ax.hidden ? 'false' : 'true'); }
+      else { ax.hidden = false; if (btn) btn.setAttribute('aria-expanded', 'true'); ax.scrollIntoView({ behavior: U.reducirMovimiento() ? 'auto' : 'smooth', block: 'start' }); }
+      return;
+    }
+    var k = kDe(r, b.getAttribute('data-k'));
+    if (!k) return;
+    var d = U.drawer({ titulo: k.nombre, subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">' + txt([k.tema, k.mide, r.nombre].filter(Boolean).join(' · ')) + '</span>', cuerpo: panelIndicador(r, k) });
+    d.el.classList.add('sx2-drawer--ancho');
+  });
+
+  window.SigsoIndicadores = { tarjeta: tarjeta, grafico: grafico, figura: figura, alerta: alerta, tabla: tabla, detalle: detalle, bloqueArea: bloqueArea, bloquePortada: bloquePortada, portada: portada, valor: valor, chip: chip, ESTADO_TXT: ESTADO_TXT };
 })();

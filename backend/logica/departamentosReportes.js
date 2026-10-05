@@ -116,8 +116,15 @@ function resumenAuto_(db, depto, periodo) {
   // Contabilidad y RR.HH.: los indicadores, alertas y explicaciones del mes
   // (indicadoresDepto.js), que quedan congelados al enviar el reporte.
   const indicadores = Indicadores.TIENE_INDICADORES.includes(depto) ? Indicadores.calcularArea_(db, depto, periodo) : null;
+  // Actividades que SIGSO propone (el área corrige en vez de escribir desde cero, auditoría · etapa 2).
+  const propuestas = matrices.map((m) => ({ cliente: '', actividad: m.nombre + ': ' + m.terminadas + ' de ' + m.total + (m.total === 1 ? ' registro terminado' : ' registros terminados'), fecha: '', estado: m.pendientes ? 'En curso' : 'Terminado', observacion: m.pendientes ? m.pendientes + ' sin terminar' : '' }));
+  try {
+    const ag = require('./agendaDepto').medirMes_(db, depto, periodo);
+    if (ag.envios) propuestas.push({ cliente: '', actividad: 'Recordatorios a clientes: ' + ag.envios + (ag.envios === 1 ? ' enviado' : ' enviados') + ' (' + ag.a_tiempo + ' a tiempo)', fecha: '', estado: 'Terminado', observacion: ag.sin_respuesta.length ? ag.sin_respuesta.length + ' sin respuesta' : '' });
+  } catch (e) { /* sin agenda */ }
+  if (terminadasMes.length) propuestas.push({ cliente: '', actividad: 'Tareas terminadas en SIGSO: ' + terminadasMes.length, fecha: '', estado: 'Terminado', observacion: '' });
   return {
-    periodo, generado: ahora_(), personas: equipo.length, indicadores,
+    periodo, generado: ahora_(), personas: equipo.length, indicadores, actividades_propuestas: propuestas.slice(0, 30),
     matrices,
     tareas: {
       terminadas: terminadasMes.length,
