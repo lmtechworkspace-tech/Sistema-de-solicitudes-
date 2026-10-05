@@ -298,7 +298,20 @@
       (botones ? '<div class="dr-barra sx2-entra">' + U.badge(ETIQ[rep.estado] || rep.estado, TONO[rep.estado]) + '<span style="flex:1"></span>' + botones + '</div>' : '<div class="dr-barra sx2-entra">' + U.badge(ETIQ[rep.estado] || rep.estado, TONO[rep.estado]) + '</div>') +
       '<div class="dr-cols"><div class="dr-principal">' + principal + '</div><aside class="dr-lateral">' + lateral + '</aside></div>', silencioso);
     var doc = x_.raiz().querySelector('.js-dr-doc');
-    if (doc) R().wireAcciones(doc, { nombreArchivo: 'Reporte ' + rep.depto_nombre + ' ' + x_.perTexto(rep.periodo) });
+    if (doc) R().wireAcciones(doc, { nombreArchivo: 'Reporte ' + rep.depto_nombre + ' ' + x_.perTexto(rep.periodo), excel: conIndicadores(d) ? function () { return excelReporte(d); } : null });
+  }
+
+  /** El Excel del reporte: lo que escribió el área y, por tema, todo lo que mide SIGSO. */
+  function excelReporte(d) {
+    var rep = d.reporte, c = d.contenido, extra = [];
+    var texto = [['Comentario del área', c.resumen], ['Dificultades y riesgos', c.dificultades], ['Pendientes para el próximo mes', c.pendientes], ['Respaldos', c.respaldos]].filter(function (x) { return x[1]; });
+    if (texto.length) extra.push({ nombre: 'Lo que dice el área', columnas: ['Sección', 'Texto'], filas: texto });
+    if (c.actividades.length) extra.push({ nombre: 'Actividades', columnas: COLS_ACT.map(function (x) { return x[1]; }), filas: c.actividades.map(function (a) { return COLS_ACT.map(function (x) { return a[x[0]] || ''; }); }) });
+    var firmas = [['Preparó', rep.autor_email ? nombre(rep.autor_email) : '', rep.fecha_envio ? fecha(rep.fecha_envio) : ''], ['Validó (jefatura)', rep.validado_por ? nombre(rep.validado_por) : 'Pendiente', rep.fecha_validacion ? fecha(rep.fecha_validacion) : ''],
+      ['Recibió (Administración)', rep.recibido_por ? nombre(rep.recibido_por) : 'Pendiente', rep.fecha_recepcion ? fecha(rep.fecha_recepcion) : '']];
+    extra.push({ nombre: 'Validación', columnas: ['Paso', 'Quién', 'Cuándo'], filas: firmas });
+    return SigsoIndicadores.excel(d.auto.indicadores, { titulo: 'Reporte de ' + rep.depto_nombre + ' · ' + x_.perTexto(rep.periodo, true), subtitulo: (ETIQ[rep.estado] || rep.estado) + (d.congelado ? ' · cifras congeladas al enviarlo' : ' · cifras en vivo'),
+      meta: [['Área', rep.depto_nombre], ['Mes', x_.perTexto(rep.periodo, true)], ['Estado', ETIQ[rep.estado] || rep.estado]], hojasExtra: extra });
   }
 
   // --- acciones -------------------------------------------------------------------------------

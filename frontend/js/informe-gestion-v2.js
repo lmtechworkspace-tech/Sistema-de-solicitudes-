@@ -221,7 +221,32 @@
       '<div class="dr-barra sx2-entra">' + U.badge(d.estado_texto, TONO_EST[d.estado] || 'neutro') + '<span style="flex:1"></span>' + b + '</div>' +
       '<div class="dr-cols"><div class="dr-principal">' + documento(d) + '</div><aside class="dr-lateral">' + U.card({ i: 2, titulo: 'Historial', icono: 'reloj', cuerpo: hist }) + '</aside></div>', silencioso);
     var doc = x_.raiz().querySelector('.js-ig-doc');
-    if (doc) R().wireAcciones(doc, { nombreArchivo: 'Informe de gestion ' + x_.perTexto(d.periodo) });
+    if (doc) R().wireAcciones(doc, { nombreArchivo: 'Informe de gestion ' + x_.perTexto(d.periodo), excel: function () { return excelInforme(d); } });
+  }
+
+  /** El Excel del informe: resumen ejecutivo, las áreas, decisiones, indicadores clave, reportes y calidad. */
+  function excelInforme(d) {
+    var ej = d.ejecutivo, inf = d.informe || {}, h = [];
+    var TX = { ok: 'ok', alerta: 'alerta', critico: 'critico', en_curso: 'neutro', sin_datos: 'neutro' };
+    if ((ej.areas_resumen || []).length) h.push({ nombre: 'Áreas', columnas: ['Área', 'Estado', 'En meta', 'Para vigilar', 'Críticos', 'Informativos', 'Cifra principal', 'Valor', 'Alerta principal'],
+      filas: ej.areas_resumen.map(function (a) { var c = a.cuenta || {}; return [a.nombre, { v: TXT_AREA[a.nivel] || a.nivel, tono: TX[a.nivel] || 'neutro' }, c.ok || 0, c.alerta || 0, c.critico || 0, c.otros || 0, a.cifra ? a.cifra.nombre : '', a.cifra ? a.cifra.valor : '', a.alerta || '']; }) });
+    var dec = (inf.decisiones && inf.decisiones.length) ? inf.decisiones : (d.decisiones_sugeridas || []);
+    if (dec.length) h.push({ nombre: 'Decisiones', columnas: ['Decisión', 'Estado', 'Responsable', 'Plazo', 'Origen', 'Área'], filas: dec.map(function (x) { return [x.texto, x.estado === 'ACORDADA' ? 'Acordada' : (x.estado === 'DESCARTADA' ? 'Descartada' : 'Propuesta'), x.responsable || '', x.plazo || '', x.origen || '', x.area || '']; }) });
+    if ((d.decisiones_anteriores || []).length) h.push({ nombre: 'Acordado el mes pasado', columnas: ['Decisión', 'Responsable', 'Plazo', 'Situación'], filas: d.decisiones_anteriores.map(function (x) { return [x.texto, x.responsable || '', x.plazo || '', { v: x.vencida ? 'Plazo vencido' : 'En plazo', tono: x.vencida ? 'critico' : 'info' }]; }) });
+    if ((ej.indicadores || []).length) h.push({ nombre: 'Indicadores clave', columnas: ['Indicador', 'Qué mide', 'Valor', 'Estado', 'Meta', 'Explicación'], filas: ej.indicadores.map(function (k) { return [k.nombre, k.mide || '', I().valor(k, k.valor), { v: I().ESTADO_TXT[k.estado] || k.estado, tono: TX[k.estado] || 'info' }, k.meta_texto || '', k.explicacion || '']; }) });
+    if ((ej.reportes_areas || []).length) h.push({ nombre: 'Reportes de las áreas', columnas: ['Área', 'Reporte', 'Preparó', 'Validó', 'Comentario del área'], filas: ej.reportes_areas.map(function (r) { return [r.nombre, EST_REP[r.estado] || r.estado, r.autor_email ? nombre(r.autor_email) : '', r.validado_por ? nombre(r.validado_por) : '', r.comentario_area || '']; }) });
+    if (inf.conclusion) h.push({ nombre: 'Conclusión de Control', columnas: ['Conclusión'], filas: [[inf.conclusion]] });
+    if ((inf.comentarios || []).length) h.push({ nombre: 'Comentarios', columnas: ['Quién', 'Rol', 'Comentario', 'Fecha'], filas: inf.comentarios.map(function (c) { return [nombre(c.email), c.rol_txt || '', c.texto, fecha(c.fecha)]; }) });
+    if ((ej.calidad || []).length) h.push({ nombre: 'Calidad del dato', columnas: ['Área', 'Dónde', 'Qué hay que corregir'], filas: ej.calidad.map(function (x) { return [x.area || '', x.matriz || '', x.problema || '']; }) });
+    var alertas = ej.alertas || [];
+    return { titulo: 'Informe de gestión · ' + x_.perTexto(d.periodo, true), subtitulo: d.estado_texto + (d.congelado ? ' · cifras congeladas al enviarlo' : ' · cifras en vivo'),
+      meta: [['Mes', x_.perTexto(d.periodo, true)], ['Estado', d.estado_texto]],
+      resumen: { estado: alertas.some(function (a) { return a.nivel === 'critico'; }) ? 'critico' : (alertas.length ? 'alerta' : 'ok'), frase: ej.titular || '',
+        kpis: (ej.indicadores || []).slice(0, 8).map(function (k) { return { etiqueta: k.nombre, valor: I().valor(k, k.valor), nota: I().ESTADO_TXT[k.estado] || '' }; }),
+        alertas: alertas.map(function (a) { return { severidad: a.nivel === 'critico' ? 'critico' : 'alerta', cantidad: a.breve || a.cifra || '', titulo: a.titulo + (a.nueva === true ? ' (nueva)' : ''),
+          detalle: [a.que_pasa, a.decision ? 'Decisión sugerida: ' + a.decision : ''].filter(Boolean).join(' '), dueno: a.area || '' }; }),
+        bien: (ej.bien || []).map(function (b) { return b.area + ': ' + b.texto; }) },
+      hojas: h };
   }
 
   // =========================================================================================

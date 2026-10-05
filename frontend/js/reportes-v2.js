@@ -435,6 +435,8 @@
     contenedor.querySelectorAll('.js-rep-excel').forEach(function (b) {
       b.addEventListener('click', function () {
         var tit = contenedor.querySelector('.rp2-doc__tit');
+        // Un reporte puede armar su propio libro (p. ej. una hoja por tema); si no, se exporta lo que se ve.
+        if (opts.excel) { descargarExcelDeDatos(Object.assign({ nombreArchivo: opts.nombreArchivo }, opts.excel()), { boton: b }); return; }
         descargarExcel(contenedor, { titulo: opts.titulo || (tit ? tit.textContent : 'Reporte'), nombreArchivo: opts.nombreArchivo, boton: b });
       });
     });

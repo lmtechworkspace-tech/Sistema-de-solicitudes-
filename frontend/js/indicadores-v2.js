@@ -153,10 +153,13 @@
     avance_contable: ['contabilizacion_pendiente_mes', 'contabilizacion_atrasada'], atraso_contable: ['contabilizacion_atrasada'],
     facturacion: ['facturacion_top'], concentracion: ['facturacion_top'], convenios_vencidos: ['convenios_vencidos'], notificaciones_sii: ['notificaciones_abiertas'],
     rle_pendiente: ['rle_pendiente'], anexos_pendientes: [], liquidaciones: ['liquidaciones_por_cliente'], salidas_por_entrada: ['causales'],
-    cartera_vencida: ['morosos'], clientes_sin_respuesta: ['clientes_sin_respuesta'], dependencia: ['carga_por_persona']
+    cartera_vencida: ['morosos'], clientes_sin_respuesta: ['clientes_sin_respuesta'], dependencia: ['carga_por_persona'],
+    tareas_a_tiempo: ['tareas_area'], citas_avisadas: ['citas_clientes']
   };
   var DET_EXTRA = {
     contabilizacion_pendiente_mes: ['Clientes sin cerrar la contabilización del mes', [{ t: 'Cliente', v: 'cliente' }, { t: 'Situación', v: 'situacion' }]],
+    tareas_area: ['Fechas del área en el mes', [{ t: 'Tarea', v: 'tarea' }, { t: 'Fecha', v: 'fecha' }, { t: 'Estado', v: 'estado' }, { t: 'Hecha el', v: 'hecho' }]],
+    citas_clientes: ['Citas de clientes del mes', [{ t: 'Cita', v: 'cita' }, { t: 'Cliente', v: 'cliente' }, { t: 'Fecha', v: 'fecha' }, { t: 'Avisada', v: 'avisada' }]],
     carga_por_persona: ['Registros por persona (12 meses)', [{ t: 'Persona', v: function (f) { return persona(f.email); } }, { t: 'Registros', v: 'registros', num: true }, { t: '%', v: function (f) { return f.participacion + ' %'; }, num: true }]]
   };
   function persona(e) {
@@ -301,5 +304,62 @@
     d.el.classList.add('sx2-drawer--ancho');
   });
 
-  window.SigsoIndicadores = { tarjeta: tarjeta, grafico: grafico, figura: figura, alerta: alerta, tabla: tabla, detalle: detalle, bloqueArea: bloqueArea, bloquePortada: bloquePortada, portada: portada, valor: valor, chip: chip, ESTADO_TXT: ESTADO_TXT };
+  // =========================================================================================
+  // EXCEL POR TEMA (2026-10-05): Resumen (la portada), una hoja por tema con sus
+  // indicadores, «Tendencias 12 meses» en formato largo (sirve para tablas dinámicas),
+  // una hoja por cada tabla de detalle y «Calidad del dato». Los valores van como
+  // números (no como texto formateado) para poder calcular con ellos.
+  // =========================================================================================
+  // Nombres cortos de hoja (Excel corta en 31 caracteres).
+  var HOJA_CORTA = { f29_atrasos_mes: 'F29 fuera de plazo', f29_reincidentes: 'Reincidentes en el F29', f29_sin_registro: 'Sin F29 registrado', contabilizacion_atrasada: 'Contabilidad atrasada',
+    facturacion_top: 'Mayores clientes', convenios_vencidos: 'Convenios vencidos', notificaciones_abiertas: 'Notificaciones SII', contabilizacion_pendiente_mes: 'Sin cerrar este mes',
+    carga_por_persona: 'Registros por persona', rle_pendiente: 'RLE pendiente', liquidaciones_por_cliente: 'Liquidaciones por cliente', causales: 'Causales de término',
+    morosos: 'Facturas vencidas', clientes_sin_respuesta: 'Clientes sin respuesta', tareas_area: 'Fechas del área', citas_clientes: 'Citas de clientes' };
+  var MES_LARGO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  function mesAnio(p) { var m = /^(\d{4})-M(\d{2})$/.exec(p || ''); return m ? MES_LARGO[+m[2] - 1] + ' ' + m[1] : String(p || ''); }
+  function unidadDe(k) { return k.formato === 'pct' ? '%' : (k.formato === 'monto' ? '$' : (k.formato === 'ratio' ? 'veces' : (k.unidad || ''))); }
+  function num(v) { return v === null || v === undefined || v === '' || !isFinite(Number(v)) ? '' : Number(v); }
+  var TONO_X = { ok: 'ok', alerta: 'alerta', critico: 'critico', info: 'info', en_curso: 'neutro', sin_dato: 'neutro' };
+  function estadoCelda(k) { return { v: ESTADO_TXT[k.estado] || k.estado || '', tono: TONO_X[k.estado] || 'neutro' }; }
+  function textoCelda(c, f) { var v = typeof c.v === 'function' ? c.v(f) : f[c.v]; return v === null || v === undefined ? '' : (typeof v === 'number' ? v : String(v)); }
+  /**
+   * r: el bloque de indicadores del área. o: { titulo, subtitulo, meta: [[k, v]], hojasExtra: [{ nombre, columnas, filas }] }
+   * Devuelve la especificación para SigsoReportes.descargarExcelDeDatos.
+   */
+  function excel(r, o) {
+    o = o || {};
+    var p = portadaDe(r), kpis = r.kpis || [], d = r.detalle || {};
+    var cifras = p.cifras.map(function (c) { return kDe(r, c); }).filter(Boolean);
+    var resumen = {
+      estado: r.semaforo === 'critico' ? 'critico' : (r.semaforo === 'alerta' ? 'alerta' : 'ok'), frase: p.titular || '',
+      kpis: cifras.map(function (k) { return { etiqueta: k.nombre, valor: valor(k, k.valor), nota: [ESTADO_TXT[k.estado], k.mide].filter(Boolean).join(' · ') }; }),
+      alertas: (r.alertas || []).map(function (a) { return { severidad: a.nivel === 'critico' ? 'critico' : 'alerta', cantidad: a.breve || a.cifra || '', titulo: a.titulo,
+        detalle: [a.que_pasa, a.por_que ? 'Por qué: ' + a.por_que : '', a.impacto ? 'Impacto: ' + a.impacto : '', a.decision ? 'Decisión sugerida: ' + a.decision : ''].filter(Boolean).join(' '), dueno: a.area || '' }; }),
+      bien: p.bien || []
+    };
+    var hojas = [];
+    // Una hoja por tema, en el orden del reporte.
+    var orden = [], por = {};
+    kpis.forEach(function (k) { var t = k.tema || 'Otros'; if (!por[t]) { por[t] = []; orden.push(t); } por[t].push(k); });
+    orden.forEach(function (t) {
+      hojas.push({ nombre: t, columnas: ['Indicador', 'Qué mide', 'Valor', 'Unidad', 'Estado', 'Meta', 'Mes anterior', 'Promedio 12 meses', 'Explicación', 'Cómo se calcula'],
+        filas: por[t].map(function (k) { return [k.nombre, k.mide || '', num(k.valor), unidadDe(k), estadoCelda(k), k.meta_texto || '', num(k.anterior), num(k.promedio_12), k.explicacion || k.nota || '', k.definicion || '']; }) });
+    });
+    // Tendencias en formato largo.
+    var tend = [];
+    kpis.forEach(function (k) { (k.serie || []).forEach(function (x, i, arr) { if (x.valor === null || x.valor === undefined) return; tend.push([k.tema || 'Otros', k.nombre, mesAnio(x.periodo), num(x.valor), unidadDe(k), k.preliminar && i === arr.length - 1 ? 'Preliminar' : '']); }); });
+    if (tend.length) hojas.push({ nombre: 'Tendencias 12 meses', columnas: ['Tema', 'Indicador', 'Mes', 'Valor', 'Unidad', 'Nota'], filas: tend });
+    // Las tablas de detalle, cada una en su hoja (completas, sin el tope de pantalla).
+    var tablas = DETALLES.map(function (x) { return { clave: x[0], titulo: x[1], cols: x[2] }; })
+      .concat(Object.keys(DET_EXTRA).map(function (c) { return { clave: c, titulo: DET_EXTRA[c][0], cols: DET_EXTRA[c][1] }; }))
+      .filter(function (t) { return t.clave !== 'calidad' && (d[t.clave] || []).length; });
+    var cupo = 20 - 1 - hojas.length - (o.hojasExtra || []).length - ((d.calidad || []).length ? 1 : 0);
+    tablas.slice(0, Math.max(0, cupo)).forEach(function (t) {
+      hojas.push({ nombre: HOJA_CORTA[t.clave] || t.titulo, columnas: t.cols.map(function (c) { return c.t; }), filas: d[t.clave].map(function (fl) { return t.cols.map(function (c) { return textoCelda(c, fl); }); }) });
+    });
+    if ((d.calidad || []).length) hojas.push({ nombre: 'Calidad del dato', columnas: ['Dónde', 'Último mes', 'Qué hay que corregir'], filas: d.calidad.map(function (x) { return [x.area ? x.area + ' · ' + x.matriz : x.matriz, x.ultimo_mes || '', x.problema]; }) });
+    return { titulo: o.titulo || ('Indicadores · ' + (r.nombre || '')), subtitulo: o.subtitulo || '', meta: o.meta || [['Mes', r.periodo_texto || '']], resumen: resumen, hojas: (o.hojasExtra || []).concat(hojas) };
+  }
+
+  window.SigsoIndicadores = { excel: excel, tarjeta: tarjeta, grafico: grafico, figura: figura, alerta: alerta, tabla: tabla, detalle: detalle, bloqueArea: bloqueArea, bloquePortada: bloquePortada, portada: portada, valor: valor, chip: chip, ESTADO_TXT: ESTADO_TXT };
 })();
