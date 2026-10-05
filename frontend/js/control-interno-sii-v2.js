@@ -169,8 +169,8 @@
     var instalar = U.card({ titulo: 'El marcador "Enviar a SIGSO"', icono: 'bandera', cuerpo:
       '<p class="sx2-tenue" style="margin:0 0 10px">El mismo de la TGR: arrástralo una vez a la barra de marcadores (Ctrl+Shift+B la muestra).</p>' +
       '<a class="sx2-boton sx2-boton--primario cv-marcador js-sii-marcador" href="' + U.esc(x_.marcador()) + '" draggable="true">' + U.ico('bandera', 16) + 'Enviar a SIGSO</a>' +
-      '<ol class="cv-pasos"><li><b>F29:</b> en el SII, con la clave del cliente, abre el formulario del mes (Consulta integral F29 › ver el formulario) y toca el marcador.</li>' +
-      '<li><b>Compras y ventas:</b> en el Registro de Compras y Ventas, el mes y la pestaña (Compras o Ventas): el marcador manda el resumen; para comparar folio por folio sube el CSV de "Descargar detalles".</li>' +
+      '<ol class="cv-pasos"><li><b>F29:</b> en el SII, con la clave del cliente: Servicios online › Impuestos mensuales › Consulta y seguimiento (F29 y F50) › <b>Consultar estado de declaración</b> › Formulario 29 y el período › <b>Buscar Datos Ingresados</b> › el folio en Declaraciones Vigentes › <b>Formulario Compacto</b>, y toca el marcador.</li>' +
+      '<li><b>Compras y ventas:</b> Servicios online › Factura electrónica › <b>Registro de Compras y Ventas</b> › Ingresar › el período y <b>Consultar</b> › pestaña COMPRA o VENTA: el marcador manda el resumen; para comparar folio por folio sube el CSV de <b>Descargar Detalles</b> (no "Descargar Resúmenes").</li>' +
       '<li>Revisa qué cambia y aplica solo lo que corresponde.</li></ol>' +
       '<p class="sx2-tenue" style="font-size:.8125rem;margin:8px 0 0">SIGSO no guarda claves ni entra al SII: solo lee lo que ya ves en tu pantalla.</p>' });
     var subir = U.card({ titulo: 'Subir el CSV del Registro de Compras y Ventas', icono: 'subir', cuerpo:
