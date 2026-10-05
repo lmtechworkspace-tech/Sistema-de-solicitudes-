@@ -404,10 +404,22 @@ function panel(db, data, contexto) {
   const meses = [];
   for (let i = 5; i >= 0; i--) meses.push(CI.moverPeriodo_(periodo, -i));
   const mensual = (dep, per) => todos.find((r) => r.depto === dep && r.periodo === per && r.tipo === 'MENSUAL') || null;
+  // Lo que dice cada reporte sin abrirlo: su titular y sus dos cifras clave (auditoría · etapa 4).
+  const ctxInd = Indicadores.contexto_(db, periodo);
+  const resumenDe = (dep, r) => {
+    try {
+      const congelado = r && r.resumen_auto && r.estado !== E.BORRADOR && r.estado !== E.OBSERVADO;
+      const ind = congelado ? (json_(r.resumen_auto, {}) || {}).indicadores : Indicadores.calcularArea_(db, dep.clave, periodo, ctxInd);
+      if (!ind || !ind.con_indicadores) return null;
+      const p = ind.portada || { titular: '', cifras: [] };
+      return { titular: p.titular, semaforo: ind.semaforo, cifras: p.cifras.slice(0, 2).map((c) => ind.kpis.find((k) => k.clave === c)).filter(Boolean).map((k) => ({ nombre: k.nombre, valor: Indicadores.valorTxt_(k), estado: k.estado })) };
+    } catch (e) { return null; }
+  };
   const areas = AREAS.map((dep) => {
     const r = mensual(dep.clave, periodo);
     const eq = personas_(db, dep.clave);
     return {
+      resumen: resumenDe(dep, r),
       depto: dep.clave, nombre: dep.nombre, modulo: dep.modulo, icono: dep.icono,
       jefaturas: eq.jefaturas, personas: eq.todos.length,
       reporte: r ? publico_(r) : null, estado: r ? r.estado : 'SIN_INICIAR', estado_texto: ETIQUETAS[r ? r.estado : 'SIN_INICIAR'],

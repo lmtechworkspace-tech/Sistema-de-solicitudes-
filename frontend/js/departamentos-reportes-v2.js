@@ -378,7 +378,9 @@
     var i = 4;
     var tarjetas = '<div class="dr-areas">' + d.areas.map(function (a) {
       var rep = a.reporte;
+      var res = a.resumen;
       var cuerpo = '<div class="dr-area__estado">' + U.badge(d.etiquetas[a.estado] || a.estado, TONO[a.estado]) + '</div>' +
+        (res ? '<div class="dr-area__res">' + (res.titular ? '<p>' + txt(res.titular) + '</p>' : '') + (res.cifras.length ? '<div class="dr-area__cifras">' + res.cifras.map(function (k) { return '<span class="dr-area__cifra dr-area__cifra--' + U.esc(k.estado) + '"><small>' + txt(k.nombre) + '</small><b>' + txt(k.valor) + '</b></span>'; }).join('') + '</div>' : '') + '</div>' : '') +
         '<dl class="dr-area__datos"><div><dt>Jefatura</dt><dd>' + (a.jefaturas.length ? txt(a.jefaturas.map(nombre).join(', ')) : '<i>sin asignar</i>') + '</dd></div>' +
         (rep && rep.fecha_envio ? '<div><dt>Envió</dt><dd>' + txt(nombre(rep.autor_email)) + ' · ' + txt(fecha(rep.fecha_envio)) + '</dd></div>' : '') +
         (rep && rep.fecha_validacion ? '<div><dt>Validó</dt><dd>' + txt(nombre(rep.validado_por)) + ' · ' + txt(fecha(rep.fecha_validacion)) + '</dd></div>' : '') + '</dl>' +

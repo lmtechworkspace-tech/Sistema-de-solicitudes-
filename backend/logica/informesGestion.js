@@ -155,6 +155,9 @@ function obtener(db, data, contexto) {
     } : null,
     ejecutivo: snap,
     decisiones_sugeridas: inf && json_(inf.decisiones, []).length ? [] : decisionesSugeridas_(snap),
+    // Seguimiento: lo que Gerencia acordó el mes pasado, con su plazo (auditoría · etapa 4).
+    decisiones_anteriores: ((informe_(db, CI.moverPeriodo_(periodo, -1)) || {}).decisiones ? json_(informe_(db, CI.moverPeriodo_(periodo, -1)).decisiones, []) : [])
+      .filter((x) => x.estado === 'ACORDADA').map((x) => Object.assign({}, x, { vencida: !!(x.plazo && x.plazo < hoy) })),
     plazos: plazos.map((p) => Object.assign({}, p, { vencido: hoy > p.fecha && p.paso >= pasoActual && pasoActual < 7 })),
     cadena: Object.assign({}, yo.cadena), roles_txt: ROL_TXT, yo: { email: yo.email, roles: yo.roles, es_admin: yo.esAdmin },
     acciones: acciones_(inf, yo)

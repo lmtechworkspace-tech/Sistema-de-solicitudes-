@@ -24,8 +24,8 @@
   var x_ = null, est_ = { periodo: '', datos: null, turno: 0, hist: [] };
 
   var TONO_EST = { SIN_INICIAR: 'neutro', PREPARACION: 'info', EN_FINANZAS: 'alerta', EN_CONTROL: 'alerta', EN_GERENCIA: 'primario', CERRADO: 'ok' };
-  var TONO_AREA = { critico: 'critico', alerta: 'alerta', ok: 'ok', sin_datos: 'neutro' };
-  var TXT_AREA = { critico: 'Atención', alerta: 'Vigilar', ok: 'En orden', sin_datos: 'Sin datos' };
+  var TONO_AREA = { critico: 'critico', alerta: 'alerta', ok: 'ok', sin_datos: 'neutro', en_curso: 'neutro' };
+  var TXT_AREA = { critico: 'Atención', alerta: 'Vigilar', ok: 'En orden', sin_datos: 'Sin datos', en_curso: 'Mes en curso' };
   var EST_REP = { SIN_INICIAR: 'Sin iniciar', BORRADOR: 'En preparación', EN_REVISION: 'Por validar', OBSERVADO: 'Devuelto', VALIDADO: 'Por recibir', RECIBIDO: 'Recibido' };
   var TONO_REP = { SIN_INICIAR: 'neutro', BORRADOR: 'info', EN_REVISION: 'alerta', OBSERVADO: 'critico', VALIDADO: 'primario', RECIBIDO: 'ok' };
   var ACC_TXT = { INFORME_CREADO: 'lo empezó', INFORME_A_FINANZAS: 'lo envió a Finanzas y Cobranzas', INFORME_APROBADO_FINANZAS: 'lo aprobó (Finanzas)', INFORME_APROBADO_COBRANZAS: 'lo aprobó (Cobranzas)',
@@ -86,7 +86,9 @@
       GERENCIA: inf.fecha_cierre ? 'Cerró ' + fecha(inf.fecha_cierre) : quien('GERENCIA')
     };
     return '<ol class="ig-cadena sx2-entra">' + d.plazos.map(function (p) {
-      var hecho = p.paso < actual || (p.paso <= 2 && areas.length && areas.every(function (a) { return a.estado === 'RECIBIDO'; }));
+      // Pasos 1 y 2 (áreas y jefaturas) se cumplen cuando TODAS las áreas enviaron / validaron, no por el paso del informe.
+      var hecho = p.paso === 1 ? !!areas.length && areas.every(function (a) { return a.fecha_envio; })
+        : (p.paso === 2 ? !!areas.length && areas.every(function (a) { return a.validado_por; }) : p.paso < actual);
       var cls = hecho ? ' is-hecho' : (p.paso === actual ? ' is-actual' : '');
       return '<li class="ig-paso' + cls + (p.vencido && !hecho ? ' is-vencido' : '') + '"><span class="ig-paso__n">' + (hecho ? U.ico('check', 13) : p.paso) + '</span>' +
         '<span class="ig-paso__txt"><strong>' + txt(p.nombre) + '</strong><span>' + txt(det[p.clave] || '') + '</span>' +
@@ -101,6 +103,28 @@
     return '<div class="ig-semaforo">' + (ej.semaforo || []).map(function (s) {
       return '<div class="ig-area ig-area--' + U.esc(s.nivel) + '"><strong>' + txt(s.nombre) + '</strong>' + U.badge(TXT_AREA[s.nivel] || s.nivel, TONO_AREA[s.nivel] || 'neutro') + '<span>' + txt(s.resumen) + '</span></div>';
     }).join('') + '</div>';
+  }
+  /** Las áreas lado a lado: cuántos indicadores en meta, para vigilar y críticos, con su cifra principal. */
+  function comparativo(ej) {
+    var a = ej.areas_resumen || [];
+    if (!a.length) return '';
+    return '<div class="ig-comp">' + a.map(function (x) {
+      var c = x.cuenta || {}, t = (c.ok || 0) + (c.alerta || 0) + (c.critico || 0) + (c.otros || 0);
+      var seg = function (n, cl, et) { return n ? '<span class="ig-comp__seg ig-comp__seg--' + cl + '" style="flex:' + n + '" title="' + U.esc(n + ' ' + et) + '"></span>' : ''; };
+      return '<div class="ig-comp__fila"><span class="ig-comp__area"><strong>' + txt(x.nombre) + '</strong>' + U.badge(TXT_AREA[x.nivel] || x.nivel, TONO_AREA[x.nivel] || 'neutro') + '</span>' +
+        '<span class="ig-comp__barra" role="img" aria-label="' + U.esc((c.ok || 0) + ' en meta, ' + (c.alerta || 0) + ' para vigilar, ' + (c.critico || 0) + ' críticos') + '">' +
+          (t ? seg(c.critico, 'critico', 'críticos') + seg(c.alerta, 'alerta', 'para vigilar') + seg(c.ok, 'ok', 'en meta') + seg(c.otros, 'otros', 'informativos') : '<span class="ig-comp__vacia">Sin indicadores todavía</span>') + '</span>' +
+        '<span class="ig-comp__cifra">' + (x.cifra ? txt(x.cifra.nombre) + ': <b>' + txt(x.cifra.valor) + '</b>' + (x.cifra.estado === 'en_curso' && x.cifra.valor !== 'en curso' ? ' <span class="sx2-tenue">(parcial)</span>' : '') : '<span class="sx2-tenue">—</span>') + '</span></div>';
+    }).join('') + '<p class="ig-comp__ley"><i class="ig-comp__seg--critico"></i>Crítico <i class="ig-comp__seg--alerta"></i>Para vigilar <i class="ig-comp__seg--ok"></i>En meta <i class="ig-comp__seg--otros"></i>Informativo</p></div>';
+  }
+  /** Lo que Gerencia acordó el mes pasado, con su plazo. */
+  function seguimiento(d) {
+    var l = d.decisiones_anteriores || [];
+    if (!l.length) return '';
+    return '<section class="ci2-rep-sec"><h2 class="rp2-sub">Seguimiento de lo acordado el mes pasado</h2><ul class="ig-decisiones">' + l.map(function (x) {
+      return '<li class="ig-dec">' + U.badge(x.vencida ? 'Plazo vencido' : 'En plazo', x.vencida ? 'critico' : 'info') + '<span><strong>' + txt(x.texto) + '</strong>' +
+        (x.responsable || x.plazo ? '<em>' + txt([x.responsable, x.plazo ? 'plazo ' + x.plazo.split('-').reverse().join('-') : ''].filter(Boolean).join(' · ')) + '</em>' : '') + '</span></li>';
+    }).join('') + '</ul></section>';
   }
   function decisiones(d, editable) {
     var inf = d.informe || {};
@@ -154,10 +178,12 @@
       ? '<textarea class="sx2-input dr-texto js-ig-concl" rows="3" placeholder="Lo que concluye Control del mes, en dos o tres frases.">' + U.esc(inf.conclusion || '') + '</textarea>'
       : (inf.conclusion ? '<p class="dr-parrafo">' + txt(inf.conclusion) + '</p>' : '<p class="sx2-tenue">La deja el Analista de Control antes de enviarlo a Gerencia.</p>');
     var cuerpo =
-      '<section class="ci2-rep-sec"><h2 class="rp2-sub">Estado de cada área</h2>' + semaforo(ej) + '</section>' +
+      (ej.titular ? '<p class="ip-titular ig-titular">' + txt(ej.titular) + '</p>' : '') +
+      '<section class="ci2-rep-sec"><h2 class="rp2-sub">Las áreas en una mirada</h2>' + (ej.areas_resumen ? comparativo(ej) : semaforo(ej)) + '</section>' +
       '<section class="ci2-rep-sec"><h2 class="rp2-sub">Requiere su decisión</h2>' + (criticas.length ? '<div class="ind-alertas">' + criticas.map(I().alerta).join('') + '</div>' : '<p class="ind-ok">' + U.ico('check', 16) + ' Sin alertas críticas este mes.</p>') + '</section>' +
       (vigilar.length ? '<section class="ci2-rep-sec"><h2 class="rp2-sub">Para vigilar</h2><div class="ind-alertas">' + vigilar.map(I().alerta).join('') + '</div></section>' : '') +
       '<section class="ci2-rep-sec"><h2 class="rp2-sub">Decisiones' + (d.estado === 'EN_CONTROL' ? ' propuestas por Control' : '') + '</h2>' + decisiones(d, editDec) + '</section>' +
+      seguimiento(d) +
       '<section class="ci2-rep-sec"><h2 class="rp2-sub">Conclusión del Analista de Control</h2>' + concl + '</section>' +
       '<section class="ci2-rep-sec"><h2 class="rp2-sub">Indicadores clave</h2><div class="ind-kpis">' + (ej.indicadores || []).map(I().tarjeta).join('') + '</div></section>' +
       ((ej.bien || []).length ? '<section class="ci2-rep-sec"><h2 class="rp2-sub">Lo que va bien</h2><ul class="ig-bien">' + ej.bien.map(function (b) { return '<li><b>' + txt(b.area) + ':</b> ' + txt(b.texto) + '</li>'; }).join('') + '</ul></section>' : '') +

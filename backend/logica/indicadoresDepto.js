@@ -722,8 +722,25 @@ function contexto_(db, periodo) {
   return { leer: lector_(db, CI.moverPeriodo_(desde, -4), hasta), meses: meses_(periodo, 12), feriados: new Set(fer), hoy: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date()),
     get preliminar() { return this.hoy <= vencimiento_(periodo, 15, this.feriados); } };
 }
+// Cifras que dependen del trabajo DEL MES: mientras el mes no termina son parciales,
+// sin color ni alerta. Lo acumulado (RLE pendiente, reincidentes, convenios, cartera) sí alerta.
+const DEL_MES = ['avance_contable', 'clientes_activos', 'facturacion', 'liquidaciones', 'salidas_por_entrada', 'certificados', 'licencias',
+  'tareas_a_tiempo', 'citas_avisadas', 'recordatorios_a_tiempo', 'clientes_sin_respuesta', 'cobrado', 'facturado_hp'];
+function finDeMes_(p) { const a = Number(p.slice(0, 4)), m = Number(p.slice(6)); return new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10); }
 /** Indicadores, alertas y detalle de un área en un mes (sin permisos: lo usan otras acciones). */
 function calcularArea_(db, depto, periodo, ctx) {
+  const c = ctx || contexto_(db, periodo);
+  const r = calcularAreaBase_(db, depto, periodo, c);
+  if (!r.con_indicadores || c.hoy > finDeMes_(periodo)) return r;
+  r.en_curso = true;
+  const delMesK = (k) => DEL_MES.includes(k.clave) || /^meta_/.test(k.clave);
+  r.kpis.forEach((k) => { if (delMesK(k)) { k.estado = 'en_curso'; k.explicacion = mesAnio_(periodo).replace(/^./, (x) => x.toUpperCase()) + ' todavía no termina: cifra parcial. ' + (k.explicacion || ''); } });
+  r.alertas = r.alertas.filter((a) => !DEL_MES.includes(a.clave));
+  r.semaforo = r.alertas.some((a) => a.nivel === 'critico') ? 'critico' : (r.alertas.length ? 'alerta' : 'ok');
+  if (r.portada && r.portada.cifras && r.portada.cifras.length) r.portada = portada_(depto, r.kpis, r.alertas);
+  return r;
+}
+function calcularAreaBase_(db, depto, periodo, ctx) {
   const c = ctx || contexto_(db, periodo);
   const dep = DEPARTAMENTOS.find((d) => d.clave === depto);
   if (!dep || !TIENE_INDICADORES.includes(depto)) return { depto, nombre: dep ? dep.nombre : depto, periodo, con_indicadores: false, kpis: [], alertas: [], detalle: {} };
@@ -776,8 +793,29 @@ function ejecutivo_(db, periodo) {
     .map((k, i) => Object.assign({}, k, i === 2 ? { nombre: 'Clientes de Contabilidad' } : {}));
   const bien = [];
   areas.forEach((a) => a.kpis.filter((k) => k.estado === 'ok' && k.gerencia).forEach((k) => bien.push({ area: a.nombre, texto: k.nombre + ': ' + k.explicacion })));
+  // Lo nuevo frente a lo que se arrastra del mes anterior (auditoría · etapa 4).
+  let previas = new Set();
+  try {
+    const pa = CI.moverPeriodo_(periodo, -1), cp = contexto_(db, pa);
+    DEPARTAMENTOS.filter((d) => !d.recibe).forEach((d) => calcularArea_(db, d.clave, pa, cp).alertas.forEach((x) => previas.add(d.clave + '|' + x.clave)));
+  } catch (e) { previas = new Set(); }
+  areas.forEach((a) => a.alertas.forEach((x) => { x.nueva = !previas.has(a.depto + '|' + x.clave); }));
+  // Las áreas lado a lado: cuántos indicadores en meta, para vigilar y críticos, y su cifra principal.
+  const areasResumen = areas.map((a) => {
+    const c = { ok: 0, alerta: 0, critico: 0, otros: 0 };
+    a.kpis.forEach((k) => { if (k.estado === 'ok' || k.estado === 'alerta' || k.estado === 'critico') c[k.estado]++; else c.otros++; });
+    const k0 = a.portada && a.portada.cifras[0] ? a.kpis.find((k) => k.clave === a.portada.cifras[0]) : null;
+    return { depto: a.depto, nombre: a.nombre, nivel: a.con_indicadores ? (a.en_curso && !a.alertas.length ? 'en_curso' : a.semaforo) : 'sin_datos', cuenta: c,
+      cifra: k0 ? { nombre: k0.nombre, valor: valorTxt_(k0), estado: k0.estado } : null, alerta: a.alertas[0] ? a.alertas[0].titulo : '' };
+  });
+  const urg = alertas.slice(0, 2).map((x) => x.titulo + ' (' + x.area + (x.breve ? ', ' + x.breve : '') + ')');
+  const mejor = clave.find((k) => k.estado === 'ok');
+  const nuevas = alertas.filter((x) => x.nueva).length;
+  const titular = (urg.length ? 'Lo más urgente: ' + urg[0] + '.' + (urg[1] ? ' Le sigue: ' + urg[1] + '.' : '') : 'Ninguna área tiene alertas este mes.') +
+    (alertas.length ? ' ' + (nuevas ? plural_(nuevas, 'alerta es nueva', 'alertas son nuevas') + ' y ' + (alertas.length - nuevas) + ' vienen del mes anterior.' : 'Todas las alertas vienen del mes anterior.') : '') +
+    (mejor ? ' Va bien: ' + mejor.nombre + ' (' + valorTxt_(mejor) + ').' : '');
   return {
-    periodo, periodo_texto: mesAnio_(periodo),
+    periodo, periodo_texto: mesAnio_(periodo), titular, areas_resumen: areasResumen,
     semaforo: areas.map((a) => ({ depto: a.depto, nombre: a.nombre, nivel: a.con_indicadores ? a.semaforo : 'sin_datos',
       resumen: a.con_indicadores ? (a.alertas[0] ? a.alertas[0].titulo : 'Sin alertas en el mes.') : (a.depto === 'COBRANZAS' ? 'Todavía sin facturas registradas en la matriz de cobranza.' : 'Todavía sin matrices: entrega su reporte con la plantilla.') })),
     alertas, indicadores: clave, bien, calidad: [].concat(...areas.map((a) => (a.detalle.calidad || []).map((x) => Object.assign({ area: a.nombre }, x))))

@@ -107,7 +107,8 @@
   }
   function alerta(a) {
     return '<article class="ind-alerta ind-alerta--' + U.esc(a.nivel) + ' sx2-entra">' +
-      '<header class="ind-alerta__cab"><strong>' + txt(a.titulo) + '</strong><span class="ind-alerta__cifra">' + txt(a.cifra || '') + '</span>' + (a.area ? '<span class="sx2-tenue">' + txt(a.area) + '</span>' : '') + '</header>' +
+      '<header class="ind-alerta__cab"><strong>' + txt(a.titulo) + '</strong><span class="ind-alerta__cifra">' + txt(a.cifra || '') + '</span>' + (a.area ? '<span class="sx2-tenue">' + txt(a.area) + '</span>' : '') +
+        (a.nueva === true ? U.badge('Nueva', 'info', true) : (a.nueva === false ? U.badge('Viene del mes anterior', 'neutro', true) : '')) + '</header>' +
       (a.que_pasa ? '<p>' + txt(a.que_pasa) + '</p>' : '') +
       (a.por_que ? '<p class="ind-alerta__porque"><b>Por qué pasa:</b> ' + txt(a.por_que) + '</p>' : '') +
       '<div class="ind-alerta__pie">' + (a.impacto ? '<span><b>Impacto:</b> ' + txt(a.impacto) + '</span>' : '') + (a.decision ? '<span><b>Decisión sugerida:</b> ' + txt(a.decision) + '</span>' : '') + '</div></article>';

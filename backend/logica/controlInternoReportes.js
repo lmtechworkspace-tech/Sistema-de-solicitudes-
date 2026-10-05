@@ -263,8 +263,41 @@ function fichaCliente(db, data, contexto) {
   const actividad = meses.map((p) => ({ periodo: p, filas: filas.filter((r) => r.periodo === p).length }));
   const primero = filas.filter((r) => r.periodo !== CI.PERIODO_LISTA).reduce((mn, r) => (!mn || r.periodo < mn ? r.periodo : mn), '');
   const muestra = filas.find((r) => r.cliente_nombre) || {};
+  // Lo que requiere atención del cliente según los indicadores del último mes informado,
+  // y los recordatorios de la Agenda con sus respuestas (auditoría · etapa 4).
+  const nom = CI.normalizarTexto_(muestra.cliente_nombre || nombre);
+  const es = (n) => CI.normalizarTexto_(n) === nom;
+  const alertas = [];
+  try {
+    const Ind = require('./indicadoresDepto');
+    const per = CI.moverPeriodo_(actual, -1);
+    const ve = (dep) => v.ac.deptos[dep] && v.ac.deptos[dep].ve;
+    if (ve('CONTABILIDAD')) {
+      const dc = Ind.calcularArea_(db, 'CONTABILIDAD', per).detalle || {};
+      (dc.f29_reincidentes || []).filter((x) => es(x.cliente)).forEach((x) => alertas.push({ nivel: 'alerta', texto: 'Se atrasa con el IVA casi todos los meses (' + x.meses_tarde + ' de 12).' }));
+      (dc.convenios_vencidos || []).filter((x) => es(x.cliente)).forEach(() => alertas.push({ nivel: 'critico', texto: 'Tiene cuotas de convenio TGR vencidas: el convenio puede caducar.' }));
+      (dc.contabilizacion_atrasada || []).filter((x) => es(x.cliente)).forEach((x) => alertas.push({ nivel: 'alerta', texto: 'Contabilidad atrasada: ' + x.meses_pendientes + ' meses sin cerrar desde ' + x.desde + '.' }));
+    }
+    if (ve('COBRANZAS')) {
+      const dk = Ind.calcularArea_(db, 'COBRANZAS', per).detalle || {};
+      (dk.morosos || []).filter((x) => es(x.cliente)).forEach((x) => alertas.push({ nivel: x.dias_max > 90 ? 'critico' : 'alerta', texto: 'Facturas de HomePymes vencidas: $' + Number(x.saldo_vencido).toLocaleString('es-CL') + ' (' + x.dias_max + ' días la más antigua).' }));
+    }
+  } catch (e) { /* sin indicadores: la ficha sigue */ }
+  let agenda = [];
+  try {
+    const { leerFilas_ } = require('../db/sqliteRepo');
+    const { COLUMNAS } = require('../db/schema');
+    const obls = {};
+    leerFilas_(db, 'DEP_OBLIGACIONES', COLUMNAS.DEP_OBLIGACIONES).forEach((o) => { obls[o.obligacion_id] = o.nombre; });
+    const deptosVe = DEPARTAMENTOS.filter((dp) => v.ac.deptos[dp.clave] && v.ac.deptos[dp.clave].ve).map((dp) => dp.clave);
+    agenda = leerFilas_(db, 'DEP_RECORDATORIOS', COLUMNAS.DEP_RECORDATORIOS)
+      .filter((r) => (r.activa === true || r.activa === 'TRUE') && deptosVe.includes(r.depto) && (id ? r.cliente_id === id : es(r.cliente_nombre)))
+      .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).slice(0, 15)
+      .map((r) => ({ fecha: r.fecha, obligacion: obls[r.obligacion_id] || '', tipo: r.escalon_id === 'RESPUESTA' ? 'RESPUESTA' : 'ENVIO', canal: r.canal, respuesta: r.respuesta, nota: r.nota, usuario_email: r.usuario_email }));
+  } catch (e) { agenda = []; }
   return {
     cliente_id: id, cliente_nombre: muestra.cliente_nombre || nombre, cliente_rut: muestra.cliente_rut || '', fuera_catalogo: !id,
+    alertas, agenda,
     desde: primero, total_filas: filas.length, matrices: porMatriz, pendientes, actividad,
     deptos: DEPARTAMENTOS.filter((dp) => porMatriz.some((x2) => x2.depto === dp.clave)).map((dp) => ({ clave: dp.clave, nombre: dp.nombre }))
   };

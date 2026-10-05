@@ -278,3 +278,31 @@
 .dr-nota-auto { margin: 0; font: var(--sx-t-chico); }
 .rp2-documento .ip-portada { margin-bottom: var(--sx-e-4); }
 .ip-det__fig .ind-graf { max-width: 520px; }
+
+/* ===== Informe de gestión: las áreas en una mirada (auditoría · etapa 4) ===== */
+.ig-titular { margin-bottom: var(--sx-e-3); }
+.ig-comp { display: flex; flex-direction: column; gap: 10px; }
+.ig-comp__fila { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 2fr) minmax(0, 1.4fr); gap: 12px; align-items: center; }
+@media (max-width: 760px) { .ig-comp__fila { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+.ig-comp__area { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font: var(--sx-t-chico); color: var(--sx-texto); }
+.ig-comp__barra { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--sx-neutro-suave); gap: 2px; }
+.ig-comp__seg { display: block; height: 100%; }
+.ig-comp__seg--critico { background: var(--sx-critico); } .ig-comp__seg--alerta { background: var(--sx-alerta); } .ig-comp__seg--ok { background: var(--sx-ok); } .ig-comp__seg--otros { background: var(--sx-borde-fuerte); }
+.ig-comp__vacia { font: var(--sx-t-micro, var(--sx-t-chico)); color: var(--sx-texto-3); padding-left: 8px; line-height: 14px; }
+.ig-comp__cifra { font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.ig-comp__cifra b { color: var(--sx-texto); font-variant-numeric: tabular-nums; }
+.ig-comp__ley { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 4px 0 0; font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.ig-comp__ley i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+/* Panel de Administración: lo que dice cada reporte. */
+.dr-area__res { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.dr-area__res p { margin: 0; font: var(--sx-t-chico); line-height: 1.45; color: var(--sx-texto); }
+.dr-area__cifras { display: flex; flex-wrap: wrap; gap: 6px; }
+.dr-area__cifra { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: var(--sx-radio-sm); background: var(--sx-superficie-2); border-left: 3px solid var(--sx-borde-fuerte); min-width: 0; }
+.dr-area__cifra--ok { border-left-color: var(--sx-ok); } .dr-area__cifra--alerta { border-left-color: var(--sx-alerta); } .dr-area__cifra--critico { border-left-color: var(--sx-critico); } .dr-area__cifra--info { border-left-color: var(--sx-primario); }
+.dr-area__cifra small { font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.dr-area__cifra b { font: 700 1rem/1.2 var(--fuente); font-variant-numeric: tabular-nums; color: var(--sx-texto); }
+/* Ficha por cliente: alertas del cliente. */
+.cir-alertas { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cir-alerta { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: var(--sx-radio-sm); background: var(--sx-alerta-suave); font: var(--sx-t-chico); color: var(--sx-texto); }
+.cir-alerta svg { flex: none; margin-top: 2px; color: var(--sx-alerta); }
+.cir-alerta--critico { background: var(--sx-critico-suave); } .cir-alerta--critico svg { color: var(--sx-critico); }

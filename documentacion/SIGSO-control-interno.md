@@ -467,3 +467,32 @@ a las 08:00 de cada día hábil, notificación en SIGSO a quien registra en el
 tiempo» y «Clientes que no respondieron»; en el F29 atrasado se indica si el
 cliente tuvo recordatorio antes del vencimiento (atraso del cliente) o no
 (atraso interno).
+
+## Auditoría de los reportes (2026-10-04/05)
+
+Auditados los nueve reportes de los departamentos con datos reales (artefacto
+«Auditoría de los reportes de los departamentos»); el dueño aprobó las cuatro
+recomendaciones. Implementado en cuatro etapas:
+
+1. **Cifras correctas** (`55847b2`). Cada reporte mide lo que VENCIÓ en el mes:
+   el de septiembre muestra el F29 de agosto (venció el 21-09). Lo que aún no
+   vence o el mes que sigue en curso salen «en curso», sin color ni alerta;
+   las cifras de volumen del mes son preliminares hasta el día 15 del mes
+   siguiente. Mínimo 5 casos para dar un estado. Un dato no confiable va a
+   «Calidad del dato» (nunca es alerta). Fechas con año imposible se descartan
+   y se listan. Gráficos legibles, sin el mes en curso ni listas impresas.
+2. **Reporte en tres capas** (`793ff1f`): portada de una pantalla (titular
+   escrito, 4 cifras clave, hasta 3 decisiones, lo que va bien), indicadores
+   por tema en pestañas con un panel de detalle por indicador, y anexo plegado
+   (completo al imprimir). Formulario corto donde SIGSO mide; las actividades
+   las propone SIGSO.
+3. **Prevención y Marketing** (`ffe37fd`): indicadores desde la Agenda (fechas
+   del área cumplidas a tiempo, citas avisadas, recordatorios, respuestas) y
+   metas propias (`DEP_METAS`) que define la jefatura en Ajustes; el área
+   anota el resultado en su reporte mensual.
+4. **Informe de gestión y demás reportes**: titular del mes, las áreas lado a
+   lado (en meta / para vigilar / críticos y su cifra principal), alertas
+   marcadas como nuevas o del mes anterior, seguimiento de lo acordado el mes
+   pasado; panel de Administración con el titular y dos cifras de cada área;
+   ficha por cliente con sus alertas y recordatorios; «registros» en vez de
+   «filas».
