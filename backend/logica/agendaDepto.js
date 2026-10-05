@@ -666,6 +666,78 @@ function medirMes_(db, depto, periodo) {
   return { envios: envios.length, a_tiempo: aTiempo, tarde, respuestas: delMes.filter((r) => r.escalon_id === 'RESPUESTA').length,
     sin_respuesta: [...new Set(Object.values(sinResp))].sort() };
 }
+/**
+ * Las fechas del área que vencieron en el mes (tareas internas: comité, visitas,
+ * plan de contenidos…): cuáles se cumplieron a tiempo, tarde o no se hicieron; y
+ * las citas de clientes (examen, pacto) con su aviso. Hasta `hoyF` si el mes sigue en curso.
+ */
+function cumplimientoMes_(db, depto, periodo, hoyF) {
+  const fer = feriados_(db), ctx = { fer }, reg = registro_(db, depto);
+  const a = Number(periodo.slice(0, 4)), m = Number(periodo.slice(6));
+  const desde = a + '-' + String(m).padStart(2, '0') + '-01', hasta = ultimoDia_(a, m);
+  const corte = (hoyF || hoy_()) < hasta ? (hoyF || hoy_()) : hasta;
+  const internas = [], citas = { total: 0, avisadas: 0, lista: [] };
+  obligaciones_(db, depto).forEach((o) => {
+    instancias_(db, o, desde, hasta, ctx).forEach((ins) => {
+      if (o.tipo === 'INTERNO') {
+        ins.escalones.filter((e) => e.fecha >= desde && e.fecha <= corte).forEach((e) => {
+          const r = reg[o.obligacion_id + '|' + ins.periodo + '|interno'] || { enviados: {}, ultima: null, cerrado: false };
+          const env = r.enviados[e.id];
+          const hecho = env ? diaChile_(env.fecha) : (r.cerrado && r.ultima ? diaChile_(r.ultima.fecha) : null);
+          internas.push({ tarea: e.nombre, obligacion: o.nombre, fecha: e.fecha, hecho: hecho || '', estado: !hecho ? 'SIN_HACER' : (hecho <= e.fecha ? 'A_TIEMPO' : 'TARDE') });
+        });
+      } else if (o.fuente === 'manual' && ins.fecha_limite >= desde && ins.fecha_limite <= hasta) {
+        ins.items.forEach((it) => {
+          const r = reg[o.obligacion_id + '|' + ins.periodo + '|' + it.clave];
+          const avisada = !!(r && Object.keys(r.enviados).length);
+          citas.total++; if (avisada) citas.avisadas++;
+          citas.lista.push({ cita: o.nombre, cliente: it.cliente_nombre, fecha: ins.fecha_limite, avisada: avisada ? 'Sí' : 'No' });
+        });
+      }
+    });
+  });
+  internas.sort((x, y) => x.fecha.localeCompare(y.fecha));
+  return { internas, citas, clientes: medirMes_(db, depto, periodo) };
+}
+
+// =========================================================================================
+// METAS PROPIAS del área: las define la jefatura; el valor de cada mes va en el reporte
+// =========================================================================================
+function metas_(db, depto) {
+  return leer_(db, 'DEP_METAS').filter((x) => esVerdadero_(x.activa) && (!depto || x.depto === depto))
+    .map((x) => ({ meta_id: x.meta_id, depto: x.depto, nombre: x.nombre, descripcion: x.descripcion || '', unidad: x.unidad || '', meta: Number(x.meta), sentido: x.sentido === 'menor' ? 'menor' : 'mayor', orden: Number(x.orden) || 99 }))
+    .sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre));
+}
+function listarMetas(db, data, contexto) {
+  const dep = depto_((data || {}).depto);
+  if (!dep) return { ok: false, message: 'Elige un área.' };
+  const pm = permisos_(db, contexto, dep.clave);
+  if (!pm.ve) return { _forbidden: true, message: 'No tienes acceso a ' + dep.nombre + '.' };
+  return { metas: metas_(db, dep.clave), puede_editar: pm.edita };
+}
+function guardarMeta(db, data, contexto) {
+  const d = data || {};
+  const actual = d.meta_id ? leer_(db, 'DEP_METAS').find((x) => x.meta_id === d.meta_id && esVerdadero_(x.activa)) : null;
+  if (d.meta_id && !actual) return { ok: false, message: 'Esa meta no existe.' };
+  const dep = depto_(actual ? actual.depto : d.depto);
+  if (!dep) return { ok: false, message: 'Elige un área.' };
+  const pm = permisos_(db, contexto, dep.clave);
+  if (!pm.edita) return { _forbidden: true, message: 'Las metas las define la jefatura del área o el superusuario.' };
+  if (d.quitar && actual) {
+    actualizarFilaPorId_(db, 'DEP_METAS', 'meta_id', actual.meta_id, { activa: false, actualizado_por: pm.email, fecha_actualizacion: ahora_() });
+    return { ok: true, message: 'Meta quitada. Los valores ya registrados quedan en los reportes anteriores.' };
+  }
+  const nombre = String(d.nombre || '').trim().slice(0, 100);
+  if (!nombre) return { ok: false, message: 'Ponle un nombre a la meta.' };
+  const meta = Number(String(d.meta).replace(',', '.'));
+  if (!isFinite(meta)) return { ok: false, message: 'La meta debe ser un número.' };
+  const fila = { nombre, descripcion: String(d.descripcion || '').slice(0, 300), unidad: String(d.unidad || '').slice(0, 20), meta, sentido: d.sentido === 'menor' ? 'menor' : 'mayor', actualizado_por: pm.email, fecha_actualizacion: ahora_() };
+  if (actual) { actualizarFilaPorId_(db, 'DEP_METAS', 'meta_id', actual.meta_id, fila); return { ok: true, message: 'Meta actualizada.' }; }
+  if (metas_(db, dep.clave).length >= 8) return { ok: false, message: 'Hasta 8 metas por área: mejor pocas y claras.' };
+  agregarFila_(db, 'DEP_METAS', Object.assign({ meta_id: crypto.randomUUID(), depto: dep.clave, orden: metas_(db, dep.clave).length + 1, creado_por: pm.email, fecha_creacion: ahora_(), activa: true }, fila));
+  return { ok: true, message: 'Meta agregada: el área anota su valor en el reporte mensual.' };
+}
+
 /** ¿Se le recordó al cliente (obligación `clave`, período, cliente) hasta la fecha `hasta`? Para separar atraso del cliente de atraso interno. */
 function avisos_(db, clave, periodo) {
   const o = obligaciones_(db, null, true).find((x) => x.clave === clave);
@@ -731,6 +803,6 @@ function alertasDiarias(db) {
 
 module.exports = {
   hoy, calendario, registrarEnvio, deshacer, responder, listarRegistro, guardarEvento, eliminarEvento, porCliente,
-  ajustes, guardarObligacion, restaurarPropuesta, historialObligacion, resumen, pendientes_, alertasDiarias, medirMes_, avisos_,
+  ajustes, guardarObligacion, restaurarPropuesta, historialObligacion, resumen, pendientes_, alertasDiarias, medirMes_, avisos_, cumplimientoMes_, metas_, listarMetas, guardarMeta,
   calcularHoy_, fechaLimite_, sumarHabiles_, habilesEntre_, telefono_, asegurarPropuesta_, registro_, obligaciones_, RESPUESTAS
 };

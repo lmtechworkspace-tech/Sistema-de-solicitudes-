@@ -839,6 +839,13 @@ const COLUMNAS = {
   DEP_EVENTOS: [
     'evento_id', 'depto', 'obligacion_id', 'titulo', 'fecha', 'hora', 'cliente_id', 'cliente_nombre', 'datos',
     'alcance', 'usuario_email', 'nota', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+  // Metas propias de cada área (2026-10-04): las define la jefatura (por
+  // ejemplo «visitas a terreno realizadas», meta 12 al mes) y el área anota el
+  // valor de cada mes en su reporte mensual (contenido.metas del reporte).
+  DEP_METAS: [
+    'meta_id', 'depto', 'nombre', 'descripcion', 'unidad', 'meta', 'sentido', 'orden',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activa'
   ]
 };
 

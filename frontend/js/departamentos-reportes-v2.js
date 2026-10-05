@@ -112,7 +112,7 @@
   var COLS_IND = [['indicador', 'Indicador'], ['meta', 'Meta'], ['resultado', 'Resultado'], ['comentario', 'Comentario']];
   function notaAuto(d, rep) {
     if (!conIndicadores(d)) return '';
-    return '<p class="sx2-tenue dr-nota-auto">' + txt(d.congelado ? 'Cifras congeladas al enviarlo (' + fecha(rep.fecha_envio) + '): lo validado no cambia.' : 'Cifras calculadas por SIGSO con las matrices del mes; se actualizan solas hasta que se envía.') + '</p>';
+    return '<p class="sx2-tenue dr-nota-auto">' + txt(d.congelado ? 'Cifras congeladas al enviarlo (' + fecha(rep.fecha_envio) + '): lo validado no cambia.' : 'Cifras calculadas por SIGSO con lo registrado en el mes (matrices, Agenda y metas); se actualizan solas hasta que se envía.') + '</p>';
   }
   function seccionDoc(titulo, cuerpo) { return '<section class="ci2-rep-sec"><h2 class="rp2-sub">' + txt(titulo) + '</h2>' + cuerpo + '</section>'; }
   function documento(d) {
@@ -166,6 +166,22 @@
     return '<div class="dr-campo"><span class="dr-campo__tit">Actividades realizadas</span><span class="sx2-tenue dr-campo__ayuda">' +
       (act.propuestas ? 'SIGSO las propone a partir de las matrices y la Agenda del mes: corrige, agrega o borra lo que no corresponda.' : 'Una fila por actividad o servicio; el cliente es opcional.') + '</span>' + tablaEditable(COLS_ACT, act.filas, 'act', 2) + '</div>';
   }
+  /** Las metas propias del área: el valor del mes y un comentario (la meta la define la jefatura en Ajustes). */
+  function campoMetas(d) {
+    var metas = d.metas || [], c = d.contenido;
+    var esJef = !!(x_.cfg && x_.cfg.departamentos[0] && x_.cfg.departamentos[0].jefatura);
+    if (!metas.length) return esJef ? '<p class="sx2-tenue dr-campo__ayuda">Puedes definir metas propias del área (por ejemplo «visitas a terreno realizadas») en <button type="button" class="sx2-enlace" data-ci2-ir="ajustes">Ajustes › Recordatorios y fechas</button>: el área anota aquí su valor cada mes.</p>' : '';
+    var val = {};
+    (c.metas || []).forEach(function (m) { val[m.meta_id] = m; });
+    return '<div class="dr-campo"><span class="dr-campo__tit">Metas del área</span><span class="sx2-tenue dr-campo__ayuda">Anota el resultado del mes. Las metas las define la jefatura en Ajustes.</span>' +
+      '<div class="sx2-tabla-wrap"><table class="sx2-tabla dr-metas"><thead><tr><th>Meta</th><th>Resultado del mes</th><th>Comentario (opcional)</th></tr></thead><tbody>' +
+      metas.map(function (m) {
+        var v = val[m.meta_id] || {};
+        return '<tr data-meta="' + U.esc(m.meta_id) + '"><td><strong>' + txt(m.nombre) + '</strong><br><span class="sx2-tenue">Meta ' + (m.sentido === 'menor' ? '≤ ' : '≥ ') + txt(m.meta) + (m.unidad ? ' ' + txt(m.unidad) : '') + '</span></td>' +
+          '<td><input class="sx2-input dr-celda" inputmode="decimal" data-m="valor" value="' + U.esc(v.valor || '') + '" aria-label="Resultado de ' + U.esc(m.nombre) + '"></td>' +
+          '<td><input class="sx2-input dr-celda dr-celda--larga" data-m="comentario" value="' + U.esc(v.comentario || '') + '" aria-label="Comentario"></td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+  }
   function formulario(d) {
     var c = d.contenido;
     if (conIndicadores(d)) {
@@ -173,6 +189,7 @@
       var abierto = !!(c.dificultades || c.pendientes || c.respaldos || c.actividades.length);
       return '<form class="dr-form sx2-entra js-dr-form" onsubmit="return false">' +
         area('resumen', 'Comentario del área (opcional)', c.resumen, 'Las cifras y alertas del mes ya las arma SIGSO. Si quieres explicar algo u opinar, escríbelo aquí: llega hasta Gerencia.', 3) +
+        campoMetas(d) +
         '<details class="dr-mas"' + (abierto ? ' open' : '') + '><summary>Agregar dificultades, pendientes, actividades o respaldos (opcional)</summary><div class="dr-form">' +
           area('dificultades', 'Dificultades y riesgos', c.dificultades, 'Lo que frenó el trabajo o puede frenarlo.') +
           area('pendientes', 'Pendientes para el próximo mes', c.pendientes) + campoActividades(d) +
@@ -180,8 +197,8 @@
     }
     return '<form class="dr-form sx2-entra js-dr-form" onsubmit="return false">' +
       area('resumen', 'Resumen del mes', c.resumen, 'Lo más importante del mes en el área: qué se hizo, qué cambió y cómo terminó. Obligatorio para enviarlo.', 5) +
-      campoActividades(d) +
-      '<div class="dr-campo"><span class="dr-campo__tit">Indicadores</span><span class="sx2-tenue dr-campo__ayuda">Los indicadores del área (DOC-07): meta y resultado del mes.</span>' + tablaEditable(COLS_IND, c.indicadores, 'ind', 2) + '</div>' +
+      campoMetas(d) + campoActividades(d) +
+      (c.indicadores.length ? '<div class="dr-campo"><span class="dr-campo__tit">Indicadores</span><span class="sx2-tenue dr-campo__ayuda">Los indicadores del área (DOC-07): meta y resultado del mes.</span>' + tablaEditable(COLS_IND, c.indicadores, 'ind', 2) + '</div>' : '') +
       area('dificultades', 'Dificultades y riesgos', c.dificultades, 'Lo que frenó el trabajo o puede frenarlo.') +
       area('pendientes', 'Pendientes para el próximo mes', c.pendientes) +
       area('respaldos', 'Respaldos', c.respaldos, 'Dónde están los documentos que respaldan el reporte (carpeta del Drive, enlaces).', 2) +
@@ -200,7 +217,10 @@
     return {
       resumen: f.querySelector('[name="resumen"]').value, dificultades: f.querySelector('[name="dificultades"]').value,
       pendientes: f.querySelector('[name="pendientes"]').value, respaldos: f.querySelector('[name="respaldos"]').value,
-      actividades: filas('act', COLS_ACT), indicadores: filas('ind', COLS_IND)
+      actividades: filas('act', COLS_ACT), indicadores: filas('ind', COLS_IND),
+      metas: [].slice.call(f.querySelectorAll('tr[data-meta]')).map(function (tr) {
+        return { meta_id: tr.getAttribute('data-meta'), valor: tr.querySelector('[data-m="valor"]').value.trim(), comentario: tr.querySelector('[data-m="comentario"]').value.trim() };
+      }).filter(function (m) { return m.valor || m.comentario; })
     };
   }
 

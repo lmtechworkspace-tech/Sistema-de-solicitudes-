@@ -640,6 +640,9 @@ const ACCIONES = {
   restaurarObligacionAgenda: (db, data, contexto) => AgendaDepto.restaurarPropuesta(db, data, contexto),
   historialObligacionAgenda: (db, data, contexto) => AgendaDepto.historialObligacion(db, data, contexto),
   resumenAgenda: (db, data, contexto) => AgendaDepto.resumen(db, data, contexto),
+  // Metas propias de cada área (2026-10-04): las define la jefatura; el valor va en el reporte mensual.
+  listarMetasDep: (db, data, contexto) => AgendaDepto.listarMetas(db, data, contexto),
+  guardarMetaDep: (db, data, contexto) => AgendaDepto.guardarMeta(db, data, contexto),
   // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y
   // manda hoja por hoja; `simular` primero.
   importarHojaCI: (db, data, contexto) => ControlInternoImportar.importarHoja(db, data, contexto),

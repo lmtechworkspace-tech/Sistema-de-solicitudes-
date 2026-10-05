@@ -28,6 +28,8 @@
  */
 
 const CI = require('./controlInterno');
+const { leerFilas_ } = require('../db/sqliteRepo');
+const { COLUMNAS } = require('../db/schema');
 const { DEPARTAMENTOS, MATRICES, matriz_ } = require('./controlInternoMatrices');
 const Cumplimiento = require('./cumplimiento');
 
@@ -502,6 +504,90 @@ function cobranzas_(db, periodo, ctx) {
 }
 
 // =========================================================================================
+// AGENDA del área (2026-10-04, auditoría · etapa 3): lo que Prevención y Marketing
+// no tenían con qué medir. Fechas del área cumplidas a tiempo, citas de clientes
+// avisadas, recordatorios a tiempo y clientes que no respondieron.
+// =========================================================================================
+function agendaKpis_(db, depto, periodo, ctx) {
+  const kpis = [], alertas = [], detalle = {};
+  if (periodo < INICIO_AGENDA) return { kpis, alertas, detalle };
+  const area = (DEPARTAMENTOS.find((d) => d.clave === depto) || {}).nombre;
+  const c = agenda_().cumplimientoMes_(db, depto, periodo, ctx.hoy);
+  // Fechas del área (tareas internas de la Agenda) que vencieron en el mes.
+  const tot = c.internas.length, ok = c.internas.filter((x) => x.estado === 'A_TIEMPO').length;
+  const tarde = c.internas.filter((x) => x.estado === 'TARDE').length, sin = c.internas.filter((x) => x.estado === 'SIN_HACER');
+  const EST = { A_TIEMPO: 'A tiempo', TARDE: 'Tarde', SIN_HACER: 'Sin hacer' };
+  detalle.tareas_area = c.internas.map((x) => ({ tarea: x.tarea + ' · ' + x.obligacion, fecha: fechaTxt_(x.fecha), estado: EST[x.estado], hecho: x.hecho ? fechaTxt_(x.hecho) : '' }));
+  if (tot) {
+    const p = pct_(ok, tot);
+    const kt = indicador_({ clave: 'tareas_a_tiempo', nombre: 'Fechas del área cumplidas a tiempo', unidad: '%', formato: 'pct', sentido: 'mayor', valor: p, serie: [], gerencia: true,
+      estado: tot < MIN_CASOS ? 'info' : (p >= 90 ? 'ok' : (p >= 75 ? 'alerta' : 'critico')), meta_texto: '≥ 90 %',
+      definicion: 'Tareas de la Agenda del área (comité, visitas, plan, revisiones…) que vencieron en el mes y se marcaron hechas a tiempo ÷ las que vencieron.',
+      explicacion: ok + ' de ' + plural_(tot, 'fecha cumplida a tiempo', 'fechas cumplidas a tiempo') + (tarde ? '; ' + plural_(tarde, 'tarde', 'tarde') : '') +
+        (sin.length ? '; ' + plural_(sin.length, 'sin hacer', 'sin hacer') + ': ' + sin.slice(0, 2).map((x) => x.tarea).join(', ') + (sin.length > 2 ? '…' : '') : '') + '.' });
+    kpis.push(kt);
+    if (sin.length && tot >= MIN_CASOS && kt.estado !== 'ok') alertas.push({ nivel: kt.estado === 'critico' ? 'critico' : 'alerta', area, clave: 'tareas_a_tiempo', breve: plural_(sin.length, 'fecha sin cumplir', 'fechas sin cumplir'),
+      titulo: 'Fechas del área sin cumplir', cifra: ok + ' de ' + tot + ' a tiempo', que_pasa: kt.explicacion, por_que: 'Tareas de la Agenda que vencieron y no se marcaron hechas.',
+      impacto: 'Compromisos con los clientes o con la ley que pueden quedar sin hacer.', decision: 'Revisar en la Agenda las fechas pendientes y reasignarlas si hace falta.' });
+  }
+  // Citas de clientes (examen ocupacional, pacto de horas extra) avisadas con su recordatorio.
+  if (c.citas.total) {
+    const p = pct_(c.citas.avisadas, c.citas.total);
+    detalle.citas_clientes = c.citas.lista.map((x) => ({ cita: x.cita, cliente: x.cliente, fecha: fechaTxt_(x.fecha), avisada: x.avisada }));
+    kpis.push(indicador_({ clave: 'citas_avisadas', nombre: 'Citas de clientes avisadas', unidad: '%', formato: 'pct', sentido: 'mayor', valor: p, serie: [],
+      estado: c.citas.total < MIN_CASOS ? 'info' : (p >= 90 ? 'ok' : 'alerta'), meta_texto: '100 %', definicion: 'Citas del mes (examen ocupacional, pacto de horas extra…) con el recordatorio al cliente registrado.',
+      explicacion: c.citas.avisadas + ' de ' + plural_(c.citas.total, 'cita avisada', 'citas avisadas') + ' al cliente.' }));
+  }
+  // Recordatorios a clientes y respuestas.
+  const m = c.clientes, medidos = m.a_tiempo + m.tarde, pr = medidos ? pct_(m.a_tiempo, medidos) : null;
+  if (m.envios) {
+    kpis.push(indicador_({ clave: 'recordatorios_a_tiempo', nombre: 'Recordatorios enviados a tiempo', unidad: '%', formato: 'pct', sentido: 'mayor', valor: pr, serie: [],
+      estado: pr === null ? 'sin_dato' : (medidos < MIN_CASOS ? 'info' : (pr >= 90 ? 'ok' : (pr >= 75 ? 'alerta' : 'critico'))), meta_texto: '≥ 90 %',
+      definicion: 'Recordatorios a clientes registrados en la Agenda el día que tocaba o antes ÷ registrados.',
+      explicacion: plural_(m.envios, 'recordatorio a clientes', 'recordatorios a clientes') + ': ' + m.a_tiempo + ' a tiempo y ' + m.tarde + ' tarde. ' + plural_(m.respuestas, 'respuesta registrada', 'respuestas registradas') + '.' }));
+    const nSR = m.sin_respuesta.length;
+    detalle.clientes_sin_respuesta = m.sin_respuesta.map((x) => ({ cliente: x }));
+    kpis.push(indicador_({ clave: 'clientes_sin_respuesta', nombre: 'Clientes que no respondieron', unidad: 'clientes', formato: 'num', sentido: 'menor', valor: nSR, serie: [],
+      estado: nSR ? 'alerta' : 'ok', meta_texto: '0', definicion: 'Clientes con recordatorios este mes y sin respuesta registrada.',
+      explicacion: nSR ? plural_(nSR, 'cliente no respondió', 'clientes no respondieron') + ': ' + m.sin_respuesta.slice(0, 3).join(', ') + (nSR > 3 ? ' y otros.' : '.') : 'Todos los clientes avisados respondieron.' }));
+  }
+  return { kpis, alertas, detalle };
+}
+
+// =========================================================================================
+// METAS PROPIAS del área: las define la jefatura en Ajustes; el valor de cada mes lo
+// anota el área en su reporte mensual (contenido.metas). La serie sale de los reportes.
+// =========================================================================================
+function metasKpis_(db, depto, periodo, ctx) {
+  const kpis = [];
+  const metas = agenda_().metas_(db, depto);
+  if (!metas.length) return { kpis, alertas: [], detalle: {} };
+  let reps = [];
+  try { reps = leerFilas_(db, 'DEP_REPORTES', COLUMNAS.DEP_REPORTES); } catch (e) { /* sin reportes */ }
+  const porPer = {};
+  reps.filter((r) => (r.activa === true || r.activa === 'TRUE') && r.depto === depto && r.tipo === 'MENSUAL').forEach((r) => {
+    let c = {};
+    try { c = typeof r.contenido === 'object' ? r.contenido : JSON.parse(r.contenido || '{}'); } catch (e) { /* */ }
+    porPer[r.periodo] = (c && c.metas) || [];
+  });
+  const valorDe = (p, id) => { const x = (porPer[p] || []).find((y) => y.meta_id === id); return x && String(x.valor).trim() !== '' && isFinite(num_(x.valor)) ? num_(x.valor) : null; };
+  const comentarioDe = (p, id) => { const x = (porPer[p] || []).find((y) => y.meta_id === id); return x ? String(x.comentario || '') : ''; };
+  const alertas = [];
+  metas.forEach((m) => {
+    const pct = m.unidad === '%';
+    const serie = ctx.meses.map((p) => ({ periodo: p, valor: valorDe(p, m.meta_id) }));
+    const k = indicador_({ clave: 'meta_' + m.meta_id, tema: 'Metas del área', nombre: m.nombre, unidad: m.unidad, formato: pct ? 'pct' : 'num', sentido: m.sentido,
+      umbrales: { meta: m.meta, alerta: m.meta }, serie, meta_texto: (m.sentido === 'menor' ? '≤ ' : '≥ ') + d_(m.meta) + (m.unidad ? (pct ? ' %' : ' ' + m.unidad) : ''),
+      definicion: (m.descripcion ? m.descripcion + ' ' : '') + 'Meta definida por la jefatura del área; el valor lo anota el área en su reporte mensual.' });
+    const com = comentarioDe(periodo, m.meta_id);
+    k.explicacion = k.valor === null ? 'Sin valor anotado en el reporte del mes.' :
+      (k.estado === 'ok' ? 'Cumple la meta.' : 'Bajo la meta.') + (com ? ' ' + com.charAt(0).toUpperCase() + com.slice(1) + (/[.!?]$/.test(com) ? '' : '.') : '') + frase_(variacion_(k, pct ? puntos_ : (x) => d_(x)));
+    kpis.push(k);
+  });
+  return { kpis, alertas, detalle: {} };
+}
+
+// =========================================================================================
 // Transversal: clientes activos, dependencia de una persona y calidad del dato
 // =========================================================================================
 function transversal_(db, depto, periodo, ctx) {
@@ -555,20 +641,9 @@ function transversal_(db, depto, periodo, ctx) {
       por_que: 'No hay una segunda persona que haga el mismo trabajo.', impacto: 'Si se ausenta, los cierres del mes quedan sin respaldo.', decision: 'Designar y capacitar a una persona de respaldo.' });
   }
 
-  // Agenda del área (desde octubre de 2026): recordatorios a tiempo y clientes que no respondieron.
-  if (periodo >= INICIO_AGENDA) {
-    const ag = agenda_().medirMes_(db, depto, periodo);
-    const medidos = ag.a_tiempo + ag.tarde, p = medidos ? pct_(ag.a_tiempo, medidos) : null;
-    kpis.push(indicador_({ clave: 'recordatorios_a_tiempo', nombre: 'Recordatorios enviados a tiempo', unidad: '%', formato: 'pct', sentido: 'mayor', valor: p, serie: [],
-      estado: p === null ? 'sin_dato' : (p >= 90 ? 'ok' : (p >= 75 ? 'alerta' : 'critico')), meta_texto: '≥ 90 %',
-      definicion: 'Recordatorios a clientes registrados en la Agenda el día que tocaba o antes ÷ registrados.',
-      explicacion: p === null ? 'No hay recordatorios registrados en la Agenda este mes.' : ag.envios + ' recordatorios a clientes; ' + ag.a_tiempo + ' a tiempo y ' + ag.tarde + ' tarde. ' + ag.respuestas + ' respuestas registradas.' }));
-    const nSR = ag.sin_respuesta.length;
-    detalle.clientes_sin_respuesta = ag.sin_respuesta.map((c) => ({ cliente: c }));
-    kpis.push(indicador_({ clave: 'clientes_sin_respuesta', nombre: 'Clientes que no respondieron', unidad: 'clientes', formato: 'num', sentido: 'menor', valor: ag.envios ? nSR : null, serie: [],
-      estado: !ag.envios ? 'sin_dato' : (nSR ? 'alerta' : 'ok'), meta_texto: '0', definicion: 'Clientes con recordatorios este mes y sin respuesta registrada.',
-      explicacion: !ag.envios ? '' : (nSR ? nSR + ' clientes no respondieron: ' + ag.sin_respuesta.slice(0, 3).join(', ') + (nSR > 3 ? ' y otros.' : '.') : 'Todos los clientes avisados respondieron.') }));
-  }
+  // Agenda del área (desde octubre de 2026): fechas cumplidas, recordatorios y respuestas.
+  const ag = agendaKpis_(db, depto, periodo, ctx);
+  kpis.push(...ag.kpis); alertas.push(...ag.alertas); Object.assign(detalle, ag.detalle);
 
   // Calidad del dato: matrices sin registros recientes y pendientes antiguos.
   const calidad = [];
@@ -589,7 +664,9 @@ function transversal_(db, depto, periodo, ctx) {
 // API
 // =========================================================================================
 const ORDEN_NIVEL = { critico: 0, alerta: 1, info: 2 };
-const TIENE_INDICADORES = ['CONTABILIDAD', 'RRHH', 'COBRANZAS'];
+const TIENE_INDICADORES = ['CONTABILIDAD', 'RRHH', 'COBRANZAS', 'PREVENCION', 'MARKETING'];
+// Prevención y Marketing no tienen matrices: sus indicadores salen de la Agenda y de sus metas.
+const SOLO_AGENDA = ['PREVENCION', 'MARKETING'];
 // El tema de cada indicador: así se agrupan en el reporte (pestañas), en este orden.
 const TEMAS = {
   f29_a_tiempo: 'IVA', f29_al_limite: 'IVA', f29_sin_registro: 'IVA', f29_reincidentes: 'IVA', iva_pagado: 'IVA',
@@ -600,12 +677,14 @@ const TEMAS = {
   rle_pendiente: 'Registro ante la DT', anexos_pendientes: 'Registro ante la DT',
   salidas_por_entrada: 'Movimientos de personal', certificados: 'Trámites', licencias: 'Trámites',
   cartera_vencida: 'Cobranza', cobrado: 'Cobranza', facturado_hp: 'Cobranza', dias_cobro: 'Cobranza',
-  dependencia: 'Equipo y Agenda', recordatorios_a_tiempo: 'Equipo y Agenda', clientes_sin_respuesta: 'Equipo y Agenda'
+  dependencia: 'Equipo y Agenda', recordatorios_a_tiempo: 'Equipo y Agenda', clientes_sin_respuesta: 'Equipo y Agenda', tareas_a_tiempo: 'Equipo y Agenda', citas_avisadas: 'Equipo y Agenda'
 };
 // La PORTADA del reporte (2026-10-04, auditoría · etapa 2): lo que se entiende en 30 segundos.
 const CLAVE_PORTADA = {
   CONTABILIDAD: ['f29_a_tiempo', 'avance_contable', 'convenios_vencidos', 'facturacion'],
   RRHH: ['liquidaciones', 'rle_pendiente', 'salidas_por_entrada', 'clientes_activos'],
+  PREVENCION: ['tareas_a_tiempo', 'citas_avisadas', 'recordatorios_a_tiempo', 'clientes_sin_respuesta'],
+  MARKETING: ['tareas_a_tiempo', 'recordatorios_a_tiempo'],
   COBRANZAS: ['cartera_vencida', 'cobrado', 'facturado_hp', 'dias_cobro']
 };
 /** El valor de un indicador en texto (97 %, $115,6 MM, 1,8×, 341). */
@@ -624,10 +703,12 @@ function minuscula_(t) { t = String(t || ''); return /^[A-ZÁÉÍÓÚÑ0-9]{2}/.
  */
 function portada_(depto, kpis, alertas) {
   const cifras = (CLAVE_PORTADA[depto] || []).filter((c) => kpis.some((k) => k.clave === c));
+  kpis.filter((k) => /^meta_/.test(k.clave)).forEach((k) => { if (cifras.length < 4) cifras.push(k.clave); });
   const ok = kpis.filter((k) => k.estado === 'ok');
   const pos = ok.find((k) => cifras.includes(k.clave)) || ok[0];
   const neg = alertas.slice(0, 2).map((a) => a.titulo + (a.breve ? ' (' + a.breve + ')' : ''));
-  const titular = (neg.length ? 'Lo más urgente: ' + neg[0] + '.' + (neg[1] ? ' Le sigue: ' + neg[1] + '.' : '') : 'Sin alertas en el mes.') +
+  const vig = kpis.filter((k) => (k.estado === 'alerta' || k.estado === 'critico') && !alertas.some((x) => x.clave === k.clave));
+  const titular = (neg.length ? 'Lo más urgente: ' + neg[0] + '.' + (neg[1] ? ' Le sigue: ' + neg[1] + '.' : '') : 'Nada que requiera decisión este mes.' + (vig[0] ? ' Para vigilar: ' + vig[0].nombre + ' (' + valorTxt_(vig[0]) + ').' : '')) +
     (pos ? ' Va bien: ' + pos.nombre + ' (' + valorTxt_(pos) + ').' : '');
   return { titular, cifras, decisiones: alertas.slice(0, 3).map((a) => a.clave), bien: ok.slice(0, 4).map((k) => k.nombre + ': ' + valorTxt_(k)) };
 }
@@ -652,7 +733,14 @@ function calcularArea_(db, depto, periodo, ctx) {
     return { depto, nombre: dep.nombre, periodo, periodo_texto: mesAnio_(periodo), con_indicadores: !x.sin_datos, semaforo: nivel, kpis: conTema_(x.kpis), alertas: x.alertas, detalle: x.detalle,
       portada: x.sin_datos ? { titular: 'Todavía no hay facturas registradas en la matriz de cobranza: cuando se carguen, aquí se verá la cartera y lo cobrado.', cifras: [], decisiones: [], bien: [] } : portada_(depto, x.kpis, x.alertas) };
   }
-  const partes = [depto === 'CONTABILIDAD' ? contabilidad_(db, periodo, c) : rrhh_(db, periodo, c), transversal_(db, depto, periodo, c)];
+  if (SOLO_AGENDA.includes(depto)) {
+    const ps = [agendaKpis_(db, depto, periodo, c), metasKpis_(db, depto, periodo, c)];
+    const kp = [].concat(...ps.map((x) => x.kpis)), al = [].concat(...ps.map((x) => x.alertas)).sort((a, b) => ORDEN_NIVEL[a.nivel] - ORDEN_NIVEL[b.nivel]);
+    const det = Object.assign({}, ...ps.map((x) => x.detalle));
+    const nivel = al.some((a) => a.nivel === 'critico') ? 'critico' : (al.length ? 'alerta' : 'ok');
+    return { depto, nombre: dep.nombre, periodo, periodo_texto: mesAnio_(periodo), con_indicadores: kp.length > 0, semaforo: kp.length ? nivel : 'sin_datos', kpis: conTema_(kp), alertas: al, detalle: det, portada: portada_(depto, kp, al) };
+  }
+  const partes = [depto === 'CONTABILIDAD' ? contabilidad_(db, periodo, c) : rrhh_(db, periodo, c), transversal_(db, depto, periodo, c), metasKpis_(db, depto, periodo, c)];
   const kpis = [].concat(...partes.map((x) => x.kpis));
   const alertas = [].concat(...partes.map((x) => x.alertas)).sort((a, b) => ORDEN_NIVEL[a.nivel] - ORDEN_NIVEL[b.nivel]);
   const detalle = Object.assign({}, ...partes.map((x) => x.detalle));

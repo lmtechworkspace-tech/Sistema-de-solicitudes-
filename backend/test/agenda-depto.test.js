@@ -259,3 +259,36 @@ test('contadores y alertas de la mañana', () => {
   assert.ok('dep_contabilidad' in pend.pendientes);
   assert.equal(A.resumen(db, {}, LUIS).pendientes.dep_contabilidad, undefined, 'quien no está en el área no tiene contador');
 });
+
+test('Prevención: indicadores desde la Agenda y metas propias de la jefatura', () => {
+  const db = crear();
+  const CAMILA = p('camila@homepymes.cl'), AMARLLA = p('amarlla@homepymes.cl');
+  CI.guardarMiembros(db, { depto: 'PREVENCION', miembros: [{ email: CAMILA.email, rol: 'JEFATURA' }, { email: AMARLLA.email, rol: 'REGISTRA' }] }, ADM);
+  // Metas: las define la jefatura; quien registra, no.
+  assert.equal(A.guardarMeta(db, { depto: 'PREVENCION', nombre: 'Visitas a terreno realizadas', unidad: 'visitas', meta: 12 }, AMARLLA)._forbidden, true);
+  assert.equal(A.guardarMeta(db, { depto: 'PREVENCION', nombre: 'Visitas a terreno realizadas', unidad: 'visitas', meta: 12 }, CAMILA).ok, true);
+  const meta = A.listarMetas(db, { depto: 'PREVENCION' }, AMARLLA).metas[0];
+  assert.equal(meta.meta, 12);
+  // El área anota el valor del mes en su reporte.
+  const RD = require('../logica/departamentosReportes');
+  const g = RD.guardar(db, { depto: 'PREVENCION', periodo: '2026-M10', contenido: { resumen: '', metas: [{ meta_id: meta.meta_id, valor: '10', comentario: 'faltaron dos por lluvia' }] } }, AMARLLA);
+  // Comité paritario (vence el 23-oct) hecho a tiempo; visitas (1-oct) sin hacer.
+  const comite = obl(db, 'COMITE_PARITARIO');
+  agregarFila_(db, 'DEP_RECORDATORIOS', { recordatorio_id: 'T1', depto: 'PREVENCION', obligacion_id: comite.obligacion_id, periodo: '2026-M10', fecha_limite: '2026-10-30', item_clave: 'interno', cliente_id: '', cliente_nombre: '',
+    escalon_id: 'T', canal: 'INTERNO', destino: '', mensaje: '', respuesta: '', nota: '', usuario_email: AMARLLA.email, fecha: '2026-10-20T14:00:00.000Z', activa: true });
+  const IND = require('../logica/indicadoresDepto');
+  const c = IND.contexto_(db, '2026-M10'); c.hoy = '2026-11-05';
+  const r = IND.calcularArea_(db, 'PREVENCION', '2026-M10', c);
+  assert.equal(r.con_indicadores, true, 'Prevención ya no sale «sin datos»');
+  const t = r.kpis.find((k) => k.clave === 'tareas_a_tiempo');
+  assert.equal(t.valor, 50);
+  assert.match(t.explicacion, /1 de 2 fechas cumplidas a tiempo; 1 sin hacer: Programar visitas/);
+  const km = r.kpis.find((k) => k.clave === 'meta_' + meta.meta_id);
+  assert.equal(km.valor, 10);
+  assert.equal(km.estado, 'alerta');
+  assert.match(km.explicacion, /Bajo la meta\. Faltaron dos por lluvia\./);
+  assert.ok(r.portada.cifras.includes('tareas_a_tiempo'));
+  // Sin resumen se puede enviar: SIGSO ya mide el mes.
+  const e = RD.enviar(db, { reporte_id: g.reporte.reporte_id }, CAMILA);
+  assert.notEqual(e.ok, false, e.message);
+});

@@ -451,16 +451,18 @@
   var ORIGEN = { PROPUESTA: ['Propuesta inicial', 'neutro'], EDITADA: ['Editada', 'info'], PROPIA: ['Creada por el área', 'ok'] };
   function ajustes(x) {
     x.pagina(x.cabecera(x.modNombre, 'Recordatorios y fechas', 'Cargando…') + U.esqueleto('tarjetas', 4));
-    x.api('ajustesAgenda', { depto: x.opc.depto }).then(function (r) {
+    Promise.all([x.api('ajustesAgenda', { depto: x.opc.depto }), x.api('listarMetasDep', { depto: x.opc.depto })]).then(function (rs) {
+      var r = rs[0];
       if (!r || !r.ok) { x.pagina(x.cabecera(x.modNombre, 'Recordatorios y fechas', '') + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: (r && r.message) || '' }) })); return; }
       st(x).aj = r.data;
+      st(x).metas = (rs[1] && rs[1].ok && rs[1].data.metas) || [];
       x.resolverPersonas(r.data.obligaciones.map(function (o) { return { email: o.actualizado_por }; })).then(function () { pintarAjustes(x); });
     });
   }
   function pintarAjustes(x) {
     var d = st(x).aj;
     var html = x.cabecera(x.modNombre, 'Recordatorios y fechas', 'Qué vence, cuándo, la escalera de recordatorios y sus mensajes. ' + (d.puede_editar ? 'Los cambios valen desde ahora y quedan en el historial.' : 'Solo la jefatura del área o el superusuario los editan.'),
-      d.puede_editar ? U.boton({ texto: 'Nueva obligación', icono: 'nueva', variante: 'primario', clase: 'js-aga-nueva' }) : '') +
+      d.puede_editar ? U.boton({ texto: 'Nueva obligación', icono: 'nueva', variante: 'primario', clase: 'js-aga-nueva' }) : '') + seccionMetas(x, d.puede_editar) +
       '<div class="ag-obls">' + d.obligaciones.map(function (o, k) {
         var org = ORIGEN[o.origen] || ORIGEN.PROPUESTA;
         return '<section class="sx2-card ag-obl' + (o.activa ? '' : ' ag-obl--inactiva') + ' sx2-entra" style="--i:' + (k + 1) + '">' +
@@ -481,6 +483,29 @@
         '</section>';
       }).join('') + '</div>';
     x.pagina(html);
+  }
+  /** Metas propias del área (2026-10-04): la jefatura las define; el área anota el valor en su reporte mensual. */
+  function seccionMetas(x, editable) {
+    var metas = st(x).metas || [];
+    return U.card({ i: 1, titulo: 'Metas del área', icono: 'diana', sub: 'Se ven como indicadores en el reporte mensual', accion: editable && metas.length < 8 ? { texto: 'Nueva meta', clase: 'js-agm-nueva' } : null,
+      cuerpo: metas.length ? '<ul class="ag-metas">' + metas.map(function (m) {
+        return '<li><div><strong>' + txt(m.nombre) + '</strong><span class="sx2-tenue">Meta ' + (m.sentido === 'menor' ? '≤ ' : '≥ ') + txt(m.meta) + (m.unidad ? ' ' + txt(m.unidad) : '') + ' al mes' + (m.descripcion ? ' · ' + txt(m.descripcion) : '') + '</span></div>' +
+          (editable ? '<span>' + U.boton({ texto: 'Editar', icono: 'editar', sm: true, clase: 'js-agm-editar', datos: { id: m.meta_id } }) + U.boton({ soloIcono: true, icono: 'basura', titulo: 'Quitar', variante: 'fantasma', sm: true, clase: 'js-agm-quitar', datos: { id: m.meta_id } }) + '</span>' : '') + '</li>';
+      }).join('') + '</ul>' : '<p class="sx2-tenue">' + (editable ? 'Todavía no hay metas. Define 2 o 3 que muestren cómo le va al área (por ejemplo «visitas a terreno realizadas», meta 12 al mes): el área anota el resultado en su reporte y SIGSO lo grafica.' : 'La jefatura todavía no define metas para el área.') + '</p>' });
+  }
+  function editarMeta(x, id) {
+    var m = id ? (st(x).metas || []).filter(function (z) { return z.meta_id === id; })[0] : null;
+    m = m || { nombre: '', descripcion: '', unidad: '', meta: '', sentido: 'mayor' };
+    U.formulario({ titulo: id ? 'Editar meta' : 'Nueva meta', boton: 'Guardar',
+      campos: U.campo('Qué se mide', '<input class="sx2-input" name="nombre" maxlength="100" value="' + txt(m.nombre) + '" placeholder="Ej.: Visitas a terreno realizadas">') +
+        '<div class="sx2-form__fila">' + U.campo('Meta mensual', '<input class="sx2-input" name="meta" inputmode="decimal" value="' + txt(m.meta) + '">') +
+        U.campo('Unidad', '<input class="sx2-input" name="unidad" maxlength="20" value="' + txt(m.unidad) + '" placeholder="visitas, %, clientes…">') + '</div>' +
+        U.campo('Se cumple cuando el resultado es', '<select class="sx2-select" name="sentido"><option value="mayor"' + (m.sentido !== 'menor' ? ' selected' : '') + '>Igual o mayor que la meta</option><option value="menor"' + (m.sentido === 'menor' ? ' selected' : '') + '>Igual o menor que la meta</option></select>') +
+        U.campo('Descripción (opcional)', '<textarea class="sx2-input" name="descripcion" rows="2" maxlength="300">' + txt(m.descripcion) + '</textarea>'),
+      preparar: function (v) { return Object.assign({ depto: x.opc.depto, meta_id: id || '' }, v); },
+      enviar: function (p) { return x.api('guardarMetaDep', p); },
+      aviso: function (r) { return r.data.message; },
+      listo: function () { ajustes(x); } });
   }
   function editarObligacion(x, id) {
     var d = st(x).aj, o = id ? d.obligaciones.filter(function (z) { return z.obligacion_id === id; })[0] : null;
@@ -620,6 +645,14 @@
       if (t.closest('.js-agc-ver')) { verCliente(x); return; }
       // Ajustes
       if (t.closest('.js-aga-nueva')) { editarObligacion(x, ''); return; }
+      if (t.closest('.js-agm-nueva')) { editarMeta(x, ''); return; }
+      if ((b = t.closest('.js-agm-editar'))) { editarMeta(x, b.getAttribute('data-id')); return; }
+      if ((b = t.closest('.js-agm-quitar'))) {
+        U.confirmar({ titulo: '¿Quitar esta meta?', texto: 'Deja de pedirse en el reporte mensual. Los valores ya anotados quedan en los reportes anteriores.', boton: 'Quitar', peligro: true }).then(function (ok) {
+          if (ok) x.api('guardarMetaDep', { meta_id: b.getAttribute('data-id'), quitar: true }).then(function (r) { aviso(r && r.ok ? r.data.message : ((r && r.message) || 'No se pudo.'), r && r.ok ? 'exito' : 'error'); ajustes(x); });
+        });
+        return;
+      }
       if ((b = t.closest('.js-aga-editar'))) { editarObligacion(x, b.getAttribute('data-id')); return; }
       if ((b = t.closest('.js-aga-hist'))) { historialObl(x, b.getAttribute('data-id')); return; }
       if ((b = t.closest('.js-aga-restaurar'))) {

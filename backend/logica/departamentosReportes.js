@@ -89,7 +89,9 @@ function limpiarContenido_(c) {
     indicadores: filas_(c.indicadores, ['indicador', 'meta', 'resultado', 'comentario'], TOPE.indicadores),
     dificultades: texto_(c.dificultades),
     pendientes: texto_(c.pendientes),
-    respaldos: texto_(c.respaldos)
+    respaldos: texto_(c.respaldos),
+    // Valor del mes de cada meta propia del área (DEP_METAS).
+    metas: filas_(c.metas, ['meta_id', 'valor', 'comentario'], 12)
   };
 }
 
@@ -222,13 +224,13 @@ function obtener(db, data, contexto) {
   if (!r) {
     return {
       nuevo: true, reporte: { depto: dep.clave, depto_nombre: dep.nombre, periodo, tipo: 'MENSUAL', estado: 'SIN_INICIAR', estado_texto: ETIQUETAS.SIN_INICIAR },
-      contenido: limpiarContenido_({}), auto, historial: [], jefaturas: equipo.jefaturas,
+      contenido: limpiarContenido_({}), auto, historial: [], jefaturas: equipo.jefaturas, metas: require('./agendaDepto').metas_(db, dep.clave),
       acciones: { editar: pm.registra, enviar: pm.registra, validar: false, devolver: false, recibir: false }
     };
   }
   return {
     reporte: publico_(r), contenido: limpiarContenido_(json_(r.contenido, {})), auto, congelado: !!enviado,
-    historial: historial_(db, r.reporte_id), jefaturas: equipo.jefaturas, acciones: acciones_(r, pm)
+    historial: historial_(db, r.reporte_id), jefaturas: equipo.jefaturas, acciones: acciones_(r, pm), metas: require('./agendaDepto').metas_(db, dep.clave)
   };
 }
 
@@ -314,11 +316,13 @@ function enviar(db, data, contexto) {
   if (r.estado !== E.BORRADOR && r.estado !== E.OBSERVADO) return { ok: false, message: 'Este reporte ya se envió.' };
   const c = limpiarContenido_(json_(r.contenido, {}));
   // Donde SIGSO arma los indicadores solo, el texto del área es un comentario opcional.
-  if (!c.resumen && !Indicadores.TIENE_INDICADORES.includes(r.depto)) return { ok: false, message: 'Escribe el resumen del mes antes de enviarlo.' };
+  // Donde SIGSO ya mide el mes (indicadores, Agenda o metas), el resumen es un comentario opcional.
+  const auto = resumenAuto_(db, r.depto, r.periodo);
+  if (!c.resumen && !(auto.indicadores && auto.indicadores.con_indicadores)) return { ok: false, message: 'Escribe el resumen del mes antes de enviarlo.' };
   const dep = depto_(r.depto);
   const equipo = personas_(db, r.depto);
   const yo = normalizarEmail_(contexto && contexto.email);
-  const base = { autor_email: yo, fecha_envio: ahora_(), resumen_auto: JSON.stringify(resumenAuto_(db, r.depto, r.periodo)), devuelto_por: '', fecha_devolucion: '', motivo_devolucion: '' };
+  const base = { autor_email: yo, fecha_envio: ahora_(), resumen_auto: JSON.stringify(auto), devuelto_por: '', fecha_devolucion: '', motivo_devolucion: '' };
   // La jefatura que envía su propio reporte: no hay a quién más pedirle la validación.
   if (pm.jefatura) {
     const v = actualizar_(db, r, Object.assign(base, { estado: E.VALIDADO, validado_por: yo, fecha_validacion: ahora_(), observacion_jefatura: '' }), contexto);
