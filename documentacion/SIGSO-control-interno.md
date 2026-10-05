@@ -496,3 +496,12 @@ recomendaciones. Implementado en cuatro etapas:
    pasado; panel de Administración con el titular y dos cifras de cada área;
    ficha por cliente con sus alertas y recordatorios; «registros» en vez de
    «filas».
+
+**Excel por tema** (2026-10-05): el botón «Descargar Excel» del reporte del área
+arma su propio libro (`SigsoIndicadores.excel`): Resumen (la portada), una hoja
+por tema con los indicadores (valores numéricos, estado con color, meta, mes
+anterior, promedio de 12 meses), «Tendencias 12 meses» en formato largo, una
+hoja por tabla de detalle (completa) y Calidad del dato, más lo que escribió el
+área, sus actividades y la validación. El informe de gestión tiene el suyo:
+resumen ejecutivo, áreas, decisiones, lo acordado el mes pasado, indicadores
+clave, reportes de las áreas, comentarios y calidad del dato.
