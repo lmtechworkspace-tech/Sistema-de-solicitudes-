@@ -30,7 +30,7 @@
 const CI = require('./controlInterno');
 const { leerFilas_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
-const { DEPARTAMENTOS, MATRICES, matriz_ } = require('./controlInternoMatrices');
+const { DEPARTAMENTOS, MATRICES, matriz_, periodoRemuneracion_ } = require('./controlInternoMatrices');
 const Cumplimiento = require('./cumplimiento');
 
 const FINALES = ['TERMINADO', 'NO_APLICA', 'REGISTRADO', 'RESUELTA', 'AL_DIA', 'SIN_CONVENIO'];
@@ -119,7 +119,9 @@ function lector_(db, desde, hasta) {
       if (!m) { cache[matriz] = []; } else if (m.tipo === 'lista') {
         cache[matriz] = CI.rango_(db, matriz, CI.PERIODO_LISTA, CI.PERIODO_LISTA);
       } else {
-        cache[matriz] = COMPLETAS.includes(matriz) ? CI.rango_(db, matriz, '0001-M01', hasta) : CI.rango_(db, matriz, desde, hasta);
+        // Remuneraciones: los sueldos de un mes llegan hasta el 10 del siguiente (se lee un mes más).
+        const fin = matriz === 'REMUNERACIONES' ? CI.moverPeriodo_(hasta, 1) : hasta;
+        cache[matriz] = COMPLETAS.includes(matriz) ? CI.rango_(db, matriz, '0001-M01', fin) : CI.rango_(db, matriz, desde, fin);
       }
     }
     return cache[matriz];
@@ -360,21 +362,23 @@ function rrhh_(db, periodo, ctx) {
   const L = ctx.leer, M12 = ctx.meses, kpis = [], alertas = [], detalle = {};
 
   // --- Liquidaciones procesadas ----------------------------------------------------------------------
+  // Por el MES DE LA REMUNERACIÓN, no por el mes en que llegó la información (revisión con RR.HH.).
   const rem = L('REMUNERACIONES');
-  const serieLiq = M12.map((p) => ({ periodo: p, valor: delMes_(rem, p).reduce((s, r) => s + num_(r.datos.cantidad), 0) }));
-  const remMes = delMes_(rem, periodo);
+  const delMesRem_ = (p) => rem.filter((r) => periodoRemuneracion_(r) === p);
+  const serieLiq = M12.map((p) => ({ periodo: p, valor: delMesRem_(p).reduce((s, r) => s + num_(r.datos.cantidad), 0) }));
+  const remMes = delMesRem_(periodo);
   const porCli = {};
   remMes.forEach((r) => { const c = cliente_(r); porCli[c] = porCli[c] || { cliente: r.cliente_nombre, liquidaciones: 0 }; porCli[c].liquidaciones += num_(r.datos.cantidad); });
   detalle.liquidaciones_por_cliente = Object.values(porCli).sort((a, b) => b.liquidaciones - a.liquidaciones).slice(0, 10);
   const kl = indicador_({ clave: 'liquidaciones', tema: 'Remuneraciones', preliminar: ctx.preliminar, nombre: 'Liquidaciones procesadas', unidad: 'trabajadores', formato: 'num', serie: serieLiq, gerencia: true, estado: 'info',
-    definicion: 'Trabajadores liquidados en el mes, todas las empresas cliente.', extra: { clientes: Object.keys(porCli).length } });
+    definicion: 'Trabajadores liquidados por los sueldos del mes, todas las empresas cliente (la información del mes llega entre el 20 y el 10 del mes siguiente).', extra: { clientes: Object.keys(porCli).length } });
   const top2 = detalle.liquidaciones_por_cliente.slice(0, 2);
   kl.explicacion = plural_(kl.valor || 0, 'liquidación', 'liquidaciones') + ' de ' + plural_(Object.keys(porCli).length, 'cliente', 'clientes') + '.' + comparar_(kl, miles_) +
     (top2.length === 2 && kl.valor ? ' Los dos mayores (' + top2.map((x) => x.cliente).join(' y ') + ') suman ' + d_(pct_(top2[0].liquidaciones + top2[1].liquidaciones, kl.valor)) + ' %.' : '');
   kpis.push(kl);
 
   // --- Cotizaciones a tiempo e intereses (dependen de columnas que hoy casi no se llenan) ---------------------
-  const conFecha = remMes.filter((r) => esFecha_(r.datos.fecha_declaracion));
+  const conFecha = remMes.filter((r) => esFecha_(r.datos.fecha_declaracion) || esFecha_(r.datos.fecha_envio_imposiciones_planillas_declaradas));
   const cobertura = remMes.length ? conFecha.length / remMes.length : 0;
   detalle.calidad_area = [];
   if (cobertura < 0.8) {
@@ -382,7 +386,7 @@ function rrhh_(db, periodo, ctx) {
     detalle.calidad_area.push({ matriz: 'Remuneraciones', ultimo_mes: '', problema: 'Cotizaciones a tiempo: no se puede medir porque la fecha de declaración en Previred está llena en ' + Math.round(100 * cobertura) + ' % de las empresas del mes. Llenarla al cerrar cada empresa.' });
   } else {
     const venc = vencimiento_(periodo, 10, ctx.feriados);
-    const ok = conFecha.filter((r) => r.datos.fecha_declaracion.slice(0, 10) <= venc).length;
+    const ok = conFecha.filter((r) => String(r.datos.fecha_declaracion || r.datos.fecha_envio_imposiciones_planillas_declaradas).slice(0, 10) <= venc).length;
     kpis.push(indicador_({ clave: 'cotizaciones_a_tiempo', nombre: 'Cotizaciones declaradas a tiempo', unidad: '%', formato: 'pct', sentido: 'mayor', valor: pct_(ok, conFecha.length), serie: [],
       umbrales: { meta: 100, alerta: 100, critico: 90 }, meta_texto: '100 %', definicion: 'Declaradas en Previred hasta el día 10 ÷ total.', explicacion: ok + ' de ' + conFecha.length + ' empresas declararon a tiempo.' }));
   }

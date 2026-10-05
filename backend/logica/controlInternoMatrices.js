@@ -409,4 +409,21 @@ function matriz_(clave) {
   return MATRICES.find((m) => m.clave === clave) || null;
 }
 
-module.exports = { DEPARTAMENTOS, MATRICES, matriz_, hecho_, porTexto_, ESTADOS: E, mesesDespuesHabil_, calculosIva_, SERVICIOS_SIN_MATRIZ };
+/**
+ * Remuneraciones (revisión con RR.HH., 2026-10-05): la información de los sueldos
+ * de un mes llega entre el 27 de ese mes y el 10 del siguiente (el plazo que se le
+ * da al cliente es el día 5). En la planilla la fila queda en el mes en que llegó,
+ * así que los sueldos de septiembre quedaban partidos entre septiembre y octubre.
+ * El MES DE LA REMUNERACIÓN sale de la fecha de recepción: del día 20 en adelante
+ * es ese mes; antes del 20, el mes anterior. Sin fecha, el mes de la fila.
+ */
+function periodoRemuneracion_(r) {
+  const f = String(((r && r.datos) || {}).fecha_recepcion_informacion || '');
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(f);
+  if (!m) return (r && r.periodo) || '';
+  let a = Number(m[1]), mes = Number(m[2]);
+  if (Number(m[3]) < 20) { mes -= 1; if (!mes) { mes = 12; a -= 1; } }
+  return a + '-M' + String(mes).padStart(2, '0');
+}
+
+module.exports = { DEPARTAMENTOS, MATRICES, matriz_, hecho_, porTexto_, ESTADOS: E, mesesDespuesHabil_, calculosIva_, SERVICIOS_SIN_MATRIZ, periodoRemuneracion_ };

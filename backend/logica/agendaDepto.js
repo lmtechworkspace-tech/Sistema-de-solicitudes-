@@ -27,7 +27,7 @@
 const crypto = require('node:crypto');
 const { leerFilas_, agregarFila_, actualizarFilaPorId_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
-const { DEPARTAMENTOS } = require('./controlInternoMatrices');
+const { DEPARTAMENTOS, periodoRemuneracion_ } = require('./controlInternoMatrices');
 const CI = require('./controlInterno');
 const Cumplimiento = require('./cumplimiento');
 const NotificacionesApp = require('./notificacionesApp');
@@ -106,10 +106,23 @@ function fechaLimite_(regla, periodo, fer) {
 
 // --- obligaciones -----------------------------------------------------------------------------------
 const listas_ = new WeakSet();
-/** Carga la propuesta inicial de las obligaciones que falten (por clave). Nunca pisa lo editado. */
+/**
+ * Carga la propuesta inicial de las obligaciones que falten (por clave). Nunca pisa lo editado:
+ * si una obligación sigue tal como la dejó la propuesta (nadie la editó) y la propuesta cambió
+ * —por ejemplo, las fechas que dictó RR.HH. el 2026-10-05—, se actualiza sola.
+ */
 function asegurarPropuesta_(db) {
   if (listas_.has(db)) return;
-  const ya = new Set(leer_(db, 'DEP_OBLIGACIONES').map((o) => o.clave));
+  const filas = leer_(db, 'DEP_OBLIGACIONES');
+  const ya = new Set(filas.map((o) => o.clave));
+  const CAMPOS = ['nombre', 'descripcion', 'tipo', 'fuente', 'regla', 'escalones', 'sin_recordatorio', 'sin_respuesta', 'proceso', 'orden'];
+  filas.filter((o) => o.origen === 'PROPUESTA' && !String(o.actualizado_por || '').trim()).forEach((o) => {
+    const p = PROPUESTA.find((x) => x.clave === o.clave);
+    if (!p) return;
+    const nueva = filaDe_(p);
+    if (CAMPOS.every((k) => String(o[k] == null ? '' : o[k]) === String(nueva[k] == null ? '' : nueva[k]))) return;
+    actualizarFilaPorId_(db, 'DEP_OBLIGACIONES', 'obligacion_id', o.obligacion_id, nueva);
+  });
   PROPUESTA.forEach((p) => {
     if (ya.has(p.clave)) return;
     agregarFila_(db, 'DEP_OBLIGACIONES', Object.assign(filaDe_(p), { obligacion_id: crypto.randomUUID(), origen: 'PROPUESTA', creado_por: 'sistema', fecha_creacion: ahora_(), actualizado_por: '', fecha_actualizacion: '', activa: true }));
@@ -151,6 +164,12 @@ function contactoDe_(cat, item) {
 // Cada fuente devuelve [{ clave, cliente_id, cliente_nombre, vars, fecha_limite?, periodo? }] PENDIENTES
 // (lo que la matriz ya da por cumplido no se devuelve).
 function filasMes_(db, matriz, p) { try { return CI.rango_(db, matriz, p, p); } catch (e) { return []; } }
+/** Filas de Remuneraciones cuyo MES DE LA REMUNERACIÓN es p (llegan en p o en p+1). */
+function remuneracionesDe_(db, p) {
+  let filas = [];
+  try { filas = CI.rango_(db, 'REMUNERACIONES', p, CI.moverPeriodo_(p, 1)); } catch (e) { return []; }
+  return filas.filter((r) => periodoRemuneracion_(r) === p);
+}
 const FUENTE = {
   iva_por_pagar(db, p) {
     const porCli = {};
@@ -165,20 +184,22 @@ const FUENTE = {
     return Object.values(porCli);
   },
   previred(db, p) {
+    // Las imposiciones de los sueldos de p (vencen el 13 de p+1): por el mes de la remuneración.
     const porCli = {};
-    filasMes_(db, 'REMUNERACIONES', p).forEach((r) => {
+    remuneracionesDe_(db, p).forEach((r) => {
       const d = r.datos || {};
       if (r.estado === 'NO_APLICA') return;
       const k = r.cliente_id || 'N:' + r.cliente_nombre;
       porCli[k] = porCli[k] || { clave: k, cliente_id: r.cliente_id, cliente_nombre: r.cliente_nombre, monto: 0, pagado: false };
       porCli[k].monto += num_(d.valor_imposiciones);
-      if (esFecha_(d.fecha_declaracion)) porCli[k].pagado = true;
+      if (esFecha_(d.f_pago_imposiciones) || esFecha_(d.fecha_declaracion) || esFecha_(d.fecha_envio_imposiciones_planillas_declaradas)) porCli[k].pagado = true;
     });
     return Object.values(porCli).filter((x) => !x.pagado && x.monto > 0).map((x) => ({ clave: x.clave, cliente_id: x.cliente_id, cliente_nombre: x.cliente_nombre, vars: { monto: pesos_(x.monto) } }));
   },
   asistencia(db, p) {
-    // Clientes con remuneraciones el mes anterior que todavía no envían la información de este mes.
-    const ant = filasMes_(db, 'REMUNERACIONES', CI.moverPeriodo_(p, -1)), act = filasMes_(db, 'REMUNERACIONES', p);
+    // Clientes con remuneraciones el mes anterior que todavía no envían la información de este mes
+    // (por el mes de la remuneración: la de septiembre llega entre el 20 de septiembre y el 10 de octubre).
+    const ant = remuneracionesDe_(db, CI.moverPeriodo_(p, -1)), act = remuneracionesDe_(db, p);
     const recibido = new Set(act.filter((r) => esFecha_((r.datos || {}).fecha_recepcion_informacion)).map((r) => r.cliente_id || 'N:' + r.cliente_nombre));
     const porCli = {};
     ant.forEach((r) => { const k = r.cliente_id || 'N:' + r.cliente_nombre; if (!recibido.has(k)) porCli[k] = { clave: k, cliente_id: r.cliente_id, cliente_nombre: r.cliente_nombre, vars: {} }; });

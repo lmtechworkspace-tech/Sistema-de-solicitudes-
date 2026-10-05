@@ -10,13 +10,15 @@
  *    que mandarles recordatorio.
  *  - Postergaciones que vencen en 10 días (o ya vencieron) sin pago.
  *  - Impuesto único: lo informa RR.HH. (matriz 3 % e IUSC). Si allá hay
- *    monto y aquí no, se avisa y se puede traer con un clic.
+ *    monto y aquí no, se avisa y se puede traer con un clic. Si esa matriz no
+ *    tiene el mes (dejó de llenarse en julio de 2026), se suma el monto IUSC de
+ *    cada obra en Remuneraciones, por el mes de la remuneración.
  *
  * Cada alerta: { clave, tono, titulo, texto, items: [{ registro_id, cliente,
  * texto, usar?: { columna: valor } }] }.
  */
 
-const { matriz_, hecho_ } = require('./controlInternoMatrices');
+const { matriz_, hecho_, periodoRemuneracion_ } = require('./controlInternoMatrices');
 
 const RE_FECHA = /^\d{4}-\d{2}-\d{2}$/;
 function num_(v) {
@@ -67,7 +69,19 @@ function iva(db, m, periodo, filas, h) {
   // 3. Impuesto único que RR.HH. informó y aquí no está.
   const mi = matriz_('IUSC');
   if (mi) {
-    const rrhh = h.consultar_(db, 'CI_REGISTROS', { matriz: 'IUSC', periodo, activa: true }).filter((r) => num_((r.datos || {}).monto_iusc) > 0);
+    let rrhh = h.consultar_(db, 'CI_REGISTROS', { matriz: 'IUSC', periodo, activa: true }).filter((r) => num_((r.datos || {}).monto_iusc) > 0);
+    let fuente = 'Según la matriz 3 % e impuesto único de RR.HH. del mismo mes.';
+    if (!rrhh.length) {
+      const porCli = {};
+      [periodo, h.moverPeriodo_(periodo, 1)].forEach((p) => h.consultar_(db, 'CI_REGISTROS', { matriz: 'REMUNERACIONES', periodo: p, activa: true }).forEach((r) => {
+        if (periodoRemuneracion_(r) !== periodo || !(num_((r.datos || {}).monto_iusc) > 0)) return;
+        const k = r.cliente_id || 'N:' + r.cliente_nombre;
+        if (!porCli[k]) porCli[k] = { cliente_id: r.cliente_id, cliente_nombre: r.cliente_nombre, cliente_rut: r.cliente_rut, datos: { monto_iusc: 0 } };
+        porCli[k].datos.monto_iusc += num_(r.datos.monto_iusc);
+      }));
+      rrhh = Object.values(porCli);
+      fuente = 'Según Remuneraciones de RR.HH. (impuesto único de cada obra, sumado por cliente).';
+    }
     const items = [];
     rrhh.forEach((r) => {
       const monto = num_(r.datos.monto_iusc);
@@ -79,7 +93,7 @@ function iva(db, m, periodo, filas, h) {
         usar: f ? { monto_impuesto_unico: monto } : null
       });
     });
-    if (items.length) out.push({ clave: 'iusc', tono: 'info', titulo: items.length + (items.length === 1 ? ' impuesto único informado por RR.HH. no está aquí' : ' impuestos únicos informados por RR.HH. no están aquí'), texto: 'Según la matriz 3 % e impuesto único de RR.HH. del mismo mes.', items });
+    if (items.length) out.push({ clave: 'iusc', tono: 'info', titulo: items.length + (items.length === 1 ? ' impuesto único informado por RR.HH. no está aquí' : ' impuestos únicos informados por RR.HH. no están aquí'), texto: fuente, items });
   }
   return out;
 }

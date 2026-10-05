@@ -135,40 +135,63 @@ const PROPUESTA = [
   }),
 
   // =============================== RECURSOS HUMANOS ===============================
+  // Fechas dictadas por RR.HH. en la revisión de sus matrices (2026-10-05): la información
+  // de los sueldos se pide el 28, se recuerda el 2-3 y el plazo es el día 5 (si no llega,
+  // no se declara); las imposiciones se recuerdan el 10 y el 13 en la mañana. Internas:
+  // informe de plataformas externas a Facturación y Cobranzas en los primeros 5 días e
+  // informe de impuesto único a Contabilidad el 5-7 (primero) y el 13 (final).
   P({
     clave: 'ASISTENCIA', depto: 'RRHH', orden: 1, tipo: 'CLIENTE', fuente: 'asistencia', proceso: 'SRV-RHH-01',
-    nombre: 'Asistencia y novedades del mes',
-    descripcion: 'Clientes con remuneraciones que todavía no envían la asistencia y las novedades del mes (horas extra, bonos, licencias, ingresos y salidas).',
-    regla: { tipo: 'mensual', mes: 0, dia: 'ultimo', habil: true },
+    nombre: 'Información para las remuneraciones',
+    descripcion: 'Clientes con remuneraciones que todavía no envían la información del mes (asistencia, horas extra, bonos, licencias, ingresos y salidas). Se pide el 28 y el plazo es el día 5 del mes siguiente.',
+    regla: { tipo: 'mensual', mes: 1, dia: 5, habil: true },
     escalones: [
-      { id: 'R1', nombre: 'Pedir asistencia', offset: -5, canal: 'CORREO', a_quien: 'CLIENTE',
-        asunto: 'Asistencia y novedades de {periodo} · {empresa}',
-        texto: 'Hola {contacto}:\n\nEstamos preparando las remuneraciones de {periodo}. ¿Nos envías la asistencia y las novedades del mes (horas extra, bonos, licencias, ingresos y salidas) a más tardar el {fecha_limite}? Así las liquidaciones salen a tiempo.\n\nSaludos,\n{firma}\nHomePymes' },
-      { id: 'R2', nombre: 'Hoy es el cierre', offset: 0, canal: 'WHATSAPP', a_quien: 'CLIENTE',
-        texto: 'Hola {contacto}, hoy {fecha_limite} cerramos la asistencia de {periodo}. ¿Nos envías la asistencia y las novedades de {empresa}? Así las liquidaciones salen a tiempo.' },
-      { id: 'R3', nombre: 'Llamada', offset: 1, canal: 'LLAMADA', a_quien: 'CLIENTE',
-        texto: 'Llamar a {contacto} de {empresa}: falta la asistencia de {periodo}. Preguntar cuándo la envía y si hubo ingresos, salidas o licencias.' },
-      { id: 'R4', nombre: 'Liquidaciones en riesgo', offset: 2, canal: 'WHATSAPP', a_quien: 'CLIENTE',
-        texto: 'Hola {contacto}, todavía no recibimos la asistencia de {periodo} de {empresa}. Sin ella, las liquidaciones se atrasan. Si nos autorizas, podemos liquidar con la asistencia del mes anterior.' }
+      { id: 'R1', nombre: 'Inicio del proceso (día 28)', offset: -5, canal: 'CORREO', a_quien: 'CLIENTE',
+        asunto: 'Remuneraciones de {periodo} · {empresa} · información hasta el {fecha_limite}',
+        texto: 'Hola {contacto}:\n\nIniciamos el proceso de remuneraciones de {periodo}. Por favor envíanos la asistencia y las novedades del mes (horas extra, bonos, licencias, ingresos y salidas) a más tardar el {fecha_limite}.\n\nSaludos,\n{firma}\nHomePymes' },
+      { id: 'R2', nombre: 'Segundo recordatorio (día 2-3)', offset: -2, canal: 'WHATSAPP', a_quien: 'CLIENTE',
+        texto: 'Hola {contacto}, te recordamos que estamos en el proceso de remuneraciones de {periodo}. Tienes hasta el {fecha_limite} para enviarnos la asistencia y las novedades de {empresa}.' },
+      { id: 'R3', nombre: 'Último día (día 5)', offset: 0, canal: 'WHATSAPP', a_quien: 'CLIENTE',
+        texto: 'Hola {contacto}, hoy {fecha_limite} es el último día para enviarnos la información de remuneraciones de {periodo} de {empresa}. Si no la recibimos, las remuneraciones de este mes no se podrán declarar a tiempo.' }
     ],
     sin_recordatorio: 'Las liquidaciones se atrasan y no queda constancia de que se pidió la información.',
-    sin_respuesta: 'Se avisa a la jefatura. Con autorización del cliente, se liquida con la asistencia del mes anterior.'
+    sin_respuesta: 'No se le declaran las remuneraciones del mes a tiempo. Se avisa a la jefatura.'
   }),
   P({
     clave: 'PREVIRED', depto: 'RRHH', orden: 2, tipo: 'CLIENTE', fuente: 'previred', proceso: 'SRV-RHH-01',
-    nombre: 'Pago de cotizaciones (Previred)',
-    descripcion: 'Clientes con cotizaciones del mes por pagar. La declaración vence el día 10 y el pago el 13 (fecha fija).',
-    regla: { tipo: 'mensual', mes: 1, dia: 13, habil: false },
+    nombre: 'Pago de imposiciones (Previred)',
+    descripcion: 'Clientes con imposiciones del mes por pagar. Se recuerda el día 10 y el mismo 13 en la mañana; el pago vence el 13 (o el hábil siguiente).',
+    regla: { tipo: 'mensual', mes: 1, dia: 13, habil: true },
     escalones: [
-      { id: 'R1', nombre: 'Monto a pagar', offset: -3, canal: 'WHATSAPP', a_quien: 'CLIENTE',
-        texto: 'Hola {contacto}, las cotizaciones de {periodo} de {empresa} suman {monto} y deben pagarse a más tardar el {fecha_limite}. Envíanos el comprobante del depósito para dejarlas pagadas en Previred.' },
-      { id: 'R2', nombre: 'Mañana vence', offset: -1, canal: 'WHATSAPP', a_quien: 'CLIENTE',
-        texto: 'Hola {contacto}, mañana {fecha_limite} vence el pago de las cotizaciones de {periodo} de {empresa} ({monto}). ¿Ya hiciste el depósito?' },
-      { id: 'R3', nombre: 'Último día', offset: 0, canal: 'WHATSAPP', a_quien: 'CLIENTE',
-        texto: 'Hola {contacto}, hoy es el último día para pagar las cotizaciones de {periodo} de {empresa} ({monto}) sin intereses. Si ya depositaste, envíanos el comprobante.' }
+      { id: 'R1', nombre: 'Recordatorio de pago (día 10)', offset: -3, canal: 'WHATSAPP', a_quien: 'CLIENTE',
+        texto: 'Hola {contacto}, las imposiciones de {periodo} de {empresa} suman {monto} y deben pagarse a más tardar el {fecha_limite}. Envíanos el comprobante del pago para dejarlas al día en Previred.' },
+      { id: 'R2', nombre: 'Último día (13 en la mañana)', offset: 0, canal: 'WHATSAPP', a_quien: 'CLIENTE',
+        texto: 'Hola {contacto}, hoy {fecha_limite} es el último día para pagar las imposiciones de {periodo} de {empresa} ({monto}) sin intereses. Si ya pagaste, envíanos el comprobante.' }
     ],
-    sin_recordatorio: 'Cotizaciones impagas sin aviso al cliente.',
+    sin_recordatorio: 'Imposiciones impagas sin aviso al cliente.',
     sin_respuesta: 'Desde el día siguiente hay intereses y multas (DNP). Pasa a «Imposiciones impagas» y se avisa a la jefatura.'
+  }),
+  P({
+    clave: 'INFORME_PLATAFORMAS', depto: 'RRHH', orden: 6, tipo: 'INTERNO', fuente: 'interno', proceso: 'SRV-RHH-01',
+    nombre: 'Informe de plataformas externas a Facturación y Cobranzas',
+    descripcion: 'En los primeros 5 días del mes: enviar a la gerencia de Facturación y Cobranzas el informe de plataformas externas del mes anterior (trabajadores a los que se subió documentación para el cobro, trabajadores del mes y finiquitados), desde la matriz Plataformas externas.',
+    regla: { tipo: 'mensual', mes: 1, dia: 5, habil: true },
+    escalones: [
+      { id: 'T1', nombre: 'Preparar informe', offset: -2, canal: 'INTERNO', a_quien: 'RESPONSABLE', texto: 'Preparar el informe de plataformas externas de {periodo} para Facturación y Cobranzas (vence el {fecha_limite}).' },
+      { id: 'T2', nombre: 'Enviar informe', offset: 0, canal: 'INTERNO', a_quien: 'RESPONSABLE', texto: 'Hoy vence el informe de plataformas externas de {periodo}: enviarlo a la gerencia de Facturación y Cobranzas.' }
+    ],
+    sin_recordatorio: 'Facturación y Cobranzas no tiene la cantidad de trabajadores para cobrar el servicio de plataformas del mes.', sin_respuesta: ''
+  }),
+  P({
+    clave: 'IMPUESTO_UNICO_CONTABILIDAD', depto: 'RRHH', orden: 7, tipo: 'INTERNO', fuente: 'interno', proceso: 'SRV-RHH-01',
+    nombre: 'Informe de impuesto único a Contabilidad',
+    descripcion: 'Enviar a Contabilidad el impuesto único (y el 3 % de préstamo solidario) de cada cliente: un primer informe entre el 5 y el 7, y el final el día 13 en la tarde, cuando terminan las liquidaciones.',
+    regla: { tipo: 'mensual', mes: 1, dia: 13, habil: true },
+    escalones: [
+      { id: 'T1', nombre: 'Primer informe (día 5-7)', offset: -5, canal: 'INTERNO', a_quien: 'RESPONSABLE', texto: 'Enviar a Contabilidad el primer informe de impuesto único y 3 % de {periodo}.' },
+      { id: 'T2', nombre: 'Informe final (día 13)', offset: 0, canal: 'INTERNO', a_quien: 'RESPONSABLE', texto: 'Hoy, en la tarde, enviar a Contabilidad el informe final de impuesto único y 3 % de {periodo}.' }
+    ],
+    sin_recordatorio: 'Se atrasa Contabilidad: declara el F29 sin el impuesto único de los trabajadores.', sin_respuesta: ''
   }),
   P({
     clave: 'LRE', depto: 'RRHH', orden: 3, tipo: 'INTERNO', fuente: 'interno', proceso: 'SRV-RHH-01',
