@@ -123,7 +123,12 @@ test('motor real (si hay Chromium): PDF válido, JS apagado y cero pedidos a la 
     // A propósito SIN sanitizar: prueba el aislamiento del motor por sí solo.
     const doc = '<!doctype html><html><head><style>body{background:url(' + url + '/css)}</style></head><body><p id="x">ORIGINAL</p>' +
       '<script>document.getElementById("x").textContent="EJECUTADO";fetch("' + url + '/js")</script><img src="' + url + '/img"><iframe src="' + url + '/if"></iframe></body></html>';
-    const b = await Motor.htmlAPdf(doc, {});
+    // El primer arranque de Chromium en un servidor de CI recién creado puede
+    // pasarse del tiempo límite (#163, 2026-10-05: 35 s en frío). Un segundo
+    // intento, con el navegador ya encendido, mide lo que importa aquí: el PDF y
+    // el aislamiento, no la velocidad del arranque.
+    let b;
+    try { b = await Motor.htmlAPdf(doc, {}); } catch (e) { if (e.codigo !== 'TIMEOUT') throw e; b = await Motor.htmlAPdf(doc, {}); }
     assert.equal(b.slice(0, 5).toString(), '%PDF-');
     assert.equal(pedidos, 0, 'ningún pedido salió del documento');
   } finally { srv.close(); await Motor.cerrar(); }
