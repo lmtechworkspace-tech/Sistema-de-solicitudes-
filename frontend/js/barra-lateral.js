@@ -67,6 +67,8 @@
    * `plano`: una tarjeta que lleva directo a su pantalla.
    */
   function menu(moduloId) {
+    // Inicio también va en bloques (2026-10-06): sus tarjetas se arman con lo tuyo, tus atajos, lo pendiente y lo reciente.
+    if (moduloId === 'home') return inicioCards();
     var def = window.SigsoNav && SigsoNav.obtener(moduloId);
     if (!def || !(def.submodulos || []).length) return [];
     var hoja = function (it, nombre) {
@@ -103,6 +105,7 @@
   // La hoja de la página activa. Una pantalla que no está en el menú (la ficha
   // «conv:123») se atribuye a la hoja de la que cuelga («conv»).
   function rutaActiva(moduloId, itemId) {
+    if (moduloId === 'home') return rutaInicio();
     if (!itemId) return null;
     var todas = hojas(moduloId);
     var r = todas.filter(function (x) { return x.hoja.id === itemId; })[0];
@@ -110,6 +113,20 @@
     return r || null;
   }
   function tieneMenu(moduloId) { return menu(moduloId).length > 0; }
+  // Lo que salió del riel (Mis solicitudes, Pausas) se muestra en el panel de Inicio.
+  function esDeInicio(id) { return !!(est_.opts && (est_.opts.fueraDelRiel || []).indexOf(id) !== -1 && modulo(id)); }
+  // En Inicio, la fila de la pantalla abierta (primero en «Lo tuyo»).
+  function rutaInicio() {
+    var o = est_.opts;
+    if (!o || o.moduloActivo === 'home') return null;
+    var r = null;
+    inicioCards().forEach(function (c) {
+      c.items.forEach(function (it) {
+        if (!r && it.mod === o.moduloActivo && (it.item || '') === (it.item ? o.itemActivo || '' : '')) r = { hoja: it, mod1: c.id, item2: null };
+      });
+    });
+    return r;
+  }
 
   // --- atajos (fijados) y recientes ---------------------------------------------------------
   function sugeridos() {
@@ -201,7 +218,7 @@
       return '<div class="sb-grupo-r" role="group"' + (b.titulo ? ' aria-label="' + esc(b.titulo) + '"' : '') + '>' +
         (b.titulo || i ? '<p class="sb-grupo" aria-hidden="true"><span class="sb-grupo__linea"></span><span class="sb-txt">' + esc(b.titulo) + '</span></p>' : '') +
         b.ids.map(function (id) {
-          var m = modulo(id), act = id === o.moduloActivo, bd = est_.badges[id];
+          var m = modulo(id), act = id === (esDeInicio(o.moduloActivo) ? 'home' : o.moduloActivo), bd = est_.badges[id];
           var nombre = m.titulo || m.nombre;
           return '<button type="button" class="sb-rb' + (act ? ' sb-rb--act' : '') + '" data-modulo="' + esc(id) + '"' +
             ' aria-label="' + esc(nombre + (bd && bd.n ? ', ' + textoEstado(bd) : '')) + '"' + (act ? ' aria-current="true"' : '') + '>' +
@@ -231,8 +248,12 @@
     var tab = abierta1 ? '' : ' tabindex="-1"';
     if (!it.hijos.length) {
       var act = activa && activa.hoja.id === it.id;
-      return '<button type="button" class="sb-n2' + (act ? ' sb-n2--act' : '') + '" data-item="' + esc(it.id) + '" data-de-modulo="' + esc(mod) + '"' + (act ? ' aria-current="page"' : '') + tab + '>' +
-        '<span class="sb-n2__t">' + esc(it.nombre) + '</span>' + pildora(badgeHoja(it)) + '</button>';
+      // En Inicio cada fila lleva a su propio módulo (it.mod) y pantalla (it.item, '' = el módulo).
+      var destino = it.mod ? ' data-item="' + esc(it.item || '') + '" data-de-modulo="' + esc(it.mod) + '"' : ' data-item="' + esc(it.id) + '" data-de-modulo="' + esc(mod) + '"';
+      var boton = '<button type="button" class="sb-n2' + (act ? ' sb-n2--act' : '') + '"' + destino + (act ? ' aria-current="page"' : '') + (it.titulo ? ' title="' + esc(it.titulo) + '"' : '') + tab + '>' +
+        '<span class="sb-n2__t">' + esc(it.nombre) + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</span>' + pildora(badgeHoja(it)) + '</button>';
+      if (!it.envoltura && !it.extra) return boton;
+      return '<div class="sb-fila"' + (it.envoltura || '') + '>' + boton + String(it.extra || '').replace('{tab}', tab) + '</div>';
     }
     var padre = activa && activa.item2 === it.id;
     var abierta = q ? true : est_.abierto2 === it.id && abierta1;
@@ -258,14 +279,15 @@
     // El conteo de la tarjeta: lo que esperan sus pantallas (rojo si algo está atrasado).
     var suma = 0, rojo = false;
     c.items.forEach(function (it) { [it].concat(it.hijos).forEach(function (h) { var b = badgeHoja(h); if (b && b.n) { suma += b.n; if (b.tono === 'rojo') rojo = true; } }); });
-    var n = c.items.length;
+    var n = c.items.length, u = c.unidad || ['sección', 'secciones'];
     return '<div class="sb-mod' + (abierta ? ' sb-mod--abierto' : '') + (contiene ? ' sb-mod--act' : '') + '" data-mod1="' + esc(c.id) + '">' +
       '<button type="button" class="sb-mod__cab" data-abrir1="' + esc(c.id) + '" aria-expanded="' + abierta + '" aria-controls="' + idc + '"' + (c.nota ? ' title="' + esc(c.nota) + '"' : '') + '>' +
         '<span class="sb-mod__tile">' + ico(c.icono, 17) + '</span>' +
-        '<span class="sb-mod__t"><b>' + esc(c.titulo) + '</b><small>' + n + (n === 1 ? ' sección' : ' secciones') + '</small></span>' +
+        '<span class="sb-mod__t"><b>' + esc(c.titulo) + '</b><small>' + n + ' ' + (n === 1 ? u[0] : u[1]) + '</small></span>' +
         (suma ? pildora({ n: suma, tono: rojo ? 'rojo' : 'ambar' }) : '') +
         '<span class="sb-mod__flecha">' + ico('derecha', 16) + '</span></button>' +
-      '<div class="sb-plegable" id="' + idc + '"><div><div class="sb-mod__cuerpo">' +
+      '<div class="sb-plegable" id="' + idc + '"><div><div class="sb-mod__cuerpo' + (c.claseCuerpo ? ' ' + c.claseCuerpo : '') + '">' +
+        (c.pista ? '<p class="sb-pista sb-pista--tarjeta">' + c.pista + '</p>' : '') +
         c.items.map(function (it) { return filaHtml(mod, c, it, activa, abierta, q); }).join('') +
       '</div></div></div>' +
     '</div>';
@@ -301,53 +323,55 @@
     return vista.map(function (c) { return tarjetaHtml(m.id, c, activa, est_.q.trim()); }).join('');
   }
 
-  function mini(m) { return '<span class="sb-mini" style="--sb-c:' + colorDe(m) + '">' + ico((m && m.icono) || 'derecha', 14) + '</span>'; }
   function badgeDe(f) {
     if (f.item) { var h = hojaDe(f.modulo, f.item); return badgeHoja(h); }
     return est_.badges[f.modulo] || null;
   }
-  function filaInicio(attrs, m, nombre, sub, b, extra) {
-    return '<div class="sb-fila"><button type="button" class="sb-n2 sb-n2--ini" ' + attrs + '>' + mini(m) +
-      '<span class="sb-n2__t">' + esc(nombre) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span>' + (b ? pildora(b) : '') + '</button>' + (extra || '') + '</div>';
-  }
+  function conBadge(it, b) { it.badge = b && b.n ? b.n : 0; it.tono = (b && b.tono) || 'ambar'; return it; }
 
-  /** Inicio: lo tuyo que salió del riel (Mis solicitudes, Pausas), tus atajos, lo pendiente y lo reciente. */
-  function inicioHtml() {
-    var o = est_.opts, html = '';
+  /**
+   * Inicio, en bloques como las áreas (2026-10-06): tarjetas que se abren de a
+   * una — Lo tuyo (lo que salió del riel: Mis solicitudes, Pausas), tus
+   * atajos, lo pendiente de cada módulo y lo reciente.
+   */
+  function inicioCards() {
+    var o = est_.opts;
+    if (!o) return [];
+    var cards = [];
     var propios = (o.fueraDelRiel || []).filter(function (id) { return modulo(id); });
     if (propios.length) {
-      html += '<p class="sb-titulo">' + ico('persona', 12) + 'Lo tuyo</p><div class="sb-lista">' + propios.map(function (id) {
-        var m = modulo(id), act = o.moduloActivo === id;
-        return filaInicio('data-irmod="' + esc(id) + '"' + (act ? ' aria-current="page"' : ''), m, m.titulo || m.nombre, '', est_.badges[id] && est_.badges[id].n ? est_.badges[id] : null)
-          .replace('sb-n2 sb-n2--ini', 'sb-n2 sb-n2--ini' + (act ? ' sb-n2--act' : ''));
-      }).join('') + '</div>';
+      cards.push({ id: 'tuyo', titulo: 'Lo tuyo', icono: 'persona', nota: 'Tus solicitudes y tus pausas', items: propios.map(function (id) {
+        var m = modulo(id);
+        return conBadge({ id: 'tuyo|' + id, mod: id, item: '', nombre: m.titulo || m.nombre, hijos: [] }, est_.badges[id]);
+      }) });
     }
     var l = fijadosVisibles(), sug = est_.fijados === null;
-    html += '<p class="sb-titulo sb-titulo--fij">' + ico('estrella', 12) + (sug ? 'Atajos sugeridos' : 'Mis atajos') + '</p>' +
-      (sug ? '<p class="sb-pista">Agrega tus pantallas de todos los días con la estrella ' + ico('estrella', 11) + ' de arriba, junto al nombre del área. Mientras, te sugerimos estas.</p>' : '') +
-      (l.length ? '<div class="sb-lista sb-fijados">' + l.map(function (f, i) {
-        var m = modulo(f.modulo) || (o.accion && o.accion.modulo === f.modulo ? { icono: o.accion.icono || 'nueva', acento: 'var(--mod-nueva)' } : null);
-        return '<div class="sb-fila sb-atajo" draggable="true" data-pos="' + i + '">' +
-          '<button type="button" class="sb-n2 sb-n2--ini" data-fijado="' + i + '"' + (i < 8 ? ' title="Alt+' + (i + 1) + '"' : '') + '>' + mini(m) + '<span class="sb-n2__t">' + esc(f.nombre) +
-            (f.ruta && f.nombre.indexOf(f.ruta) === -1 ? '<small>' + esc(f.ruta) + '</small>' : '') + '</span>' + (badgeDe(f) ? pildora(badgeDe(f)) : '') + '</button>' +
-          (sug ? '' : '<button type="button" class="sb-quitar" data-quitar="' + i + '" aria-label="Quitar ' + esc(f.nombre) + ' de tus atajos" title="Quitar de tus atajos">' + ico('equis', 12) + '</button>') +
-        '</div>';
-      }).join('') + '</div>' : '<p class="sb-pista">Todavía no tienes atajos.</p>');
+    cards.push({ id: 'atajos', titulo: sug ? 'Atajos sugeridos' : 'Mis atajos', icono: 'estrella', unidad: ['atajo', 'atajos'], claseCuerpo: 'sb-fijados',
+      nota: 'Alt+1 a Alt+8 te llevan directo. Arrástralos para ordenarlos.',
+      pista: sug ? 'Agrega tus pantallas de todos los días con la estrella ' + ico('estrella', 11) + ' junto al nombre del área. Mientras, te sugerimos estas.'
+        : (l.length ? '' : 'Todavía no tienes atajos: márcalos con la estrella ' + ico('estrella', 11) + ' junto al nombre del área.'),
+      items: l.map(function (f, i) {
+        return conBadge({ id: 'atajo|' + i, mod: f.modulo, item: f.item || '', nombre: f.nombre, hijos: [],
+          sub: f.ruta && f.nombre.indexOf(f.ruta) === -1 ? f.ruta : '', titulo: i < 8 ? 'Alt+' + (i + 1) : '',
+          envoltura: ' draggable="true" data-pos="' + i + '"',
+          extra: sug ? '' : '<button type="button" class="sb-quitar" data-quitar="' + i + '" aria-label="Quitar ' + esc(f.nombre) + ' de tus atajos" title="Quitar de tus atajos"{tab}>' + ico('equis', 12) + '</button>' }, badgeDe(f));
+      }) });
+    var orden = { rojo: 0, ambar: 1, gris: 2 };
     var pend = o.modulos.filter(function (m) { return m.id !== 'home' && est_.badges[m.id] && est_.badges[m.id].n; })
-      .sort(function (a, b) { var r = { rojo: 0, ambar: 1, gris: 2 }; return r[est_.badges[a.id].tono] - r[est_.badges[b.id].tono] || est_.badges[b.id].n - est_.badges[a.id].n; });
+      .sort(function (x, y) { return orden[est_.badges[x.id].tono] - orden[est_.badges[y.id].tono] || est_.badges[y.id].n - est_.badges[x.id].n; });
     if (pend.length) {
-      html += '<p class="sb-titulo">' + ico('campana', 12) + 'Lo pendiente</p><div class="sb-lista">' + pend.map(function (m) {
-        var b = est_.badges[m.id];
-        return filaInicio('data-irmod="' + esc(m.id) + '"', m, m.titulo || m.nombre, textoEstado(b), b);
-      }).join('') + '</div>';
+      cards.push({ id: 'pendiente', titulo: 'Lo pendiente', icono: 'campana', unidad: ['módulo', 'módulos'], nota: 'Lo que te espera en cada módulo', items: pend.map(function (m) {
+        var bd = est_.badges[m.id];
+        return conBadge({ id: 'pend|' + m.id, mod: m.id, item: '', nombre: m.titulo || m.nombre, sub: textoEstado(bd), hijos: [] }, bd);
+      }) });
     }
     var rec = est_.recientes.filter(function (r) { return puedeIr(r) && !esFijado(r.modulo, r.item); }).slice(0, MAX_RECIENTES);
     if (rec.length) {
-      html += '<p class="sb-titulo">' + ico('reloj', 12) + 'Recientes</p><div class="sb-lista">' + rec.map(function (r) {
-        return filaInicio('data-reciente="' + esc(r.modulo) + '|' + esc(r.item || '') + '"', modulo(r.modulo), r.nombre, r.ruta && r.nombre.indexOf(r.ruta) === -1 ? r.ruta : '', null);
-      }).join('') + '</div>';
+      cards.push({ id: 'recientes', titulo: 'Recientes', icono: 'reloj', unidad: ['pantalla', 'pantallas'], nota: 'Lo último que abriste en este equipo', items: rec.map(function (r, i) {
+        return { id: 'rec|' + i, mod: r.modulo, item: r.item || '', nombre: r.nombre, sub: r.ruta && r.nombre.indexOf(r.ruta) === -1 ? r.ruta : '', hijos: [], badge: 0, tono: 'ambar' };
+      }) });
     }
-    return html;
+    return cards;
   }
 
   function estadoHtml(m) {
@@ -365,10 +389,12 @@
     return true;
   }
 
+  var INICIO_ = { id: 'home', nombre: 'Inicio', titulo: 'Inicio', icono: 'inicio', desc: 'Lo tuyo, tus atajos y lo pendiente de todos tus módulos' };
   function moduloVisible() {
     var o = est_.opts;
+    if (esDeInicio(o.moduloActivo)) return INICIO_;
     return modulo(o.moduloActivo) || (o.accion && o.accion.modulo === o.moduloActivo ? { id: o.accion.modulo, nombre: o.accion.texto, titulo: o.accion.texto, icono: o.accion.icono || 'nueva', desc: 'Ingresa un pedido a cualquier área' } : null) ||
-      { id: 'home', nombre: 'Inicio', titulo: 'Inicio', icono: 'inicio', desc: 'Tus atajos y lo pendiente de todos tus módulos' };
+      INICIO_;
   }
 
   function pintar() {
@@ -386,7 +412,7 @@
       var input = raiz_.querySelector('#sb-buscar');
       if (input) input.value = '';
     }
-    if (est_.abrirRuta && o.itemActivo && abrirRutaDe(m.id, o.itemActivo)) est_.abrirRuta = false;
+    if (est_.abrirRuta && (o.itemActivo || m.id === 'home') && abrirRutaDe(m.id, o.itemActivo)) est_.abrirRuta = false;
 
     var riel = raiz_.querySelector('#sb-riel');
     var nav = raiz_.querySelector('#nav-modulos');
@@ -403,10 +429,9 @@
     if (panel) panel.setAttribute('aria-label', 'Menú de ' + (m.titulo || m.nombre));
     // El buscador filtra el menú del área; sin menú (Inicio, áreas directas) queda solo el de todo SIGSO.
     var caja = raiz_.querySelector('#sb-buscar-caja');
-    var conMenu = m.id !== 'home' && tieneMenu(m.id);
     if (caja) {
-      caja.classList.toggle('sb-buscar--global', m.id === 'home');
-      caja.hidden = !conMenu && m.id !== 'home';
+      caja.classList.remove('sb-buscar--global');
+      caja.hidden = !tieneMenu(m.id);
       var inp = caja.querySelector('#sb-buscar');
       if (inp) inp.placeholder = 'Buscar en ' + (m.titulo || m.nombre);
     }
@@ -429,7 +454,7 @@
     // El manual de uso de este módulo (manual-v2.js).
     var manual = raiz_.querySelector('#sb-manual');
     if (manual) {
-      var mn = window.SigsoManual ? SigsoManual.de(m.id) : null;
+      var mn = window.SigsoManual ? SigsoManual.de(esDeInicio(o.moduloActivo) ? o.moduloActivo : m.id) : null;
       manual.hidden = !mn;
       if (mn) { manual.innerHTML = ico('libro', 14) + '<span>Manual de uso</span>'; manual.setAttribute('data-manual', mn.id); manual.title = 'Paso a paso de ' + (m.nombre || '') + ' (F1)'; }
     }
@@ -444,7 +469,7 @@
     }
     var volver = raiz_.querySelector('#sb-volver');
     if (volver && !volver.firstChild) volver.innerHTML = ico('izquierda', 16) + '<span>Áreas</span>';
-    if (nav) { nav.innerHTML = m.id === 'home' ? inicioHtml() : areaHtml(m); nav.scrollTop = scroll; }
+    if (nav) { nav.innerHTML = areaHtml(m); nav.scrollTop = scroll; }
     if (foco) { var el = raiz_.querySelector(foco); if (el) el.focus(); }
     // El área abierta, a la vista en el riel (cuentas con muchas).
     var act = riel && riel.querySelector('.sb-rb--act');
@@ -469,7 +494,7 @@
     if (cuerpo) {
       cuerpo.classList.toggle('sb-plegable--abierto', abierto);
       // Lo de adentro de algo cerrado no se recorre con Tab.
-      cuerpo.querySelectorAll('.sb-n2, .sb-n3').forEach(function (b) {
+      cuerpo.querySelectorAll('.sb-n2, .sb-n3, .sb-quitar').forEach(function (b) {
         var enBandeja = b.classList.contains('sb-n3');
         var visible = abierto && (!enBandeja || (b.closest('.sb-plegable--3') || {}).classList.contains('sb-plegable--abierto'));
         if (visible) b.removeAttribute('tabindex'); else b.setAttribute('tabindex', '-1');
@@ -696,7 +721,7 @@
     });
     // El encabezado del área abierta e Inicio (lo pendiente, tus atajos) muestran el mismo número.
     var o = est_.opts;
-    if (o && (o.moduloActivo === id || o.moduloActivo === 'home' || !modulo(o.moduloActivo))) pintar();
+    if (o && (o.moduloActivo === id || o.moduloActivo === 'home' || esDeInicio(o.moduloActivo) || !modulo(o.moduloActivo))) pintar();
   }
 
   window.SigsoBarra = {

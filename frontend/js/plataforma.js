@@ -1354,7 +1354,7 @@
     if (!window.SigsoBarra) return;
     var grupoDe = {};
     GRUPOS_SIDEBAR.forEach(function (g) { g.modulos.forEach(function (id) { grupoDe[id] = g.titulo; }); });
-    var modulos = [{ id: 'home', nombre: 'Inicio', corto: 'Inicio', titulo: 'Inicio', icono: 'inicio', grupo: '', desc: 'Tus atajos y lo pendiente de todos tus módulos', acento: 'var(--mod-inicio)' }]
+    var modulos = [{ id: 'home', nombre: 'Inicio', corto: 'Inicio', titulo: 'Inicio', icono: 'inicio', grupo: '', desc: 'Lo tuyo, tus atajos y lo pendiente de todos tus módulos', acento: 'var(--mod-inicio)' }]
       .concat(modulosDeLaCuenta_().filter(function (id) { return id !== 'nueva_solicitud'; }).map(function (id) {
         var def = MODULOS_SHELL[id];
         var color = MODULO_COLOR[id];

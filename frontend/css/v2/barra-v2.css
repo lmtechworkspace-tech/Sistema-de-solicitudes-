@@ -326,3 +326,9 @@
   .sb-rb, .sb-n2, .sb-n3, .sb-mod__cab, .sb-expandir svg, .sb-quitar,
   #vista-shell .plataforma-sidebar.sb { transition: none !important; }
 }
+
+/* Inicio en bloques (2026-10-06): la ayuda de una tarjeta va alineada con sus filas. */
+.sb-pista--tarjeta { margin: 4px 8px 6px 44px; }
+.sb-fila .sb-n2 { flex: 1; }
+.sb-fila:hover .sb-pill { visibility: hidden; }
+.sb-fila:not(:has(.sb-quitar)):hover .sb-pill { visibility: visible; }
