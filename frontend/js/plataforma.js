@@ -597,7 +597,7 @@
   // se le da la bienvenida de siempre.
   // 2026-10-05 (segunda versión de la barra): llave nueva para que todos vean
   // una vez cómo se lee la barra con nombres, colores y secciones.
-  var LLAVE_TOUR = 'sigso_tour_barra_v2';
+  var LLAVE_TOUR = 'sigso_tour_barra_2'; // ojo: una llave terminada en _v2 la borra la limpieza de abajo (preferencias de la versión clásica)
   var LLAVE_TOUR_ANTERIOR = 'sigso_tour_visto';
   var TOUR_PASOS = [
     { selector: '#plataforma-sidebar .plataforma-header__marca', titulo: 'Bienvenido a SIGSO',
