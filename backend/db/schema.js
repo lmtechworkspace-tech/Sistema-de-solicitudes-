@@ -863,7 +863,24 @@ const COLUMNAS = {
 
   // Preferencias de cada persona que la siguen a cualquier equipo (2026-10-05):
   // hoy, los fijados de la barra lateral (clave 'barra_fijados', valor JSON).
-  PREFERENCIAS_CUENTA: ['cuenta_id', 'clave', 'valor', 'fecha_actualizacion']
+  PREFERENCIAS_CUENTA: ['cuenta_id', 'clave', 'valor', 'fecha_actualizacion'],
+
+  // Hompy, la mascota (2026-10-06, logica/hompy.js). Tipos de evento (5, los
+  // definen Bárbara y Lisseth; parten como PROPUESTA), las actividades del
+  // calendario y el reporte de salida a terreno de cada una (`datos`, JSON).
+  HOMPY_TIPOS: [
+    'tipo_id', 'nombre', 'color', 'icono', 'orden', 'origen',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
+  ],
+  HOMPY_EVENTOS: [
+    'evento_id', 'tipo_id', 'titulo', 'fecha', 'hora_inicio', 'hora_fin', 'lugar', 'direccion', 'comuna',
+    'participantes', 'descripcion', 'estado', 'motivo_cancelacion',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
+  ],
+  HOMPY_SALIDAS: [
+    'salida_id', 'evento_id', 'datos', 'estado', 'cerrado_por', 'fecha_cierre',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
+  ]
 };
 
 // Crea la organización por defecto si todavía no existe ninguna, y le

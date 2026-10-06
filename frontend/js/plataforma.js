@@ -69,7 +69,11 @@
     // Finanzas (2026-10-06, finanzas-v2.js): la bóveda de las finanzas del
     // grupo. No se asigna en la cuenta: solo aparece si la sesión trae
     // cuenta.finanzas (lista fija del servidor) y cada acción lo re-verifica.
-    finanzas: { icono: 'candado', nombre: 'Finanzas', descripcion: 'Bóveda: caja, cobranza y resultados del grupo' }
+    finanzas: { icono: 'candado', nombre: 'Finanzas', descripcion: 'Bóveda: caja, cobranza y resultados del grupo' },
+    // Hompy (2026-10-06, hompy-v2.js): la mascota. Se asigna en la cuenta
+    // (módulo `hompy`) y el servidor lo exige en cada acción. Su ícono es la
+    // cara de Hompy (iconos.js la dibuja como imagen).
+    hompy: { icono: 'hompy', nombre: 'Hompy', descripcion: 'La mascota: calendario, salidas a terreno y contenido' }
   };
 
   // 2026-10-03: los DEPARTAMENTOS del organigrama, un módulo cada uno
@@ -123,7 +127,8 @@
     mi_trabajo: { acento: 'var(--mod-mi-trabajo)', suave: 'var(--mod-mi-trabajo-suave)' },
     proyectos: { acento: 'var(--mod-proyectos)', suave: 'var(--mod-proyectos-suave)' },
     calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' },
-    finanzas: { acento: 'var(--mod-finanzas)', suave: 'var(--mod-finanzas-suave)' }
+    finanzas: { acento: 'var(--mod-finanzas)', suave: 'var(--mod-finanzas-suave)' },
+    hompy: { acento: 'var(--mod-hompy)', suave: 'var(--mod-hompy-suave)' }
   };
   // Barra lateral, segunda versión (2026-10-05): cada área con su color, para reconocerla de lejos.
   var COLOR_AREA = { dep_contabilidad: 'contab', dep_rrhh: 'rrhh', dep_prevencion: 'prev', dep_marketing: 'mkt', dep_cobranzas: 'fact', dep_administracion: 'admarea' };
@@ -588,6 +593,9 @@
           if (window.SigsoCalidad.refrescar) window.SigsoCalidad.refrescar();
           else window.SigsoCalidad.cargar();
         }
+        break;
+      case 'hompy':
+        if (window.SigsoHompy) window.SigsoHompy.refrescar();
         break;
       default:
         break; // nueva_solicitud / administracion: sin auto-refresco
@@ -1334,7 +1342,7 @@
   var GRUPOS_SIDEBAR = [
     { titulo: 'Mi espacio', modulos: ['home', 'novedades', 'mi_trabajo', 'bandeja'] },
     // Cada persona ve solo su(s) área(s); el orden es el del organigrama.
-    { titulo: 'Áreas', modulos: IDS_DEPARTAMENTO.concat(['proyectos', 'jefatura', 'gerencia', 'pausas_coordinacion', 'calidad']) },
+    { titulo: 'Áreas', modulos: IDS_DEPARTAMENTO.concat(['hompy', 'proyectos', 'jefatura', 'gerencia', 'pausas_coordinacion', 'calidad']) },
     { titulo: 'Sistema', modulos: ['administracion'] }
   ];
   var FUERA_DEL_RIEL = ['mis_solicitudes', 'pausas'];
@@ -1398,7 +1406,8 @@
     jefatura: function (id) { return window.SigsoJefatura && window.SigsoJefatura.irAItem && window.SigsoJefatura.irAItem(id); },
     proyectos: function (id) { var m = moduloProyectos_(); return m && m.irAItem && m.irAItem(id); },
     novedades: function (id) { return window.SigsoNovedades && window.SigsoNovedades.irAItem && window.SigsoNovedades.irAItem(id); },
-    pausas_coordinacion: function (id) { return window.SigsoCoordinacion && window.SigsoCoordinacion.irAItem && window.SigsoCoordinacion.irAItem(id); }
+    pausas_coordinacion: function (id) { return window.SigsoCoordinacion && window.SigsoCoordinacion.irAItem && window.SigsoCoordinacion.irAItem(id); },
+    hompy: function (id) { return window.SigsoHompy && window.SigsoHompy.irAItem(id); }
   };
   IDS_DEPARTAMENTO.forEach(function (dep) { IR_A_ITEM_POR_MODULO[dep] = function (id) { var m = moduloDepartamento_(dep); return m && m.irAItem(id); }; });
 
@@ -1538,7 +1547,7 @@
   // el contenedor ancho, como app.html. Los demas (formulario, mis
   // solicitudes) se leen mejor angostos y centrados -- por eso el ancho del
   // <main> se adapta al modulo en vez de ser fijo.
-  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad'].concat(IDS_DEPARTAMENTO);
+  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad', 'hompy'].concat(IDS_DEPARTAMENTO);
 
   // SIGSO v2 (documentacion/SIGSO-v2-hoja-de-ruta.md). Desde el 2026-09-25 la
   // versión clásica está retirada: cada módulo tiene UNA implementación, la v2.
@@ -1703,6 +1712,7 @@
     }
     // Finanzas: sin auto-refresco a propósito (mantendría la bóveda abierta).
     if (id === 'finanzas' && window.SigsoFinanzas) window.SigsoFinanzas.cargar();
+    if (id === 'hompy' && window.SigsoHompy) window.SigsoHompy.cargar();
     if (id === 'pausas' && moduloImpl_('pausas')) {
       moduloImpl_('pausas').cargar();
     }

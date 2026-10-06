@@ -1,0 +1,143 @@
+'use strict';
+
+/**
+ * Hompy, la mascota (2026-10-06): el acceso solo con el módulo `hompy`, los
+ * tipos de evento propuestos y editables, el calendario y el reporte de salida
+ * a terreno (borrador, cierre con lo mínimo, reapertura y su PDF).
+ */
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { abrirDb_, sembrarTabla_, agregarFila_, leerFilas_ } = require('../db/sqliteRepo');
+const { COLUMNAS } = require('../db/schema');
+const H = require('../logica/hompy');
+const CuentasPortal = require('../logica/cuentasPortal');
+
+const BARBARA = { email: 'barbara@homepymes.cl', rol: 'DEV', modulos: ['hompy'] };
+const ADM_SIN = { email: 'admin@homepymes.cl', rol: 'ADM', modulos: ['administracion'] };
+const OTRA = { email: 'otra@homepymes.cl', rol: 'DEV', modulos: ['bandeja'] };
+
+function crear() {
+  const db = abrirDb_();
+  Object.keys(COLUMNAS).forEach((h) => { try { sembrarTabla_(db, h, COLUMNAS[h], []); } catch (e) { /* */ } });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'c1', usuario: 'barbara', nombre: 'Bárbara Álvarez', emails: JSON.stringify(['barbara@homepymes.cl']), activo: true });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'c2', usuario: 'lisseth', nombre: 'Lisseth Soto', emails: JSON.stringify(['lisseth@homepymes.cl']), activo: true });
+  return db;
+}
+const rechazado = (r) => r && r._forbidden === true;
+const invalido = (r) => r && r._validationError === true;
+function hoy() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date()); }
+function mover(f, n) { return new Date(new Date(f + 'T12:00:00Z').getTime() + n * 864e5).toISOString().slice(0, 10); }
+
+test('acceso: solo con el módulo hompy (ni un ADM sin él)', () => {
+  const db = crear();
+  assert.ok(rechazado(H.datos(db, {}, OTRA)));
+  assert.ok(rechazado(H.datos(db, {}, ADM_SIN)), 'el ADM sin el módulo no entra');
+  assert.ok(rechazado(H.guardarEvento(db, { titulo: 'x' }, OTRA)));
+  assert.ok(rechazado(H.guardarSalida(db, {}, null)));
+  const d = H.datos(db, {}, BARBARA);
+  assert.equal(d.tipos.length, 5, 'parte con los 5 tipos propuestos');
+  assert.ok(d.tipos.every((t) => t.origen === 'PROPUESTA' && t.activo));
+  assert.deepEqual(d.personas, ['Bárbara Álvarez', 'Lisseth Soto']);
+  assert.ok(CuentasPortal.MODULOS_VALIDOS.includes('hompy'), 'se puede asignar desde Administración');
+  assert.ok(!CuentasPortal.MODULOS_POR_ROL.ADM.includes('hompy'), 'no viene por defecto en ningún rol');
+});
+
+test('tipos de evento: renombrar, validar y no quedar sin ninguno activo', () => {
+  const db = crear();
+  const [t1] = H.datos(db, {}, BARBARA).tipos;
+  const r = H.guardarTipo(db, { tipo_id: t1.tipo_id, nombre: 'Feria de seguridad', color: 'violeta', icono: 'casco' }, BARBARA);
+  assert.equal(r.tipo.nombre, 'Feria de seguridad');
+  assert.equal(r.tipo.origen, 'EDITADA');
+  assert.equal(r.tipo.color, 'violeta');
+  assert.equal(H.guardarTipo(db, { tipo_id: t1.tipo_id, nombre: 'X', color: 'fucsia', icono: 'inventado' }, BARBARA).tipo.color, 'gris', 'color fuera de la lista');
+  const otro = H.datos(db, {}, BARBARA).tipos[1];
+  assert.ok(invalido(H.guardarTipo(db, { tipo_id: otro.tipo_id, nombre: 'x' }, BARBARA)), 'nombre repetido');
+  assert.ok(invalido(H.guardarTipo(db, { nombre: '' }, BARBARA)));
+  // Apagar todos menos uno: el último no se puede apagar.
+  const tipos = H.datos(db, {}, BARBARA).tipos;
+  tipos.slice(1).forEach((t) => H.guardarTipo(db, { tipo_id: t.tipo_id, nombre: t.nombre, color: t.color, icono: t.icono, activo: false }, BARBARA));
+  assert.ok(invalido(H.guardarTipo(db, { tipo_id: tipos[0].tipo_id, nombre: tipos[0].nombre, activo: false }, BARBARA)));
+  // Hasta 8.
+  for (let i = 0; i < 3; i++) assert.ok(H.guardarTipo(db, { nombre: 'Nuevo ' + i }, BARBARA).tipo);
+  assert.ok(invalido(H.guardarTipo(db, { nombre: 'Noveno' }, BARBARA)));
+});
+
+test('actividades: alta con validaciones, estados y cancelación con motivo', () => {
+  const db = crear();
+  const tipo = H.datos(db, {}, BARBARA).tipos[0].tipo_id;
+  assert.ok(invalido(H.guardarEvento(db, { tipo_id: tipo, fecha: hoy() }, BARBARA)), 'sin título');
+  assert.ok(invalido(H.guardarEvento(db, { tipo_id: tipo, titulo: 'Feria', fecha: '2026-02-30' }, BARBARA)), 'fecha inválida');
+  assert.ok(invalido(H.guardarEvento(db, { tipo_id: 'nope', titulo: 'Feria', fecha: hoy() }, BARBARA)));
+  assert.ok(invalido(H.guardarEvento(db, { tipo_id: tipo, titulo: 'Feria', fecha: hoy(), hora_inicio: '12:00', hora_fin: '11:00' }, BARBARA)));
+  const futuro = H.guardarEvento(db, { tipo_id: tipo, titulo: 'Feria BCI', fecha: mover(hoy(), 5), hora_inicio: '10:00', hora_fin: '13:00', lugar: 'Mall', participantes: ['Bárbara Álvarez', 'bárbara álvarez', 'Lisseth Soto'] }, BARBARA).evento;
+  assert.equal(futuro.estado, 'PLANIFICADO');
+  assert.deepEqual(futuro.participantes, ['Bárbara Álvarez', 'Lisseth Soto'], 'sin duplicados');
+  assert.equal(H.cambiarEstadoEvento(db, { evento_id: futuro.evento_id, estado: 'CONFIRMADO' }, BARBARA).evento.estado, 'CONFIRMADO');
+  assert.ok(invalido(H.cambiarEstadoEvento(db, { evento_id: futuro.evento_id, estado: 'REALIZADO' }, BARBARA)), 'no se realiza antes de su fecha');
+  assert.ok(invalido(H.cambiarEstadoEvento(db, { evento_id: futuro.evento_id, estado: 'CANCELADO' }, BARBARA)), 'cancelar pide motivo');
+  const c = H.cambiarEstadoEvento(db, { evento_id: futuro.evento_id, estado: 'CANCELADO', motivo: 'Lluvia' }, BARBARA).evento;
+  assert.equal(c.motivo_cancelacion, 'Lluvia');
+  assert.ok(invalido(H.guardarSalida(db, { evento_id: futuro.evento_id, datos: {} }, BARBARA)), 'una cancelada no lleva reporte');
+  // Editar mantiene el id; eliminar la saca del calendario.
+  const ed = H.guardarEvento(db, { evento_id: futuro.evento_id, tipo_id: tipo, titulo: 'Feria BCI (editada)', fecha: mover(hoy(), 6) }, BARBARA).evento;
+  assert.equal(ed.titulo, 'Feria BCI (editada)');
+  H.eliminarEvento(db, { evento_id: futuro.evento_id }, BARBARA);
+  assert.equal(H.datos(db, {}, BARBARA).eventos.length, 0);
+});
+
+test('reporte de salida: borrador, cierre con lo mínimo, reapertura y limpieza de datos', () => {
+  const db = crear();
+  const tipo = H.datos(db, {}, BARBARA).tipos[0].tipo_id;
+  const futuro = H.guardarEvento(db, { tipo_id: tipo, titulo: 'Mañana', fecha: mover(hoy(), 1) }, BARBARA).evento;
+  assert.ok(invalido(H.guardarSalida(db, { evento_id: futuro.evento_id, datos: {} }, BARBARA)), 'antes de la fecha no hay reporte');
+
+  const ev = H.guardarEvento(db, { tipo_id: tipo, titulo: 'Activación BCI', fecha: mover(hoy(), -2), lugar: 'Sucursal Centro' }, BARBARA).evento;
+  // Borrador con datos sucios: se guardan solo los campos conocidos y con su tipo.
+  const b = H.guardarSalida(db, { evento_id: ev.evento_id, datos: { hora_inicio: '10:00', hora_fin: '25:00', publico: '1.200', calificacion: 9, material: ['Pendón', 'Cohete'], enlace_fotos: 'javascript:alert(1)', inventado: 'x', apoyo: 'Ana, Ana; Luis' } }, BARBARA);
+  assert.equal(b.salida.estado, 'BORRADOR');
+  assert.equal(b.evento.estado, 'REALIZADO', 'llenar el reporte marca la salida como realizada');
+  const d = b.salida.datos;
+  assert.equal(d.hora_fin, '', 'hora inválida se descarta');
+  assert.equal(d.publico, 1200, '"1.200" es mil doscientos');
+  assert.equal(d.calificacion, 5, 'la nota se acota a 5');
+  assert.deepEqual(d.material, ['Pendón']);
+  assert.equal(d.enlace_fotos, '');
+  assert.deepEqual(d.apoyo, ['Ana', 'Luis']);
+  assert.equal(d.inventado, undefined);
+
+  // Cerrar sin lo mínimo: dice qué falta, campo por campo.
+  const f = H.guardarSalida(db, { evento_id: ev.evento_id, datos: { hora_inicio: '10:00' }, cerrar: true }, BARBARA);
+  assert.ok(invalido(f));
+  assert.deepEqual(f.fields.map((x) => x.campo).sort(), ['calificacion', 'estado_traje', 'hora_fin', 'publico', 'traje']);
+  assert.match(f.message, /Para cerrar el reporte falta/);
+
+  const completo = { hora_salida: '08:30', hora_inicio: '10:00', hora_fin: '12:15', traje: 'Lisseth Soto', publico: 0, estado_traje: 'LIMPIEZA', calificacion: 4, minutos_traje: 55, pausas: 2, hidratacion: true, bien: 'Mucha gente' };
+  const ok = H.guardarSalida(db, { evento_id: ev.evento_id, datos: completo, cerrar: true }, BARBARA);
+  assert.equal(ok.salida.estado, 'CERRADO');
+  assert.equal(ok.salida.cerrado_por, BARBARA.email);
+  assert.equal(ok.salida.datos.publico, 0, 'cero personas es un dato válido');
+  assert.ok(invalido(H.guardarSalida(db, { evento_id: ev.evento_id, datos: completo }, BARBARA)), 'cerrado no se edita');
+  assert.ok(invalido(H.eliminarEvento(db, { evento_id: ev.evento_id }, BARBARA)), 'con reporte cerrado no se elimina');
+  assert.ok(invalido(H.cambiarEstadoEvento(db, { evento_id: ev.evento_id, estado: 'CANCELADO', motivo: 'x' }, BARBARA)));
+  assert.equal(H.reabrirSalida(db, { evento_id: ev.evento_id }, BARBARA).salida.estado, 'BORRADOR');
+  assert.equal(leerFilas_(db, 'HOMPY_SALIDAS', COLUMNAS.HOMPY_SALIDAS).length, 1, 'una sola fila por actividad');
+});
+
+test('PDF: el cuerpo trae la portada, el traje, la evaluación y los gastos', () => {
+  const U = { esc: (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'), ico: () => '<svg></svg>' };
+  const html = H.cuerpoPdf_(
+    { evento_id: 'HE-1', titulo: 'Activación <BCI>', fecha: '2026-10-03', lugar: 'Sucursal', comuna: 'Santiago', direccion: '' },
+    { nombre: 'Evento con marca', color: 'azul', icono: 'megafono' },
+    { estado: 'CERRADO', cerrado_por: 'barbara@homepymes.cl', fecha_cierre: '2026-10-04T15:00:00.000Z',
+      datos: { hora_inicio: '10:00', hora_fin: '12:15', traje: 'Lisseth', publico: 1200, estado_traje: 'LIMPIEZA', calificacion: 4, minutos_traje: 55, gasto_transporte: 5000, gasto_colacion: 3500, bien: 'Mucha gente' } },
+    { 'barbara@homepymes.cl': 'Bárbara Álvarez' }, U);
+  assert.match(html, /Activación &lt;BCI&gt;/, 'escapa el título');
+  assert.match(html, /sábado 3 de octubre de 2026/);
+  assert.match(html, /2 h 15 min/);
+  assert.match(html, /1\.200/);
+  assert.match(html, /Necesita limpieza/);
+  assert.match(html, /\$8\.500/, 'total de gastos');
+  assert.match(html, /Reporte cerrado por Bárbara Álvarez/);
+  assert.equal((html.match(/class="on"/g) || []).length, 8, '4 estrellas, en la portada y en la evaluación');
+});

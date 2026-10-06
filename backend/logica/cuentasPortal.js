@@ -37,7 +37,8 @@ const MODULOS_POR_ROL = {
   ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad', 'control_interno']
 };
 
-const MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad', 'control_interno'];
+// 'hompy' (2026-10-06): no va en ningún rol por defecto; se asigna a mano a quien lleva a la mascota.
+const MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad', 'control_interno', 'hompy'];
 
 function leerCuentas(db) {
   return leerFilas_(db, 'CUENTAS_PORTAL', COLUMNAS.CUENTAS_PORTAL);

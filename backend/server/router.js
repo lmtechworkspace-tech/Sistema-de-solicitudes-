@@ -93,6 +93,7 @@ const ReporteExcel = require('../logica/reporteExcel');
 const ArchivosSolicitud = require('../logica/archivosSolicitud');
 const Preferencias = require('../logica/preferencias');
 const FinanzasBoveda = require('../logica/finanzasBoveda');
+const Hompy = require('../logica/hompy');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -674,6 +675,16 @@ const ACCIONES = {
   finanzasSalir: (db, data, contexto) => FinanzasBoveda.salir(db, data, contexto),
   finanzasResumen: (db, data, contexto) => FinanzasBoveda.resumen(db, data, contexto),
   finanzasBitacora: (db, data, contexto) => FinanzasBoveda.bitacora(db, data, contexto),
+  // Hompy, la mascota (2026-10-06): solo cuentas con el módulo `hompy`
+  // (cada acción lo verifica -- ver hompy.js).
+  hompyDatos: (db, data, contexto) => Hompy.datos(db, data, contexto),
+  hompyGuardarTipo: (db, data, contexto) => Hompy.guardarTipo(db, data, contexto),
+  hompyGuardarEvento: (db, data, contexto) => Hompy.guardarEvento(db, data, contexto),
+  hompyCambiarEstadoEvento: (db, data, contexto) => Hompy.cambiarEstadoEvento(db, data, contexto),
+  hompyEliminarEvento: (db, data, contexto) => Hompy.eliminarEvento(db, data, contexto),
+  hompyGuardarSalida: (db, data, contexto) => Hompy.guardarSalida(db, data, contexto),
+  hompyReabrirSalida: (db, data, contexto) => Hompy.reabrirSalida(db, data, contexto),
+  hompyPdfSalida: (db, data, contexto) => Hompy.pdfSalida(db, data, contexto),
   obtenerPreferencias: (db, data, contexto) => Preferencias.obtener(db, data, contexto),
   guardarFijados: (db, data, contexto) => Preferencias.guardarFijados(db, data, contexto),
   // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y

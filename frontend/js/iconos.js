@@ -140,7 +140,18 @@ var Iconos = (function () {
    *        titulo: si se pasa, el icono se anuncia a lectores de pantalla;
    *        si no, se marca aria-hidden (es decorativo junto a un texto).
    */
+  // Hompy (2026-10-06): el ícono del módulo de la mascota es SU CARA, no un
+  // trazo. Una <img> (no <svg>): donde el shell arma una máscara con el trazo
+  // (encabezado de página), simplemente no encuentra uno y no la pinta.
+  function hompy_(opts) {
+    var tam = opts.tam || 16;
+    return '<img class="sigso-ico sigso-ico--hompy' + (opts.clase ? ' ' + opts.clase : '') + '" src="assets/hompy/hompy-cara.webp"' +
+      ' width="' + tam + '" height="' + tam + '" alt="' + (opts.titulo ? String(opts.titulo).replace(/"/g, '&quot;') : '') + '"' +
+      (opts.titulo ? '' : ' aria-hidden="true"') + ' decoding="async">';
+  }
+
   function svg(nombre, opciones) {
+    if (nombre === 'hompy') return hompy_(opciones || {});
     var trazo = TRAZOS[nombre];
     if (!trazo) {
       return '';
