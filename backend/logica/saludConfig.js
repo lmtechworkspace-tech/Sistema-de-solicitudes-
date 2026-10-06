@@ -140,6 +140,39 @@ function revisar(db) {
     explicacion: 'Las solicitudes y publicaciones de esas áreas no tienen a quién llegar.',
     casos: leer_(db, 'CAT_AREAS').filter((a) => v_(a.activo) && !String(a.responsable_email || '').trim()).map((a) => caso_(a.nombre)) });
 
+  // --- Avisos (2026-10-06) ------------------------------------------------------
+  // Una solicitud a Soporte de plataformas no le llegó a Leo: los correos no
+  // salían desde el 18-sep y él no entraba a SIGSO. Las dos cosas se ven aquí.
+  const hace7 = ahora - 7 * DIA;
+  const recientes = leer_(db, 'LOG_NOTIFICACIONES').filter((n) => n.canal === 'EMAIL' && new Date(n.timestamp).getTime() >= hace7);
+  const fallidos = recientes.filter((n) => n.resultado === 'FALLIDO' || n.resultado === 'PENDIENTE_REINTENTO').length;
+  const enviados = recientes.filter((n) => n.resultado === 'ENVIADO').length;
+  if (fallidos) {
+    const ultimo = leer_(db, 'LOG_SISTEMA').filter((l) => l.contexto === 'CORREO_ERROR')
+      .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))[0];
+    add({ id: 'correo_no_sale', grupo: 'Avisos', severidad: enviados ? 'alerta' : 'critico', ir: '',
+      titulo: enviados ? 'Correos que no se pudieron enviar' : 'Los correos de SIGSO no están saliendo',
+      explicacion: 'Los avisos por correo (solicitudes nuevas, derivaciones, novedades) no llegan. Suele ser la clave del servicio de correo (Resend) o el dominio sin verificar: revisa la configuración del servidor. Mientras tanto, los avisos siguen llegando a la campana de SIGSO.',
+      casos: [caso_(fallidos + ' sin enviar y ' + enviados + ' enviados en los últimos 7 días' +
+        (ultimo ? '. Último error (' + String(ultimo.timestamp).slice(0, 16).replace('T', ' ') + '): ' + ultimo.mensaje : '. El motivo se anotará con el próximo intento.'))] });
+  }
+  const receptores = {};
+  leer_(db, 'CAT_AREAS').filter((a) => v_(a.activo) && String(a.responsable_email || '').trim())
+    .forEach((a) => { receptores[n_(a.responsable_email)] = a.nombre; });
+  leer_(db, 'CI_MIEMBROS').filter((m) => v_(m.activa) && (m.rol === 'JEFATURA' || m.rol === 'REGISTRA'))
+    .forEach((m) => { if (!receptores[n_(m.usuario_email)]) receptores[n_(m.usuario_email)] = m.depto; });
+  const sinVer = [];
+  Object.keys(receptores).forEach((email) => {
+    const c = ctx.cuentaDe(email);
+    if (!c) sinVer.push(caso_(email + ' (' + receptores[email] + ') — sin cuenta activa: no puede ver lo que le llega'));
+    else if (v_(c.debe_cambiar_password)) sinVer.push(caso_(c.nombre + ' (' + receptores[email] + ') — clave temporal sin cambiar' +
+      (c.ultimo_acceso ? ', último acceso ' + String(c.ultimo_acceso).slice(0, 10) : ', nunca entró'), { cuenta_id: c.cuenta_id }));
+  });
+  add({ id: 'receptores_sin_entrar', grupo: 'Avisos', severidad: 'alerta', ir: 'CUENTAS_PORTAL',
+    titulo: 'Personas que reciben solicitudes pero no entran a SIGSO',
+    explicacion: 'Les llegan pedidos (son responsables de un área o trabajan la cola de un departamento), pero no tienen cuenta o no han fijado su clave: si además el correo falla, no se enteran. Entrégales acceso.',
+    casos: sinVer });
+
   const orden = { critico: 0, alerta: 1, info: 2 };
   checks.sort((a, b) => orden[a.severidad] - orden[b.severidad]);
   return {

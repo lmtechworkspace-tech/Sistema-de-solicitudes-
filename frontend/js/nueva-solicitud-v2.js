@@ -30,7 +30,7 @@
   var MAX_ADJUNTOS = 5;
   var MAX_BYTES = 10 * 1024 * 1024;
   var catalogo_ = null, clientes_ = null;
-  var e = { paso: 'destino', depto: null, servicio: null, enviando: false, archivos: [], resultado: null, q: '', filtro: '' };
+  var e = { paso: 'destino', depto: null, servicio: null, destinatario: '', enviando: false, archivos: [], resultado: null, q: '', filtro: '' };
   // Para buscar sin importar tildes ni mayúsculas.
   function norm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
   function plazoTxt(d) { return d ? d + (d === 1 ? ' día hábil' : ' días hábiles') : ''; }
@@ -167,6 +167,36 @@
       '<button type="button" class="sx2-boton sx2-boton--fantasma sx2-boton--sm js-ns2-cambiar">' + ico('izquierda', 14) + 'Elegir otro</button></div>';
   }
 
+  // 2026-10-06 (pedido del dueño): a quién le llega, por persona. Por defecto
+  // a todo el equipo del departamento (se ven sus nombres, cargo y empresa);
+  // o a una persona en particular de ese equipo.
+  function persona(p) {
+    var linea = [p.cargo, p.empresa].filter(Boolean).join(' · ');
+    return '<span class="ns2-persona">' + (U() && U().avatar ? U().avatar(p, 'sm') : '') +
+      '<span><b>' + esc(p.nombre) + '</b>' + (p.rol === 'JEFATURA' ? ' <small class="ns2-persona__jefa">jefatura</small>' : '') +
+      (linea ? '<small>' + esc(linea) + '</small>' : '') + '</span></span>';
+  }
+  function destino() {
+    var d = e.depto, equipo = d.equipo || [];
+    if (!equipo.length) {
+      return '<div class="ns2-destino-a"><span class="sx2-campo__et">¿A quién le llega?</span>' +
+        '<p class="sx2-tenue">' + esc(d.nombre) + ' todavía no tiene equipo cargado en SIGSO: lo recibe Administración del sistema y lo deriva.</p></div>';
+    }
+    var aUno = !!e.destinatario;
+    var opciones = equipo.map(function (p) {
+      return '<option value="' + esc(p.email) + '"' + (e.destinatario === p.email ? ' selected' : '') + '>' +
+        esc(p.nombre + ([p.cargo, p.empresa].filter(Boolean).length ? ' — ' + [p.cargo, p.empresa].filter(Boolean).join(' · ') : '')) + '</option>';
+    }).join('');
+    return '<fieldset class="ns2-destino-a"><legend class="sx2-campo__et">¿A quién se lo envías?</legend>' +
+      '<label class="ns2-opcion"><input type="radio" name="a_quien" value="equipo" class="js-ns2-aquien"' + (aUno ? '' : ' checked') + '> ' +
+        '<span><b>A todo el equipo de ' + esc(d.nombre) + '</b><small class="sx2-tenue">Les llega a ' + (equipo.length === 1 ? 'esta persona' : 'estas ' + equipo.length + ' personas') + ' y lo toma quien esté disponible (o la jefatura lo reparte).</small></span></label>' +
+      (aUno ? '' : '<div class="ns2-personas">' + equipo.map(persona).join('') + '</div>') +
+      '<label class="ns2-opcion"><input type="radio" name="a_quien" value="persona" class="js-ns2-aquien"' + (aUno ? ' checked' : '') + '> ' +
+        '<span><b>A una persona en particular</b><small class="sx2-tenue">Queda a su nombre desde el inicio y le llega solo a ella; la jefatura queda al tanto.</small></span></label>' +
+      (aUno ? '<select class="sx2-input js-ns2-persona" name="destinatario" aria-label="Persona">' + opciones + '</select>' : '') +
+    '</fieldset>';
+  }
+
   function formulario() {
     var sv = e.servicio;
     var hoy = new Date(); var min = hoy.getFullYear() + '-' + ('0' + (hoy.getMonth() + 1)).slice(-2) + '-' + ('0' + hoy.getDate()).slice(-2);
@@ -182,9 +212,14 @@
       '</div>' +
       '<label class="ns2-urgente"><input type="checkbox" name="urgente"> <span><b>Es urgente</b> <small class="sx2-tenue">Solo si de verdad no puede esperar el plazo habitual.</small></span></label>' +
       campo('Adjuntos (opcional)', '<input class="sx2-input" type="file" name="archivos" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt">', 'Hasta ' + MAX_ADJUNTOS + ' archivos de 10 MB.') +
+      destino() +
       '<p class="sx2-campo__error js-ns2-error" hidden></p>' +
-      '<div class="ns2-acciones"><button type="submit" class="sx2-boton sx2-boton--primario"' + (e.enviando ? ' disabled' : '') + '>' + ico('derecha', 16) + (e.enviando ? 'Enviando…' : 'Enviar a ' + esc(e.depto.nombre)) + '</button></div>' +
+      '<div class="ns2-acciones"><button type="submit" class="sx2-boton sx2-boton--primario"' + (e.enviando ? ' disabled' : '') + '>' + ico('derecha', 16) + (e.enviando ? 'Enviando…' : textoEnviar()) + '</button></div>' +
     '</form>';
+  }
+  function textoEnviar() {
+    var p = e.destinatario && (e.depto.equipo || []).filter(function (x) { return x.email === e.destinatario; })[0];
+    return 'Enviar a ' + (p ? p.nombre : e.depto.nombre);
   }
 
   function vistaListo() {
@@ -194,6 +229,7 @@
       '<span class="ns2-listo__ico">' + ico('check', 26) + '</span>' +
       '<h1>Listo: tu pedido llegó a ' + esc(r.depto || '') + '</h1>' +
       '<p>Número <b>' + esc(r.solicitud_id || '') + '</b>. Te avisaremos por correo cuando empiecen, si necesitan algo de ti y cuando esté resuelto.</p>' +
+      ((r.destinatarios || []).length ? '<div class="ns2-llego"><span class="sx2-campo__et">Le llegó a</span><div class="ns2-personas">' + r.destinatarios.map(persona).join('') + '</div></div>' : '') +
       (r.fallasAdjuntos ? '<p class="sx2-tenue">' + r.fallasAdjuntos + ' adjunto(s) no se pudieron subir: agrégalos desde Mis solicitudes.</p>' : '') +
       '<div class="ns2-acciones">' +
         (conMis ? '<button type="button" class="sx2-boton sx2-boton--primario js-ns2-mis">' + ico('lista', 16) + 'Ver en Mis solicitudes</button>' : '') +
@@ -252,7 +288,8 @@
       empresa_cliente: cli ? cli.nombre : '', rut_cliente: cli ? cli.rut : '', codigo_cliente: cli ? cli.codigo : '',
       subsolicitudes: [{
         titulo: titulo, descripcion: descripcion, depto: e.depto.clave,
-        servicio_id: e.servicio.servicio_id || '', urgente: !!form.urgente.checked
+        servicio_id: e.servicio.servicio_id || '', urgente: !!form.urgente.checked,
+        destinatario: e.destinatario || ''
       }]
     };
     e.enviando = true;
@@ -261,7 +298,7 @@
     err.hidden = true;
     api('crearSolicitud', datos).then(function (r) {
       if (!r || !r.ok) {
-        e.enviando = false; btn.disabled = false; btn.lastChild.textContent = 'Enviar a ' + e.depto.nombre;
+        e.enviando = false; btn.disabled = false; btn.lastChild.textContent = textoEnviar();
         var detalle = r && r.fields && r.fields.length ? ' (' + r.fields.map(function (x) { return x.mensaje; }).join('; ') + ')' : '';
         return mal(((r && r.message) || 'No se pudo enviar.') + detalle);
       }
@@ -274,7 +311,7 @@
         });
       }, Promise.resolve()).then(function () {
         e.enviando = false;
-        e.resultado = { solicitud_id: id, depto: e.depto.nombre, fallasAdjuntos: fallas };
+        e.resultado = { solicitud_id: id, depto: e.depto.nombre, fallasAdjuntos: fallas, destinatarios: r.data.destinatarios || [] };
         e.paso = 'listo';
         pintar();
         document.dispatchEvent(new CustomEvent('sigso:solicitudes-cambio'));
@@ -294,6 +331,7 @@
       if (!e.depto) return;
       e.servicio = id ? (e.depto.servicios || []).filter(function (x) { return x.servicio_id === id; })[0] : otroPedido(e.depto);
       e.paso = 'pedido';
+      e.destinatario = '';
       pintar(); cargarClientes();
       window.scrollTo(0, 0);
       return;
@@ -310,6 +348,24 @@
     e.q = ev.target.value;
     var res = document.querySelector('#ns2-pedido .js-ns2-res');
     if (res) res.innerHTML = resultados();
+  });
+  // A todo el equipo / a una persona: solo se repinta ese bloque (lo escrito en el formulario se conserva).
+  document.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (!t.classList || !e.depto || !document.getElementById('ns2-pedido') || !document.getElementById('ns2-pedido').contains(t)) return;
+    if (t.classList.contains('js-ns2-aquien')) {
+      e.destinatario = t.value === 'persona' ? (((e.depto.equipo || [])[0] || {}).email || '') : '';
+      var bloque = document.querySelector('#ns2-pedido .ns2-destino-a');
+      if (bloque) {
+        bloque.outerHTML = destino();
+        var sel = document.querySelector('#ns2-pedido .js-ns2-persona');
+        if (sel) sel.focus();
+      }
+    } else if (t.classList.contains('js-ns2-persona')) {
+      e.destinatario = t.value;
+    } else return;
+    var btn = document.querySelector('#ns2-pedido .js-ns2-form [type=submit]');
+    if (btn && !e.enviando) btn.lastChild.textContent = textoEnviar();
   });
   document.addEventListener('submit', function (ev) {
     if (!ev.target.classList || !ev.target.classList.contains('js-ns2-form')) return;
@@ -329,7 +385,7 @@
     if (s) s.classList.remove('sx2', 'ns2', 'ns2-modo-depto');
     var r = document.getElementById('ns2-pedido');
     if (r) r.remove();
-    e = { paso: 'destino', depto: null, servicio: null, enviando: false, archivos: [], resultado: null, q: '', filtro: '' };
+    e = { paso: 'destino', depto: null, servicio: null, destinatario: '', enviando: false, archivos: [], resultado: null, q: '', filtro: '' };
   }
   // 2026-09-25: la versión clásica se retiró; la v2 es la única.
   function activo() { return true; }

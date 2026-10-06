@@ -79,7 +79,7 @@ const CANALES_ALERTA = [
     prefijos: ['NOVEDAD'] },
   { clave: 'SOLICITUDES', nombre: 'Solicitudes (equipo)', tiene_en_vivo: false,
     descripcion: 'Pedidos nuevos a tu departamento, derivaciones a tu bandeja y avisos de documento listo.',
-    prefijos: ['DERIVACION', 'DOC_LISTO', 'FALLO_DOCUMENTO', 'PEDIDO_DEPTO'] },
+    prefijos: ['DERIVACION', 'DOC_LISTO', 'FALLO_DOCUMENTO', 'PEDIDO_DEPTO', 'PEDIDO_DIRECTO'] },
   { clave: 'SLA', nombre: 'SLA y vencimientos (equipo)', tiene_en_vivo: false,
     descripcion: 'SLA próximo o vencido, fecha comprometida en riesgo y alertas de patrón. Hoy solo por correo.',
     prefijos: ['SLA_PROXIMO', 'SLA_VENCIDO', 'FECHA_EN_RIESGO', 'ALERTA_PATRON'] },
@@ -272,8 +272,30 @@ async function enviarCorreo_(db, { solicitudId, destinatario, evento, asunto, cu
     return { enviado: true };
   } catch (err) {
     actualizarFilaPorId_(db, 'LOG_NOTIFICACIONES', 'log_id', logId, { resultado: 'PENDIENTE_REINTENTO', reintentos: 1 });
+    registrarErrorCorreo_(db, err, destinatario);
     return { enviado: false, motivo: 'error_envio' };
   }
+}
+
+// 2026-10-06: desde el 18-sep ningún correo salía (todos FALLIDO) y no
+// quedaba en ninguna parte POR QUÉ: el error de Resend se descartaba. Ahora
+// queda en LOG_SISTEMA (contexto CORREO_ERROR) y en el log del servidor, y la
+// Salud de la configuración lo muestra. Para no llenar la tabla, el mismo
+// mensaje se anota a lo más una vez por hora.
+const ultimoErrorCorreo_ = new WeakMap(); // por base: { mensaje, ts }
+function registrarErrorCorreo_(db, err, destinatario) {
+  const mensaje = String((err && err.message) || err || 'error desconocido').slice(0, 500);
+  console.error('correo no enviado a ' + destinatario + ': ' + mensaje);
+  const ahora = Date.now();
+  const ultimo = ultimoErrorCorreo_.get(db);
+  if (ultimo && mensaje === ultimo.mensaje && ahora - ultimo.ts < 3600000) return;
+  ultimoErrorCorreo_.set(db, { mensaje: mensaje, ts: ahora });
+  try {
+    agregarFila_(db, 'LOG_SISTEMA', {
+      log_id: crypto.randomUUID(), timestamp: new Date(ahora).toISOString(),
+      contexto: 'CORREO_ERROR', mensaje: mensaje, ref: String(destinatario || '')
+    });
+  } catch (e) { /* anotar el error nunca debe romper el envío */ }
 }
 
 // Fase 10.2 (backend/backoffice/Notificaciones.gs): se encola directo, SIN
@@ -322,6 +344,18 @@ async function enviarAcuseRecibo(db, solicitud) {
 
 async function enviarAvisoDesarrollo(db, solicitud, motivo, destinatario) {
   const email = destinatario || EMAIL_DESARROLLO;
+  // 2026-10-06: también en la campana de SIGSO. Una solicitud a Soporte de
+  // plataformas llegaba solo por correo; si el correo fallaba, la persona no
+  // se enteraba por ningún lado.
+  let conCuenta = false;
+  try { conCuenta = tieneCuentaActiva_(db, email); } catch (err) { conCuenta = false; }
+  if (conCuenta) {
+    NotificacionesApp.encolarLote(db, [{
+      destinatario: email, tipo: 'SOLICITUD_ASIGNADA',
+      titulo: (solicitud.prioridad === 'P1' ? 'Urgente: ' : 'Solicitud nueva para ti: ') + solicitud.solicitud_id,
+      mensaje: motivo || '', modulo_id: 'bandeja', texto_accion: 'Ver la solicitud', vidaHoras: 168
+    }]);
+  }
   const asunto = 'SIGSO - ' + (solicitud.prioridad === 'P1' ? 'ALERTA P1: ' : 'Nueva solicitud asignada: ') + solicitud.solicitud_id;
   const cuerpo =
     'Estimado/a:\n\n' +
@@ -338,31 +372,65 @@ async function enviarAvisoDesarrollo(db, solicitud, motivo, destinatario) {
 }
 
 /**
- * Etapa 2: llegó un pedido a la cola de un departamento. Campana a todos los
- * que lo trabajan; correo solo a la jefatura (si no hay jefatura, a quienes
- * registran). Sin equipo cargado, a las cuentas ADM para que no se pierda.
+ * Etapa 2: llegó un pedido a un departamento.
+ * 2026-10-06 (pedido del dueño: «saber… cuáles son las personas que están en
+ * ese departamento y les llegan»):
+ *  - A la cola (sin persona): correo y campana a TODO el equipo que la
+ *    trabaja (antes el correo iba solo a la jefatura). Sin equipo cargado, a
+ *    las cuentas ADM para que no se pierda.
+ *  - A una persona en particular (item.responsable): correo y campana a esa
+ *    persona; la jefatura recibe solo la campana, para estar al tanto.
  */
 async function avisarPedidoDepartamento(db, solicitud, depto, items, equipo) {
   const lista = (equipo || []).filter((m) => m.email);
   const jefes = lista.filter((m) => m.rol === 'JEFATURA').map((m) => m.email);
-  let correo = jefes.length ? jefes : lista.map((m) => m.email);
-  if (!correo.length) {
-    try { correo = DirectorioPersonal.emailsPorRol_(db, ['ADM']); } catch (err) { correo = []; }
-  }
-  const titulos = (items || []).map((i) => '- ' + (i.titulo || i.subsolicitud_id)).join('\n');
+  const urgente = solicitud.prioridad === 'P1' || solicitud.prioridad === 'P2' ? ' (urgente)' : '';
   const enlace = urlPortal_() + '#/bandeja';
-  const campana = lista.map((m) => m.email).filter((e) => tieneCuentaActiva_(db, e)).map((e) => ({
-    destinatario: e, tipo: 'SOLICITUD_DEPTO', titulo: depto.nombre + ': pedido nuevo ' + solicitud.solicitud_id,
-    mensaje: ((items || [])[0] || {}).titulo || '', modulo_id: 'bandeja', texto_accion: 'Ver la cola', vidaHoras: 168
-  }));
-  if (campana.length) NotificacionesApp.encolarLote(db, campana);
-  const asunto = 'SIGSO — Pedido nuevo para ' + depto.nombre + ': ' + solicitud.solicitud_id + (solicitud.prioridad === 'P1' || solicitud.prioridad === 'P2' ? ' (urgente)' : '');
-  const cuerpo = 'Hola:\n\n' + (solicitud.solicitante_nombre || 'Alguien') + ' pidió a ' + depto.nombre + ':\n\n' + titulos + '\n\n' +
-    'Llegó a la cola del departamento sin asignar: repártelo o tómalo aquí:\n' + enlace + pieCorreo_();
+  const quien = solicitud.solicitante_nombre || 'Alguien';
+  const titulosDe = (l) => l.map((i) => '- ' + (i.titulo || i.subsolicitud_id)).join('\n');
+  const conCuenta = (emails) => emails.filter((e) => tieneCuentaActiva_(db, e));
   const resultados = [];
-  for (const email of correo) {
-    resultados.push(await enviarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: email, evento: 'PEDIDO_DEPTO:' + depto.clave, asunto, cuerpo }));
+  const campana = [];
+
+  // A la cola del departamento.
+  const aCola = (items || []).filter((i) => !i.responsable);
+  if (aCola.length) {
+    let correo = lista.map((m) => m.email);
+    if (!correo.length) {
+      try { correo = DirectorioPersonal.emailsPorRol_(db, ['ADM']); } catch (err) { correo = []; }
+    }
+    conCuenta(lista.map((m) => m.email)).forEach((e) => campana.push({
+      destinatario: e, tipo: 'SOLICITUD_DEPTO', titulo: depto.nombre + ': pedido nuevo ' + solicitud.solicitud_id,
+      mensaje: aCola[0].titulo || '', modulo_id: 'bandeja', texto_accion: 'Ver la cola', vidaHoras: 168
+    }));
+    const asunto = 'SIGSO — Pedido nuevo para ' + depto.nombre + ': ' + solicitud.solicitud_id + urgente;
+    const cuerpo = 'Hola:\n\n' + quien + ' pidió a ' + depto.nombre + ':\n\n' + titulosDe(aCola) + '\n\n' +
+      'Llegó a la cola del departamento, sin asignar. Lo recibe todo el equipo: la jefatura lo reparte o cualquiera lo toma aquí:\n' + enlace + pieCorreo_();
+    for (const email of correo) {
+      resultados.push(await enviarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: email, evento: 'PEDIDO_DEPTO:' + depto.clave, asunto, cuerpo }));
+    }
   }
+
+  // A personas en particular: un aviso por persona con todos sus ítems.
+  const porPersona = {};
+  (items || []).filter((i) => i.responsable).forEach((i) => { (porPersona[i.responsable] = porPersona[i.responsable] || []).push(i); });
+  for (const email of Object.keys(porPersona)) {
+    const suyos = porPersona[email];
+    conCuenta([email]).forEach((e) => campana.push({
+      destinatario: e, tipo: 'SOLICITUD_DEPTO', titulo: 'Te pidieron directamente: ' + solicitud.solicitud_id,
+      mensaje: suyos[0].titulo || '', modulo_id: 'bandeja', texto_accion: 'Ver el pedido', vidaHoras: 168
+    }));
+    conCuenta(jefes.filter((j) => j !== email)).forEach((j) => campana.push({
+      destinatario: j, tipo: 'SOLICITUD_DEPTO', titulo: depto.nombre + ': pedido ' + solicitud.solicitud_id + ' enviado a una persona del equipo',
+      mensaje: suyos[0].titulo || '', modulo_id: 'bandeja', texto_accion: 'Ver el pedido', vidaHoras: 168
+    }));
+    const asunto = 'SIGSO — Te pidieron directamente (' + depto.nombre + '): ' + solicitud.solicitud_id + urgente;
+    const cuerpo = 'Hola:\n\n' + quien + ' te pidió a ti, en ' + depto.nombre + ':\n\n' + titulosDe(suyos) + '\n\n' +
+      'Ya está a tu nombre. Revísalo y empiézalo aquí:\n' + enlace + pieCorreo_();
+    resultados.push(await enviarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: email, evento: 'PEDIDO_DIRECTO:' + depto.clave, asunto, cuerpo }));
+  }
+
+  if (campana.length) NotificacionesApp.encolarLote(db, campana);
   return resultados;
 }
 
@@ -852,6 +920,7 @@ async function procesarColaCorreo(db) {
       actualizarFilaPorId_(db, 'LOG_NOTIFICACIONES', 'log_id', n.log_id, { resultado: 'ENVIADO' });
       resultados.push({ log_id: n.log_id, resultado: 'ENVIADO' });
     } catch (err) {
+      registrarErrorCorreo_(db, err, n.destinatario);
       const reintentos = Number(n.reintentos) + 1;
       actualizarFilaPorId_(db, 'LOG_NOTIFICACIONES', 'log_id', n.log_id, {
         reintentos: reintentos,

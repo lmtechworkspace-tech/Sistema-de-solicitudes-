@@ -224,15 +224,25 @@ test('fechaCierreEstimada: 5 días hábiles desde terminado, nunca antes de 2 h�
 
 // --- áreas del formulario ----------------------------------------------------
 
-test('el formulario muestra departamentos, una vez cada uno, sin el nombre de la persona', () => {
+// 2026-10-06: el dueño cambió el criterio de la etapa 1 — se muestra la
+// PERSONA (nombre, cargo, empresa) con su departamento, no solo el
+// departamento (que mandaba todo a la primera persona sin que se supiera).
+test('el formulario muestra a cada persona con su departamento, cargo y empresa, sin correos', () => {
   const db = dbConSchema();
   const nombres = ['RRHH_LISSETH', 'CONTABILIDAD_FRANCISCA', 'RRHH_VANESSA', 'DESARROLADOR_LEO', 'FACTURACIÓN_MARISOL', 'Plataformas', 'CONTROL Y GESTIÓN'];
   nombres.forEach((n, i) => agregarFila_(db, 'CAT_AREAS', Object.assign(vacio('CAT_AREAS'),
     { area_id: 'AREA_00' + (i + 1), nombre: n, responsable_email: 'p' + i + '@homepymes.cl', activo: true })));
   agregarFila_(db, 'CAT_AREAS', Object.assign(vacio('CAT_AREAS'), { area_id: 'AREA_099', nombre: 'MARKETING_X', activo: false }));
+  sembrarTabla_(db, 'CAT_EMPRESAS', COLUMNAS.CAT_EMPRESAS, [['RLD', 'RLD Ingeniería', '', true, '']]);
+  agregarFila_(db, 'DIRECTORIO_PERSONAS', Object.assign(vacio('DIRECTORIO_PERSONAS'),
+    { persona_id: 'x', nombre: 'Leo Estay', emails: JSON.stringify(['p3@homepymes.cl']), cargo_principal: 'Desarrollador', empresa_id: 'RLD', activa: true }));
+  agregarFila_(db, 'CUENTAS_PORTAL', Object.assign(vacio('CUENTAS_PORTAL'),
+    { cuenta_id: 'c', nombre: 'Lisseth', cargo: 'Analista RR.HH.', emails: JSON.stringify(['p0@homepymes.cl']), activo: true }));
   const areas = Catalogos.getCatalogosPublicos(db).areas;
-  assert.deepEqual(areas.map((a) => a.nombre), ['Contabilidad', 'Control y Gestión', 'Desarrollo / TI', 'Facturación y Cobranzas', 'Plataformas', 'Recursos Humanos']);
-  assert.equal(areas.find((a) => a.nombre === 'Recursos Humanos').area_id, 'AREA_001', 'el departamento usa su primera área');
+  assert.deepEqual(areas.map((a) => a.nombre), ['Contabilidad', 'Control y Gestión', 'Desarrollo / TI', 'Facturación y Cobranzas', 'Plataformas', 'Recursos Humanos', 'Recursos Humanos'],
+    'las dos personas de RR.HH. aparecen, cada una con su área');
+  assert.deepEqual(areas.find((a) => a.area_id === 'AREA_004'), { area_id: 'AREA_004', nombre: 'Desarrollo / TI', persona: 'Leo Estay', cargo: 'Desarrollador', empresa: 'RLD Ingeniería' });
+  assert.equal(areas.find((a) => a.area_id === 'AREA_001').persona, 'Lisseth', 'sin ficha en el directorio, sale de su cuenta');
   assert.equal(JSON.stringify(areas).indexOf('@'), -1);
 });
 

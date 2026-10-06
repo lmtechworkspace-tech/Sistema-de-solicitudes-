@@ -100,9 +100,46 @@ test('un pedido a un departamento llega SIN asignar, con el plazo y la prioridad
   assert.equal(item.prioridad, 'P4');
   assert.equal(Number(item.sla_objetivo_horas), 2 * Servicios.HORAS_JORNADA);
   const avisos = filas(db, 'LOG_NOTIFICACIONES').filter((l) => String(l.evento).indexOf('PEDIDO_DEPTO:') === 0);
-  assert.deepEqual(avisos.map((a) => a.destinatario), [JEFA], 'correo solo a la jefatura');
+  assert.deepEqual(avisos.map((a) => a.destinatario).sort(), [ANALISTA, JEFA].sort(), '2026-10-06: correo a todo el equipo, no solo a la jefatura');
   const campana = filas(db, 'NOTIFICACIONES_APP').filter((n) => n.tipo === 'SOLICITUD_DEPTO').map((n) => n.destinatario_email).sort();
   assert.deepEqual(campana, [ANALISTA, JEFA].sort(), 'campana a quienes trabajan el área (no a lectura)');
+  // Quien pide ve a quiénes les llegó, por persona.
+  assert.deepEqual(r.destinatarios.map((p) => p.nombre), ['Francisca', 'Bárbara']);
+  assert.equal(r.destinatarios[0].jefatura, true);
+  assert.equal(r.destinatarios[0].empresa, 'HomePymes');
+});
+
+test('catálogo: cada departamento trae a su equipo con nombre, cargo y empresa (sin lectura)', () => {
+  const db = dbConSchema();
+  equipoContabilidad(db);
+  agregarFila_(db, 'DIRECTORIO_PERSONAS', Object.assign(vacio('DIRECTORIO_PERSONAS'), {
+    persona_id: 'p1', nombre: 'Francisca Feliú', emails: JSON.stringify([JEFA]), cargo_principal: 'Jefa de Contabilidad', empresa_id: 'HP', activa: true }));
+  const d = Servicios.catalogo(db).departamentos.find((x) => x.clave === 'CONTABILIDAD');
+  assert.deepEqual(d.equipo.map((p) => [p.nombre, p.cargo, p.empresa, p.rol]), [
+    ['Francisca Feliú', 'Jefa de Contabilidad', 'HomePymes', 'JEFATURA'],
+    ['Bárbara', '', 'HomePymes', 'REGISTRA']
+  ]);
+  assert.equal(Servicios.catalogo(db).departamentos.find((x) => x.clave === 'MARKETING').con_equipo, false);
+});
+
+test('pedido a una persona en particular: queda a su nombre, le llega a ella y la jefatura solo se entera', async () => {
+  const db = dbConSchema();
+  equipoContabilidad(db);
+  const r = await pedir(db, { destinatario: ' Barbara@HomePymes.cl ' });
+  assert.ok(r.solicitud_id, JSON.stringify(r));
+  assert.equal(filas(db, 'SUBSOLICITUDES')[0].desarrollador_asignado, ANALISTA);
+  const correos = filas(db, 'LOG_NOTIFICACIONES').filter((l) => /^PEDIDO_(DEPTO|DIRECTO):/.test(l.evento));
+  assert.deepEqual(correos.map((a) => [a.destinatario, a.evento]), [[ANALISTA, 'PEDIDO_DIRECTO:CONTABILIDAD']]);
+  const campana = filas(db, 'NOTIFICACIONES_APP').filter((n) => n.tipo === 'SOLICITUD_DEPTO');
+  assert.deepEqual(campana.map((n) => n.destinatario_email).sort(), [ANALISTA, JEFA].sort());
+  assert.match(campana.find((n) => n.destinatario_email === ANALISTA).titulo, /directamente/);
+  assert.deepEqual(r.destinatarios.map((p) => [p.nombre, p.directo]), [['Bárbara', true]]);
+  // Solo a alguien del equipo que trabaja la cola (ni lectura ni de otro departamento).
+  for (const fuera of [LECTORA, OTRA, 'nadie@x.cl']) {
+    const malo = await pedir(db, { destinatario: fuera });
+    assert.ok(malo._validationError, fuera);
+    assert.ok(malo.fields.some((f) => /destinatario/.test(f.campo)));
+  }
 });
 
 test('urgente sube a P2 y usa el plazo de P2 si es menor; "Otro pedido" usa el plazo de su prioridad', async () => {

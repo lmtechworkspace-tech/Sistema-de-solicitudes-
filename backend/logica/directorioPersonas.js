@@ -105,6 +105,37 @@ function resolverVarios(db, emails) {
   return mapa;
 }
 
+// Destinatarios por persona (2026-10-06, pedido del dueño: «que se vea la
+// persona como tal… definida por nombre, cargo, empresa»). Para cada correo:
+// { email, nombre, cargo, empresa } -- del directorio y, si la persona no
+// está ahí, de su cuenta de la plataforma. La empresa va con su nombre
+// (CAT_EMPRESAS), no con el código. Un correo desconocido queda con el
+// correo como nombre: nunca se pierde un destinatario por no tener ficha.
+function fichas(db, emails) {
+  const lista = [];
+  const vistos = {};
+  (emails || []).forEach((e) => { const n = normalizarEmail_(e); if (n && !vistos[n]) { vistos[n] = true; lista.push(n); } });
+  if (!lista.length) return {};
+  const directorio = resolverVarios(db, lista);
+  let cuentas = [], empresas = [];
+  try { cuentas = leerFilas_(db, 'CUENTAS_PORTAL', COLUMNAS.CUENTAS_PORTAL); } catch (err) { cuentas = []; }
+  try { empresas = leerFilas_(db, 'CAT_EMPRESAS', COLUMNAS.CAT_EMPRESAS); } catch (err) { empresas = []; }
+  const nombreEmpresa = (id) => { const f = empresas.find((x) => x.empresa_id === id); return f ? (f.nombre || id) : (id || ''); };
+  const mapa = {};
+  lista.forEach((email) => {
+    const p = directorio[email];
+    const c = cuentas.find((x) => esVerdadero_(x.activo) && parsearLista_(x.emails).some((m) => normalizarEmail_(m) === email)) ||
+      cuentas.find((x) => parsearLista_(x.emails).some((m) => normalizarEmail_(m) === email));
+    mapa[email] = {
+      email: email,
+      nombre: (p && p.nombre) || (c && c.nombre) || email,
+      cargo: (p && p.cargo) || (c && c.cargo) || '',
+      empresa: nombreEmpresa((p && p.empresa_id) || (c && c.empresa_id) || '')
+    };
+  });
+  return mapa;
+}
+
 // --- API HTTP ---
 
 // Fase 2 (2026-09-22): resolución masiva para la CAPA DE VISUALIZACIÓN --
@@ -164,6 +195,6 @@ function listar(db, data, contexto) {
 }
 
 module.exports = {
-  resolverPorEmail, resolverPorRut, resolverVarios,
+  resolverPorEmail, resolverPorRut, resolverVarios, fichas,
   buscarPersonas, listar, resolverPersonas
 };

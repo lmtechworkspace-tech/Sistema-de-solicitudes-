@@ -248,3 +248,20 @@
   .ns2-elegido { flex-wrap: wrap; }
   .ns2-busca { position: static; }
 }
+
+/* 2026-10-06 — A quién le llega, por persona (nombre, cargo, empresa). */
+.ns2-destino-a { margin: 0; padding: 12px 14px; border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio-lg); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ns2-destino-a legend { padding: 0 4px; }
+.ns2-destino-a p { margin: 0; font: var(--sx-t-chico); }
+.ns2-opcion { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font: var(--sx-t-chico); color: var(--sx-texto); }
+.ns2-opcion input { margin-top: 3px; accent-color: var(--sx-primario); }
+.ns2-opcion span { display: flex; flex-direction: column; gap: 2px; }
+.ns2-personas { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 24px; }
+.ns2-llego .ns2-personas { padding-left: 0; margin-top: 6px; }
+.ns2-persona { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; border-radius: 999px; background: var(--sx-superficie-2); border: 1px solid var(--sx-borde-suave); max-width: 100%; }
+.ns2-persona > span:last-child { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.ns2-persona b { font: 600 .875rem/1.25 var(--fuente); color: var(--sx-texto); }
+.ns2-persona small { font: var(--sx-t-chico); color: var(--sx-texto-2); overflow-wrap: anywhere; }
+.ns2-persona__jefa { align-self: flex-start; padding: 0 6px; margin: 1px 0; border-radius: 999px; background: var(--sx-primario-suave); color: var(--sx-primario); font-size: .7rem; }
+.ns2-destino-a .js-ns2-persona { margin-left: 24px; max-width: calc(100% - 24px); }
+@media (max-width: 560px) { .ns2-personas { padding-left: 0; } .ns2-destino-a .js-ns2-persona { margin-left: 0; max-width: 100%; } }

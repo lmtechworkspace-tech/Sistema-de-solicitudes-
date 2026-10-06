@@ -28,6 +28,7 @@ const crypto = require('node:crypto');
 const { leerFilas_, agregarFila_, actualizarFilaPorId_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
 const { DEPARTAMENTOS } = require('./controlInternoMatrices');
+const DirectorioPersonas = require('./directorioPersonas');
 
 const HORAS_JORNADA = 9; // la misma jornada con que cumplimiento.js mide los plazos
 const PLAZO_DIAS_DEFECTO = 3;
@@ -79,6 +80,16 @@ function equipoDepto_(db, clave) {
     .filter((m) => { if (!m.email || vistos[m.email]) return false; vistos[m.email] = true; return true; });
 }
 function puedeTrabajar_(rol) { return ROLES_QUE_TRABAJAN.indexOf(rol) !== -1; }
+/**
+ * El mismo equipo, con la persona completa (2026-10-06): [{email, rol,
+ * nombre, cargo, empresa}]. Es lo que ve quien pide: a quiénes les llega
+ * y, si quiere, a cuál de ellos se lo envía directamente.
+ */
+function personasDepto_(db, clave) {
+  const equipo = equipoDepto_(db, clave);
+  const f = DirectorioPersonas.fichas(db, equipo.map((m) => m.email));
+  return equipo.map((m) => Object.assign({ rol: m.rol }, f[m.email] || { email: m.email, nombre: m.email, cargo: '', empresa: '' }));
+}
 
 // --- catálogo ----------------------------------------------------------------------------
 
@@ -97,17 +108,22 @@ function ordenar_(a, b) { return (a.orden - b.orden) || a.nombre.localeCompare(b
 
 /**
  * Lo que ve el formulario de Nueva solicitud: cada departamento con sus
- * servicios activos y si hoy tiene a alguien que reciba (si no, el pedido
- * igual entra y lo ve Administración del sistema).
+ * servicios activos y QUIÉNES lo reciben (nombre, cargo, empresa). Si no
+ * tiene a nadie, el pedido igual entra y lo ve Administración del sistema.
+ * Exige sesión (no es acción pública), así que el correo puede viajar: es
+ * con lo que se elige a una persona en particular.
  */
 function catalogo(db) {
   const todos = servicios_(db).map(proyectar_).filter((s) => s.activa);
-  const miembros = miembrosActivos_(db);
   return {
-    departamentos: departamentos_().map((d) => Object.assign({}, d, {
-      servicios: todos.filter((s) => s.depto === d.clave).sort(ordenar_),
-      con_equipo: miembros.some((m) => m.depto === d.clave && puedeTrabajar_(m.rol))
-    }))
+    departamentos: departamentos_().map((d) => {
+      const equipo = personasDepto_(db, d.clave);
+      return Object.assign({}, d, {
+        servicios: todos.filter((s) => s.depto === d.clave).sort(ordenar_),
+        equipo: equipo,
+        con_equipo: equipo.length > 0
+      });
+    })
   };
 }
 
@@ -217,6 +233,6 @@ function condicionesDelServicio_(db, servicioId, urgente, slaPorPrioridad) {
 
 module.exports = {
   catalogo, listarAdmin, guardar, importarDesdeProcesos,
-  departamentos_, departamento_, rolesEnDeptos_, colasDe_, equipoDepto_, puedeTrabajar_, condicionesDelServicio_,
+  departamentos_, departamento_, rolesEnDeptos_, colasDe_, equipoDepto_, personasDepto_, puedeTrabajar_, condicionesDelServicio_,
   servicioPorId_, HORAS_JORNADA, PLAZO_DIAS_DEFECTO
 };

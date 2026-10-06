@@ -20,6 +20,8 @@
 const { leerFilas_, agregarFila_, actualizarFilaPorId_ } = require('../db/sqliteRepo');
 const { errorValidacion, errorForbidden } = require('./errores');
 const { COLUMNAS } = require('../db/schema');
+const DirectorioPersonas = require('./directorioPersonas');
+const { EMAIL_DESARROLLO } = require('./constantesSolicitudes');
 
 const CATALOGOS_CONFIG = {
   EMPRESA: { hoja: 'CAT_EMPRESAS', idCampo: 'empresa_id', roles: ['ADM'] },
@@ -116,16 +118,36 @@ function departamentoDeArea_(nombre) {
   if (base.indexOf('_') === -1 && base !== base.toUpperCase()) return base;
   return nombreLegible_(prefijo);
 }
+// 2026-10-06 (pedido del dueño): ya no se agrupa por departamento. Mostrar
+// solo «Contabilidad» mandaba todo a la primera persona del área sin que nadie
+// lo supiera, y «No estoy seguro» no decía a quién llegaba (una solicitud a
+// Soporte de plataformas no la vio Leo). Ahora cada opción es UNA PERSONA:
+// nombre, cargo y empresa, con su departamento para agruparlas. El correo
+// sigue sin viajar (esta acción es pública): el ruteo se hace con area_id.
 function proyectarAreasPublicas_(db) {
   let filas;
   try { filas = leerFilas_(db, 'CAT_AREAS', COLUMNAS.CAT_AREAS); } catch (err) { return []; }
+  const activas = filtrarActivos_(filas).slice().sort((a, b) => String(a.area_id).localeCompare(String(b.area_id)));
+  const fichas = DirectorioPersonas.fichas(db, activas.map((a) => a.responsable_email));
   const vistos = {};
-  return filtrarActivos_(filas)
-    .slice()
-    .sort((a, b) => String(a.area_id).localeCompare(String(b.area_id)))
-    .map((a) => ({ area_id: a.area_id, nombre: departamentoDeArea_(a.nombre) }))
-    .filter((a) => { if (vistos[a.nombre]) return false; vistos[a.nombre] = true; return true; })
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  return activas
+    .map((a) => {
+      const email = String(a.responsable_email || '').trim().toLowerCase();
+      const f = fichas[email];
+      const nombre = departamentoDeArea_(a.nombre);
+      const persona = f && f.nombre !== email ? f.nombre : '';
+      return { area_id: a.area_id, nombre: nombre, persona: persona, cargo: f ? f.cargo : '', empresa: f ? f.empresa : '', _clave: email || a.area_id };
+    })
+    .filter((a) => { if (vistos[a._clave]) return false; vistos[a._clave] = true; return true; })
+    .map((a) => { delete a._clave; return a; })
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es') || a.persona.localeCompare(b.persona, 'es'));
+}
+
+// Quién recibe lo que llega a Soporte de plataformas sin elegir persona
+// («No estoy seguro»): el mismo correo al que rutea resolverResponsable_.
+function soportePorDefecto_(db) {
+  const f = DirectorioPersonas.fichas(db, [EMAIL_DESARROLLO])[EMAIL_DESARROLLO.toLowerCase()];
+  return f ? { persona: f.nombre !== f.email ? f.nombre : '', cargo: f.cargo, empresa: f.empresa } : null;
 }
 
 function getCatalogosPublicos(db) {
@@ -134,7 +156,8 @@ function getCatalogosPublicos(db) {
     plataformas: filtrarActivos_(leerFilas_(db, 'CAT_PLATAFORMAS', COLUMNAS.CAT_PLATAFORMAS)),
     modulos: filtrarActivos_(leerFilas_(db, 'CAT_MODULOS', COLUMNAS.CAT_MODULOS)),
     tipos: filtrarActivos_(leerFilas_(db, 'CAT_TIPOS', COLUMNAS.CAT_TIPOS)),
-    areas: proyectarAreasPublicas_(db)
+    areas: proyectarAreasPublicas_(db),
+    soporte: soportePorDefecto_(db)
   };
 }
 

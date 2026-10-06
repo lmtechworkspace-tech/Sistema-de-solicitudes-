@@ -329,15 +329,51 @@
       fila.classList.add('sigso-oculto');
       return;
     }
+    // 2026-10-06 (pedido del dueño): cada opción es una PERSONA (nombre —
+    // cargo · empresa), agrupada por departamento, y debajo se dice a quién
+    // le llega. Antes decía solo el departamento y «No estoy seguro» no decía
+    // a quién iba: una solicitud a Soporte de plataformas no la vio Leo.
+    var esc = Componentes.escaparHtml;
+    var soporte = estado.catalogos.soporte;
+    var etiqueta = function (a) {
+      var extra = [a.cargo, a.empresa].filter(Boolean).join(' · ');
+      return a.persona ? a.persona + (extra ? ' — ' + extra : '') : a.nombre;
+    };
+    var grupos = [], porGrupo = {};
+    areas.forEach(function (a) {
+      if (!porGrupo[a.nombre]) { porGrupo[a.nombre] = []; grupos.push(a.nombre); }
+      porGrupo[a.nombre].push(a);
+    });
     var actual = select.value;
-    select.innerHTML = '<option value="">No estoy seguro (que lo derive el equipo)</option>' +
-      areas.map(function (a) {
-        return '<option value="' + a.area_id + '">' + Componentes.escaparHtml(a.nombre) + '</option>';
+    select.innerHTML = '<option value="">' + esc(soporte && soporte.persona
+        ? 'Soporte de plataformas: ' + soporte.persona + (soporte.cargo ? ' — ' + soporte.cargo : '') + ' (si no sabes a quién)'
+        : 'No estoy seguro (que lo derive el equipo)') + '</option>' +
+      grupos.map(function (g) {
+        return '<optgroup label="' + esc(g) + '">' + porGrupo[g].map(function (a) {
+          return '<option value="' + esc(a.area_id) + '">' + esc(etiqueta(a)) + '</option>';
+        }).join('') + '</optgroup>';
       }).join('');
     if (actual) {
       select.value = actual;
     }
+    select.onchange = function () { pintarQuienRecibe_(areas, soporte); };
+    pintarQuienRecibe_(areas, soporte);
     fila.classList.remove('sigso-oculto');
+  }
+  function pintarQuienRecibe_(areas, soporte) {
+    var p = document.getElementById('campo-area-recibe');
+    if (!p) return;
+    var id = document.getElementById('campo-area').value;
+    var a = id ? areas.filter(function (x) { return x.area_id === id; })[0] : null;
+    var quien = a ? a : (soporte ? { persona: soporte.persona, cargo: soporte.cargo, empresa: soporte.empresa, nombre: 'Soporte de plataformas' } : null);
+    if (!quien || !quien.persona) {
+      p.textContent = 'Elige a la persona que atiende tu pedido. Si no sabes, déjalo así y el equipo lo derivará.';
+      return;
+    }
+    var extra = [quien.cargo, quien.empresa].filter(Boolean).join(' · ');
+    p.innerHTML = 'Le llega a <b>' + Componentes.escaparHtml(quien.persona) + '</b>' +
+      (extra ? ' (' + Componentes.escaparHtml(extra) + ')' : '') + ', ' + Componentes.escaparHtml(quien.nombre) +
+      ', por correo y en su campana de SIGSO.';
   }
 
   function poblarPlataformas_() {
@@ -1248,6 +1284,7 @@
       // v3.0 (Fase 1): el valor se re-aplica; poblarAreas_ (tras cargar
       // catalogos) respeta el valor ya presente en el select.
       document.getElementById('campo-area').value = datos.area || '';
+      if (document.getElementById('campo-area').onchange) document.getElementById('campo-area').onchange();
       document.getElementById('campo-solicitante-nombre').value = datos.solicitante_nombre || '';
       document.getElementById('campo-solicitante-cargo').value = datos.solicitante_cargo || '';
       document.getElementById('campo-solicitante-email').value = datos.solicitante_email || '';

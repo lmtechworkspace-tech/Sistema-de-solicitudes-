@@ -64,7 +64,7 @@
               <button type="button" class="sigso-chip" data-asociada="si">S&iacute;, a una plataforma</button>
               <button type="button" class="sigso-chip" data-asociada="no">No, es otro tipo de solicitud</button>
             </div>
-            <p class="sigso-ayuda">Si es sobre un sistema/plataforma, elige cu&aacute;l. Si no (por ejemplo un pedido administrativo o de otra &aacute;rea), deja "No" y solo indica el &aacute;rea a la que va dirigida.</p>
+            <p class="sigso-ayuda">Si es sobre un sistema/plataforma, elige cu&aacute;l. Si no (por ejemplo un pedido administrativo o de otra &aacute;rea), deja "No" y solo indica a qui&eacute;n va dirigida.</p>
           </div>
 
           <div class="sigso-campo" id="fila-plataforma">
@@ -77,9 +77,9 @@
                configuradas queda oculto y todo se rutea al responsable por
                defecto (comportamiento previo a v3.0). -->
           <div class="sigso-campo sigso-oculto" id="fila-area">
-            <label for="campo-area">¿A qué área va dirigida?</label>
+            <label for="campo-area">¿A quién va dirigida?</label>
             <select id="campo-area"></select>
-            <p class="sigso-ayuda">Elige el área que atiende tu pedido. Si no estás seguro, deja "No estoy seguro" y el equipo lo derivará.</p>
+            <p class="sigso-ayuda" id="campo-area-recibe" aria-live="polite"></p>
           </div>
         </div>
 

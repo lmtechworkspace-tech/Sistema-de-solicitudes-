@@ -230,6 +230,6 @@ test('getCatalogosPublicos proyecta CAT_AREAS a {area_id, nombre} -- el responsa
 
   const catalogos = Catalogos.getCatalogosPublicos(db);
 
-  assert.deepEqual(catalogos.areas, [{ area_id: 'AREA_1', nombre: 'Soporte' }]);
+  assert.deepEqual(catalogos.areas, [{ area_id: 'AREA_1', nombre: 'Soporte', persona: '', cargo: '', empresa: '' }]);
   assert.equal(JSON.stringify(catalogos.areas).indexOf('soporte@rld.cl'), -1);
 });

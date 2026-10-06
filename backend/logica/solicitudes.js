@@ -28,6 +28,7 @@ const {
 const Correlativo = require('./correlativo');
 const Notificaciones = require('./notificaciones');
 const Servicios = require('./serviciosSolicitud');
+const DirectorioPersonas = require('./directorioPersonas');
 
 function errorValidacion_(campo, mensaje) {
   return { _validationError: true, message: mensaje, fields: [{ campo: campo, mensaje: mensaje }] };
@@ -242,6 +243,31 @@ function generarResumenWhatsapp_(solicitudId, data, prioridad) {
   return lineas.join('\n');
 }
 
+// Para la pantalla de "Listo": a quién le llegó, por persona (nombre, cargo,
+// empresa). Asignado → esa persona; cola de un departamento → todo su equipo;
+// departamento sin equipo → Administración. Sin correos: solo lo que se pinta.
+function destinatariosDe_(db, items) {
+  const personas = [], vistos = {};
+  const sumar = (p, extra) => {
+    const clave = p.email || p.nombre;
+    if (vistos[clave]) return;
+    vistos[clave] = true;
+    personas.push(Object.assign({ nombre: p.nombre, cargo: p.cargo || '', empresa: p.empresa || '' }, extra || {}));
+  };
+  items.forEach((s) => {
+    if (s.responsable) {
+      const f = DirectorioPersonas.fichas(db, [s.responsable])[s.responsable.toLowerCase()];
+      if (f) sumar(f, { directo: true });
+      return;
+    }
+    if (!s.depto) return;
+    const equipo = Servicios.personasDepto_(db, s.depto);
+    if (!equipo.length) sumar({ nombre: 'Administración del sistema', cargo: 'mientras ' + ((Servicios.departamento_(s.depto) || {}).nombre || s.depto) + ' no tenga equipo' });
+    equipo.forEach((p) => sumar(p, { jefatura: p.rol === 'JEFATURA' }));
+  });
+  return personas;
+}
+
 async function crearSolicitud(db, data) {
   const errores = validarSolicitud_(data);
   // Etapa 4: un servicio puede exigir el cliente (p. ej. "Certificado F30").
@@ -249,6 +275,12 @@ async function crearSolicitud(db, data) {
     const s = item && item.depto && item.servicio_id ? Servicios.servicioPorId_(db, item.servicio_id) : null;
     if (s && s.pide_cliente === 'si' && !String(data.empresa_cliente || '').trim()) {
       errores.push({ campo: 'subsolicitudes[' + idx + '].cliente', mensaje: 'Este pedido necesita el cliente: indícalo.' });
+    }
+    // 2026-10-06: se puede pedir a una persona en particular del departamento,
+    // pero solo a alguien de su equipo (los que trabajan su cola).
+    const destinatario = String((item && item.destinatario) || '').trim().toLowerCase();
+    if (destinatario && item.depto && !Servicios.equipoDepto_(db, String(item.depto).toUpperCase()).some((m) => m.email === destinatario)) {
+      errores.push({ campo: 'subsolicitudes[' + idx + '].destinatario', mensaje: 'Esa persona no está en el equipo del departamento.' });
     }
   });
   if (errores.length > 0) {
@@ -282,7 +314,9 @@ async function crearSolicitud(db, data) {
       servicio = c.servicio && c.servicio.depto === depto.clave ? c.servicio : null;
       prioridad = c.prioridad;
       slaHoras = c.sla;
-      responsable = '';
+      // Pedido a una persona en particular: queda a su nombre desde el inicio
+      // (ya validado arriba que es del equipo). Si no, a la cola sin asignar.
+      responsable = String(item.destinatario || '').trim().toLowerCase();
       areaId = '';
     } else {
       const esUrgentePorTipo = !!data.es_cliente || tipoEsUrgente_(db, item.tipo);
@@ -372,8 +406,9 @@ async function crearSolicitud(db, data) {
     resumen_whatsapp: resumenWhatsapp, cc: data.cc || '', atencion_directa: !!atencion
   });
 
-  // Etapa 2: lo que va a un departamento se avisa a su equipo (correo a la
-  // jefatura, campana a todos los que trabajan el área).
+  // Etapa 2: lo que va a un departamento se avisa a su equipo. 2026-10-06:
+  // correo y campana a TODOS los que trabajan el área (no solo la jefatura);
+  // si va a una persona en particular, a ella (y la jefatura queda al tanto).
   const porDepto = {};
   subsolicitudesGuardadas.filter((s) => s.depto).forEach((s) => { (porDepto[s.depto] = porDepto[s.depto] || []).push(s); });
   for (const clave of Object.keys(porDepto)) {
@@ -390,7 +425,8 @@ async function crearSolicitud(db, data) {
   if (avisoDesarrolloActivo_(db)) {
     const responsablesAvisados = {};
     for (const s of subsolicitudesGuardadas) {
-      if (!s.responsable || responsablesAvisados[s.responsable]) continue;
+      // Lo de un departamento ya se avisó arriba (también si va a una persona).
+      if (s.depto || !s.responsable || responsablesAvisados[s.responsable]) continue;
       responsablesAvisados[s.responsable] = true;
       if (atencion) {
         await Notificaciones.avisarAtencionDirectaRegistrada(db, {
@@ -405,7 +441,10 @@ async function crearSolicitud(db, data) {
     }
   }
 
-  const respuesta = { solicitud_id: solicitudId, resumen_whatsapp: resumenWhatsapp, estado: estadoInicial, atencion_directa: !!atencion };
+  const respuesta = {
+    solicitud_id: solicitudId, resumen_whatsapp: resumenWhatsapp, estado: estadoInicial, atencion_directa: !!atencion,
+    destinatarios: destinatariosDe_(db, subsolicitudesGuardadas)
+  };
   if (duplicado) {
     // RF-F06: se avisa, no se bloquea la creacion.
     respuesta.posible_duplicado = { solicitud_id: duplicado.solicitud_id };
