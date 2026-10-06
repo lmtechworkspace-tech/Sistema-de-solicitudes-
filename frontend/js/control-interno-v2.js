@@ -42,11 +42,11 @@
   // controlInternoMatrices.DEPARTAMENTOS). Administración recibe los reportes.
   var DEPARTAMENTOS = [
     { modulo: 'dep_contabilidad', depto: 'CONTABILIDAD', nombre: 'Contabilidad', icono: 'dinero' },
-    { modulo: 'dep_rrhh', depto: 'RRHH', nombre: 'Recursos Humanos', icono: 'equipo' },
-    { modulo: 'dep_prevencion', depto: 'PREVENCION', nombre: 'Prevención de riesgos', icono: 'escudoCheck' },
+    { modulo: 'dep_rrhh', depto: 'RRHH', nombre: 'Recursos Humanos', icono: 'gafete' },
+    { modulo: 'dep_prevencion', depto: 'PREVENCION', nombre: 'Prevención de riesgos', icono: 'casco' },
     { modulo: 'dep_marketing', depto: 'MARKETING', nombre: 'Marketing corporativo', icono: 'megafono' },
-    { modulo: 'dep_cobranzas', depto: 'COBRANZAS', nombre: 'Facturación y Cobranzas', icono: 'tabla', reporta: false },
-    { modulo: 'dep_administracion', depto: 'ADMINISTRACION', nombre: 'Administración', icono: 'empresa', recibe: true }
+    { modulo: 'dep_cobranzas', depto: 'COBRANZAS', nombre: 'Facturación y Cobranzas', icono: 'recibo', reporta: false },
+    { modulo: 'dep_administracion', depto: 'ADMINISTRACION', nombre: 'Administración', icono: 'maletin', recibe: true }
   ];
 
   // La agenda de cada área (2026-10-04): lo que toca recordar hoy, por módulo.
@@ -130,7 +130,18 @@
     }
     U.animar(c);
   }
+  // La ruta dice en qué sección del menú estás: «Contabilidad › Trabajo» (barra lateral, segunda versión).
+  function seccionDeVista() {
+    var subs;
+    try { subs = arbol(); } catch (e) { return ''; }
+    for (var i = 0; i < subs.length; i++) {
+      if (!subs[i].plano && (subs[i].items || []).some(function (it) { return it.id === vista_; })) return subs[i].nombre;
+    }
+    return '';
+  }
   function cabecera(migas, tituloTxt, sub, acciones) {
+    var sec = migas === OPC.nombre ? seccionDeVista() : '';
+    if (sec && sec !== tituloTxt) migas += ' › ' + sec;
     return '<header class="sx2-cabecera sx2-entra"><div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">' + U.esc(migas) + '</span><h1>' + U.esc(tituloTxt) + '</h1>' +
       (sub ? '<span class="sx2-tenue" style="font-size:.875rem">' + U.esc(sub) + '</span>' : '') + '</div><div class="sx2-cabecera__acciones">' + (acciones || '') + '</div></header>';
   }

@@ -85,6 +85,13 @@
   --mod-proyectos: #6D28D9;   --mod-proyectos-suave: color-mix(in srgb, var(--mod-proyectos) 14%, transparent);
   --mod-calidad: #0D9488;     --mod-calidad-suave: color-mix(in srgb, var(--mod-calidad) 14%, transparent);
   --mod-control: #4D7C0F;     --mod-control-suave: color-mix(in srgb, var(--mod-control) 14%, transparent);
+  /* Un color por área (barra lateral, segunda versión, 2026-10-05). */
+  --mod-contab: #4D7C0F;      --mod-contab-suave: color-mix(in srgb, var(--mod-contab) 14%, transparent);
+  --mod-rrhh: #9A3412;        --mod-rrhh-suave: color-mix(in srgb, var(--mod-rrhh) 14%, transparent);
+  --mod-prev: #A16207;        --mod-prev-suave: color-mix(in srgb, var(--mod-prev) 14%, transparent);
+  --mod-mkt: #A21CAF;         --mod-mkt-suave: color-mix(in srgb, var(--mod-mkt) 14%, transparent);
+  --mod-fact: #0369A1;        --mod-fact-suave: color-mix(in srgb, var(--mod-fact) 14%, transparent);
+  --mod-admarea: #475569;     --mod-admarea-suave: color-mix(in srgb, var(--mod-admarea) 14%, transparent);
 
   /* --- Tipografia ------------------------------------------------------- */
   --fuente: 'Inter', system-ui, -apple-system, sans-serif;
@@ -205,6 +212,7 @@
     --mod-proyectos: #B794F6;
     --mod-calidad: #2DD4BF;
     --mod-control: #A3D65C;
+    --mod-contab: #A3D65C; --mod-rrhh: #FDBA74; --mod-prev: #FACC15; --mod-mkt: #E879F9; --mod-fact: #38BDF8; --mod-admarea: #CBD5E1;
 
     --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.35);
     --sombra-2: 0 8px 30px rgba(0, 0, 0, 0.5);
@@ -266,6 +274,7 @@
   --mod-proyectos: #B794F6;
   --mod-calidad: #2DD4BF;
     --mod-control: #A3D65C;
+    --mod-contab: #A3D65C; --mod-rrhh: #FDBA74; --mod-prev: #FACC15; --mod-mkt: #E879F9; --mod-fact: #38BDF8; --mod-admarea: #CBD5E1;
 
   --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.35);
   --sombra-2: 0 8px 30px rgba(0, 0, 0, 0.5);

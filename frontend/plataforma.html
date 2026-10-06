@@ -219,6 +219,7 @@
             <span class="sb-oculto-visual">SIGSO</span>
           </div>
         </div>
+        <button type="button" class="sb-nueva" id="sb-accion" hidden></button>
         <nav class="sb-riel__mods" id="sb-riel" aria-label="Módulos"></nav>
         <div class="sb-riel__pie">
           <button type="button" class="sb-rb sb-expandir" id="btn-expandir-sidebar" aria-label="Mostrar el menú" title="Mostrar el menú ([)">
@@ -257,23 +258,30 @@
       </div>
 
       <div class="sb-panel" id="sb-panel">
-        <div class="sb-panel__cab">
-          <div class="sb-panel__tit">
-            <strong id="sb-panel-titulo">Inicio</strong>
-            <small id="sb-panel-sub"></small>
+        <!-- Portada del módulo abierto: su color, su nombre y para qué sirve (segunda versión, 2026-10-05). -->
+        <div class="sb-portada" id="sb-portada">
+          <div class="sb-portada__fila">
+            <span class="sb-tile" id="sb-panel-tile" aria-hidden="true"></span>
+            <div class="sb-panel__tit">
+              <strong id="sb-panel-titulo">Inicio</strong>
+              <small id="sb-panel-sub"></small>
+            </div>
+            <div class="sb-portada__acc">
+              <button type="button" class="sb-fijar sb-fijar--cab" id="sb-fijar-actual" hidden aria-pressed="false" aria-label="Agregar esta pantalla a tus atajos"></button>
+              <button type="button" class="plataforma-sidebar__colapsar" id="btn-colapsar-sidebar"
+                      aria-label="Angostar el menú" aria-expanded="true" title="Angostar el menú ([)">
+                <span id="ico-colapsar"></span>
+              </button>
+            </div>
           </div>
-          <button type="button" class="sb-fijar sb-fijar--cab" id="sb-fijar-actual" hidden aria-pressed="false" aria-label="Fijar esta pantalla arriba"></button>
-          <button type="button" class="plataforma-sidebar__colapsar" id="btn-colapsar-sidebar"
-                  aria-label="Angostar el menú" aria-expanded="true" title="Angostar el menú ([)">
-            <span id="ico-colapsar"></span>
-          </button>
+          <div class="sb-estado" id="sb-panel-estado"></div>
         </div>
-        <button type="button" class="sb-accion" id="sb-accion" hidden></button>
         <!-- SIGSO v2, Módulo 9B: "Buscar y saltar" (Ctrl+K). -->
         <button type="button" class="shell-buscar" id="btn-shell-buscar" aria-label="Buscar (Ctrl+K)">
           <span id="ico-shell-buscar"></span><span class="shell-buscar__txt">Buscar en SIGSO</span><kbd>Ctrl K</kbd>
         </button>
         <nav class="sb-panel__nav" id="nav-modulos" aria-label="Menú del módulo"></nav>
+        <p class="sb-leyenda" aria-hidden="true"><span><i class="sb-leyenda--rojo"></i>atrasado</span><span><i class="sb-leyenda--ambar"></i>para hoy</span><span><i class="sb-leyenda--gris"></i>por revisar</span></p>
       </div>
     </aside>
 

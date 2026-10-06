@@ -49,7 +49,7 @@
     // modulosDeLaCuenta_) -- igual que "Mi perfil", disponible para
     // cualquiera con sesion, sin que un Admin tenga que activarlo cuenta por
     // cuenta.
-    novedades: { icono: 'campana', nombre: 'Novedades', descripcion: 'Leyes, avisos y novedades de todas las áreas' },
+    novedades: { icono: 'periodico', nombre: 'Novedades', descripcion: 'Leyes, avisos y novedades de todas las áreas' },
     // v7.0 (Fase 2, modulo de Gestion Operacional): compromisos con
     // check-in de 1 clic (documentacion/SIGSO-v7.0-propuesta-modulo-
     // gestion-operacional.md §4.4/§5.1). No es core como 'novedades' --
@@ -65,7 +65,7 @@
     // persona ve SOLO los documentos que le corresponden -- el filtrado lo
     // hace el backend (Calidad.gs), no el shell. No es core: depende de que
     // la cuenta tenga 'calidad' en CUENTAS_PORTAL.modulos.
-    calidad: { icono: 'escudoCheck', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC' }
+    calidad: { icono: 'medalla', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC' }
   };
 
   // 2026-10-03: los DEPARTAMENTOS del organigrama, un módulo cada uno
@@ -75,11 +75,11 @@
   // en cada acción. Todos comparten acento: son una misma familia.
   var DEPARTAMENTOS_SHELL = [
     ['dep_contabilidad', 'Contabilidad', 'dinero', 'Matrices del área, reporte mensual y su equipo'],
-    ['dep_rrhh', 'Recursos Humanos', 'equipo', 'Matrices del área, reporte mensual y su equipo'],
-    ['dep_prevencion', 'Prevención de riesgos', 'escudoCheck', 'Trabajo del área, reporte mensual y su equipo'],
+    ['dep_rrhh', 'Recursos Humanos', 'gafete', 'Matrices del área, reporte mensual y su equipo'],
+    ['dep_prevencion', 'Prevención de riesgos', 'casco', 'Trabajo del área, reporte mensual y su equipo'],
     ['dep_marketing', 'Marketing corporativo', 'megafono', 'Trabajo del área, reporte mensual y su equipo'],
-    ['dep_cobranzas', 'Facturación y Cobranzas', 'tabla', 'Lo que HomePymes factura y cobra a sus clientes'],
-    ['dep_administracion', 'Administración', 'empresa', 'Los reportes mensuales de las áreas, ya validados por su jefatura']
+    ['dep_cobranzas', 'Facturación y Cobranzas', 'recibo', 'Lo que HomePymes factura y cobra a sus clientes'],
+    ['dep_administracion', 'Administración', 'maletin', 'Los reportes mensuales de las áreas, ya validados por su jefatura']
   ];
   var IDS_DEPARTAMENTO = DEPARTAMENTOS_SHELL.map(function (d) { return d[0]; });
   DEPARTAMENTOS_SHELL.forEach(function (d) { MODULOS_SHELL[d[0]] = { icono: d[2], nombre: d[1], descripcion: d[3] }; });
@@ -120,7 +120,9 @@
     proyectos: { acento: 'var(--mod-proyectos)', suave: 'var(--mod-proyectos-suave)' },
     calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' }
   };
-  IDS_DEPARTAMENTO.forEach(function (id) { MODULO_COLOR[id] = { acento: 'var(--mod-control)', suave: 'var(--mod-control-suave)' }; });
+  // Barra lateral, segunda versión (2026-10-05): cada área con su color, para reconocerla de lejos.
+  var COLOR_AREA = { dep_contabilidad: 'contab', dep_rrhh: 'rrhh', dep_prevencion: 'prev', dep_marketing: 'mkt', dep_cobranzas: 'fact', dep_administracion: 'admarea' };
+  IDS_DEPARTAMENTO.forEach(function (id) { var k = COLOR_AREA[id] || 'control'; MODULO_COLOR[id] = { acento: 'var(--mod-' + k + ')', suave: 'var(--mod-' + k + '-suave)' }; });
 
   var sesion = { token: null, cuenta: null };
   // v6.0 (Pausas P4.1): si el enlace magico traia "?modulo=", se guarda aca
@@ -593,15 +595,19 @@
   // 2026-10-05: llave nueva para que quien ya vio el recorrido anterior vea
   // una vez la barra renovada (riel + panel); a quien entra por primera vez
   // se le da la bienvenida de siempre.
-  var LLAVE_TOUR = 'sigso_tour_barra_v1';
+  // 2026-10-05 (segunda versión de la barra): llave nueva para que todos vean
+  // una vez cómo se lee la barra con nombres, colores y secciones.
+  var LLAVE_TOUR = 'sigso_tour_barra_v2';
   var LLAVE_TOUR_ANTERIOR = 'sigso_tour_visto';
   var TOUR_PASOS = [
     { selector: '#plataforma-sidebar .plataforma-header__marca', titulo: 'Bienvenido a SIGSO',
       texto: 'Este es tu panel: desde aquí llegas a todo lo que tu cuenta puede ver.' },
     { selector: '#sb-riel', titulo: 'Tus módulos',
-      texto: 'Cada ícono es un módulo; al pasar el mouse ves su nombre. El número dice cuánto te espera: rojo, atrasado; ámbar, para hoy; gris, por revisar.' },
-    { selector: '#nav-modulos', titulo: 'El menú y tus fijados',
-      texto: 'Aquí está el menú completo del módulo abierto. Toca la estrella de una pantalla para dejarla fija arriba; con Alt+1 a Alt+8 vas directo a ellas.' },
+      texto: 'Cada módulo tiene su nombre, su ícono y su color. El número dice cuánto te espera: rojo, atrasado; ámbar, para hoy; gris, por revisar.' },
+    { selector: '#sb-portada', titulo: 'Dónde estás',
+      texto: 'Arriba del menú, el módulo abierto con su color y para qué sirve. La página repite ese mismo color e ícono.' },
+    { selector: '#nav-modulos', titulo: 'El menú, por secciones',
+      texto: 'Cada sección se abre y se cierra con un clic. Con la estrella de una pantalla la dejas en tus atajos de Inicio; con Alt+1 a Alt+8 vas directo a ellos.' },
     { selector: '#btn-shell-buscar', titulo: 'Busca y salta rápido',
       texto: 'Encuentra una pantalla o una solicitud por su número. También con Ctrl+K (Cmd+K en Mac) desde cualquier parte.' },
     { selector: '#plataforma-sidebar .js-shell-campana', titulo: 'Tus avisos',
@@ -616,10 +622,10 @@
     try { visto = localStorage.getItem(LLAVE_TOUR) === '1'; } catch (err) { visto = true; }
     if (visto || window.innerWidth <= 900) return;
     var conocia = false;
-    try { conocia = localStorage.getItem(LLAVE_TOUR_ANTERIOR) === '1'; } catch (err) { conocia = false; }
+    try { conocia = localStorage.getItem(LLAVE_TOUR_ANTERIOR) === '1' || localStorage.getItem('sigso_tour_barra_v1') === '1'; } catch (err) { conocia = false; }
     if (conocia) {
       TOUR_PASOS[0] = { selector: '#plataforma-sidebar .plataforma-header__marca', titulo: 'Tu barra lateral, renovada',
-        texto: 'Los módulos quedan en un riel de íconos y el menú de cada uno, completo, al lado. Te muestro lo nuevo en unos pasos.' };
+        texto: 'Cada módulo ahora muestra su nombre y su color, y el menú se ordena por secciones. Te muestro lo nuevo en unos pasos.' };
     }
     tourPasoActual_ = 0;
     mostrarPasoTour_();
@@ -1293,11 +1299,11 @@
     if (!window.SigsoBarra) return;
     var grupoDe = {};
     GRUPOS_SIDEBAR.forEach(function (g) { g.modulos.forEach(function (id) { grupoDe[id] = g.titulo; }); });
-    var modulos = [{ id: 'home', nombre: 'Inicio', corto: 'Inicio', titulo: 'Inicio', icono: 'inicio', grupo: '' }]
+    var modulos = [{ id: 'home', nombre: 'Inicio', corto: 'Inicio', titulo: 'Inicio', icono: 'inicio', grupo: '', desc: 'Tus atajos y lo pendiente de todos tus módulos', acento: 'var(--mod-inicio)' }]
       .concat(modulosDeLaCuenta_().filter(function (id) { return id !== 'nueva_solicitud'; }).map(function (id) {
         var def = MODULOS_SHELL[id];
         var color = MODULO_COLOR[id];
-        return { id: id, nombre: def.nombre, corto: def.corto, titulo: def.titulo, icono: def.icono, grupo: grupoDe[id] || '', acento: color ? color.acento : '' };
+        return { id: id, nombre: def.nombre, corto: def.corto, titulo: def.titulo, icono: def.icono, grupo: grupoDe[id] || '', acento: color ? color.acento : '', desc: def.descripcion || '' };
       }));
     SigsoBarra.actualizar({
       modulos: modulos,
@@ -1581,6 +1587,13 @@
       main.classList.toggle('plataforma-contenido--ancho', MODULOS_ANCHOS.indexOf(id) !== -1);
       var color = MODULO_COLOR[id];
       main.style.setProperty('--acento-modulo', color ? color.acento : 'var(--naranja)');
+      // Barra lateral, segunda versión (cambio 4): el encabezado de cada página lleva el ícono del módulo.
+      var defIco = MODULOS_SHELL[id] && MODULOS_SHELL[id].icono;
+      var trazo = defIco && window.Iconos ? /<svg[^>]*>([\s\S]*)<\/svg>/.exec(Iconos.svg(defIco, { tam: 24 })) : null;
+      if (trazo) {
+        main.style.setProperty('--sx-mod-ico', 'url("data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fff" ' +
+          'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + trazo[1] + '</svg>') + '")');
+      } else main.style.removeProperty('--sx-mod-ico');
     }
     // v14.0 (piel nueva, Fase 3): encabezado de modulo UNIFICADO. Cada modulo
     // tenia un <h1> plano distinto; se decora con el icono del modulo en una

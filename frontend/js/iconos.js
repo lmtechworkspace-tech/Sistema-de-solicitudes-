@@ -121,7 +121,14 @@ var Iconos = (function () {
     dona: '<path d="M21.2 15.9A10 10 0 118 2.8"/><path d="M22 12A10 10 0 0012 2v10z"/>',
     destello: '<path d="M12 3l1.8 4.9L19 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5 9.7l4.9-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z"/>', // "Nueva versión"
     // Barra lateral (2026-10-05): fijar una pantalla.
-    estrella: '<path d="M12 2.8l2.8 5.7 6.3.9-4.6 4.4 1.1 6.2L12 17l-5.6 3 1.1-6.2-4.6-4.4 6.3-.9z"/>'
+    estrella: '<path d="M12 2.8l2.8 5.7 6.3.9-4.6 4.4 1.1 6.2L12 17l-5.6 3 1.1-6.2-4.6-4.4 6.3-.9z"/>',
+    // Barra lateral, segunda versión (2026-10-05): un ícono propio por módulo, sin repetidos.
+    casco: '<path d="M4 16a8 8 0 0116 0"/><path d="M10 8.5V5h4v3.5"/><path d="M2.5 16h19v2.5h-19z"/>',
+    recibo: '<path d="M6 2.5h12v19l-3-2-3 2-3-2-3 2z"/><path d="M9 7.5h6M9 11h6M9 14.5h4"/>',
+    periodico: '<rect x="3" y="4" width="15" height="16" rx="2"/><path d="M18 8h3v10a2 2 0 01-2 2"/><path d="M7 8h7M7 12h7M7 16h4"/>',
+    maletin: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2"/><path d="M3 13h18"/>',
+    gafete: '<rect x="4.5" y="3" width="15" height="18" rx="2"/><circle cx="12" cy="10" r="2.8"/><path d="M8 17.2a4 4 0 018 0"/>',
+    medalla: '<circle cx="12" cy="9" r="6"/><path d="M8.6 13.8 7.5 21.5l4.5-2.6 4.5 2.6-1.1-7.7"/>'
   };
 
   /**
