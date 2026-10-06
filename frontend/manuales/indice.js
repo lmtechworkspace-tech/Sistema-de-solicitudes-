@@ -5,7 +5,7 @@
  */
 SigsoManual.indice([
   { id: 'primeros-pasos', archivo: 'primeros-pasos', grupo: 'Para empezar', todos: true, titulo: 'Primeros pasos en SIGSO', icono: 'inicio', color: 'var(--mod-nueva)', modulos: ['home'],
-    resumen: 'Entrar, tu Inicio, la barra lateral, buscar, avisos y tu cuenta.' },
+    resumen: 'Entrar, tu Inicio, la barra lateral (íconos y menú en tarjetas), buscar, avisos y tu cuenta.' },
   { id: 'nueva-solicitud', archivo: 'solicitudes', grupo: 'Solicitudes', titulo: 'Nueva solicitud', icono: 'nueva', color: 'var(--mod-nueva)', modulos: ['nueva_solicitud'],
     resumen: 'Pedir un servicio a cualquier área o reportar un error o mejora de un sistema.' },
   { id: 'mis-solicitudes', archivo: 'solicitudes', grupo: 'Solicitudes', titulo: 'Mis solicitudes', icono: 'lista', color: 'var(--mod-mis)', modulos: ['mis_solicitudes'],
@@ -30,4 +30,4 @@ SigsoManual.indice([
     resumen: 'Recordatorios de cobro, agenda, matriz de cobranza y el informe de plataformas de RR.HH.' },
   { id: 'area-administracion', archivo: 'administracion', grupo: 'Áreas', titulo: 'Administración', icono: 'maletin', color: 'var(--mod-admarea)', modulos: ['dep_administracion'],
     resumen: 'Recibir los reportes de las áreas y armar el informe de gestión para la gerencia.' }
-], '2026-10-06c');
+], '2026-10-06d');

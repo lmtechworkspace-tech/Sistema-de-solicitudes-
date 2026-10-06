@@ -47,7 +47,8 @@
 /* ===== Riel ===== */
 .sb-riel {
   position: absolute; left: 0; top: 0; bottom: 0; z-index: 5; width: 68px;
-  display: flex; flex-direction: column; overflow: hidden;
+  /* overflow visible: el menú de la cuenta sale hacia la derecha; lo que se anima recorta por su cuenta. */
+  display: flex; flex-direction: column; overflow: visible;
   background: var(--sb-rail-bg); border-right: 1px solid #23283f;
   transition: width .26s var(--sb-curva), box-shadow .26s var(--sb-curva);
 }
@@ -55,7 +56,8 @@
 .sb-riel .sb-txt { white-space: nowrap; opacity: 0; transition: opacity .2s; }
 .sb--riel-abierto .sb-riel .sb-txt { opacity: 1; }
 
-.sb-riel__cab { flex: none; height: 64px; display: flex; align-items: center; padding: 0 16px; }
+.sb-riel__cab { flex: none; height: 64px; display: flex; align-items: center; padding: 0 16px; overflow: hidden; }
+.sb-riel .sb-rb, .sb-riel .sb-grupo, .sb-campana, #vista-shell .sb-riel .sb-usuario { overflow: hidden; }
 .sb-riel__cab .plataforma-header__marca { display: flex; align-items: center; gap: 12px; color: #fff; }
 .sb-logo { width: 36px; height: 36px; flex: none; border-radius: 10px; display: grid; place-items: center; background: #fff; color: var(--sb-rail-bg); font: 800 18px/1 var(--sb-fuente); }
 .sb-logo__t { font: 700 16px/1 var(--sb-fuente); color: #fff; }

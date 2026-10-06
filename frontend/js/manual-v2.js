@@ -82,8 +82,9 @@
       return '<span class="mn-senal mn-senal--' + (s.forma || 'caja') + '" data-n="' + s.n + '" style="left:' + s.x + '%;top:' + s.y + '%;width:' + s.w + '%;height:' + s.h + '%"' +
         (txt ? ' title="' + esc(txt) + '"' : '') + '><b>' + s.n + '</b></span>';
     }).join('');
+    // Capturas tomadas a 1,5x: nunca más grandes que su tamaño real (las angostas del menú quedaban gigantes).
     return '<figure class="mn-fig">' +
-      '<button type="button" class="mn-fig__marco" data-mn-zoom aria-label="Ver la captura en grande" style="aspect-ratio:' + w + ' / ' + h + '">' +
+      '<button type="button" class="mn-fig__marco" data-mn-zoom aria-label="Ver la captura en grande" style="aspect-ratio:' + w + ' / ' + h + ';max-width:' + Math.round(w / 1.5) + 'px">' +
         '<img src="manuales/img/' + esc(manualId) + '/' + esc(key) + '.webp?v=' + esc(VERSION) + '" alt="' + esc(paso.alt || paso.titulo || '') + '" loading="lazy" width="' + w + '" height="' + h + '">' + senales +
         '<span class="mn-fig__lupa">' + ico('lupa', 14) + 'Ampliar</span></button>' +
       (leyenda.length ? '<ol class="mn-leyenda">' + leyenda.map(function (l) {

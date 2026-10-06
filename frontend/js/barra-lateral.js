@@ -658,6 +658,9 @@
     if (riel) {
       riel.addEventListener('mouseenter', function () {
         if (esCajon()) return;
+        // Con el menú de la cuenta abierto no se despliega (el menú saltaría de lugar).
+        var cuentaAbierta = document.getElementById('btn-menu-usuario');
+        if (cuentaAbierta && cuentaAbierta.getAttribute('aria-expanded') === 'true') return;
         clearTimeout(timerRiel_);
         timerRiel_ = setTimeout(function () { desplegar(true); }, ESPERA_RIEL);
       });

@@ -25,41 +25,52 @@ SigsoManual.registrar({
           texto: ['Inicio cambia según tus módulos. De arriba abajo:'],
           marcas: [{ n: 1, t: 'Tu saludo y cuántas cosas requieren tu atención.' }, { n: 2, t: 'Tus números del día: tareas abiertas, atrasadas, las que vencen en 7 días…' },
             { n: 3, t: '**Requiere tu atención**: lo que espera algo de ti (validar una solicitud, leer una novedad…), con su botón.' }, { n: 4, t: 'Tu semana y tu día: horas registradas y lo que viene.' }] },
-        { titulo: 'Tus atajos y lo pendiente', img: 'panel-inicio',
-          texto: ['En Inicio, el panel de la barra lateral muestra:'],
-          marcas: [{ n: 1, t: '**Mis atajos**: tus pantallas de todos los días (las agregas con la estrella).' }, { n: 2, t: '**Lo pendiente**: cada módulo con algo esperando, con su número.' }, { n: 3, t: '**Recientes**: lo último que abriste.' }],
+        { titulo: 'Lo tuyo, tus atajos y lo pendiente', img: 'panel-inicio',
+          texto: ['En Inicio, el menú de la barra se ordena en **tarjetas**. Al entrar están cerradas: toca una para abrirla (se abre de a una).'],
+          marcas: [{ n: 1, t: '**Lo tuyo**: **Mis solicitudes** y **Pausas activas**.' }, { n: 2, t: '**Mis atajos**: tus pantallas de todos los días (las agregas con la estrella junto al nombre del área).' },
+            { n: 3, t: '**Lo pendiente**: cada módulo con algo esperando, con su número y qué es (atrasado, para hoy).' }, { n: 4, t: '**Recientes**: lo último que abriste en este computador.' }],
           consejo: ['Con **Alt + 1** a **Alt + 8** vas directo a tus atajos desde cualquier parte.'] }
       ] },
     { id: 'barra', titulo: 'La barra lateral', ruta: '#/home',
-      intro: ['La barra de la izquierda es el mapa de SIGSO: a la izquierda tus módulos; al lado, el menú del módulo abierto.'],
+      intro: ['La barra de la izquierda es el mapa de SIGSO: una columna de íconos con tus áreas y, al lado, el menú del área que tienes abierta.'],
       pasos: [
         { titulo: 'Conoce la barra', img: 'barra',
-          texto: ['Cada módulo tiene su **nombre**, su **ícono** y su **color**, agrupados (Mi espacio, Solicitudes, Áreas, Gestión). Solo ves los módulos que te corresponden.'],
-          marcas: [{ n: 1, t: '[[Nueva solicitud]]: pedir algo a cualquier área.' }, { n: 2, t: 'Tus módulos, por grupo.' }, { n: 3, t: 'El número de un módulo: rojo, hay atrasos; ámbar, es para hoy; gris, por revisar.' },
-            { n: 4, t: 'La portada del módulo abierto: nombre, para qué sirve y su **Manual de uso**.' }, { n: 5, t: 'El menú del módulo, por secciones.' }, { n: 6, t: 'Tus avisos (la campana).' }, { n: 7, t: 'Tu cuenta: perfil, modo oscuro, manuales y salir.' }] },
-        { titulo: 'Angosta la barra si necesitas espacio', img: 'angosta',
-          texto: ['Toca el botón de angostar en la portada (o la tecla **[**). Queda solo la columna de módulos, con sus nombres; al tocar un módulo, su menú se abre flotando. Vuelve a tocarlo (o **[**) para abrirla.'],
-          marcas: [{ n: 1, t: 'La barra angosta: los módulos siguen con su nombre.' }, { n: 2, t: 'Mostrar el menú otra vez.' }] },
+          texto: ['La columna de la izquierda tiene un ícono por área, agrupados en **Mi espacio**, **Áreas** y **Sistema**. Solo ves lo que te corresponde. Al lado está el menú del área abierta.'],
+          marcas: [{ n: 1, t: '[[Nueva solicitud]]: el botón azul con el **+**, para pedir algo a cualquier área.' }, { n: 2, t: 'Tus áreas, por grupo. La abierta queda en azul.' },
+            { n: 3, t: 'Un punto de color: hay algo esperando. Rojo, atrasado; ámbar, para hoy; gris, por revisar.' },
+            { n: 4, t: 'El área abierta: su nombre, para qué sirve, cuánto espera y su **Manual de uso**.' }, { n: 5, t: 'Buscar en el menú del área (**Ctrl K** busca en todo SIGSO).' },
+            { n: 6, t: 'El menú del área, en tarjetas.' }, { n: 7, t: 'Tus avisos (la campana).' }, { n: 8, t: 'Tu cuenta: perfil, modo oscuro, manuales y salir.' }] },
+        { titulo: 'Pasa el mouse para ver los nombres', img: 'riel',
+          texto: ['Pasa el mouse sobre la columna de íconos (o entra con la tecla **Tab**): se despliega encima del menú con el **nombre completo** de cada área y su número ((1)). Al sacar el mouse, o con **Esc**, vuelve a ser solo íconos.'],
+          marcas: [{ n: 1, t: 'Los nombres completos, por grupo.' }, { n: 2, t: 'Cuánto espera: rojo, atrasado; ámbar, para hoy; gris, por revisar.' }, { n: 3, t: 'Ocultar (o mostrar) el menú del área.' }] },
+        { titulo: 'El menú se abre de a una tarjeta',
+          texto: ['Cada **tarjeta** es una parte del área (Agenda, Trabajo, Reportes…). Al entrar están cerradas: toca una para ver sus secciones y se cierra la que estaba abierta. Si una sección tiene más pantallas, se abre su **bandeja**, un poco más adentro.',
+            'La pantalla donde estás queda en **azul**, y su tarjeta marcada aunque esté cerrada. Si llegas por un enlace, el menú se abre solo hasta esa pantalla.'] },
+        { titulo: 'Oculta el menú si necesitas espacio', img: 'angosta',
+          texto: ['Toca el botón de ocultar junto al nombre del área (o presiona **Ctrl + B**). Queda solo la columna de íconos; al tocar un área, su menú vuelve a aparecer. **Ctrl + B** también lo muestra otra vez, y SIGSO recuerda cómo lo dejaste.'],
+          marcas: [{ n: 1, t: 'Solo la columna de íconos.' }, { n: 2, t: 'Mostrar el menú otra vez.' }],
+          consejo: ['En una pantalla mediana (un notebook pequeño, por ejemplo) el menú parte oculto y se abre encima de la página al tocar un área; se cierra al elegir una pantalla o al hacer clic fuera.'] },
         { titulo: 'En el celular', img: 'celular',
-          texto: ['En el celular, la barra se abre con el botón de menú arriba a la izquierda ((1)). Abajo tienes a mano Inicio, Mi trabajo, Buscar y Menú ((2)).'],
+          texto: ['En el celular, la barra se abre con el botón de menú arriba a la izquierda ((1)) y muestra tus áreas con su nombre. Al tocar una se abre su menú, con **← Áreas** para volver. Abajo tienes a mano Inicio, Mi trabajo, Buscar y Menú ((2)).'],
           marcas: [{ n: 1, t: 'Abrir la barra.' }, { n: 2, t: 'Los atajos de abajo.' }] }
       ] },
     { id: 'buscar', titulo: 'Busca y salta a cualquier parte', ruta: '#/home',
       intro: ['El buscador encuentra pantallas, solicitudes por su número y más, sin navegar por los menús.'],
       pasos: [
         { titulo: 'Usa el buscador', img: 'buscar',
-          texto: [[ 'Toca **Buscar en SIGSO** en la barra, o presiona **Ctrl + K** (Cmd + K en Mac) desde cualquier parte.', 'Escribe lo que buscas, por ejemplo `iva` ((1)).', 'Elige un resultado con el mouse o con las flechas y **Enter** ((2)).' ]],
+          texto: [[ 'Toca **Ctrl K** en el buscador de arriba del menú, o presiona **Ctrl + K** (Cmd + K en Mac) desde cualquier parte.', 'Escribe lo que buscas, por ejemplo `iva` ((1)).', 'Elige un resultado con el mouse o con las flechas y **Enter** ((2)).' ],
+            'Si en cambio escribes en el buscador del menú, se filtra solo el menú del área donde estás (sin importar tildes ni mayúsculas).'],
           marcas: [{ n: 1, t: 'Lo que escribiste.' }, { n: 2, t: 'Los resultados: pantallas y solicitudes.' }] }
       ] },
     { id: 'avisos', titulo: 'Tus avisos', ruta: '#/home',
       intro: ['La campana avisa lo que requiere tu atención: asignaciones, novedades por leer, cambios en tus solicitudes y recordatorios.'],
       pasos: [
         { titulo: 'Revisa la campana', img: 'avisos',
-          texto: ['Toca la campana ((1)) abajo en la barra. Cada aviso te lleva a donde está lo que hay que hacer.'],
+          texto: ['Toca la campana ((1)) abajo en la columna de íconos. Cada aviso te lleva a donde está lo que hay que hacer.'],
           marcas: [{ n: 1, t: 'La campana, con cuántos avisos nuevos tienes.' }, { n: 2, t: 'Tus avisos.' }] }
       ] },
     { id: 'cuenta', titulo: 'Tu cuenta', ruta: '#/home',
-      intro: ['Toca tu foto (o tus iniciales) abajo en la barra.'],
+      intro: ['Toca tu foto (o tus iniciales) abajo en la columna de íconos.'],
       pasos: [
         { titulo: 'El menú de tu cuenta', img: 'cuenta',
           texto: ['Desde aquí:'],
@@ -70,13 +81,14 @@ SigsoManual.registrar({
       intro: ['Cada módulo tiene su manual paso a paso, como este.'],
       pasos: [
         { titulo: 'Abre el manual del módulo donde estás', img: 'manual',
-          texto: ['Toca [[Manual de uso]] en la portada del módulo (o presiona **F1**). En el manual puedes buscar, ampliar las capturas, ir directo a la pantalla que explica y imprimirlo o guardarlo en PDF. Todos los manuales están en tu cuenta › **Manuales de uso**.'],
+          texto: ['Toca [[Manual de uso]] bajo el nombre del área (o presiona **F1**). En el manual puedes buscar, ampliar las capturas, ir directo a la pantalla que explica y imprimirlo o guardarlo en PDF. Todos los manuales están en tu cuenta › **Manuales de uso**.'],
           marcas: [{ n: 1, t: 'El botón Manual de uso.' }] }
       ] }
   ],
   preguntas: [
     { p: 'No veo un módulo que necesito.', r: ['Cada persona ve solo los módulos de su trabajo. Pide al administrador que te dé acceso.'] },
-    { p: '¿Qué significan los números de colores?', r: ['Cuánto te espera en ese módulo: **rojo**, hay algo atrasado; **ámbar**, es para hoy; **gris**, por revisar. Al pie del menú está la leyenda.'] },
+    { p: '¿Qué significan los números de colores?', r: ['Cuánto te espera en ese módulo: **rojo**, hay algo atrasado; **ámbar**, es para hoy; **gris**, por revisar. Pasa el mouse por la columna de íconos para ver el número; en el área abierta también aparece escrito (por ejemplo «7 para hoy»).'] },
+    { p: '¿Dónde quedaron Mis solicitudes y Pausas activas?', r: ['En **Inicio**: abre la tarjeta **Lo tuyo** del menú.'] },
     { p: 'La pantalla se ve rara o desactualizada.', r: ['Presiona **Ctrl + F5** para recargar la página con la última versión de SIGSO.'] }
   ]
 });

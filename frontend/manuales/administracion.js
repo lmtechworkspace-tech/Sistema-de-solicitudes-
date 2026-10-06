@@ -17,7 +17,7 @@ SigsoManual.registrar({
         { titulo: 'Abre Administración', img: 'orientarse',
           texto: ['En la barra, bajo **Áreas**, toca **Administración** ((1)). El menú ((2)) tiene:',
             [ '**Informe de gestión**: lo que llega a la gerencia, con su cadena de revisión.', '**Agenda general**: el calendario de todas las áreas juntas.', '**Reportes de las áreas**: el estado del reporte mensual de cada área.', '**Cadena de reportes** y **Accesos** (solo el administrador): quién revisa y quién entra.' ]],
-          marcas: [{ n: 1, t: 'Administración en la barra de módulos.' }, { n: 2, t: 'El menú del módulo.' }, { n: 3, t: 'Este manual.' }] }
+          marcas: [{ n: 1, t: 'Administración en la columna de íconos (pasa el mouse para ver los nombres).' }, { n: 2, t: 'El menú del módulo.' }, { n: 3, t: 'Este manual.' }] }
       ] },
     { id: 'reportes', titulo: 'Recibe los reportes de las áreas', ruta: '#/dep_administracion/areas',
       intro: ['Cada área prepara su reporte del mes, su jefatura lo valida y te llega a ti. Aquí ves en qué va cada una y recibes los que ya están validados.'],

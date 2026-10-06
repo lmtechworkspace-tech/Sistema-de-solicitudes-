@@ -17,7 +17,7 @@
         intro: ['La pantalla empieza preguntando **¿Qué necesitas?**: buscas el servicio o eliges el departamento.'],
         pasos: [
           { titulo: 'Abre Nueva solicitud', img: 'inicio',
-            texto: ['Toca [[Nueva solicitud]], arriba en la barra de la izquierda (el botón azul). Se abre la lista de todo lo que puedes pedir, por departamento.'],
+            texto: ['Toca [[Nueva solicitud]], el botón azul con el **+** arriba en la columna de la izquierda. Se abre la lista de todo lo que puedes pedir, por departamento.'],
             marcas: [{ n: 1, t: 'El buscador: escribe lo que necesitas con tus palabras.' }, { n: 2, t: 'Filtra por departamento.' }, { n: 3, t: 'Un servicio, con su plazo habitual en días hábiles.' },
               { n: 4, t: '**Otro pedido**: si lo que necesitas no está en la lista de ese departamento.' }, { n: 5, t: '**Soporte de plataformas**: errores o mejoras de un sistema (Desarrollo / TI).' }] },
           { titulo: 'Búscalo por su nombre', img: 'buscar',
@@ -68,10 +68,10 @@
         intro: ['Arriba está lo que espera de ti; abajo, todas tus solicitudes con su estado.'],
         pasos: [
           { titulo: 'Lee la pantalla', img: 'inicio',
-            texto: ['Abre **Mis solicitudes** en la barra.'],
+            texto: ['En **Inicio**, abre la tarjeta **Lo tuyo** del menú y toca **Mis solicitudes**.'],
             marcas: [{ n: 1, t: 'Los totales: abiertas, **te toca a ti**, cerradas y todas.' }, { n: 2, t: '**Te toca a ti**: lo que el equipo espera de ti, con el botón para hacerlo ([[Responder]] o [[Validar]]).' },
               { n: 3, t: 'Todas tus solicitudes, con su número, fecha, estado y fecha comprometida.' }, { n: 4, t: '[[Nueva solicitud]] para pedir algo más.' }],
-            consejo: ['El número junto a **Mis solicitudes** en la barra es lo que te toca a ti.'] },
+            consejo: ['El número junto a **Mis solicitudes** (en Inicio › Lo tuyo) es lo que te toca a ti.'] },
           { titulo: 'Abre una solicitud', img: 'detalle',
             texto: ['Toca una solicitud. Se abre a la derecha con todo su detalle.'],
             marcas: [{ n: 1, t: 'Los pasos: nueva, en curso, resuelta y cerrada; resaltado, dónde va.' }, { n: 2, t: 'Ítems, conversación con el equipo, historial y archivos.' }, { n: 3, t: 'Quién te atiende, de qué área y servicio, y la fecha comprometida.' }, { n: 4, t: '[[Corregir]] (mientras nadie la empiece) y [[Ya se resolvió por fuera]].' }] }

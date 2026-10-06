@@ -78,7 +78,7 @@
         intro: ['Cada día hábil hay una pausa activa a la hora habitual. Te llega un aviso unos minutos antes, y la tarjeta **Pausa activa de hoy** aparece también en tu **Inicio**: puedes registrarla desde ahí sin entrar al módulo.'],
         pasos: [
           { titulo: 'La pantalla de Pausas activas', img: 'inicio',
-            texto: ['Abre **Pausas activas** en la barra.'],
+            texto: ['En **Inicio**, abre la tarjeta **Lo tuyo** del menú y toca **Pausas activas**.'],
             marcas: [{ n: 1, t: 'La pausa de hoy: la hora y cuánto dura.' }, { n: 2, t: '[[Declaro que participé]].' }, { n: 3, t: '[[No pude]] (con el motivo).' }, { n: 4, t: 'Tu historial de los últimos 60 días: participación, racha y días sin registrar.' }] },
           { titulo: 'Si participaste', img: 'participe',
             texto: ['Toca [[Declaro que participé]]. Se abre la declaración ya marcada ((1)); si quieres, cuenta cómo te sientes hoy, y toca [[Guardar]] ((2)). Listo.'],

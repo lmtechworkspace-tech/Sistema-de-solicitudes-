@@ -38,24 +38,27 @@
       intro: ['Todo lo del área vive en un solo módulo de la barra lateral. En dos minutos sabrás dónde está cada cosa.'],
       pasos: [
         { titulo: 'Abre el área desde la barra', img: 'orientarse',
-          texto: ['En la barra de la izquierda, bajo **Áreas**, toca **' + a.corto + '** ((1)). Al lado se abre el panel del área.',
-            'Arriba del panel está la **portada** ((2)): el nombre del área, para qué sirve y, si hay algo esperando, cuánto ((3)). Con [[Manual de uso]] ((4)) vuelves a este manual cuando quieras.'],
-          marcas: [{ n: 1, t: 'El área en la barra de módulos, con su ícono y su color.' }, { n: 2, t: 'La portada: dónde estás y para qué sirve.' },
-            { n: 3, t: 'Cuánto te espera hoy. Rojo: hay atrasos; ámbar: es para hoy; gris: por revisar.' }, { n: 4, t: 'Este manual (también con la tecla F1).' },
-            { n: 5, t: 'El menú del área, ordenado por secciones.' }, { n: 6, t: 'Qué significa cada color de los números.' }] },
-        { titulo: 'Recorre las secciones del menú', img: 'menu',
-          texto: ['El menú se ordena por secciones. Toca el título de una sección para abrirla o cerrarla; SIGSO recuerda cómo las dejaste.',
+          texto: ['En la columna de íconos de la izquierda, bajo **Áreas**, toca **' + a.corto + '** ((1)) (si no ves los nombres, pasa el mouse por encima). Al lado se abre el menú del área.',
+            'Arriba está el **nombre del área** ((2)), para qué sirve y, si hay algo esperando, cuánto ((3)). Con [[Manual de uso]] ((4)) vuelves a este manual cuando quieras.'],
+          marcas: [{ n: 1, t: 'El área en la columna de íconos, marcada en azul.' }, { n: 2, t: 'Dónde estás y para qué sirve.' },
+            { n: 3, t: 'Cuánto te espera hoy, escrito: atrasados, para hoy o por revisar.' }, { n: 4, t: 'Este manual (también con la tecla F1).' },
+            { n: 5, t: 'El menú del área, en tarjetas.' }, { n: 6, t: 'Buscar en el menú del área.' }] },
+        { titulo: 'Abre el menú de a una tarjeta', img: 'menu',
+          texto: ['Cada **tarjeta** es una parte del área. Al entrar están cerradas: toca una para ver sus secciones y se cierra la que estaba abierta.',
             [ '**Hoy**: los recordatorios y tareas del día.', '**Agenda**: el calendario, lo que ya se recordó y la historia de cada cliente.' ]
-              .concat(a.matrices ? ['**Trabajo**: las matrices del área (las planillas de siempre, con las mismas columnas).'] : [])
+              .concat(a.matrices ? ['**Trabajo**: las matrices del área (las planillas de siempre, con las mismas columnas).' + (M === 'dep_contabilidad' ? ' Adentro, **Convenios TGR** se abre como una bandeja.' : '')] : [])
               .concat(a.reporta ? ['**Reportes**: el reporte mensual que va a Administración y los informes del área.'] : [])
               .concat(['**Equipo** (solo jefatura): qué está haciendo cada persona.', '**Ajustes**: las fechas, los recordatorios y sus mensajes.'])],
-          marcas: [{ n: 1, t: 'Hoy, destacado arriba con lo que espera.' }, { n: 2, t: 'Título de una sección: tócalo para abrirla o cerrarla.' }, { n: 3, t: 'Cuántas pantallas tiene la sección.' }, { n: 4, t: 'La pantalla en la que estás, marcada con el color del área.' }],
-          consejo: ['La sección donde estás nunca se cierra sola, así no pierdes de vista dónde estás.'] },
+          marcas: [{ n: 1, t: '**Hoy**: una tarjeta que lleva directo, con lo que espera.' }, { n: 2, t: 'Una tarjeta abierta: tócala otra vez para cerrarla.' }, { n: 3, t: 'Cuántas secciones tiene.' }, { n: 4, t: 'Sus secciones: toca una para abrirla.' }],
+          consejo: ['La tarjeta donde estás queda marcada en azul aunque esté cerrada, así no pierdes de vista dónde estás. Si llegas por un enlace, el menú se abre solo hasta esa pantalla.'] }].concat(M === 'dep_contabilidad' ? [
+        { titulo: 'Convenios TGR: la bandeja de adentro', img: 'tgr-menu',
+          texto: ['En **Trabajo**, la fila **Convenios TGR** ((1)) no abre una pantalla: abre su **bandeja** ((2)) con **Matriz de convenios**, **Seguimiento de cuotas** y **Recibir desde la TGR**. Toca la que necesitas.'],
+          marcas: [{ n: 1, t: 'Convenios TGR: ábrela para ver lo de adentro.' }, { n: 2, t: 'La bandeja: las tres pantallas de los convenios.' }] }] : []).concat([
         { titulo: 'Deja a mano lo que usas todos los días', img: 'estrella',
-          texto: ['Pasa el mouse sobre una pantalla del menú y toca la **estrella** ((1)). Queda en **Mis atajos**, en Inicio, y llegas a ella con **Alt + 1** a **Alt + 8** desde cualquier parte.'],
-          marcas: [{ n: 1, t: 'La estrella: agrega la pantalla a tus atajos (amarilla si ya está).' }],
+          texto: ['Abre la pantalla y toca la **estrella** ((1)) junto al nombre del área. Queda en **Mis atajos**, en Inicio, y llegas a ella con **Alt + 1** a **Alt + 8** desde cualquier parte.'],
+          marcas: [{ n: 1, t: 'La estrella: agrega la pantalla abierta a tus atajos (amarilla si ya está).' }],
           consejo: ['Tus atajos se guardan en tu cuenta: te siguen aunque entres desde otro computador.'] }
-      ] });
+      ]) });
 
     // 2. Hoy -----------------------------------------------------------------------------------
     var pasosHoy = [
