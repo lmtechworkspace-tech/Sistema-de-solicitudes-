@@ -1156,6 +1156,16 @@
       btnCerrarAtajos.addEventListener('click', cerrarAtajos_);
       document.getElementById('atajos-telon').addEventListener('click', cerrarAtajos_);
     }
+    // Manuales de uso (2026-10-06): todos los que corresponden a tu cuenta.
+    var manuales = document.getElementById('btn-menu-manuales');
+    if (manuales) {
+      document.getElementById('ico-manuales').innerHTML = Iconos.svg('libro', { tam: 15 });
+      manuales.addEventListener('click', function () {
+        document.getElementById('menu-usuario').classList.add('sigso-oculto');
+        document.getElementById('btn-menu-usuario').setAttribute('aria-expanded', 'false');
+        if (window.SigsoManual) SigsoManual.centro();
+      });
+    }
     var desdeMenu = document.getElementById('btn-menu-atajos');
     if (desdeMenu) {
       document.getElementById('ico-atajos').innerHTML = Iconos.svg('info', { tam: 15 });

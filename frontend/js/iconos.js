@@ -128,7 +128,10 @@ var Iconos = (function () {
     periodico: '<rect x="3" y="4" width="15" height="16" rx="2"/><path d="M18 8h3v10a2 2 0 01-2 2"/><path d="M7 8h7M7 12h7M7 16h4"/>',
     maletin: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2"/><path d="M3 13h18"/>',
     gafete: '<rect x="4.5" y="3" width="15" height="18" rx="2"/><circle cx="12" cy="10" r="2.8"/><path d="M8 17.2a4 4 0 018 0"/>',
-    medalla: '<circle cx="12" cy="9" r="6"/><path d="M8.6 13.8 7.5 21.5l4.5-2.6 4.5 2.6-1.1-7.7"/>'
+    medalla: '<circle cx="12" cy="9" r="6"/><path d="M8.6 13.8 7.5 21.5l4.5-2.6 4.5 2.6-1.1-7.7"/>',
+    // Manuales de uso (2026-10-06).
+    libro: '<path d="M4 4.5A2.5 2.5 0 016.5 2H20v17H6.5A2.5 2.5 0 004 21.5z"/><path d="M4 21.5A2.5 2.5 0 016.5 19H20v3H6.5"/><path d="M8.5 7h7M8.5 10.5h5"/>',
+    bombilla: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0012 3z"/>'
   };
 
   /**

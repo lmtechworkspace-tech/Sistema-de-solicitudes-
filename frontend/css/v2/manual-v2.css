@@ -1,0 +1,169 @@
+/* manual-v2.css — el visor de los manuales de uso (manual-v2.js, 2026-10-06).
+   Pantalla completa sobre SIGSO: barra con volver/buscar/imprimir, índice a
+   la izquierda y el manual al centro, en columna de lectura. Cada paso lleva
+   su captura con señales numeradas que se iluminan junto con su leyenda. */
+
+html.mn-abierto, html.mn-abierto body { overflow: hidden; }
+.mn {
+  position: fixed; inset: 0; z-index: 1200; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--sx-fondo); color: var(--sx-texto); font: var(--sx-t-cuerpo);
+  --mn-c: var(--sx-primario);
+  --mn-senal: #E5484D;
+}
+.mn[hidden] { display: none; }
+
+/* Barra superior */
+.mn-barra {
+  position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+  background: color-mix(in srgb, var(--sx-superficie) 92%, transparent); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--sx-borde);
+}
+.mn-barra__esp { flex: 1; }
+.mn-cerrar, .mn-accion {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--sx-borde); background: var(--sx-superficie); color: var(--sx-texto); font: 600 .84rem/1 var(--fuente); cursor: pointer;
+}
+.mn-cerrar:hover, .mn-accion:hover { background: var(--sx-superficie-hover); }
+.mn-cerrar:focus-visible, .mn-accion:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.mn-buscar { display: flex; align-items: center; gap: 8px; height: 36px; width: min(360px, 40vw); padding: 0 12px; border-radius: 10px; border: 1px solid var(--sx-borde); background: var(--sx-superficie); color: var(--sx-texto-3); }
+.mn-buscar input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--sx-texto); font: 500 .86rem/1 var(--fuente); outline: none; }
+.mn-buscar:focus-within { box-shadow: var(--sx-anillo-foco); border-color: var(--sx-primario); }
+
+/* Índice + artículo */
+.mn-cuerpo { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 36px; max-width: 1240px; margin: 0 auto; padding: 28px 24px 80px; }
+.mn-toc { position: sticky; top: 76px; align-self: start; max-height: calc(100vh - 100px); overflow-y: auto; }
+.mn-toc__t { margin: 0 0 10px 10px; font: var(--sx-t-etiqueta); letter-spacing: .08em; text-transform: uppercase; color: var(--sx-texto-3); }
+.mn-toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.mn-toc a { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 9px; color: var(--sx-texto-2); text-decoration: none; font: 500 .86rem/1.35 var(--fuente); }
+.mn-toc a:hover { background: var(--sx-superficie); color: var(--sx-texto); }
+.mn-toc a span { flex: none; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--sx-superficie-2); color: var(--sx-texto-2); font: 700 .72rem/1 var(--fuente); }
+.mn-toc__todos { margin: 16px 0 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--sx-primario); font: 600 .82rem/1 var(--fuente); cursor: pointer; padding: 6px 0; }
+
+.mn-art { min-width: 0; max-width: 860px; display: flex; flex-direction: column; gap: 22px; }
+.mn-art p { margin: 0; line-height: 1.65; color: var(--sx-texto-2); }
+.mn-art p + p { margin-top: 8px; }
+.mn-art ul { margin: 6px 0 0; padding-left: 20px; color: var(--sx-texto-2); line-height: 1.6; }
+.mn-art li + li { margin-top: 4px; }
+.mn-art b { color: var(--sx-texto); }
+.mn-art code { font: 600 .84em/1.3 ui-monospace, 'Cascadia Code', Consolas, monospace; padding: 1px 6px; border-radius: 6px; background: var(--sx-superficie-2); color: var(--sx-texto); }
+
+/* Portada */
+.mn-portada { display: flex; gap: 20px; align-items: flex-start; padding: 26px; border-radius: var(--sx-radio-lg); background: linear-gradient(135deg, color-mix(in srgb, var(--mn-c) 14%, var(--sx-superficie)), var(--sx-superficie)); border: 1px solid var(--sx-borde); }
+.mn-portada__tile { flex: none; width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center; background: var(--mn-c); color: #fff; }
+.mn-ceja { font: var(--sx-t-etiqueta) !important; letter-spacing: .1em; text-transform: uppercase; color: var(--mn-c) !important; margin-bottom: 6px !important; }
+.mn-portada h1 { margin: 0 0 8px; font: 800 1.85rem/1.15 var(--fuente); letter-spacing: -.02em; color: var(--sx-texto); text-wrap: balance; }
+.mn-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px !important; font: 500 .8rem/1.3 var(--fuente) !important; color: var(--sx-texto-3) !important; }
+.mn-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.mn-antes { display: flex; gap: 14px; padding: 18px 20px; border-radius: var(--sx-radio-lg); background: var(--sx-info-suave); border: 1px solid color-mix(in srgb, var(--sx-info) 30%, transparent); }
+.mn-antes > svg { flex: none; color: var(--sx-info); margin-top: 3px; }
+.mn-antes h2 { margin: 0 0 6px; font: 700 1rem/1.3 var(--fuente); }
+
+/* Capítulos y pasos */
+.mn-cap { display: flex; flex-direction: column; gap: 18px; padding-top: 12px; scroll-margin-top: 70px; }
+.mn-cap[hidden], .mn-paso[hidden] { display: none; }
+.mn-cap__cab { display: flex; gap: 14px; align-items: flex-start; padding-bottom: 14px; border-bottom: 2px solid var(--sx-borde); }
+.mn-cap__cab > div { flex: 1; min-width: 0; }
+.mn-cap__n { flex: none; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--mn-c, var(--sx-primario)); background: var(--sx-primario); color: #fff; font: 800 1.05rem/1 var(--fuente); }
+.mn-cap h2 { margin: 4px 0 6px; font: 800 1.4rem/1.2 var(--fuente); letter-spacing: -.01em; color: var(--sx-texto); }
+.mn-ir { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--sx-primario); background: var(--sx-primario-suave); color: var(--sx-primario); font: 600 .8rem/1 var(--fuente); cursor: pointer; }
+.mn-ir:hover { background: var(--sx-primario); color: #fff; }
+.mn-paso { display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; border-radius: var(--sx-radio-lg); background: var(--sx-superficie); border: 1px solid var(--sx-borde); box-shadow: var(--sx-sombra-1); }
+.mn-paso__cab { display: flex; align-items: center; gap: 10px; }
+.mn-paso__n { flex: none; min-width: 40px; height: 26px; padding: 0 8px; border-radius: 8px; display: grid; place-items: center; background: var(--sx-primario-suave); color: var(--sx-primario); font: 800 .8rem/1 var(--fuente); font-variant-numeric: tabular-nums; }
+.mn-paso h3 { margin: 0; font: 700 1.05rem/1.3 var(--fuente); color: var(--sx-texto); }
+
+/* Lo que dice un botón, una señal y lo que se escribe */
+.mn-btn { display: inline-block; padding: 0 7px; border-radius: 6px; border: 1px solid var(--sx-borde-fuerte); background: var(--sx-superficie-2); color: var(--sx-texto); font: 600 .86em/1.6 var(--fuente); white-space: nowrap; }
+.mn-num { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--mn-senal); color: #fff; font: 800 .72rem/1 var(--fuente); vertical-align: 1px; cursor: default; transition: transform .12s; }
+.mn-num.mn-on { transform: scale(1.18); }
+kbd { display: inline-block; padding: 0 6px; border-radius: 5px; border: 1px solid var(--sx-borde-fuerte); border-bottom-width: 2px; background: var(--sx-superficie); font: 600 .8em/1.6 var(--fuente); }
+
+/* Captura con señales */
+.mn-fig { margin: 4px 0 0; display: flex; flex-direction: column; gap: 10px; }
+.mn-fig__marco { position: relative; display: block; width: 100%; padding: 0; border: 1px solid var(--sx-borde); border-radius: 12px; overflow: hidden; background: var(--sx-superficie-2); cursor: zoom-in; box-shadow: var(--sx-sombra-2); }
+.mn-fig__marco img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.mn-fig__marco:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.mn-fig__lupa { position: absolute; right: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; background: rgba(15, 23, 42, .72); color: #fff; font: 600 .72rem/1.3 var(--fuente); opacity: 0; transition: opacity .15s; }
+.mn-fig__marco:hover .mn-fig__lupa, .mn-fig__marco:focus-visible .mn-fig__lupa { opacity: 1; }
+.mn-senal { position: absolute; border: 3px solid var(--mn-senal); border-radius: 8px; box-shadow: 0 0 0 3px rgba(255, 255, 255, .55), 0 0 0 9999px rgba(15, 23, 42, 0); pointer-events: auto; transition: box-shadow .15s, background .15s; }
+.mn-senal b { position: absolute; top: -13px; left: -13px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--mn-senal); color: #fff; font: 800 .8rem/1 var(--fuente); box-shadow: 0 0 0 3px #fff, 0 2px 6px rgba(0, 0, 0, .3); }
+.mn-senal--punto { border: 0; box-shadow: none; }
+.mn-senal--punto b { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.mn-senal.mn-on { background: color-mix(in srgb, var(--mn-senal) 14%, transparent); box-shadow: 0 0 0 3px rgba(255, 255, 255, .7), 0 0 0 9999px rgba(15, 23, 42, .35); z-index: 2; }
+.mn-leyenda { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mn-leyenda li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 10px; border-radius: 9px; line-height: 1.5; color: var(--sx-texto-2); transition: background .12s; }
+.mn-leyenda li .mn-num { margin-top: 1px; flex: none; }
+.mn-leyenda li.mn-on { background: color-mix(in srgb, var(--mn-senal) 9%, transparent); }
+.mn-fig figcaption { font: var(--sx-t-chico); color: var(--sx-texto-3); }
+
+/* Avisos */
+.mn-aviso { display: flex; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid; }
+.mn-aviso > svg { flex: none; margin-top: 2px; }
+.mn-aviso__t { display: block; margin-bottom: 2px; font: 700 .82rem/1.3 var(--fuente); }
+.mn-aviso p { font-size: .88rem; }
+.mn-aviso--consejo { background: var(--sx-ok-suave); border-color: color-mix(in srgb, var(--sx-ok) 30%, transparent); }
+.mn-aviso--consejo > svg, .mn-aviso--consejo .mn-aviso__t { color: var(--sx-ok); }
+.mn-aviso--ojo { background: var(--sx-alerta-suave); border-color: color-mix(in srgb, var(--sx-alerta) 35%, transparent); }
+.mn-aviso--ojo > svg, .mn-aviso--ojo .mn-aviso__t { color: var(--sx-alerta); }
+.mn-aviso--error { background: var(--sx-superficie-2); border-color: var(--sx-borde); }
+.mn-aviso--error > svg, .mn-aviso--error .mn-aviso__t { color: var(--sx-texto-2); }
+
+/* Preguntas frecuentes */
+.mn-preg { padding: 14px 18px; border-radius: 12px; background: var(--sx-superficie); border: 1px solid var(--sx-borde); }
+.mn-preg summary { cursor: pointer; font: 700 .95rem/1.4 var(--fuente); color: var(--sx-texto); }
+.mn-preg[open] summary { margin-bottom: 8px; }
+.mn-sinres { text-align: center; padding: 30px; }
+.mn-pie { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--sx-borde); font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.mn-cargando { min-height: 60vh; display: grid; place-items: center; align-content: center; gap: 10px; color: var(--sx-texto-3); text-align: center; }
+
+/* Centro de manuales */
+.mn-centro { margin: 28px auto 80px; padding: 0 24px; max-width: 980px; }
+.mn-centro__g { margin: 10px 0 0; font: var(--sx-t-etiqueta); letter-spacing: .08em; text-transform: uppercase; color: var(--sx-texto-3); }
+.mn-centro__lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.mn-tarjeta { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: var(--sx-radio-lg); border: 1px solid var(--sx-borde); background: var(--sx-superficie); color: var(--sx-texto); text-align: left; cursor: pointer; box-shadow: var(--sx-sombra-1); transition: border-color .15s, transform .15s; }
+.mn-tarjeta:hover { border-color: var(--mn-c); transform: translateY(-1px); }
+.mn-tarjeta:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.mn-tarjeta > span:nth-child(2) { flex: 1; min-width: 0; }
+.mn-tarjeta b { display: block; font: 700 .95rem/1.3 var(--fuente); }
+.mn-tarjeta small { display: block; margin-top: 3px; font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.mn-tarjeta > svg { color: var(--sx-texto-3); flex: none; }
+.mn-tarjeta__tile { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--mn-c); color: #fff; }
+
+/* Captura en grande */
+.mn-zoom { position: fixed; inset: 0; z-index: 1300; display: grid; place-items: center; padding: 3vh 3vw; background: rgba(9, 14, 28, .86); }
+.mn-zoom__in { position: relative; width: min(100%, 1700px); max-height: 94vh; aspect-ratio: auto; }
+.mn-zoom__in img { display: block; width: 100%; height: auto; max-height: 94vh; object-fit: contain; border-radius: 10px; }
+.mn-zoom__in .mn-fig__lupa { display: none; }
+.mn-zoom__x { position: fixed; top: 16px; right: 16px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #fff; color: #0F1A30; display: grid; place-items: center; cursor: pointer; }
+
+/* Celular */
+@media (max-width: 900px) {
+  .mn-cuerpo { grid-template-columns: 1fr; padding: 16px 16px 60px; gap: 16px; }
+  .mn-toc { position: static; max-height: none; padding: 12px; border-radius: 12px; background: var(--sx-superficie); border: 1px solid var(--sx-borde); }
+  .mn-barra { padding: 8px 12px; }
+  .mn-cerrar span, .mn-accion span { display: none; }
+  .mn-buscar { flex: 1; width: auto; }
+  .mn-portada { flex-direction: column; padding: 20px; }
+  .mn-portada h1 { font-size: 1.5rem; }
+  .mn-paso { padding: 16px; }
+  .mn-cap__cab { flex-wrap: wrap; }
+  .mn-centro { padding: 0 16px; }
+}
+
+/* Imprimir / PDF: solo el manual, sin barra ni índice. */
+@media print {
+  body > *:not(.mn) { display: none !important; }
+  html.mn-abierto, html.mn-abierto body { overflow: visible; }
+  .mn { position: static; overflow: visible; background: #fff; }
+  .mn-barra, .mn-toc, .mn-ir, .mn-fig__lupa, .mn-toc__todos { display: none !important; }
+  .mn-cuerpo { display: block; padding: 0; max-width: none; }
+  .mn-art { max-width: none; }
+  .mn-paso, .mn-fig, .mn-aviso { break-inside: avoid; box-shadow: none; }
+  .mn-cap { break-before: page; }
+  .mn-preg { break-inside: avoid; }
+  .mn-preg:not([open]) > *:not(summary) { display: block; }
+}
+
+@media (prefers-reduced-motion: reduce) { .mn-num, .mn-senal, .mn-tarjeta, .mn-fig__lupa { transition: none; } }
+.mn-leyenda li.mn-sin { opacity: .55; }
+.mn-leyenda li.mn-sin .mn-num { background: var(--sx-texto-3); }

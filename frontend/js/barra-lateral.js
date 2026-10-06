@@ -291,6 +291,13 @@
       estrella.setAttribute('data-fitem', h ? h.id : '');
       estrella.setAttribute('data-fnombre', h ? h.nombre : (m.nombre || ''));
     }
+    // El manual de uso de este módulo (manual-v2.js).
+    var manual = raiz_.querySelector('#sb-manual');
+    if (manual) {
+      var mn = window.SigsoManual ? SigsoManual.de(m.id) : null;
+      manual.hidden = !mn;
+      if (mn) { manual.innerHTML = ico('libro', 14) + '<span>Manual de uso</span>'; manual.setAttribute('data-manual', mn.id); manual.title = 'Paso a paso de ' + (m.nombre || '') + ' (F1)'; }
+    }
     var accion = raiz_.querySelector('#sb-accion');
     if (accion) {
       accion.hidden = !o.accion;
@@ -353,7 +360,8 @@
       var l = fijadosVisibles().slice(); l.splice(Number(t.getAttribute('data-quitar')), 1); guardarFijados(l); return;
     }
     if (t.hasAttribute('data-fmod')) { alternarFijado(t.getAttribute('data-fmod'), t.getAttribute('data-fitem'), t.getAttribute('data-fnombre')); return; }
-    if (t.id === 'sb-accion' && o.accion) { o.accion.ir(); if (o.alNavegar) o.alNavegar(); }
+    if (t.id === 'sb-accion' && o.accion) { o.accion.ir(); if (o.alNavegar) o.alNavegar(); return; }
+    if (t.id === 'sb-manual' && window.SigsoManual) { SigsoManual.abrir(t.getAttribute('data-manual')); if (o.alNavegar) o.alNavegar(); }
   }
 
   // Flechas arriba/abajo dentro del riel o del panel; Inicio/Fin a los extremos.
@@ -478,6 +486,10 @@
     tieneMenu: tieneMenu,
     // Para pruebas y para el buscador: lo que hoy se ve como atajo.
     fijados: function () { return fijadosVisibles(); },
+    // Para los manuales: repintar cuando llega su índice, qué módulos ve la cuenta y cuál está abierto.
+    refrescar: function () { pintar(); },
+    modulos: function () { return ((est_.opts && est_.opts.modulos) || []).map(function (m) { return m.id; }).concat(est_.opts && est_.opts.accion ? [est_.opts.accion.modulo] : []); },
+    moduloActivo: function () { return est_.opts ? est_.opts.moduloActivo : ''; },
     _secciones: secciones,
     MAX_FIJADOS: MAX_FIJADOS
   };

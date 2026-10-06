@@ -233,3 +233,14 @@
   .plataforma-sidebar--colapsado.sb--flotante .sb-panel { animation: none; }
   .sb-tip, .sb-rb, .sb-fila, .sb-fijar, .sb-quitar, .sb-sec__flecha svg { transition: none; }
 }
+
+/* Manual de uso del módulo abierto (manual-v2.js, 2026-10-06). */
+.sb-manual {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: #fff;
+  font: 600 .72rem/1 var(--fuente); cursor: pointer; transition: background var(--mov-normal, .15s), border-color var(--mov-normal, .15s);
+}
+.sb-manual:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.4); }
+.sb-manual:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.sb-manual[hidden] { display: none; }
+.sb-manual svg { color: var(--sb-c, #fff); }

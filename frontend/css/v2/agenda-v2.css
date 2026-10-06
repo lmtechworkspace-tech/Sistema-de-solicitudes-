@@ -52,7 +52,10 @@
 .ag-conse--critico { background: var(--sx-critico-suave); } .ag-conse--critico svg { color: var(--sx-critico); flex: none; margin-top: 2px; }
 .ag-conse--alerta { background: var(--sx-alerta-suave); } .ag-conse--alerta svg { color: var(--sx-alerta); flex: none; margin-top: 2px; }
 .ag-filas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.ag-fila { display: grid; grid-template-columns: minmax(180px, 1.1fr) minmax(0, 2fr) auto; gap: 8px 16px; align-items: center; padding: 10px 4px 10px 12px; border-top: 1px solid var(--sx-borde-suave); border-left: 3px solid transparent; }
+/* 2026-10-06: en pantallas de notebook (1366-1600 px) las tres columnas no caben junto al panel de
+   «Próximos 14 días» y el mensaje quedaba en una columna de 80 px. Los botones bajan bajo el mensaje;
+   en pantallas anchas vuelven a la misma línea. */
+.ag-fila { display: grid; grid-template-columns: minmax(170px, 1fr) minmax(0, 1.8fr); gap: 8px 16px; align-items: start; padding: 12px 6px 12px 12px; border-top: 1px solid var(--sx-borde-suave); border-left: 3px solid transparent; }
 .ag-fila--atrasado { border-left-color: var(--sx-critico); }
 .ag-fila--hoy { border-left-color: var(--sx-primario); }
 .ag-fila--sin_respuesta { border-left-color: var(--sx-alerta); }
@@ -65,11 +68,12 @@
 .ag-fila__que .sx2-badge { align-self: flex-start; }
 .ag-fila__esc { display: inline-flex; align-items: center; gap: 4px; font: 600 .75rem/1.3 var(--fuente); color: var(--sx-texto-2); }
 .ag-fila__prev { font: var(--sx-t-chico); color: var(--sx-texto-2); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.ag-fila__acc { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.ag-fila__acc { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px; }
+@media (min-width: 1700px) { .ag-fila { grid-template-columns: minmax(180px, 1.1fr) minmax(0, 2fr) auto; align-items: center; } .ag-fila__acc { grid-column: auto; justify-content: flex-end; } }
 .ag-fila__acc .sx2-select { max-width: 150px; }
 .ag-wa { text-decoration: none; }
 .ag-pregunta { display: inline-flex; align-items: center; gap: 4px; font: 600 .8125rem/1.3 var(--fuente); color: var(--sx-texto); }
-@media (max-width: 860px) { .ag-fila { grid-template-columns: minmax(0, 1fr); } .ag-fila__acc { justify-content: flex-start; } }
+@media (max-width: 860px) { .ag-fila { grid-template-columns: minmax(0, 1fr); } .ag-fila__acc { grid-column: auto; justify-content: flex-start; } }
 
 /* --- próximos días ------------------------------------------------------------------------- */
 .ag-prox { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }

@@ -45,6 +45,7 @@
   <link rel="stylesheet" href="css/v2/agenda-v2.css" />
   <link rel="stylesheet" href="css/v2/shell-v2.css" />
   <link rel="stylesheet" href="css/v2/barra-v2.css" />
+  <link rel="stylesheet" href="css/v2/manual-v2.css" />
   <link rel="stylesheet" href="css/v2/acceso-v2.css" />
   <link rel="stylesheet" href="css/v2/perfil-v2.css" />
   <link rel="stylesheet" href="css/v2/reportes-v2.css" />
@@ -246,6 +247,9 @@
               <button type="button" class="plataforma-menu__item" id="btn-tema" role="menuitem" aria-label="Cambiar a modo oscuro">
                 <span id="ico-tema"></span> <span id="txt-tema">Modo oscuro</span>
               </button>
+              <button type="button" class="plataforma-menu__item" id="btn-menu-manuales" role="menuitem">
+                <span id="ico-manuales"></span> Manuales de uso
+              </button>
               <button type="button" class="plataforma-menu__item" id="btn-menu-atajos" role="menuitem">
                 <span id="ico-atajos"></span> Atajos de teclado
               </button>
@@ -275,6 +279,8 @@
             </div>
           </div>
           <div class="sb-estado" id="sb-panel-estado"></div>
+          <!-- Manuales de uso (2026-10-06): el paso a paso de este módulo (manual-v2.js). -->
+          <button type="button" class="sb-manual" id="sb-manual" hidden></button>
         </div>
         <!-- SIGSO v2, Módulo 9B: "Buscar y saltar" (Ctrl+K). -->
         <button type="button" class="shell-buscar" id="btn-shell-buscar" aria-label="Buscar (Ctrl+K)">
@@ -621,6 +627,9 @@
   <script src="js/navegacion.js"></script>
   <!-- 2026-10-05: la barra lateral (riel + panel, fijados y recientes). -->
   <script src="js/barra-lateral.js"></script>
+  <!-- 2026-10-06: manuales de uso (el índice es liviano; cada manual se baja al abrirlo). -->
+  <script src="js/manual-v2.js"></script>
+  <script src="manuales/indice.js"></script>
   <!-- UIv2 va temprano: la usan el motor de reportes y todos los módulos. -->
   <script src="js/ui-v2.js"></script>
   <script src="js/reportes-v2.js"></script>
