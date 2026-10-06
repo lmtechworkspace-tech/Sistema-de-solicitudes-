@@ -380,8 +380,8 @@ function rrhh_(db, periodo, ctx) {
   // --- Información de los sueldos a tiempo (decisión 4, 2026-10-05) -------------------------------------
   // Plazo que el área le da al cliente: el día 5 del mes siguiente (o el hábil siguiente). Se mide con la
   // primera fecha de recepción de cada cliente en el mes de la remuneración (llena en todas las filas).
-  // Los que tuvieron sueldos el mes anterior y todavía no envían este mes también cuentan como tarde
-  // (igual que la Agenda), pero solo una vez vencido el plazo: antes, el mes está abierto.
+  // Los que tuvieron sueldos el mes anterior y todavía no envían este mes se listan aparte, sin entrar al
+  // porcentaje: muchos son clientes sin sueldos ese mes, no atrasados. Hasta el día 15 la cifra es preliminar.
   const aTiempoDe_ = (p) => {
     const lim = vencimiento_(p, 5, ctx.feriados), primera = {};
     delMesRem_(p).forEach((r) => {
@@ -390,25 +390,24 @@ function rrhh_(db, periodo, ctx) {
       const c = cliente_(r);
       if (!primera[c] || f < primera[c].f) primera[c] = { f, nombre: r.cliente_nombre };
     });
-    const abierto = ctx.hoy <= lim;
+    const abierto = ctx.hoy <= vencimiento_(p, 15, ctx.feriados);
     const sinEnviar = {};
-    if (!abierto) delMesRem_(CI.moverPeriodo_(p, -1)).forEach((r) => { const c = cliente_(r); if (!primera[c]) sinEnviar[c] = { f: '', nombre: r.cliente_nombre }; });
-    const v = Object.values(primera), faltan = Object.values(sinEnviar);
-    const tarde = v.filter((x) => x.f > lim).sort((a, b) => b.f.localeCompare(a.f)).concat(faltan.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre))));
-    return { total: v.length + faltan.length, ok: v.filter((x) => x.f <= lim).length, tarde, sin_enviar: faltan.length, lim, abierto };
+    if (ctx.hoy > lim) delMesRem_(CI.moverPeriodo_(p, -1)).forEach((r) => { const c = cliente_(r); if (!primera[c]) sinEnviar[c] = { f: '', nombre: r.cliente_nombre }; });
+    const v = Object.values(primera), faltan = Object.values(sinEnviar).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
+    return { total: v.length, ok: v.filter((x) => x.f <= lim).length, tarde: v.filter((x) => x.f > lim).sort((a, b) => b.f.localeCompare(a.f)), faltan, lim, abierto };
   };
   const at = aTiempoDe_(periodo);
   if (at.total) {
     const p = pct_(at.ok, at.total);
-    detalle.informacion_tarde = at.tarde.map((x) => ({ cliente: x.nombre, recibida: x.f ? fechaTxt_(x.f) : 'Sin enviar' }));
+    detalle.informacion_tarde = at.tarde.concat(at.faltan).map((x) => ({ cliente: x.nombre, recibida: x.f ? fechaTxt_(x.f) : 'Sin enviar (tuvo sueldos el mes anterior)' }));
     const ka = indicador_({ clave: 'informacion_a_tiempo', tema: 'Remuneraciones', nombre: 'Clientes que envían la información a tiempo', unidad: '%', formato: 'pct', sentido: 'mayor', valor: p, gerencia: true,
       preliminar: at.abierto,
       serie: M12.map((q) => { const x = aTiempoDe_(q); return { periodo: q, valor: x.total ? pct_(x.ok, x.total) : null }; }),
       estado: at.abierto || at.total < MIN_CASOS ? 'info' : (p >= 80 ? 'ok' : (p >= 60 ? 'alerta' : 'critico')), meta_texto: '≥ 80 %',
-      definicion: 'Clientes que enviaron la información de los sueldos del mes hasta el día 5 del mes siguiente ÷ los que la enviaron más los que tuvieron sueldos el mes anterior y no la han enviado.',
-      explicacion: (at.abierto ? 'El plazo vence el ' + fechaTxt_(at.lim) + ': por ahora, ' : '') +
-        at.ok + ' de ' + plural_(at.total, 'cliente', 'clientes') + (at.ok === 1 ? ' envió' : ' enviaron') + ' la información hasta el ' + fechaTxt_(at.lim) + '.' +
-        (at.sin_enviar ? ' ' + plural_(at.sin_enviar, 'todavía no la envía', 'todavía no la envían') + '.' : '') +
+      definicion: 'Clientes que enviaron la información de los sueldos del mes hasta el día 5 del mes siguiente ÷ los que la enviaron. Los que tuvieron sueldos el mes anterior y no la enviaron se listan aparte.',
+      explicacion: at.ok + ' de ' + plural_(at.total, 'cliente', 'clientes') + (at.ok === 1 ? ' envió' : ' enviaron') + ' la información hasta el ' + fechaTxt_(at.lim) + '.' +
+        (at.faltan.length === 1 ? ' Otro cliente con sueldos el mes anterior no la ha enviado.' : '') +
+        (at.faltan.length > 1 ? ' Otros ' + plural_(at.faltan.length, '', 'clientes con sueldos el mes anterior no la han enviado') + '.' : '') +
         (at.tarde.length ? ' Tarde: ' + at.tarde.slice(0, 3).map((x) => x.nombre).join(', ') + (at.tarde.length > 3 ? ' y ' + (at.tarde.length - 3) + ' más' : '') + '.' : '') });
     kpis.push(ka);
     if (ka.estado === 'critico') alertas.push({ nivel: 'alerta', area: 'Recursos Humanos', clave: 'informacion_a_tiempo', breve: d_(p) + ' % a tiempo', titulo: 'Clientes envían tarde la información de sueldos',

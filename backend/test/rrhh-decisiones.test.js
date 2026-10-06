@@ -110,18 +110,19 @@ test('D4: clientes que envían la información a tiempo (primera recepción hast
   assert.equal(Math.round(k.valor), 67);
   assert.equal(k.estado, 'alerta');
   assert.deepEqual(r.detalle.informacion_tarde.map((x) => x.cliente).sort(), ['Ingeniería Oeste SpA', 'Montajes Este SpA']);
-  // Sueldos de octubre: el plazo (5 de noviembre) no vence. Solo CLI-1 envió: el mes está abierto, no se juzga.
-  rem(db, 'CLI-1', '2026-10-30');
-  const c2 = IND.contexto_(db, '2026-M10'); c2.hoy = '2026-11-03';
+  // Sueldos de octubre: hasta el 15 de noviembre la cifra es preliminar y no se juzga.
+  rem(db, 'CLI-1', '2026-10-30'); rem(db, 'CLI-2', '2026-11-02'); rem(db, 'CLI-3', '2026-11-03'); rem(db, 'CLI-4', '2026-11-04'); rem(db, 'CLI-5', '2026-11-09');
+  const c2 = IND.contexto_(db, '2026-M10'); c2.hoy = '2026-11-10';
   const k2 = IND.calcularArea_(db, 'RRHH', '2026-M10', c2).kpis.find((x) => x.clave === 'informacion_a_tiempo');
-  assert.equal(k2.valor, 100); assert.equal(k2.estado, 'info'); assert.equal(k2.preliminar, true);
-  // Vencido el plazo, los 5 que tuvieron sueldos en septiembre y no enviaron octubre cuentan como tarde.
+  assert.equal(k2.valor, 80); assert.equal(k2.estado, 'info'); assert.equal(k2.preliminar, true);
+  // Cerrado el mes: 4 de 5 a tiempo; CLI-6 (sueldos en septiembre, nada en octubre) va aparte, sin entrar al porcentaje.
   c2.hoy = '2026-11-20';
   const r3 = IND.calcularArea_(db, 'RRHH', '2026-M10', c2);
   const k3 = r3.kpis.find((x) => x.clave === 'informacion_a_tiempo');
-  assert.equal(Math.round(k3.valor), 17, '1 de 6');
-  assert.equal(k3.estado, 'critico');
-  assert.equal(r3.detalle.informacion_tarde.filter((x) => x.recibida === 'Sin enviar').length, 5);
+  assert.equal(k3.valor, 80); assert.equal(k3.estado, 'ok'); assert.ok(!k3.preliminar);
+  assert.match(k3.explicacion, /Otro cliente con sueldos el mes anterior/);
+  assert.deepEqual(r3.detalle.informacion_tarde.map((x) => x.cliente), ['Montajes Este SpA', 'Ingeniería Oeste SpA']);
+  assert.match(r3.detalle.informacion_tarde[1].recibida, /^Sin enviar/);
 });
 
 test('D5: «Ya cumplió» en el recordatorio de Previred anota la fecha de pago y deja de recordar', () => {
