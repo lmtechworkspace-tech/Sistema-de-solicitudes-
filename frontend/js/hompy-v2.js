@@ -108,13 +108,18 @@
     var v = i === -1 ? s : s.slice(0, i);
     return { vista: VISTAS[v] ? v : 'inicio', arg: i === -1 ? '' : s.slice(i + 1) };
   }
-  function traer(v, arg, silencioso) {
+  function traer(v, arg, silencioso, reintento) {
     var t = ++turno_;
-    if (!silencioso || !D) pagina('<div class="hp2-cargando">' + U.esqueleto('kpis', 4) + U.esqueleto('tarjetas', 3) + '</div>');
+    if ((!silencioso || !D) && !reintento) pagina('<div class="hp2-cargando">' + U.esqueleto('kpis', 4) + U.esqueleto('tarjetas', 3) + '</div>');
     return api('hompyDatos').then(function (r) {
       if (t !== turno_) return;
       if (!r || !r.ok) {
-        pagina(U.card({ cuerpo: U.vacio({ icono: 'hompy', titulo: 'No se pudo abrir Hompy', texto: (r && r.message) || 'Inténtalo de nuevo en un momento.' }) }));
+        // Una actualización de fondo que falla no borra lo que se está viendo.
+        if (silencioso && D) return;
+        // La carga inicial se reintenta una vez (el servidor a veces tarda) antes de mostrar el error.
+        if (!reintento) return new Promise(function (ok) { setTimeout(ok, 1200); }).then(function () { return traer(v, arg, silencioso, true); });
+        pagina(U.card({ cuerpo: U.vacio({ icono: 'hompy', titulo: 'No se pudo abrir Hompy', texto: (r && r.message) || 'Inténtalo de nuevo en un momento.',
+          accion: U.boton({ texto: 'Reintentar', icono: 'derivar', variante: 'primario', sm: true, clase: 'js-hp2-reintentar hp2-boton-hompy' }) }) }));
         return;
       }
       D = r.data;
@@ -960,6 +965,7 @@
     if (!b) return;
     var id = b.getAttribute('data-id');
     if (b.classList.contains('js-hp2-ir')) irAItem(b.getAttribute('data-ir'));
+    else if (b.classList.contains('js-hp2-reintentar')) traer(vista_, arg_);
     else if (b.classList.contains('js-hp2-nuevo')) formularioEvento(null, b.getAttribute('data-fecha') || (vista_ === 'calendario' && diaSel_ >= D.hoy ? diaSel_ : ''));
     else if (b.classList.contains('js-hp2-evento')) abrirEvento(id);
     else if (b.classList.contains('js-hp2-reporte')) ir('salida', id);
