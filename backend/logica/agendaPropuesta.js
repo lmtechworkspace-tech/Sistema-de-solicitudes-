@@ -174,7 +174,7 @@ const PROPUESTA = [
   P({
     clave: 'INFORME_PLATAFORMAS', depto: 'RRHH', orden: 6, tipo: 'INTERNO', fuente: 'interno', proceso: 'SRV-RHH-01',
     nombre: 'Informe de plataformas externas a Facturación y Cobranzas',
-    descripcion: 'En los primeros 5 días del mes: enviar a la gerencia de Facturación y Cobranzas el informe de plataformas externas del mes anterior (trabajadores a los que se subió documentación para el cobro, trabajadores del mes y finiquitados), desde la matriz Plataformas externas.',
+    descripcion: 'En los primeros 5 días del mes: enviar a la gerencia de Facturación y Cobranzas el informe de plataformas externas del mes anterior (trabajadores a los que se subió documentación para el cobro, trabajadores del mes y finiquitados). SIGSO lo arma desde la matriz Plataformas externas: Recursos Humanos › Trabajo › Plataformas para Facturación.',
     regla: { tipo: 'mensual', mes: 1, dia: 5, habil: true },
     escalones: [
       { id: 'T1', nombre: 'Preparar informe', offset: -2, canal: 'INTERNO', a_quien: 'RESPONSABLE', texto: 'Preparar el informe de plataformas externas de {periodo} para Facturación y Cobranzas (vence el {fecha_limite}).' },
@@ -185,7 +185,7 @@ const PROPUESTA = [
   P({
     clave: 'IMPUESTO_UNICO_CONTABILIDAD', depto: 'RRHH', orden: 7, tipo: 'INTERNO', fuente: 'interno', proceso: 'SRV-RHH-01',
     nombre: 'Informe de impuesto único a Contabilidad',
-    descripcion: 'Enviar a Contabilidad el impuesto único (y el 3 % de préstamo solidario) de cada cliente: un primer informe entre el 5 y el 7, y el final el día 13 en la tarde, cuando terminan las liquidaciones.',
+    descripcion: 'Enviar a Contabilidad el impuesto único (y el 3 % de préstamo solidario) de cada cliente: un primer informe entre el 5 y el 7, y el final el día 13 en la tarde, cuando terminan las liquidaciones. SIGSO lo arma desde Remuneraciones: Recursos Humanos › Trabajo › Impuesto único para Contabilidad.',
     regla: { tipo: 'mensual', mes: 1, dia: 13, habil: true },
     escalones: [
       { id: 'T1', nombre: 'Primer informe (día 5-7)', offset: -5, canal: 'INTERNO', a_quien: 'RESPONSABLE', texto: 'Enviar a Contabilidad el primer informe de impuesto único y 3 % de {periodo}.' },

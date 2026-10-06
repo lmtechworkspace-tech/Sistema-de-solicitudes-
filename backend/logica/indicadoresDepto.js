@@ -377,6 +377,45 @@ function rrhh_(db, periodo, ctx) {
     (top2.length === 2 && kl.valor ? ' Los dos mayores (' + top2.map((x) => x.cliente).join(' y ') + ') suman ' + d_(pct_(top2[0].liquidaciones + top2[1].liquidaciones, kl.valor)) + ' %.' : '');
   kpis.push(kl);
 
+  // --- Información de los sueldos a tiempo (decisión 4, 2026-10-05) -------------------------------------
+  // Plazo que el área le da al cliente: el día 5 del mes siguiente (o el hábil siguiente). Se mide con la
+  // primera fecha de recepción de cada cliente en el mes de la remuneración (llena en todas las filas).
+  // Los que tuvieron sueldos el mes anterior y todavía no envían este mes también cuentan como tarde
+  // (igual que la Agenda), pero solo una vez vencido el plazo: antes, el mes está abierto.
+  const aTiempoDe_ = (p) => {
+    const lim = vencimiento_(p, 5, ctx.feriados), primera = {};
+    delMesRem_(p).forEach((r) => {
+      const f = String(r.datos.fecha_recepcion_informacion || '').slice(0, 10);
+      if (!esFecha_(f)) return;
+      const c = cliente_(r);
+      if (!primera[c] || f < primera[c].f) primera[c] = { f, nombre: r.cliente_nombre };
+    });
+    const abierto = ctx.hoy <= lim;
+    const sinEnviar = {};
+    if (!abierto) delMesRem_(CI.moverPeriodo_(p, -1)).forEach((r) => { const c = cliente_(r); if (!primera[c]) sinEnviar[c] = { f: '', nombre: r.cliente_nombre }; });
+    const v = Object.values(primera), faltan = Object.values(sinEnviar);
+    const tarde = v.filter((x) => x.f > lim).sort((a, b) => b.f.localeCompare(a.f)).concat(faltan.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre))));
+    return { total: v.length + faltan.length, ok: v.filter((x) => x.f <= lim).length, tarde, sin_enviar: faltan.length, lim, abierto };
+  };
+  const at = aTiempoDe_(periodo);
+  if (at.total) {
+    const p = pct_(at.ok, at.total);
+    detalle.informacion_tarde = at.tarde.map((x) => ({ cliente: x.nombre, recibida: x.f ? fechaTxt_(x.f) : 'Sin enviar' }));
+    const ka = indicador_({ clave: 'informacion_a_tiempo', tema: 'Remuneraciones', nombre: 'Clientes que envían la información a tiempo', unidad: '%', formato: 'pct', sentido: 'mayor', valor: p, gerencia: true,
+      preliminar: at.abierto,
+      serie: M12.map((q) => { const x = aTiempoDe_(q); return { periodo: q, valor: x.total ? pct_(x.ok, x.total) : null }; }),
+      estado: at.abierto || at.total < MIN_CASOS ? 'info' : (p >= 80 ? 'ok' : (p >= 60 ? 'alerta' : 'critico')), meta_texto: '≥ 80 %',
+      definicion: 'Clientes que enviaron la información de los sueldos del mes hasta el día 5 del mes siguiente ÷ los que la enviaron más los que tuvieron sueldos el mes anterior y no la han enviado.',
+      explicacion: (at.abierto ? 'El plazo vence el ' + fechaTxt_(at.lim) + ': por ahora, ' : '') +
+        at.ok + ' de ' + plural_(at.total, 'cliente', 'clientes') + (at.ok === 1 ? ' envió' : ' enviaron') + ' la información hasta el ' + fechaTxt_(at.lim) + '.' +
+        (at.sin_enviar ? ' ' + plural_(at.sin_enviar, 'todavía no la envía', 'todavía no la envían') + '.' : '') +
+        (at.tarde.length ? ' Tarde: ' + at.tarde.slice(0, 3).map((x) => x.nombre).join(', ') + (at.tarde.length > 3 ? ' y ' + (at.tarde.length - 3) + ' más' : '') + '.' : '') });
+    kpis.push(ka);
+    if (ka.estado === 'critico') alertas.push({ nivel: 'alerta', area: 'Recursos Humanos', clave: 'informacion_a_tiempo', breve: d_(p) + ' % a tiempo', titulo: 'Clientes envían tarde la información de sueldos',
+      cifra: at.ok + ' de ' + at.total + ' hasta el día 5', que_pasa: ka.explicacion, por_que: 'El plazo del día 5 no se está cumpliendo y el proceso se corre hacia el día 10.',
+      impacto: 'Liquidaciones, declaración en Previred e impuesto único para Contabilidad se atrasan.', decision: 'Revisar con los clientes que se atrasan seguido; la Agenda ya les recuerda el 28, el 2-3 y el 5.' });
+  }
+
   // --- Cotizaciones a tiempo e intereses (dependen de columnas que hoy casi no se llenan) ---------------------
   const conFecha = remMes.filter((r) => esFecha_(r.datos.fecha_declaracion) || esFecha_(r.datos.fecha_envio_imposiciones_planillas_declaradas));
   const cobertura = remMes.length ? conFecha.length / remMes.length : 0;
@@ -739,13 +778,14 @@ const TEMAS = {
   rle_pendiente: 'Registro ante la DT', anexos_pendientes: 'Registro ante la DT',
   salidas_por_entrada: 'Movimientos de personal', certificados: 'Trámites', licencias: 'Trámites',
   cartera_vencida: 'Cobranza', cobrado: 'Cobranza', facturado_hp: 'Cobranza', dias_cobro: 'Cobranza',
+  informacion_a_tiempo: 'Remuneraciones',
   pedidos_recibidos: 'Pedidos internos', pedidos_a_tiempo: 'Pedidos internos', pedidos_respuesta: 'Pedidos internos', pedidos_atrasados: 'Pedidos internos',
   dependencia: 'Equipo y Agenda', recordatorios_a_tiempo: 'Equipo y Agenda', clientes_sin_respuesta: 'Equipo y Agenda', tareas_a_tiempo: 'Equipo y Agenda', citas_avisadas: 'Equipo y Agenda'
 };
 // La PORTADA del reporte (2026-10-04, auditoría · etapa 2): lo que se entiende en 30 segundos.
 const CLAVE_PORTADA = {
   CONTABILIDAD: ['f29_a_tiempo', 'avance_contable', 'convenios_vencidos', 'facturacion'],
-  RRHH: ['liquidaciones', 'rle_pendiente', 'salidas_por_entrada', 'clientes_activos'],
+  RRHH: ['liquidaciones', 'informacion_a_tiempo', 'rle_pendiente', 'salidas_por_entrada'],
   PREVENCION: ['tareas_a_tiempo', 'citas_avisadas', 'recordatorios_a_tiempo', 'clientes_sin_respuesta'],
   MARKETING: ['tareas_a_tiempo', 'recordatorios_a_tiempo'],
   COBRANZAS: ['cartera_vencida', 'cobrado', 'facturado_hp', 'dias_cobro']
@@ -789,7 +829,7 @@ function contexto_(db, periodo) {
 // sin color ni alerta. Lo acumulado (RLE pendiente, reincidentes, convenios, cartera) sí alerta.
 const DEL_MES = ['avance_contable', 'clientes_activos', 'facturacion', 'liquidaciones', 'salidas_por_entrada', 'certificados', 'licencias',
   'tareas_a_tiempo', 'citas_avisadas', 'recordatorios_a_tiempo', 'clientes_sin_respuesta', 'cobrado', 'facturado_hp',
-  'pedidos_recibidos', 'pedidos_a_tiempo', 'pedidos_respuesta'];
+  'pedidos_recibidos', 'pedidos_a_tiempo', 'pedidos_respuesta', 'informacion_a_tiempo'];
 function finDeMes_(p) { const a = Number(p.slice(0, 4)), m = Number(p.slice(6)); return new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10); }
 /** Indicadores, alertas y detalle de un área en un mes (sin permisos: lo usan otras acciones). */
 function calcularArea_(db, depto, periodo, ctx) {

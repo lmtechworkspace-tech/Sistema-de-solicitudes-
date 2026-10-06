@@ -374,7 +374,7 @@ function definicionPublica_(m) {
   return {
     clave: m.clave, depto: m.depto, seccion: m.seccion, nombre: m.nombre, codigo: m.codigo || '', descripcion: m.descripcion || '',
     tipo: m.tipo, unaPorCliente: !!m.unaPorCliente, abrirMes: m.tipo === 'mensual' && !!(m.unaPorCliente || m.copiar),
-    sinLiberacion: !!m.sinLiberacion, sinCliente: !!m.sinCliente, sinUso: !!m.sinUso, tiempos: m.tiempos || null, montos: m.montos || [],
+    sinLiberacion: !!m.sinLiberacion, sinCliente: !!m.sinCliente, sinUso: !!m.sinUso, motivoSinUso: m.motivoSinUso || '', tiempos: m.tiempos || null, montos: m.montos || [],
     fechaPrincipal: m.fechaPrincipal || '', estados: m.estados, sensibles: m.sensibles || [],
     columnas: m.columnas.map((c) => ({
       clave: c.clave, etiqueta: c.etiqueta, tipo: c.tipo, rol: c.rol || '', grupo: c.grupo || '', antigua: !!c.antigua, sugerencias: c.sugerencias || [],

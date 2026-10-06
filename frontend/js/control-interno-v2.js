@@ -166,6 +166,11 @@
     return cfg_.matrices.filter(function (m) { return m.depto === d.clave && !m.sinUso && uso[m.clave] > 0; })
       .sort(function (a, b) { return (uso[b.clave] || 0) - (uso[a.clave] || 0); }).slice(0, 5);
   }
+  var INFORMES_RRHH = {
+    RRHH: [{ id: 'inf:iusc', nombre: 'Impuesto único para Contabilidad' }, { id: 'inf:plataformas', nombre: 'Plataformas para Facturación' }],
+    CONTABILIDAD: [{ id: 'inf:iusc', nombre: 'Impuesto único de RR.HH.' }],
+    COBRANZAS: [{ id: 'inf:plataformas', nombre: 'Plataformas de RR.HH. (cobro)' }]
+  };
   function arbol() {
     if (OPC.recibe) {
       // Administración: el informe de gestión del mes (lo que llega a gerencia),
@@ -186,14 +191,17 @@
       { id: 'agenda', nombre: 'Agenda', icono: 'calendario', items: [{ id: 'agenda:cal', nombre: 'Calendario' }, { id: 'agenda:reg', nombre: 'Recordatorios enviados' }, { id: 'agenda:cli', nombre: 'Por cliente' }] }
     ];
     var d = cfg_ && cfg_.departamentos[0];
+    // Informes internos que arma SIGSO desde RR.HH. (2026-10-05): los ve RR.HH. y el área que los recibe.
+    var inf = window.SigsoRRHHInformes && d ? (INFORMES_RRHH[OPC.depto] || []) : [];
     if (d && cfg_.matrices.length) {
       var top = principales(d);
       var tiene = function (clave) { return cfg_.matrices.some(function (m) { return m.clave === clave && m.depto === d.clave; }); };
       subs.push({ id: 'trabajo', nombre: 'Trabajo', icono: OPC.icono, items: top.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; })
         .concat(tiene('CONVENIOS') ? [{ id: 'conv', nombre: 'Seguimiento de cuotas TGR' }] : [])
         .concat(tiene('IVA') ? [{ id: 'sii', nombre: 'Recibir desde el SII' }] : [])
+        .concat(inf)
         .concat([{ id: 'inicio', nombre: 'Todo el trabajo' }]) });
-    }
+    } else if (inf.length) subs.push({ id: 'trabajo', nombre: inf.length === 1 ? inf[0].nombre : 'Trabajo', icono: OPC.icono, plano: inf.length === 1, items: inf });
     // Facturación y Cobranzas no entrega reporte del área: revisa el informe de gestión.
     var reps = (OPC.reporta === false ? [] : [{ id: 'reporte', nombre: 'Reporte mensual' }]).concat(cfg_ && cfg_.matrices.length ? [
       { id: 'rep:informe', nombre: 'Informe mensual' }, { id: 'rep:panel', nombre: 'Panel histórico' },
@@ -293,6 +301,7 @@
     if (p[0] === 'rep' && window.SigsoCIReportes) { SigsoCIReportes.mostrar(p[1], ctxReportes()); return; }
     if (p[0] === 'conv' && window.SigsoCIConvenios && matriz('CONVENIOS')) { SigsoCIConvenios.mostrar(p.slice(1).join(':'), ctxReportes()); return; }
     if (vista_ === 'sii' && window.SigsoCISII) { SigsoCISII.mostrar(ctxReportes()); return; }
+    if (p[0] === 'inf' && window.SigsoRRHHInformes && (INFORMES_RRHH[OPC.depto] || []).some(function (i) { return i.id === vista_; })) { SigsoRRHHInformes.mostrar(p[1], ctxReportes()); return; }
     if (vista_ === 'recibir') { if (envio_) irAItem(envio_.fuente === 'tgr' ? 'conv:tgr' : 'sii'); else vistaEsperando(); return; }
     if (vista_ === 'accesos' && cfg_.puede_administrar) { vistaAccesos(); return; }
     if (p[0] === 'reporte' && window.SigsoReporteDepto) { SigsoReporteDepto.mostrar(p.slice(1).join(':'), ctxReportes()); return; }
@@ -388,7 +397,8 @@
     return '<button type="button" class="ci2-tarjeta" data-ci2-ir="m:' + U.esc(m.clave) + '">' +
       '<span class="ci2-tarjeta__sec">' + txt(m.seccion) + '</span>' +
       '<span class="ci2-tarjeta__nom">' + txt(m.nombre) + (m.codigo ? ' <small class="sx2-tenue">' + txt(m.codigo) + '</small>' : '') + '</span>' +
-      '<span class="ci2-tarjeta__desc">' + txt(m.descripcion || (m.tipo === 'registro' ? 'Una fila por requerimiento, como en la planilla.' : '')) + '</span>' + cuerpo + '</button>';
+      '<span class="ci2-tarjeta__desc">' + txt(m.descripcion || (m.tipo === 'registro' ? 'Una fila por requerimiento, como en la planilla.' : '')) + '</span>' +
+      (m.motivoSinUso ? '<span class="ci2-tarjeta__motivo">Ya no se usa: ' + txt(m.motivoSinUso) + '</span>' : '') + cuerpo + '</button>';
   }
 
   // =========================================================================================

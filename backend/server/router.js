@@ -659,6 +659,9 @@ const ACCIONES = {
   // Metas propias de cada área (2026-10-04): las define la jefatura; el valor va en el reporte mensual.
   listarMetasDep: (db, data, contexto) => AgendaDepto.listarMetas(db, data, contexto),
   guardarMetaDep: (db, data, contexto) => AgendaDepto.guardarMeta(db, data, contexto),
+  // RR.HH. (2026-10-05): informes internos que arma SIGSO.
+  rrhhImpuestoUnico: (db, data, contexto) => require('../logica/rrhhInformes').impuestoUnico(db, data, contexto),
+  rrhhPlataformas: (db, data, contexto) => require('../logica/rrhhInformes').plataformas(db, data, contexto),
   // Barra lateral (2026-10-05): fijados de cada persona.
   obtenerPreferencias: (db, data, contexto) => Preferencias.obtener(db, data, contexto),
   guardarFijados: (db, data, contexto) => Preferencias.guardarFijados(db, data, contexto),

@@ -166,6 +166,34 @@ const AJUSTES = {
     resuelta: { ayuda: 'SI = ya se solucionó (en la planilla, la celda en azul). Al importar se lee el color.' }
   }
 };
+// Remuneraciones (revisión con RR.HH., 2026-10-05, decisión 5): sin estas fechas la Agenda le
+// recuerda el pago de imposiciones a todos y no se mide «cotizaciones a tiempo».
+AJUSTES.REMUNERACIONES = {
+  fecha_recepcion_informacion: { ayuda: 'Cuando el cliente envía la información de los sueldos. Plazo: el día 5 del mes siguiente. Del 20 en adelante cuenta como sueldos de ese mes; antes del 20, del mes anterior.' },
+  fecha_declaracion: { ayuda: 'Cuando se declaran las imposiciones en Previred (plazo: día 10). Anotarla al cerrar la empresa.' },
+  fecha_envio_imposiciones_planillas_declaradas: { ayuda: 'Cuando se le envían al cliente las planillas declaradas.' },
+  f_pago_imposiciones: { ayuda: 'Cuando el cliente pagó las imposiciones (plazo: día 13). Con esta fecha la Agenda deja de recordarle el pago; también se anota sola al marcar «Ya cumplió» en el recordatorio de Previred.' },
+  monto_iusc: { ayuda: 'Impuesto único de la obra: con esto SIGSO arma el informe de impuesto único para Contabilidad.' }
+};
+
+/**
+ * Matrices de RR.HH. que ya no se usan (revisión con el área y su planilla
+ * real, 2026-10-05; decisiones 1, 2 y 6 del dueño). Van al Archivo del área:
+ * fuera del menú y de la calidad del dato, con todos sus datos para consulta,
+ * y se pueden seguir usando desde ahí.
+ */
+const SIN_USO = {
+  INGRESO_CLIENTE_CREACION: 'Sin registros desde marzo de 2025.', INGRESO_CLIENTE_CAMBIO: 'Sin registros desde septiembre de 2024.',
+  INGRESO_OBRA: 'Sin registros desde abril de 2024.', TERMINO_OBRA: 'Un solo registro (2023).', RECLAMOS: 'Sin registros desde diciembre de 2024.',
+  TERMINO_SERVICIOS: 'Sin registros desde 2023.', REHACER_LIQUIDACIONES: 'Sin registros desde abril de 2024.', IMG: 'Sin registros desde mayo de 2024.',
+  DEVOLUCIONES: 'Sin registros desde 2023.', DOC_DEVOLUCIONES: 'Sin registros desde abril de 2024.', DNP_DEMANDA: 'Sin registros desde 2023.',
+  CLAVE_AFC: 'Sin registros desde 2023 (las claves nunca se guardan en SIGSO).', IMPOSICIONES_IMPAGAS: 'Sin registros desde abril de 2024.',
+  INFORMATIVOS: 'Sin registros desde abril de 2024.', F43: 'Sin registros desde febrero de 2024.', EMPRESAS_SIN_MOVIMIENTO: 'Sin registros desde 2023.',
+  SENCE: 'Hoja vacía.', PAGO_IMPOSICIONES: 'Hoja vacía.', CONTROL_HPD: 'Hoja vacía.',
+  LRE: 'El libro de remuneraciones queda en la intranet (lo dijo el área); la carga del día 15 sigue en la Agenda.',
+  IUSC: 'Repetía lo que ya está en Remuneraciones y dejó de llenarse en julio de 2026: el informe de impuesto único para Contabilidad ahora lo arma SIGSO.'
+};
+
 /** Columnas que SIGSO agrega a las de la planilla. */
 const EXTRA = {
   IVA: [{ despuesDe: 'tasa_ppm', clave: 'ventas_ppm', etiqueta: 'VENTAS (BASE PPM)', tipo: 'monto', nombres: [] }],
@@ -387,6 +415,7 @@ const MATRICES = DEFS.map((d) => {
     m.sinLiberacion = true;
   }
   if (!m.estados) m.estados = BASE;
+  if (SIN_USO[m.clave]) { m.sinUso = true; m.motivoSinUso = SIN_USO[m.clave]; }
   m.columnas = (m.columnas || COLUMNAS[m.clave] || []).slice();
   (EXTRA[m.clave] || []).forEach((x) => {
     const c = Object.assign({}, x);

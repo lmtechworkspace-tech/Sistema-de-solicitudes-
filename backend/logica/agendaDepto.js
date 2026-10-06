@@ -496,7 +496,15 @@ function responder(db, data, contexto) {
   agregarFila_(db, 'DEP_RECORDATORIOS', { recordatorio_id: crypto.randomUUID(), depto: o.depto, obligacion_id: o.obligacion_id, periodo: d.periodo, fecha_limite: '',
     item_clave: String(d.item_clave).slice(0, 120), cliente_id: String(d.cliente_id || '').slice(0, 60), cliente_nombre: String(d.cliente_nombre || '').slice(0, 200),
     escalon_id: 'RESPUESTA', canal: '', destino: '', mensaje: '', respuesta: d.respuesta, nota: String(d.nota || '').slice(0, 500), usuario_email: pm.email, fecha: ahora_(), activa: true });
-  return { ok: true, message: 'Respuesta registrada: ' + RESPUESTAS[d.respuesta] + '.' };
+  // Imposiciones: «Ya cumplió» = el cliente pagó. Se anota la fecha de pago en sus filas de Remuneraciones
+  // del mes (las que no la tienen), así la Agenda no le vuelve a recordar y se mide el pago a tiempo.
+  let anotadas = 0;
+  if (o.fuente === 'previred' && d.respuesta === 'CUMPLIO') {
+    const hoy = hoy_();
+    remuneracionesDe_(db, d.periodo).filter((r) => (r.cliente_id || 'N:' + r.cliente_nombre) === String(d.item_clave) && !esFecha_((r.datos || {}).f_pago_imposiciones))
+      .forEach((r) => { const g = CI.guardar(db, { registro_id: r.registro_id, datos: { f_pago_imposiciones: hoy } }, contexto); if (g && g.ok) anotadas++; });
+  }
+  return { ok: true, message: 'Respuesta registrada: ' + RESPUESTAS[d.respuesta] + '.' + (anotadas ? ' Se anotó la fecha de pago de imposiciones en ' + anotadas + (anotadas === 1 ? ' fila' : ' filas') + ' de Remuneraciones.' : '') };
 }
 /** Historial de recordatorios: por área, mes, obligación, cliente o respuesta. */
 function listarRegistro(db, data, contexto) {

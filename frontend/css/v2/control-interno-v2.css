@@ -23,7 +23,13 @@
 .ci2-tarjeta:hover { border-color: var(--acento-modulo, var(--sx-primario)); transform: translateY(-1px); }
 .ci2-tarjeta:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: 2px; }
 .ci2-tarjeta__nom { font: 600 .9375rem/1.3 var(--fuente); }
-.ci2-tarjeta__desc { font: var(--sx-t-chico); color: var(--sx-texto-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ci2-tarjeta__motivo { font: var(--sx-t-chico); color: var(--sx-texto-3); font-style: italic; }
+/* Informes internos de RR.HH. (rrhh-informes-v2.js, 2026-10-05) */
+.rh-nota { margin: 0 0 var(--sx-e-3, 12px); font-size: .8125rem; }
+.rh-lista { margin: 0; line-height: 1.7; }
+.rh-tabla td.rh-obras { max-width: 18rem; white-space: normal; font-size: .8125rem; color: var(--sx-texto-2); }
+.rh-tabla tfoot th { border-top: 2px solid var(--sx-borde); font-variant-numeric: tabular-nums; }
+.ci2-tarjeta__desc {font: var(--sx-t-chico); color: var(--sx-texto-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ci2-tarjeta__cifras { display: flex; flex-wrap: wrap; gap: 4px 12px; font: var(--sx-t-chico); color: var(--sx-texto-2); font-variant-numeric: tabular-nums; }
 .ci2-tarjeta__cifras b { color: var(--sx-texto); }
 .ci2-tarjeta__cifras .sx2-tono-alerta b { color: var(--sx-alerta); }
