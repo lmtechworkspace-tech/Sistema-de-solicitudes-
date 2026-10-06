@@ -99,6 +99,7 @@
     if (i.produccion.fecha_grabacion && i.etapa === 'PRODUCCION') meta.push('<span>' + U.ico('calendario', 12) + txt(H().fechaCorta(i.produccion.fecha_grabacion)) + '</span>');
     return '<article class="hp2e-tarjeta sx2-entra' + (i.idea_id === nuevaId_ ? ' hp2e-tarjeta--nueva' : '') + '" draggable="true" tabindex="0" data-id="' + txt(i.idea_id) + '" style="--i:' + (n || 0) + '" aria-label="' + txt(i.titulo + ', ' + info.n) + '">' +
       ((obj || i.idea.duracion) && i.etapa !== 'DESCARTADA' ? '<span class="hp2e-tarjeta__chips">' + (obj ? '<span class="hp2e-chip">' + U.ico(obj[1], 11) + txt(obj[0]) + '</span>' : '') +
+        (i.marca_id && window.SigsoHompyMarcas && SigsoHompyMarcas.marca(i.marca_id) ? '<span class="hp2e-chip hp2e-chip--marca">' + U.ico('megafono', 11) + txt(SigsoHompyMarcas.marca(i.marca_id).nombre) + '</span>' : '') +
         '<span class="hp2e-chip">' + U.ico('reloj', 11) + i.idea.duracion + ' s</span></span>' : '') +
       '<b class="hp2e-tarjeta__t">' + txt(i.titulo) + '</b>' +
       (i.etapa === 'DESCARTADA' ? '<p class="hp2e-tarjeta__g">' + U.ico('info', 12) + txt(i.motivo_descarte) + '</p>'
@@ -219,6 +220,7 @@
         '<div class="hp2e-gancho__pie"><span class="hp2e-plantillas">' + GANCHOS.map(function (g) { return '<button type="button" class="hp2e-plantilla js-hp2e-plantilla" data-t="' + txt(g) + '">' + txt(g) + '</button>'; }).join('') + '</span>' +
         '<span class="hp2e-contador js-hp2e-contador">' + d.gancho.length + '/200</span></div></div>' +
       '<div class="hp2-campo-grupo"><span class="sx2-campo__et">¿Para qué es el video?</span>' + radios('objetivo', Object.keys(OBJ).map(function (k) { return [k, OBJ[k][0], OBJ[k][1]]; }), d.objetivo, 'hp2e-radios--grandes') + '</div>' +
+      (window.SigsoHompyMarcas && (D().marcas || []).length ? U.campo('Marca colaboradora (opcional)', SigsoHompyMarcas.selector('marca_id', i.marca_id), 'Si el video es con una marca, queda en su historia.') : '') +
       '<div class="hp2-campo-grupo"><span class="sx2-campo__et">Formato</span>' + radios('formato', D().catalogos.formatos.map(function (f) { return [f, f]; }), d.formato) + '</div>' +
       '<div class="hp2-campo-grupo"><span class="sx2-campo__et">Duración objetivo</span>' + radios('duracion', D().catalogos.duraciones.map(function (s) { return [s, s + ' s']; }), d.duracion, 'hp2e-radios--seg') + '</div>' +
       '<div class="hp2-form-fila">' +
@@ -471,6 +473,7 @@
       f.querySelectorAll('.js-hp2e-m').forEach(function (e) { m[e.getAttribute('data-p')][e.getAttribute('data-k')] = e.value === '' ? null : Number(e.value); });
       o.publicacion = { url: val('url'), fecha: val('fecha'), h24: m.h24, d7: m.d7, aprendizajes: val('aprendizajes') };
     }
+    if (sec === 'idea' && f.querySelector('[name=marca_id]')) o.marca_id = val('marca_id');
     var t = r.querySelector('.js-hp2e-titulo');
     if (t && t.value.trim()) o.titulo = t.value.trim();
     return o;

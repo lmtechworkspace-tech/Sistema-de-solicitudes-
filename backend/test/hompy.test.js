@@ -217,3 +217,96 @@ test('Estudio TikTok: descartar con motivo, votar y agendar la grabación en el 
   H.eliminarIdea(db, { idea_id: idea.idea_id }, BARBARA);
   assert.equal(H.datos(db, {}, BARBARA).ideas.length, 0);
 });
+
+test('Marcas: alta, validaciones, marca en actividades e ideas, y no se borra con historial', () => {
+  const db = crear();
+  assert.ok(rechazado(H.guardarMarca(db, { nombre: 'BCI' }, OTRA)));
+  assert.ok(invalido(H.guardarMarca(db, { nombre: '' }, BARBARA)));
+  assert.ok(invalido(H.guardarMarca(db, { nombre: 'X', contacto_correo: 'no-es-correo' }, BARBARA)));
+  const bci = H.guardarMarca(db, { nombre: 'BCI', rubro: 'Banca', color: 'azul', estado: 'ACTIVA', contacto_nombre: 'Ana', contacto_correo: 'ana@bci.cl', sitio: 'javascript:x' }, BARBARA).marca;
+  assert.equal(bci.sitio, '', 'solo enlaces http(s)');
+  assert.ok(invalido(H.guardarMarca(db, { nombre: 'bci' }, BARBARA)), 'sin duplicados');
+  const otra = H.guardarMarca(db, { nombre: 'Ferretería Norte', color: 'fucsia', estado: 'RARO' }, BARBARA).marca;
+  assert.equal(otra.color, 'azul'); assert.equal(otra.estado, 'ACTIVA');
+  const tipo = H.datos(db, {}, BARBARA).tipos[1].tipo_id;
+  assert.ok(invalido(H.guardarEvento(db, { tipo_id: tipo, titulo: 'x', fecha: hoy(), marca_id: 'HM-falsa' }, BARBARA)));
+  const ev = H.guardarEvento(db, { tipo_id: tipo, titulo: 'Activación BCI', fecha: hoy(), marca_id: bci.marca_id }, BARBARA).evento;
+  assert.equal(ev.marca_id, bci.marca_id);
+  const idea = H.guardarIdea(db, { titulo: 'Video con BCI' }, BARBARA).idea;
+  assert.equal(H.guardarIdea(db, { idea_id: idea.idea_id, marca_id: bci.marca_id }, BARBARA).idea.marca_id, bci.marca_id);
+  assert.ok(invalido(H.guardarIdea(db, { idea_id: idea.idea_id, marca_id: 'HM-x' }, BARBARA)));
+  assert.ok(invalido(H.eliminarMarca(db, { marca_id: bci.marca_id }, BARBARA)), 'con actividades no se elimina');
+  assert.ok(H.eliminarMarca(db, { marca_id: otra.marca_id }, BARBARA).eliminado);
+  assert.deepEqual(H.datos(db, {}, BARBARA).marcas.map((m) => m.nombre), ['BCI']);
+});
+
+test('Colaboraciones: lo entregado y lo recibido, fechas y enlaces solo a lo que existe', () => {
+  const db = crear();
+  const bci = H.guardarMarca(db, { nombre: 'BCI' }, BARBARA).marca;
+  const tipo = H.datos(db, {}, BARBARA).tipos[0].tipo_id;
+  const ev = H.guardarEvento(db, { tipo_id: tipo, titulo: 'Activación', fecha: hoy(), marca_id: bci.marca_id }, BARBARA).evento;
+  assert.ok(invalido(H.guardarColaboracion(db, { titulo: 'x', fecha_inicio: hoy() }, BARBARA)), 'pide marca');
+  assert.ok(invalido(H.guardarColaboracion(db, { marca_id: bci.marca_id, titulo: 'x', fecha_inicio: hoy(), fecha_fin: mover(hoy(), -1) }, BARBARA)));
+  const c = H.guardarColaboracion(db, { marca_id: bci.marca_id, titulo: 'Activación en sucursales', tipo: 'EVENTO', estado: 'ACORDADA', fecha_inicio: hoy(),
+    entregamos: 'Hompy en 3 sucursales', recibimos: 'Merch y difusión', valor: '350.000', calificacion: 9, evento_ids: [ev.evento_id, 'HE-falso'], idea_ids: ['HI-falsa'] }, BARBARA).colaboracion;
+  assert.equal(c.valor, 350000);
+  assert.equal(c.calificacion, 5);
+  assert.deepEqual(c.evento_ids, [ev.evento_id]);
+  assert.deepEqual(c.idea_ids, []);
+  const ed = H.guardarColaboracion(db, Object.assign({}, c, { estado: 'REALIZADA', resultado: 'Muy buena', valor: '' }), BARBARA).colaboracion;
+  assert.equal(ed.estado, 'REALIZADA'); assert.equal(ed.valor, null);
+  H.eliminarColaboracion(db, { colab_id: c.colab_id }, BARBARA);
+  assert.equal(H.datos(db, {}, BARBARA).colaboraciones.length, 0);
+});
+
+test('Reporte mensual: cifras del mes, comparación con el anterior, pendientes, videos y PDF', () => {
+  const db = crear();
+  const tipos = H.datos(db, {}, BARBARA).tipos;
+  const bci = H.guardarMarca(db, { nombre: 'BCI' }, BARBARA).marca;
+  const mes = hoy().slice(0, 7);
+  const dia = (d) => mes + '-' + String(d).padStart(2, '0');
+  const ev1 = H.guardarEvento(db, { tipo_id: tipos[0].tipo_id, titulo: 'Feria', fecha: dia(1), marca_id: bci.marca_id }, BARBARA).evento;
+  H.guardarSalida(db, { evento_id: ev1.evento_id, cerrar: true, datos: { hora_inicio: '10:00', hora_fin: '12:30', traje: 'Lisseth', publico: 200, estado_traje: 'LIMPIEZA', calificacion: 4, minutos_traje: 60, gasto_transporte: 5000 } }, BARBARA);
+  H.guardarEvento(db, { tipo_id: tipos[1].tipo_id, titulo: 'Sin reporte', fecha: dia(1) }, BARBARA);
+  const canc = H.guardarEvento(db, { tipo_id: tipos[1].tipo_id, titulo: 'Cancelada', fecha: dia(1) }, BARBARA).evento;
+  H.cambiarEstadoEvento(db, { evento_id: canc.evento_id, estado: 'CANCELADO', motivo: 'Lluvia' }, BARBARA);
+  // Un video publicado este mes, con métricas.
+  let idea = H.guardarIdea(db, { titulo: 'Casco', idea: { gancho: '¿Sabías?' } }, BARBARA).idea;
+  idea = H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'DIALOGO' }, BARBARA).idea;
+  H.guardarIdea(db, { idea_id: idea.idea_id, dialogo: { lineas: [{ texto: 'Hola' }] } }, BARBARA);
+  H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'GUION' }, BARBARA);
+  H.guardarIdea(db, { idea_id: idea.idea_id, guion: { escenas: [{ accion: 'x', segundos: 5 }] } }, BARBARA);
+  H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'PRODUCCION' }, BARBARA);
+  H.guardarIdea(db, { idea_id: idea.idea_id, produccion: { checklist: { grabado: true, aprobado: true } } }, BARBARA);
+  idea = H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'PUBLICADO', url: 'https://www.tiktok.com/@h/video/1' }, BARBARA).idea;
+  H.guardarIdea(db, { idea_id: idea.idea_id, publicacion: Object.assign({}, idea.publicacion, { h24: { vistas: 1000, me_gusta: 80, comentarios: 10, compartidos: 5, guardados: 5 } }) }, BARBARA);
+  H.guardarColaboracion(db, { marca_id: bci.marca_id, titulo: 'Activación', tipo: 'EVENTO', estado: 'EN_CURSO', fecha_inicio: dia(1), valor: 100000 }, BARBARA);
+
+  assert.ok(rechazado(H.reporteMensual(db, { periodo: mes }, OTRA)));
+  const r = H.reporteMensual(db, { periodo: mes }, BARBARA);
+  assert.equal(r.kpis.actividades.actual, 2, 'sin la cancelada');
+  assert.equal(r.kpis.canceladas, 1);
+  assert.equal(r.kpis.salidas.actual, 1);
+  assert.equal(r.kpis.publico.actual, 200);
+  assert.equal(r.kpis.horas.actual, 2.5);
+  assert.equal(r.kpis.minutos_traje, 60);
+  assert.equal(r.kpis.gastos, 5000);
+  assert.equal(r.kpis.videos.actual, 1);
+  assert.equal(r.kpis.vistas.actual, 1000);
+  assert.equal(r.kpis.interaccion, 10);
+  assert.equal(r.kpis.colaboraciones, 1);
+  assert.equal(r.kpis.actividades.anterior, 0);
+  assert.deepEqual(r.pendientes.map((p) => p.titulo), ['Sin reporte']);
+  assert.equal(r.salidas[0].marca, 'BCI');
+  assert.equal(r.traje.estado, 'LIMPIEZA');
+  assert.equal(H.reporteMensual(db, { periodo: 'cualquier-cosa' }, BARBARA).periodo, mes, 'período inválido = el mes actual');
+
+  const U = { esc: (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'), ico: () => '<svg></svg>' };
+  const html = H.cuerpoPdfMensual_(r, U);
+  assert.match(html, /Hompy en /);
+  assert.match(html, /Feria/);
+  assert.match(html, /Sin reporte cerrado: Sin reporte/);
+  assert.match(html, /10,0 %/);
+  assert.match(html, /\$100\.000/);
+  assert.match(html, /Necesita limpieza/);
+});

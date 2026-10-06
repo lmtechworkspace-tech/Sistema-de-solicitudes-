@@ -8,15 +8,15 @@
  * movimiento se apaga con «reducir movimiento» del sistema.
  *
  * Vistas: Portada · Calendario · Estudio TikTok (hompy-estudio-v2.js, Etapa 2)
- * · Salidas a terreno (+ el reporte de cada una) · Tipos de evento. Viene:
- * Marcas (Etapa 3).
+ * · Marcas y Reporte mensual (hompy-marcas-v2.js, Etapa 3) · Salidas a terreno
+ * (+ el reporte de cada una) · Tipos de evento.
  */
 (function () {
   'use strict';
 
   var U = UIv2;
   var IMG = 'assets/hompy/hompy.webp';
-  var VISTAS = { inicio: 1, calendario: 1, salidas: 1, tipos: 1, salida: 1, estudio: 1, idea: 1 };
+  var VISTAS = { inicio: 1, calendario: 1, salidas: 1, tipos: 1, salida: 1, estudio: 1, idea: 1, marcas: 1, marca: 1, reportes: 1 };
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   var DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   var DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -125,6 +125,8 @@
   }
   // El Estudio TikTok vive en su propio archivo (hompy-estudio-v2.js).
   function E() { return window.SigsoHompyEstudio || null; }
+  // Marcas y reporte mensual (hompy-marcas-v2.js).
+  function M() { return window.SigsoHompyMarcas || null; }
   function refrescar() {
     if (!raiz_ || raiz_.classList.contains('sigso-oculto')) return;
     // Nunca por debajo de un formulario abierto, de un reporte a medio llenar ni de una idea guardándose.
@@ -147,9 +149,11 @@
     vista_ = VISTAS[v] ? v : 'inicio'; arg_ = arg || '';
     if (vista_ === 'salida' && !evento(arg_)) { vista_ = 'salidas'; arg_ = ''; }
     if ((vista_ === 'estudio' || vista_ === 'idea') && !E()) { vista_ = 'inicio'; arg_ = ''; }
+    if ((vista_ === 'marcas' || vista_ === 'marca' || vista_ === 'reportes') && !M()) { vista_ = 'inicio'; arg_ = ''; }
+    if (vista_ === 'marca' && !(D.marcas || []).some(function (x) { return x.marca_id === arg_; })) { vista_ = 'marcas'; arg_ = ''; }
     if (vista_ === 'idea' && !(D.ideas || []).some(function (x) { return x.idea_id === arg_; })) { vista_ = 'estudio'; arg_ = ''; }
     sucio_ = false;
-    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(vista_ === 'salida' ? 'salidas' : vista_ === 'idea' ? 'estudio' : vista_);
+    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(vista_ === 'salida' ? 'salidas' : vista_ === 'idea' ? 'estudio' : vista_ === 'marca' ? 'marcas' : vista_);
     if (vista_ === 'inicio') pintarInicio();
     else if (vista_ === 'calendario') pintarCalendario();
     else if (vista_ === 'salidas') pintarSalidas();
@@ -157,6 +161,9 @@
     else if (vista_ === 'salida') pintarSalida(arg_);
     else if (vista_ === 'estudio') E().tablero();
     else if (vista_ === 'idea') E().taller(arg_);
+    else if (vista_ === 'marcas') M().lista();
+    else if (vista_ === 'marca') M().ficha(arg_);
+    else if (vista_ === 'reportes') M().mensual();
     if (!sinRuta) window.scrollTo({ top: 0, behavior: sinMov() ? 'auto' : 'smooth' });
   }
   function pagina(html) {
@@ -172,8 +179,10 @@
     { id: 'inicio', nombre: 'Portada', icono: 'inicio', items: [{ id: 'inicio', nombre: 'Portada' }] },
     { id: 'calendario', nombre: 'Calendario', icono: 'calendario', items: [{ id: 'calendario', nombre: 'Calendario' }] },
     { id: 'estudio', nombre: 'Estudio TikTok', icono: 'camara', items: [{ id: 'estudio', nombre: 'Estudio TikTok' }] },
+    { id: 'marcas', nombre: 'Marcas colaboradoras', icono: 'megafono', items: [{ id: 'marcas', nombre: 'Marcas colaboradoras' }] },
     { id: 'salidas', nombre: 'Salidas a terreno', icono: 'ubicacion', items: [{ id: 'salidas', nombre: 'Salidas a terreno' }] },
-    { id: 'tipos', nombre: 'Tipos de evento', icono: 'ajustes', items: [{ id: 'tipos', nombre: 'Tipos de evento' }] }
+    { id: 'tipos', nombre: 'Tipos de evento', icono: 'ajustes', items: [{ id: 'tipos', nombre: 'Tipos de evento' }] },
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true, descripcion: 'El mes de Hompy, con PDF', items: [{ id: 'reportes', nombre: 'Reporte mensual' }] }
   ];
   function registrarArbol() {
     if (!window.SigsoNav) return;
@@ -319,11 +328,7 @@
       cuerpo: listaPend ? '<ul class="hp2-lista">' + listaPend + '</ul>' : '<div class="hp2-todo-listo"><img src="assets/hompy/hompy-cara.webp" alt="" width="56" height="56"><p><b>¡Todo al día!</b> No hay reportes de salida pendientes.</p></div>' });
 
     var estudio = E() ? E().tarjetaPortada() : '';
-    var pronto = '<section class="hp2-pronto sx2-entra" style="--i:8">' +
-      '<h2>' + U.ico('estrella', 16) + 'Lo que viene para Hompy</h2>' +
-      '<div class="hp2-pronto__grilla">' +
-        '<article><span class="hp2-pronto__ico hp2-color-azul">' + U.ico('megafono', 18) + '</span><div><b>Marcas colaboradoras</b><p>Cada marca (como BCI), sus colaboraciones, lo entregado y recibido, y el reporte mensual.</p></div><span class="sx2-badge sx2-tono-hito sx2-badge--sin-punto">Etapa 3</span></article>' +
-      '</div></section>';
+    var pronto = M() ? M().tarjetaPortada() : '';
 
     pagina(heroe + kpis + '<div class="sx2-grid hp2-dos"><div class="sx2-col-7">' + cardProx + '</div><div class="sx2-col-5">' + cardPend + '</div></div>' + estudio + pronto);
     animarMascota();
@@ -429,6 +434,7 @@
       '<div><dt>' + U.ico('calendario', 14) + 'Fecha</dt><dd>' + txt(fechaLarga(e.fecha)) + ' <span class="sx2-tenue">· ' + txt(cuando(e.fecha)) + '</span></dd></div>' +
       '<div><dt>' + U.ico('reloj', 14) + 'Horario</dt><dd>' + txt(horario(e)) + '</dd></div>' +
       '<div><dt>' + U.ico('ubicacion', 14) + 'Lugar</dt><dd>' + (e.lugar || e.direccion ? txt([e.lugar, e.direccion, e.comuna].filter(Boolean).join(' · ')) : '<span class="sx2-tenue">Sin lugar</span>') + '</dd></div>' +
+      (e.marca_id && M() && M().marca(e.marca_id) ? '<div><dt>' + U.ico('megafono', 14) + 'Marca</dt><dd>' + M().chip(e.marca_id) + '</dd></div>' : '') +
       '<div><dt>' + U.ico('equipo', 14) + 'Van</dt><dd>' + (e.participantes.length ? '<span class="hp2-personas">' + e.participantes.map(function (p) { return '<span class="hp2-persona">' + U.avatar({ nombre: p }, 'xs') + txt(p) + '</span>'; }).join('') + '</span>' : '<span class="sx2-tenue">Sin definir</span>') + '</dd></div>' +
     '</dl>' +
     (e.descripcion ? '<div class="hp2-desc"><h3>Detalle</h3><p>' + txt(e.descripcion) + '</p></div>' : '') +
@@ -565,6 +571,7 @@
     var campos = datalistPersonas(e.participantes) +
       U.campo('Tipo de evento', selectorTipos(tipoIni)) +
       U.campo('¿Qué actividad es?', '<input class="sx2-input" name="titulo" maxlength="120" required value="' + txt(e.titulo || '') + '" placeholder="Ej.: Feria de seguridad en Mall Plaza">') +
+      (M() && (D.marcas || []).length ? U.campo('Marca (opcional)', M().selector('marca_id', e.marca_id || ''), 'Si la actividad es con una marca colaboradora, como BCI.') : '') +
       '<div class="hp2-form-fila hp2-form-fila--3">' +
         U.campo('Fecha', '<input class="sx2-input" type="date" name="fecha" required value="' + txt(e.fecha || fecha || D.hoy) + '">') +
         U.campo('Desde', '<input class="sx2-input" type="time" name="hora_inicio" value="' + txt(e.hora_inicio || '') + '">') +
@@ -991,7 +998,8 @@
       datos: function () { return D; }, raiz: function () { return raiz_; }, api: api, aviso: aviso, txt: txt, sinMov: sinMov,
       pagina: pagina, cabecera: cabecera, ir: ir, irAItem: irAItem, traer: function (v, a) { return traer(v, a, true); },
       chipsInput: chipsInput, enlazarChips: enlazarChips, chispas: chispas, celebrar: celebrar, abrirEvento: abrirEvento,
-      fechaLarga: fechaLarga, fechaCorta: fechaCorta, cuando: cuando, nombreDe: nombreDe, horaDe: horaDe, tipo: tipo, IMG: IMG
+      fechaLarga: fechaLarga, fechaCorta: fechaCorta, cuando: cuando, nombreDe: nombreDe, horaDe: horaDe, tipo: tipo, IMG: IMG,
+      descargarBase64: descargarBase64
     }
   };
   registrarArbol();

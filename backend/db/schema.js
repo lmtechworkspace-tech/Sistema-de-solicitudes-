@@ -874,7 +874,7 @@ const COLUMNAS = {
   ],
   HOMPY_EVENTOS: [
     'evento_id', 'tipo_id', 'titulo', 'fecha', 'hora_inicio', 'hora_fin', 'lugar', 'direccion', 'comuna',
-    'participantes', 'descripcion', 'estado', 'motivo_cancelacion', 'idea_id',
+    'participantes', 'descripcion', 'estado', 'motivo_cancelacion', 'idea_id', 'marca_id',
     'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
   ],
   HOMPY_SALIDAS: [
@@ -885,8 +885,19 @@ const COLUMNAS = {
   // una en JSON (idea, diálogo, guión por escenas, producción, publicación con
   // métricas a 24 h y 7 días). `votos`: correos de quienes la apoyan.
   HOMPY_IDEAS: [
-    'idea_id', 'titulo', 'etapa', 'idea', 'dialogo', 'guion', 'produccion', 'publicacion', 'votos', 'motivo_descarte',
+    'idea_id', 'titulo', 'etapa', 'idea', 'dialogo', 'guion', 'produccion', 'publicacion', 'votos', 'motivo_descarte', 'marca_id',
     'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
+  ],
+  // Marcas colaboradoras (Etapa 3): cada marca (ej. BCI) y sus colaboraciones,
+  // con lo que Hompy entregó y lo que se recibió. Las actividades y videos se
+  // marcan con marca_id; una colaboración puede enlazarlos (evento_ids/idea_ids, JSON).
+  HOMPY_MARCAS: [
+    'marca_id', 'nombre', 'rubro', 'color', 'estado', 'contacto_nombre', 'contacto_cargo', 'contacto_correo', 'contacto_telefono', 'sitio', 'notas',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
+  ],
+  HOMPY_COLABORACIONES: [
+    'colab_id', 'marca_id', 'titulo', 'tipo', 'estado', 'fecha_inicio', 'fecha_fin', 'entregamos', 'recibimos', 'valor', 'resultado', 'calificacion',
+    'evento_ids', 'idea_ids', 'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
   ]
 };
 

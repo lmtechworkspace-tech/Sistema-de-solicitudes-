@@ -6,7 +6,8 @@
  * Lo llevan Bárbara y Lisseth (y el dueño). Etapa 1: el calendario de las
  * actividades de Hompy y el REPORTE DE SALIDA A TERRENO de cada una, con su
  * PDF. Etapa 2: el Estudio TikTok (idea → diálogo → guión → producción →
- * publicado, con métricas). Etapa 3: las marcas colaboradoras y el reporte mensual.
+ * publicado, con métricas). Etapa 3: las marcas colaboradoras (con sus
+ * colaboraciones, actividades y videos) y el reporte mensual con su PDF.
  *
  * Acceso: el módulo `hompy` de la cuenta (Administración → Cuentas). A
  * diferencia del resto de `modulos` (que solo pinta el menú), aquí cada acción
@@ -138,7 +139,7 @@ function eventoPublico_(e) {
     evento_id: e.evento_id, tipo_id: e.tipo_id, titulo: e.titulo, fecha: fecha_(e.fecha), hora_inicio: e.hora_inicio || '', hora_fin: e.hora_fin || '',
     lugar: e.lugar || '', direccion: e.direccion || '', comuna: e.comuna || '', participantes: json_(e.participantes, []),
     descripcion: e.descripcion || '', estado: ESTADOS_EVENTO.indexOf(e.estado) !== -1 ? e.estado : 'PLANIFICADO',
-    motivo_cancelacion: e.motivo_cancelacion || '', idea_id: e.idea_id || '', creado_por: e.creado_por || '', fecha_creacion: e.fecha_creacion || ''
+    motivo_cancelacion: e.motivo_cancelacion || '', idea_id: e.idea_id || '', marca_id: e.marca_id || '', creado_por: e.creado_por || '', fecha_creacion: e.fecha_creacion || ''
   };
 }
 function eventos_(db) { return leer_(db, 'HOMPY_EVENTOS').filter((e) => esVerdadero_(e.activo)).map(eventoPublico_); }
@@ -157,8 +158,10 @@ function guardarEvento(db, data, contexto) {
   if (data.hora_inicio && !horaInicio) return errorValidacion('hora_inicio', 'La hora de inicio no es válida.');
   if (data.hora_fin && !horaFin) return errorValidacion('hora_fin', 'La hora de término no es válida.');
   if (horaInicio && horaFin && minutos_(horaFin) <= minutos_(horaInicio)) return errorValidacion('hora_fin', 'El término tiene que ser después del inicio.');
+  const marcaId = marcaValida_(db, data.marca_id);
+  if (marcaId === null) return errorValidacion('marca_id', 'Esa marca ya no existe.');
   const fila = {
-    tipo_id: tipo.tipo_id, titulo, fecha, hora_inicio: horaInicio, hora_fin: horaFin,
+    tipo_id: tipo.tipo_id, titulo, fecha, hora_inicio: horaInicio, hora_fin: horaFin, marca_id: marcaId,
     lugar: linea_(data.lugar, 120), direccion: linea_(data.direccion, 160), comuna: linea_(data.comuna, 60),
     participantes: JSON.stringify(lista_(data.participantes, 15, 60)), descripcion: texto_(data.descripcion, 1500),
     actualizado_por: contexto.email, fecha_actualizacion: ahora_()
@@ -359,7 +362,7 @@ function ideaPublica_(f) {
     idea_id: f.idea_id, titulo: f.titulo, etapa: ETAPAS.concat(['DESCARTADA']).indexOf(f.etapa) !== -1 ? f.etapa : 'IDEA',
     idea: limpiarIdea_(json_(f.idea, {})), dialogo: limpiarDialogo_(json_(f.dialogo, {})), guion: limpiarGuion_(json_(f.guion, {})),
     produccion: limpiarProduccion_(prod, prod), publicacion: limpiarPublicacion_(json_(f.publicacion, {})),
-    votos: json_(f.votos, []), motivo_descarte: f.motivo_descarte || '',
+    votos: json_(f.votos, []), motivo_descarte: f.motivo_descarte || '', marca_id: f.marca_id || '',
     creado_por: f.creado_por || '', fecha_creacion: f.fecha_creacion || '', actualizado_por: f.actualizado_por || '', fecha_actualizacion: f.fecha_actualizacion || ''
   };
 }
@@ -402,6 +405,7 @@ function guardarIdea(db, data, contexto) {
   if (!f) return errorValidacion('idea_id', 'Esa idea ya no existe.');
   const cambios = { actualizado_por: contexto.email, fecha_actualizacion: ahora_() };
   if (data.titulo !== undefined) { if (!titulo) return errorValidacion('titulo', 'La idea necesita un título.'); cambios.titulo = titulo; }
+  if (data.marca_id !== undefined) { const m = marcaValida_(db, data.marca_id); if (m === null) return errorValidacion('marca_id', 'Esa marca ya no existe.'); cambios.marca_id = m; }
   if (data.idea) cambios.idea = JSON.stringify(limpiarIdea_(data.idea));
   if (data.dialogo) cambios.dialogo = JSON.stringify(limpiarDialogo_(data.dialogo));
   if (data.guion) cambios.guion = JSON.stringify(limpiarGuion_(data.guion));
@@ -504,9 +508,10 @@ function datos(db, data, contexto) {
   if (!puede_(contexto)) return sinAcceso_();
   const salidas = leer_(db, 'HOMPY_SALIDAS').filter((s) => esVerdadero_(s.activo)).map(salidaPublica_);
   return {
-    hoy: hoy_(), tipos: tipos_(db), eventos: eventos_(db), salidas, ideas: ideas_(db), personas: personas_(db), nombres: nombres_(db),
+    hoy: hoy_(), tipos: tipos_(db), eventos: eventos_(db), salidas, ideas: ideas_(db), marcas: marcas_(db), colaboraciones: colabs_(db), personas: personas_(db), nombres: nombres_(db),
     catalogos: { colores: COLORES, iconos: ICONOS, estados_traje: ESTADOS_TRAJE, material: MATERIAL, max_tipos: MAX_TIPOS,
-      etapas: ETAPAS, nombres_etapa: NOMBRE_ETAPA, objetivos: OBJETIVOS, formatos: FORMATOS, duraciones: DURACIONES, planos: PLANOS, checklist: CHECKLIST, metricas: METRICAS }
+      etapas: ETAPAS, nombres_etapa: NOMBRE_ETAPA, objetivos: OBJETIVOS, formatos: FORMATOS, duraciones: DURACIONES, planos: PLANOS, checklist: CHECKLIST, metricas: METRICAS,
+      estados_marca: ESTADOS_MARCA, tipos_colab: TIPOS_COLAB, estados_colab: ESTADOS_COLAB }
   };
 }
 
@@ -547,7 +552,8 @@ function cuerpoPdf_(evento, tipo, salida, nombres, U) {
     (cara ? '<img class="hp2-pdf-cara" src="' + cara + '" alt="">' : '') +
     '<div><span class="hp2-pdf-tipo">' + U.ico(tipo.icono, 14) + esc(tipo.nombre) + '</span>' +
     '<h1>' + esc(evento.titulo) + '</h1>' +
-    '<p>' + esc(fechaLarga_(evento.fecha)) + (evento.lugar ? ' · ' + esc(evento.lugar) : '') + (evento.comuna ? ', ' + esc(evento.comuna) : '') + '</p></div>' +
+    '<p>' + esc(fechaLarga_(evento.fecha)) + (evento.lugar ? ' · ' + esc(evento.lugar) : '') + (evento.comuna ? ', ' + esc(evento.comuna) : '') + '</p>' +
+    (evento.marca_nombre ? '<p class="hp2-pdf-marca">Con ' + esc(evento.marca_nombre) + '</p>' : '') + '</div>' +
     '<div class="hp2-pdf-nota">' + estrellas(d.calificacion) + '<span>' + (d.publico != null ? esc(Number(d.publico).toLocaleString('es-CL')) + ' personas' : 'Público sin registrar') + '</span></div>' +
     '</div>';
 
@@ -603,6 +609,8 @@ async function pdfSalida(db, data, contexto) {
   const DocV2 = require('./documentoV2');
   if (!DocV2.disponible()) return errorValidacion('pdf', 'El generador de PDF no está disponible en este servidor.');
   const evento = eventoPublico_(e);
+  const marca = evento.marca_id && marcaFila_(db, evento.marca_id);
+  if (marca) evento.marca_nombre = marca.nombre;
   const tipo = tipos_(db).find((t) => t.tipo_id === evento.tipo_id) || { nombre: 'Actividad', color: 'gris', icono: 'calendario' };
   const { U } = DocV2.piezas();
   return DocV2.aPdf(db, contexto, {
@@ -612,9 +620,255 @@ async function pdfSalida(db, data, contexto) {
   });
 }
 
+// --- Marcas colaboradoras (Etapa 3) -------------------------------------------------------------
+// Una marca (BCI, por ejemplo) tiene colaboraciones: el acuerdo con lo que Hompy entregó y lo que
+// se recibió. Las actividades del calendario y los videos del Estudio se pueden marcar con la marca
+// (marca_id) y una colaboración puede enlazar algunos de ellos.
+const ESTADOS_MARCA = ['ACTIVA', 'CONVERSACION', 'PAUSADA', 'TERMINADA'];
+const TIPOS_COLAB = ['VIDEO', 'EVENTO', 'SORTEO', 'CANJE', 'AUSPICIO', 'OTRO'];
+const ESTADOS_COLAB = ['PROPUESTA', 'ACORDADA', 'EN_CURSO', 'REALIZADA', 'CANCELADA'];
+
+function marcaPublica_(m) {
+  return {
+    marca_id: m.marca_id, nombre: m.nombre, rubro: m.rubro || '', color: COLORES.indexOf(m.color) !== -1 ? m.color : 'azul',
+    estado: ESTADOS_MARCA.indexOf(m.estado) !== -1 ? m.estado : 'ACTIVA', contacto_nombre: m.contacto_nombre || '', contacto_cargo: m.contacto_cargo || '',
+    contacto_correo: m.contacto_correo || '', contacto_telefono: m.contacto_telefono || '', sitio: m.sitio || '', notas: m.notas || '',
+    creado_por: m.creado_por || '', fecha_creacion: m.fecha_creacion || ''
+  };
+}
+function marcas_(db) { return leer_(db, 'HOMPY_MARCAS').filter((m) => esVerdadero_(m.activo)).map(marcaPublica_).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')); }
+function marcaFila_(db, id) { return leer_(db, 'HOMPY_MARCAS').find((m) => m.marca_id === id && esVerdadero_(m.activo)) || null; }
+/** '' si no viene; null si viene una que no existe (para rechazarla). */
+function marcaValida_(db, id) { if (!id) return ''; return marcaFila_(db, id) ? id : null; }
+
+function colabPublica_(c) {
+  return {
+    colab_id: c.colab_id, marca_id: c.marca_id, titulo: c.titulo, tipo: TIPOS_COLAB.indexOf(c.tipo) !== -1 ? c.tipo : 'OTRO',
+    estado: ESTADOS_COLAB.indexOf(c.estado) !== -1 ? c.estado : 'PROPUESTA', fecha_inicio: fecha_(c.fecha_inicio), fecha_fin: fecha_(c.fecha_fin),
+    entregamos: c.entregamos || '', recibimos: c.recibimos || '', valor: entero_(c.valor), resultado: c.resultado || '',
+    calificacion: entero_(c.calificacion, 5) || null, evento_ids: json_(c.evento_ids, []), idea_ids: json_(c.idea_ids, []),
+    creado_por: c.creado_por || '', fecha_creacion: c.fecha_creacion || ''
+  };
+}
+function colabs_(db) { return leer_(db, 'HOMPY_COLABORACIONES').filter((c) => esVerdadero_(c.activo)).map(colabPublica_); }
+function colabFila_(db, id) { return leer_(db, 'HOMPY_COLABORACIONES').find((c) => c.colab_id === id && esVerdadero_(c.activo)) || null; }
+
+function guardarMarca(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  data = data || {};
+  const nombre = linea_(data.nombre, 80);
+  if (!nombre) return errorValidacion('nombre', 'Escribe el nombre de la marca.');
+  if (marcas_(db).some((m) => m.marca_id !== data.marca_id && m.nombre.toLowerCase() === nombre.toLowerCase())) return errorValidacion('nombre', 'Esa marca ya está registrada.');
+  const correo = linea_(data.contacto_correo, 120);
+  if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) return errorValidacion('contacto_correo', 'El correo del contacto no es válido.');
+  const fila = {
+    nombre, rubro: linea_(data.rubro, 80), color: COLORES.indexOf(data.color) !== -1 ? data.color : 'azul',
+    estado: ESTADOS_MARCA.indexOf(data.estado) !== -1 ? data.estado : 'ACTIVA', contacto_nombre: linea_(data.contacto_nombre, 80),
+    contacto_cargo: linea_(data.contacto_cargo, 80), contacto_correo: correo, contacto_telefono: linea_(data.contacto_telefono, 30),
+    sitio: url_(data.sitio), notas: texto_(data.notas, 1500), actualizado_por: contexto.email, fecha_actualizacion: ahora_()
+  };
+  if (data.marca_id) {
+    if (!marcaFila_(db, data.marca_id)) return errorValidacion('marca_id', 'Esa marca ya no existe.');
+    actualizarFilaPorId_(db, 'HOMPY_MARCAS', 'marca_id', data.marca_id, fila);
+    return { marca: marcaPublica_(marcaFila_(db, data.marca_id)) };
+  }
+  const nueva = Object.assign({ marca_id: id_('HM'), creado_por: contexto.email, fecha_creacion: ahora_(), activo: true }, fila);
+  agregarFila_(db, 'HOMPY_MARCAS', nueva);
+  return { marca: marcaPublica_(nueva) };
+}
+
+function eliminarMarca(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  const m = marcaFila_(db, data && data.marca_id);
+  if (!m) return errorValidacion('marca_id', 'Esa marca ya no existe.');
+  const usada = colabs_(db).some((c) => c.marca_id === m.marca_id) || eventos_(db).some((e) => e.marca_id === m.marca_id) || ideas_(db).some((i) => i.marca_id === m.marca_id);
+  if (usada) return errorValidacion('marca_id', 'Tiene colaboraciones, actividades o videos: déjala como «Terminada» para conservar el historial.');
+  actualizarFilaPorId_(db, 'HOMPY_MARCAS', 'marca_id', m.marca_id, { activo: false, actualizado_por: contexto.email, fecha_actualizacion: ahora_() });
+  return { eliminado: m.marca_id };
+}
+
+function guardarColaboracion(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  data = data || {};
+  const marca = marcaFila_(db, data.marca_id);
+  if (!marca) return errorValidacion('marca_id', 'Elige la marca.');
+  const titulo = linea_(data.titulo, 120);
+  if (!titulo) return errorValidacion('titulo', 'Ponle un nombre a la colaboración.');
+  const inicio = fecha_(data.fecha_inicio), fin = fecha_(data.fecha_fin);
+  if (!inicio) return errorValidacion('fecha_inicio', 'Indica cuándo empieza (o cuándo fue).');
+  if (fin && fin < inicio) return errorValidacion('fecha_fin', 'El término no puede ser antes del inicio.');
+  const idsEv = new Set(eventos_(db).map((e) => e.evento_id)), idsId = new Set(ideas_(db).map((i) => i.idea_id));
+  const calif = entero_(data.calificacion, 5);
+  const fila = {
+    marca_id: marca.marca_id, titulo, tipo: TIPOS_COLAB.indexOf(data.tipo) !== -1 ? data.tipo : 'OTRO',
+    estado: ESTADOS_COLAB.indexOf(data.estado) !== -1 ? data.estado : 'PROPUESTA', fecha_inicio: inicio, fecha_fin: fin,
+    entregamos: texto_(data.entregamos, 1500), recibimos: texto_(data.recibimos, 1500), valor: entero_(data.valor, 1e12),
+    resultado: texto_(data.resultado, 1500), calificacion: calif && calif >= 1 ? calif : '',
+    evento_ids: JSON.stringify(lista_(data.evento_ids, 30, 40).filter((x) => idsEv.has(x))),
+    idea_ids: JSON.stringify(lista_(data.idea_ids, 30, 40).filter((x) => idsId.has(x))),
+    actualizado_por: contexto.email, fecha_actualizacion: ahora_()
+  };
+  if (fila.valor === null) fila.valor = '';
+  if (data.colab_id) {
+    if (!colabFila_(db, data.colab_id)) return errorValidacion('colab_id', 'Esa colaboración ya no existe.');
+    actualizarFilaPorId_(db, 'HOMPY_COLABORACIONES', 'colab_id', data.colab_id, fila);
+    return { colaboracion: colabPublica_(colabFila_(db, data.colab_id)) };
+  }
+  const nueva = Object.assign({ colab_id: id_('HC'), creado_por: contexto.email, fecha_creacion: ahora_(), activo: true }, fila);
+  agregarFila_(db, 'HOMPY_COLABORACIONES', nueva);
+  return { colaboracion: colabPublica_(nueva) };
+}
+
+function eliminarColaboracion(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  const c = colabFila_(db, data && data.colab_id);
+  if (!c) return errorValidacion('colab_id', 'Esa colaboración ya no existe.');
+  actualizarFilaPorId_(db, 'HOMPY_COLABORACIONES', 'colab_id', c.colab_id, { activo: false, actualizado_por: contexto.email, fecha_actualizacion: ahora_() });
+  return { eliminado: c.colab_id };
+}
+
+// --- Reporte mensual (Etapa 3) ------------------------------------------------------------------
+function periodoValido_(p) { return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(p || '')) ? p : hoy_().slice(0, 7); }
+function periodoAnterior_(p) { const [a, m] = p.split('-').map(Number); const d = new Date(Date.UTC(a, m - 2, 1)); return d.toISOString().slice(0, 7); }
+function nombrePeriodo_(p) { const [a, m] = p.split('-').map(Number); return MESES[m - 1] + ' de ' + a; }
+function enMes_(f, p) { return !!f && String(f).slice(0, 7) === p; }
+function interaccion_(m) {
+  if (!m || !m.vistas) return null;
+  return ((m.me_gusta || 0) + (m.comentarios || 0) + (m.compartidos || 0) + (m.guardados || 0)) / m.vistas * 100;
+}
+
+/** Todo lo del mes, listo para la pantalla y para el PDF. */
+function resumenMes_(db, periodo) {
+  const hoy = hoy_();
+  const tipos = tipos_(db), marcas = marcas_(db);
+  const nombreTipo = (id) => (tipos.find((t) => t.tipo_id === id) || { nombre: 'Sin tipo' }).nombre;
+  const nombreMarca = (id) => (marcas.find((m) => m.marca_id === id) || {}).nombre || '';
+  const eventos = eventos_(db), salidas = leer_(db, 'HOMPY_SALIDAS').filter((s) => esVerdadero_(s.activo)).map(salidaPublica_);
+  const salidaDe = (id) => salidas.find((s) => s.evento_id === id) || null;
+  const ideas = ideas_(db), colabs = colabs_(db);
+
+  function cifras(p) {
+    const evs = eventos.filter((e) => enMes_(e.fecha, p));
+    const activos = evs.filter((e) => e.estado !== 'CANCELADO');
+    const cerradas = activos.map((e) => ({ e, s: salidaDe(e.evento_id) })).filter((x) => x.s && x.s.estado === 'CERRADO');
+    const publico = cerradas.reduce((a, x) => a + (Number(x.s.datos.publico) || 0), 0);
+    const minActividad = cerradas.reduce((a, x) => { const m = minutos_(x.s.datos.hora_fin) - minutos_(x.s.datos.hora_inicio); return a + (m > 0 ? m : 0); }, 0);
+    const videos = ideas.filter((i) => i.etapa === 'PUBLICADO' && enMes_(i.publicacion.fecha, p));
+    const vistas = videos.reduce((a, i) => a + (Number(i.publicacion.h24.vistas) || 0), 0);
+    return { evs, activos, cerradas, publico, minActividad, videos, vistas };
+  }
+  const act = cifras(periodo), ant = cifras(periodoAnterior_(periodo));
+  const califs = act.cerradas.map((x) => x.s.datos.calificacion).filter(Boolean);
+  const gastos = act.cerradas.reduce((a, x) => a + ['gasto_transporte', 'gasto_estacionamiento', 'gasto_colacion', 'gasto_otros'].reduce((b, k) => b + (Number(x.s.datos[k]) || 0), 0), 0);
+  const minTraje = act.cerradas.reduce((a, x) => a + (Number(x.s.datos.minutos_traje) || 0), 0);
+  const pendientes = act.activos.filter((e) => e.fecha <= hoy && !(salidaDe(e.evento_id) && salidaDe(e.evento_id).estado === 'CERRADO'));
+  // El estado del traje: el del último reporte cerrado (de cualquier mes hasta el fin de este).
+  const ultTraje = eventos.map((e) => ({ e, s: salidaDe(e.evento_id) })).filter((x) => x.s && x.s.estado === 'CERRADO' && x.s.datos.estado_traje && x.e.fecha.slice(0, 7) <= periodo)
+    .sort((a, b) => (a.e.fecha < b.e.fecha ? 1 : -1))[0];
+  const porTipo = {};
+  act.activos.forEach((e) => { porTipo[e.tipo_id] = (porTipo[e.tipo_id] || 0) + 1; });
+  const colabsMes = colabs.filter((c) => c.estado !== 'CANCELADA' && c.fecha_inicio.slice(0, 7) <= periodo && (c.fecha_fin || c.fecha_inicio).slice(0, 7) >= periodo);
+  const interacciones = act.videos.map((i) => interaccion_(i.publicacion.h24)).filter((x) => x != null);
+  const delta = (a, b) => ({ actual: a, anterior: b });
+
+  return {
+    periodo, nombre: nombrePeriodo_(periodo), anterior: nombrePeriodo_(periodoAnterior_(periodo)),
+    kpis: {
+      actividades: delta(act.activos.length, ant.activos.length), salidas: delta(act.cerradas.length, ant.cerradas.length),
+      publico: delta(act.publico, ant.publico), horas: delta(Math.round(act.minActividad / 6) / 10, Math.round(ant.minActividad / 6) / 10),
+      videos: delta(act.videos.length, ant.videos.length), vistas: delta(act.vistas, ant.vistas),
+      calificacion: califs.length ? Math.round(califs.reduce((a, b) => a + b, 0) / califs.length * 10) / 10 : null,
+      minutos_traje: minTraje, gastos, canceladas: act.evs.length - act.activos.length,
+      interaccion: interacciones.length ? Math.round(interacciones.reduce((a, b) => a + b, 0) / interacciones.length * 10) / 10 : null,
+      ideas_nuevas: ideas.filter((i) => enMes_(i.fecha_creacion ? i.fecha_creacion.slice(0, 10) : '', periodo)).length,
+      colaboraciones: colabsMes.length
+    },
+    por_tipo: tipos.filter((t) => porTipo[t.tipo_id]).map((t) => ({ nombre: t.nombre, color: t.color, n: porTipo[t.tipo_id] })),
+    salidas: act.cerradas.sort((a, b) => (a.e.fecha < b.e.fecha ? -1 : 1)).map((x) => ({
+      evento_id: x.e.evento_id, fecha: x.e.fecha, titulo: x.e.titulo, tipo: nombreTipo(x.e.tipo_id), lugar: x.s.datos.lugar_real || x.e.lugar,
+      marca: nombreMarca(x.e.marca_id), publico: x.s.datos.publico, calificacion: x.s.datos.calificacion, traje: x.s.datos.traje,
+      minutos_traje: x.s.datos.minutos_traje, estado_traje: x.s.datos.estado_traje
+    })),
+    pendientes: pendientes.map((e) => ({ evento_id: e.evento_id, fecha: e.fecha, titulo: e.titulo })),
+    videos: act.videos.sort((a, b) => (a.publicacion.fecha < b.publicacion.fecha ? -1 : 1)).map((i) => ({
+      idea_id: i.idea_id, titulo: i.titulo, fecha: i.publicacion.fecha, url: i.publicacion.url, marca: nombreMarca(i.marca_id),
+      vistas24: i.publicacion.h24.vistas, vistas7: i.publicacion.d7.vistas, interaccion: interaccion_(i.publicacion.h24)
+    })),
+    colaboraciones: colabsMes.map((c) => ({ colab_id: c.colab_id, titulo: c.titulo, marca: nombreMarca(c.marca_id), tipo: c.tipo, estado: c.estado, valor: c.valor })),
+    estudio: ETAPAS.map((et) => ({ etapa: et, nombre: NOMBRE_ETAPA[et], n: ideas.filter((i) => i.etapa === et).length })),
+    traje: ultTraje ? { estado: ultTraje.s.datos.estado_traje, texto: TRAJE_TXT[ultTraje.s.datos.estado_traje], fecha: ultTraje.e.fecha, nota: ultTraje.s.datos.nota_traje || '' } : null
+  };
+}
+
+function reporteMensual(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  return resumenMes_(db, periodoValido_(data && data.periodo));
+}
+
+const NOMBRE_TIPO_COLAB = { VIDEO: 'Video', EVENTO: 'Evento', SORTEO: 'Sorteo', CANJE: 'Canje', AUSPICIO: 'Auspicio', OTRO: 'Otro' };
+const NOMBRE_ESTADO_COLAB = { PROPUESTA: 'Propuesta', ACORDADA: 'Acordada', EN_CURSO: 'En curso', REALIZADA: 'Realizada', CANCELADA: 'Cancelada' };
+
+/** Cuerpo del PDF mensual (clases hp2-pdf-*). Exportado para la prueba. */
+function cuerpoPdfMensual_(r, U) {
+  const esc = U.esc, num = (n) => (n == null ? '—' : Number(n).toLocaleString('es-CL'));
+  const cara = caraHompy_();
+  const deltaTxt = (k) => {
+    const d = r.kpis[k], dif = (d.actual || 0) - (d.anterior || 0);
+    return dif === 0 ? 'igual que ' + r.anterior : (dif > 0 ? '▲ ' : '▼ ') + num(Math.abs(Math.round(dif * 10) / 10)) + ' vs. ' + r.anterior;
+  };
+  const kpi = (et, val, sub) => '<div><span>' + esc(et) + '</span><b>' + esc(val) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</div>';
+  const tabla = (cab, filas, vacio) => filas.length
+    ? '<table class="hp2-pdf-tabla"><thead><tr>' + cab.map((c) => '<th>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' + filas.map((f) => '<tr>' + f.map((c) => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</tbody></table>'
+    : '<p class="hp2-pdf-nada">' + esc(vacio) + '</p>';
+  const bloque = (titulo, ico, html) => '<section class="hp2-pdf-bloque"><h2>' + U.ico(ico, 16) + esc(titulo) + '</h2>' + html + '</section>';
+  const estrellas = (n) => (n ? '★'.repeat(n) + '<span class="hp2-pdf-nada">' + '★'.repeat(5 - n) + '</span>' : '—');
+  const k = r.kpis;
+  const portada = '<div class="hp2-pdf-portada hp2-color-naranja">' + (cara ? '<img class="hp2-pdf-cara" src="' + cara + '" alt="">' : '') +
+    '<div><span class="hp2-pdf-tipo">' + U.ico('estrella', 14) + 'Reporte mensual</span><h1>Hompy en ' + esc(r.nombre) + '</h1>' +
+    '<p>' + num(k.actividades.actual) + ' actividades, ' + num(k.salidas.actual) + ' salidas con reporte, ' + num(k.publico.actual) + ' personas alcanzadas y ' + num(k.videos.actual) + (k.videos.actual === 1 ? ' video publicado' : ' videos publicados') + '.</p></div></div>';
+  const cifras = '<div class="hp2-pdf-cifras hp2-pdf-cifras--3">' +
+    kpi('Actividades', num(k.actividades.actual), deltaTxt('actividades')) + kpi('Salidas con reporte', num(k.salidas.actual), deltaTxt('salidas')) +
+    kpi('Público alcanzado', num(k.publico.actual), deltaTxt('publico')) + kpi('Horas en terreno', num(k.horas.actual), deltaTxt('horas')) +
+    kpi('Videos publicados', num(k.videos.actual), deltaTxt('videos')) + kpi('Vistas (24 h)', num(k.vistas.actual), deltaTxt('vistas')) + '</div>';
+  const otros = '<dl class="hp2-pdf-datos hp2-pdf-datos--4">' +
+    '<div><dt>Evaluación promedio</dt><dd>' + (k.calificacion == null ? '—' : esc(String(k.calificacion).replace('.', ',')) + ' de 5') + '</dd></div>' +
+    '<div><dt>Minutos en el traje</dt><dd>' + num(k.minutos_traje) + '</dd></div>' +
+    '<div><dt>Interacción promedio</dt><dd>' + (k.interaccion == null ? '—' : esc(String(k.interaccion).replace('.', ',')) + ' %') + '</dd></div>' +
+    '<div><dt>Gastos de salidas</dt><dd>' + esc(pesos_(k.gastos)) + '</dd></div>' +
+    '<div><dt>Canceladas</dt><dd>' + num(k.canceladas) + '</dd></div>' +
+    '<div><dt>Ideas nuevas</dt><dd>' + num(k.ideas_nuevas) + '</dd></div>' +
+    '<div><dt>Colaboraciones</dt><dd>' + num(k.colaboraciones) + '</dd></div>' +
+    '<div><dt>Estado del traje</dt><dd>' + (r.traje ? esc(r.traje.texto) : '—') + '</dd></div></dl>';
+  const salidas = bloque('Salidas a terreno', 'ubicacion', tabla(['Fecha', 'Actividad', 'Marca', 'Público', 'Traje', 'Evaluación'],
+    r.salidas.map((s) => [esc(s.fecha.slice(8, 10) + '/' + s.fecha.slice(5, 7)), esc(s.titulo) + '<br><small>' + esc(s.tipo + (s.lugar ? ' · ' + s.lugar : '')) + '</small>', esc(s.marca || '—'), num(s.publico), esc(s.traje || '—') + (s.minutos_traje ? '<br><small>' + s.minutos_traje + ' min</small>' : ''), estrellas(s.calificacion)]),
+    'No hubo salidas con reporte cerrado este mes.') +
+    (r.pendientes.length ? '<p class="hp2-pdf-alerta">Sin reporte cerrado: ' + r.pendientes.map((p) => esc(p.titulo) + ' (' + esc(p.fecha.slice(8, 10) + '/' + p.fecha.slice(5, 7)) + ')').join(', ') + '.</p>' : ''));
+  const videos = bloque('Videos publicados', 'camara', tabla(['Fecha', 'Video', 'Marca', 'Vistas 24 h', 'Vistas 7 días', 'Interacción'],
+    r.videos.map((v) => [esc(v.fecha ? v.fecha.slice(8, 10) + '/' + v.fecha.slice(5, 7) : '—'), v.url ? '<a href="' + esc(v.url) + '">' + esc(v.titulo) + '</a>' : esc(v.titulo), esc(v.marca || '—'), num(v.vistas24), num(v.vistas7), v.interaccion == null ? '—' : esc(v.interaccion.toFixed(1).replace('.', ',')) + ' %']),
+    'No se publicaron videos este mes.'));
+  const colabs = bloque('Marcas y colaboraciones', 'megafono', tabla(['Marca', 'Colaboración', 'Tipo', 'Estado', 'Valor estimado'],
+    r.colaboraciones.map((c) => [esc(c.marca), esc(c.titulo), esc(NOMBRE_TIPO_COLAB[c.tipo] || c.tipo), esc(NOMBRE_ESTADO_COLAB[c.estado] || c.estado), c.valor ? esc(pesos_(c.valor)) : '—']),
+    'Sin colaboraciones vigentes este mes.'));
+  const estudio = bloque('Estudio TikTok hoy', 'bombilla', '<p class="hp2-pdf-embudo">' + r.estudio.map((e) => esc(e.nombre) + ': <b>' + e.n + '</b>').join(' · ') + '</p>');
+  return '<div class="hp2-pdf">' + portada + cifras + bloque('Más datos del mes', 'grafico', otros) + salidas + videos + colabs + estudio + '</div>';
+}
+
+async function pdfMensual(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  const DocV2 = require('./documentoV2');
+  if (!DocV2.disponible()) return errorValidacion('pdf', 'El generador de PDF no está disponible en este servidor.');
+  const r = resumenMes_(db, periodoValido_(data && data.periodo));
+  const { U } = DocV2.piezas();
+  return DocV2.aPdf(db, contexto, {
+    titulo: 'Reporte mensual de Hompy', subtitulo: r.nombre.charAt(0).toUpperCase() + r.nombre.slice(1), modulo: 'Hompy', periodo: r.nombre,
+    cuerpo: cuerpoPdfMensual_(r, U), nombreArchivo: 'Hompy-reporte-' + r.periodo, enlaces: true
+  });
+}
+
 module.exports = {
   datos, guardarTipo, guardarEvento, cambiarEstadoEvento, eliminarEvento, guardarSalida, reabrirSalida, pdfSalida,
   guardarIdea, moverIdea, votarIdea, eliminarIdea, agendarGrabacion,
+  guardarMarca, eliminarMarca, guardarColaboracion, eliminarColaboracion, reporteMensual, pdfMensual,
   // para las pruebas
-  puede_, limpiarDatosSalida_, faltaParaAvanzar_, limpiarDialogo_, limpiarGuion_, faltantesParaCerrar_, cuerpoPdf_, TIPOS_PROPUESTA, MODULO
+  puede_, resumenMes_, cuerpoPdfMensual_, limpiarDatosSalida_, faltaParaAvanzar_, limpiarDialogo_, limpiarGuion_, faltantesParaCerrar_, cuerpoPdf_, TIPOS_PROPUESTA, MODULO
 };
