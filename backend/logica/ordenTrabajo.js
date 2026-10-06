@@ -24,6 +24,25 @@ const SolicitudesBO = require('./solicitudesBackoffice');
 const { errorValidacion } = require('./errores');
 const PdfDoc = require('./pdfDocumento');
 const DocV2 = require('./documentoV2');
+const { departamentoDeArea_ } = require('./catalogos');
+
+const ES_URL = /^https?:\/\/\S+$/i;
+// «SIEMPRE» → «Siempre»: los códigos de catálogo llegan en mayúsculas.
+function legible_(t) {
+  const s = String(t || '').trim();
+  return s && s === s.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(s) ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ') : s;
+}
+// 2026-10-06: el estado de la solicitud es el del ítem MENOS avanzado, así que
+// una OT con un ítem en curso decía «Nueva». Si los ítems no están todos en el
+// mismo estado, se dice cuántos hay en cada uno.
+function estadoGeneral_(s, subs) {
+  const conteo = {};
+  const orden = [];
+  (subs || []).forEach((x) => { if (!conteo[x.estado]) { conteo[x.estado] = 0; orden.push(x.estado); } conteo[x.estado]++; });
+  if (orden.length <= 1) return estadoLabel_(s.estado_derivado || orden[0]);
+  orden.sort();
+  return orden.map((e) => estadoLabel_(e) + ': ' + conteo[e]).join(' · ');
+}
 
 const MAX_IMAGENES_OT = 6;
 const CREDENCIAL_OCULTA = 'Registrada en SIGSO (verla en la solicitud)';
@@ -66,7 +85,7 @@ function armarVista_(detalle) {
 
   const ficha = [
     ['Empresa', s.empresa_nombre || s.empresa_id || '—', 'Plataforma', s.plataforma_nombre || '—'],
-    ['Estado', estadoLabel_(s.estado_derivado), 'Prioridad', s.prioridad_derivada || '—'],
+    ['Estado', estadoGeneral_(s, subsolicitudes), 'Prioridad', s.prioridad_derivada || '—'],
     ['Ítems', String(total), 'Ingresada', PdfDoc.fechaCorta_(s.fecha_creacion)],
     ['Solicitante', s.solicitante_nombre + (s.solicitante_cargo ? ' — ' + s.solicitante_cargo : ''), 'Correo', s.solicitante_email || '—']
   ];
@@ -99,7 +118,15 @@ function armarItem_(sub, archivos, indice, total) {
   const accesos = [];
   if (sub.url_modulo) accesos.push(['URL principal', { texto: sub.url_modulo, link: sub.url_modulo }]);
   parsearUrlsAdicionales_(sub.urls_adicionales).forEach((u) => {
-    if (u.url) accesos.push([u.titulo || 'URL adicional', { texto: u.url, link: u.url }]);
+    // Hay quien escribe otra dirección en el título: va como su propio enlace,
+    // no como etiqueta (en una columna angosta se montaba sobre la otra).
+    const titulo = String(u.titulo || '').trim();
+    if (ES_URL.test(titulo)) {
+      if (titulo !== u.url) accesos.push(['Enlace', { texto: titulo, link: titulo }]);
+      if (u.url) accesos.push(['Enlace', { texto: u.url, link: u.url }]);
+      return;
+    }
+    if (u.url) accesos.push([titulo || 'URL adicional', { texto: u.url, link: u.url }]);
   });
   if (sub.usuario_prueba) accesos.push(['Usuario de prueba', sub.usuario_prueba]);
   // El campo pide una REFERENCIA al gestor de credenciales, pero en la práctica se escriben
@@ -109,8 +136,11 @@ function armarItem_(sub, archivos, indice, total) {
 
   const detalles = [];
   if (sub.modulo_nombre) detalles.push(['Módulo', sub.modulo_nombre]);
-  if (sub.area_nombre) detalles.push(['Área', sub.area_nombre]);
-  if (sub.frecuencia) detalles.push(['Frecuencia', sub.frecuencia]);
+  // «COMERCIAL_VALENTINA» es el nombre interno del área: se muestra el
+  // departamento (la persona ya va en «Responsable asignado»).
+  if (sub.depto_nombre) detalles.push(['Departamento', sub.depto_nombre]);
+  else if (sub.area_nombre) detalles.push(['Área', departamentoDeArea_(sub.area_nombre)]);
+  if (sub.frecuencia) detalles.push(['Frecuencia', legible_(sub.frecuencia)]);
   if (sub.personas_afectadas) detalles.push(['Personas afectadas', sub.personas_afectadas]);
   if (sub.desarrollador_asignado) detalles.push(['Responsable asignado', sub.desarrollador_asignado]);
   detalles.push(['Fecha comprometida', sub.fecha_comprometida ? PdfDoc.fechaCorta_(sub.fecha_comprometida) : 'Sin definir']);
@@ -252,7 +282,9 @@ function cuerpoOTV2_(vista, detalle, nombres, U, fecha) {
   };
   const datos = (filas) => '<dl class="ot2-datos">' + filas.map((f) => '<div><dt>' + U.esc(f[0]) + '</dt><dd>' + valor(f[1]) + '</dd></div>').join('') + '</dl>';
   const enlaces = (lista) => '<ul class="ot2-enlaces">' + lista.map((e) => '<li>' + valor({ texto: e.nombre, link: e.link }) + '</li>').join('') + '</ul>';
-  const campo = (titulo, texto) => (texto ? '<div class="ot2-campo"><h3>' + U.esc(titulo) + '</h3><p>' + U.esc(texto) + '</p></div>' : '');
+  // Las direcciones escritas dentro del texto quedan como enlace clicable.
+  const conEnlaces = (t) => U.esc(t).replace(/https?:\/\/[^\s<]+[^\s<.,;:)]/g, (u) => '<a href="' + u + '">' + u + '</a>');
+  const campo = (titulo, texto) => (texto ? '<div class="ot2-campo"><h3>' + U.esc(titulo) + '</h3><p>' + conEnlaces(texto) + '</p></div>' : '');
 
   const obs = vista.observacionesGenerales
     ? '<div class="ot2-obs"><strong>Observaciones generales</strong><p>' + U.esc(vista.observacionesGenerales) + '</p></div>' : '';
@@ -291,6 +323,19 @@ function cuerpoOTV2_(vista, detalle, nombres, U, fecha) {
   return obs + items + generales + cierre;
 }
 
+// Responsable como «Nombre — Cargo» (directorio de personas); si no hay ficha,
+// el nombre de su cuenta; si tampoco, el correo.
+function personasDeLaOT_(db, detalle) {
+  const mapa = DocV2.nombresPorCorreo(db);
+  const correos = (detalle.subsolicitudes || []).map((x) => x.desarrollador_asignado).filter(Boolean);
+  const fichas = require('./directorioPersonas').fichas(db, correos);
+  Object.keys(fichas).forEach((e) => {
+    const f = fichas[e];
+    if (f.nombre !== e) mapa[e] = f.nombre + (f.cargo ? ' — ' + f.cargo : '');
+  });
+  return mapa;
+}
+
 async function pdfV2_(db, contexto, vista, detalle) {
   const { U } = DocV2.piezas();
   const s = detalle.solicitud || {};
@@ -299,7 +344,7 @@ async function pdfV2_(db, contexto, vista, detalle) {
   return DocV2.aPdf(db, contexto, {
     titulo: 'Orden de trabajo', subtitulo: s.solicitud_id + (s.plataforma_nombre ? ' · ' + s.plataforma_nombre : ''),
     modulo: 'Solicitudes', codigo: s.solicitud_id, filtros: filtros.filter((f) => f.valor && f.valor !== '—'),
-    cuerpo: cuerpoOTV2_(vista, detalle, DocV2.nombresPorCorreo(db), U, DocV2.fecha_), nombreArchivo: 'OT-' + s.solicitud_id, enlaces: true
+    cuerpo: cuerpoOTV2_(vista, detalle, personasDeLaOT_(db, detalle), U, DocV2.fecha_), nombreArchivo: 'OT-' + s.solicitud_id, enlaces: true
   });
 }
 

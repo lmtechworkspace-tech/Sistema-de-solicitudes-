@@ -115,9 +115,9 @@ test('v7.6: la vista trae contexto operativo completo (antes ausente en la OT)',
 
   assert.equal(item.campos.contexto, 'Al cambiar los banners no deja guardar');
   assert.equal(item.tipo, 'Error / Bug');
-  assert.ok(item.detalles.some((d) => d[0] === 'Frecuencia' && d[1] === 'SIEMPRE'));
+  assert.ok(item.detalles.some((d) => d[0] === 'Frecuencia' && d[1] === 'Siempre'), 'el código del catálogo se muestra legible');
   assert.ok(item.detalles.some((d) => d[0] === 'Personas afectadas' && d[1] === '2000'));
-  assert.ok(item.detalles.some((d) => d[0] === 'Área' && d[1] === 'INGRESOS ADM'));
+  assert.ok(item.detalles.some((d) => d[0] === 'Área' && d[1] === 'Ingresos Adm'));
   assert.ok(item.detalles.some((d) => d[0] === 'Responsable asignado' && d[1] === 'leo@rld.cl'));
 });
 
@@ -191,4 +191,41 @@ test('la credencial nunca sale en la OT (a veces se escriben contraseñas): solo
   assert.ok(!JSON.stringify(accesos).includes('super$ecreta'));
   assert.deepEqual(accesos.find((a) => a[0] === 'Credencial'), ['Credencial', OrdenTrabajo.CREDENCIAL_OCULTA]);
   assert.ok(accesos.find((a) => a[0] === 'Usuario de prueba'), 'el usuario de prueba sí va');
+});
+
+// 2026-10-06, revisión de la OT SOL-2026-HP-0026 con el dueño.
+test('la OT dice el estado real cuando los ítems no van parejos (no «Nueva» con uno en curso)', () => {
+  const vista = OrdenTrabajo.armarVista_({
+    solicitud: { solicitud_id: 'SOL-X', estado_derivado: 'S01', solicitante_nombre: 'Ana' },
+    subsolicitudes: [{ estado: 'S05', titulo: 'a' }, { estado: 'S01', titulo: 'b' }, { estado: 'S01', titulo: 'c' }],
+    archivos: []
+  });
+  assert.equal(vista.ficha.find((f) => f[0] === 'Estado')[1], 'Nueva: 2 · En curso: 1');
+  const pareja = OrdenTrabajo.armarVista_({ solicitud: { solicitud_id: 'SOL-Y', estado_derivado: 'S05' }, subsolicitudes: [{ estado: 'S05' }], archivos: [] });
+  assert.equal(pareja.ficha.find((f) => f[0] === 'Estado')[1], 'En curso');
+});
+
+test('una dirección escrita como título de enlace va como su propio enlace, y el área se ve como departamento', () => {
+  const vista = OrdenTrabajo.armarVista_({
+    solicitud: { solicitud_id: 'SOL-X' },
+    subsolicitudes: [{ estado: 'S01', area_nombre: 'COMERCIAL_VALENTINA',
+      urls_adicionales: JSON.stringify([{ titulo: 'https://a.cl/dashboard.php', url: 'https://a.cl/prospectos.php' }]) }],
+    archivos: []
+  });
+  const it = vista.items[0];
+  assert.deepEqual(it.accesos.map((a) => [a[0], a[1].link]), [['Enlace', 'https://a.cl/dashboard.php'], ['Enlace', 'https://a.cl/prospectos.php']]);
+  assert.deepEqual(it.detalles.find((d) => d[0] === 'Área'), ['Área', 'Comercial']);
+});
+
+test('las direcciones dentro del texto quedan clicables en la OT', () => {
+  const vista = OrdenTrabajo.armarVista_({
+    solicitud: { solicitud_id: 'SOL-X' },
+    subsolicitudes: [{ estado: 'S01', titulo: 't', resultado_esperado: 'Ver https://docs.google.com/x/edit?usp=sharing&a=1. Gracias' }],
+    archivos: []
+  });
+  const esc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const U = { esc, badge: (t) => t };
+  const html = OrdenTrabajo.cuerpoOTV2_(vista, { solicitud: {}, subsolicitudes: [{}] }, {}, U, null);
+  assert.match(html, /<a href="https:\/\/docs\.google\.com\/x\/edit\?usp=sharing&amp;a=1">/);
+  assert.match(html, /a=1<\/a>\. Gracias/, 'el punto final no entra en el enlace');
 });

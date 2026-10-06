@@ -179,4 +179,4 @@ function getClientes(db) {
   });
 }
 
-module.exports = { CATALOGOS_CONFIG, guardar, listar, getCatalogosPublicos, getClientes };
+module.exports = { CATALOGOS_CONFIG, guardar, listar, getCatalogosPublicos, getClientes, departamentoDeArea_ };

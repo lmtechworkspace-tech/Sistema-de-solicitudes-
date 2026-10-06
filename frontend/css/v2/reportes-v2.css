@@ -64,7 +64,7 @@
 .ot2-dos { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 var(--sx-e-5); }
 .ot2-datos { margin: 0; display: flex; flex-direction: column; gap: 4px; }
 .ot2-datos div { display: grid; grid-template-columns: minmax(110px, 38%) 1fr; gap: 8px; font: var(--sx-t-chico); }
-.ot2-datos dt { color: var(--sx-texto-3); }
+.ot2-datos dt { color: var(--sx-texto-3); overflow-wrap: anywhere; }
 .ot2-datos dd { margin: 0; color: var(--sx-texto); white-space: pre-line; overflow-wrap: anywhere; }
 .ot2-datos a, .ot2-enlaces a { color: var(--sx-primario); text-decoration: underline; overflow-wrap: anywhere; }
 .ot2-enlaces { margin: 0; padding-left: 18px; font: var(--sx-t-chico); }
@@ -258,4 +258,7 @@
   .rp2-linea, .rp2-alerta, .rp2-alerta__cant, .rp2-linea__estado, .sx2-kpi { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .rp2-nivel--detalle { page-break-before: always; }
   .rp2-nivel__tit { page-break-after: avoid; }
+  /* OT: un bloque (qué pasa, detalles, cómo cerrar) no se parte entre dos páginas. */
+  .ot2-campo, .ot2-dos > div, .ot2-cierre { page-break-inside: avoid; }
+  .ot2-item__cab, .ot2-sub { page-break-after: avoid; }
 }
