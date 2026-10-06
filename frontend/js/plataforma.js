@@ -65,7 +65,11 @@
     // persona ve SOLO los documentos que le corresponden -- el filtrado lo
     // hace el backend (Calidad.gs), no el shell. No es core: depende de que
     // la cuenta tenga 'calidad' en CUENTAS_PORTAL.modulos.
-    calidad: { icono: 'medalla', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC' }
+    calidad: { icono: 'medalla', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC' },
+    // Finanzas (2026-10-06, finanzas-v2.js): la bóveda de las finanzas del
+    // grupo. No se asigna en la cuenta: solo aparece si la sesión trae
+    // cuenta.finanzas (lista fija del servidor) y cada acción lo re-verifica.
+    finanzas: { icono: 'candado', nombre: 'Finanzas', descripcion: 'Bóveda: caja, cobranza y resultados del grupo' }
   };
 
   // 2026-10-03: los DEPARTAMENTOS del organigrama, un módulo cada uno
@@ -118,7 +122,8 @@
     novedades: { acento: 'var(--mod-novedades)', suave: 'var(--mod-novedades-suave)' },
     mi_trabajo: { acento: 'var(--mod-mi-trabajo)', suave: 'var(--mod-mi-trabajo-suave)' },
     proyectos: { acento: 'var(--mod-proyectos)', suave: 'var(--mod-proyectos-suave)' },
-    calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' }
+    calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' },
+    finanzas: { acento: 'var(--mod-finanzas)', suave: 'var(--mod-finanzas-suave)' }
   };
   // Barra lateral, segunda versión (2026-10-05): cada área con su color, para reconocerla de lejos.
   var COLOR_AREA = { dep_contabilidad: 'contab', dep_rrhh: 'rrhh', dep_prevencion: 'prev', dep_marketing: 'mkt', dep_cobranzas: 'fact', dep_administracion: 'admarea' };
@@ -1288,11 +1293,13 @@
     // Sin esta guarda, renderNavAhora_ moria con una excepcion y el sidebar
     // quedaba VACIO: la persona no veia ni Inicio para reintentar.
     var cuenta = (sesion && sesion.cuenta) || {};
-    var propios = (cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m] && !esDepartamento_(m); })
+    var propios = (cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m] && !esDepartamento_(m) && m !== 'finanzas'; })
       .concat((cuenta.departamentos || []).filter(esDepartamento_));
     // Quien es jefatura de un área tiene "Mi equipo" dentro de ella: el módulo
     // suelto "Mi departamento" queda para las jefaturas sin área (2026-10-03).
     if ((cuenta.jefatura_de || []).length) propios = propios.filter(function (m) { return m !== 'jefatura'; });
+    // Finanzas: solo la lista fija de la bóveda (la sesión trae cuenta.finanzas).
+    if (cuenta.finanzas === true) propios.push('finanzas');
     // Solicitudes, etapa 2: quien está en la lista de un departamento recibe
     // sus pedidos en la Bandeja (la cola del área), tenga o no el módulo.
     if ((cuenta.colas_solicitudes || []).length && propios.indexOf('bandeja') === -1) propios.push('bandeja');
@@ -1694,6 +1701,8 @@
     if (id === 'administracion') {
       abrirAdministracion_();
     }
+    // Finanzas: sin auto-refresco a propósito (mantendría la bóveda abierta).
+    if (id === 'finanzas' && window.SigsoFinanzas) window.SigsoFinanzas.cargar();
     if (id === 'pausas' && moduloImpl_('pausas')) {
       moduloImpl_('pausas').cargar();
     }

@@ -92,6 +92,8 @@
   --mod-mkt: #A21CAF;         --mod-mkt-suave: color-mix(in srgb, var(--mod-mkt) 14%, transparent);
   --mod-fact: #0369A1;        --mod-fact-suave: color-mix(in srgb, var(--mod-fact) 14%, transparent);
   --mod-admarea: #475569;     --mod-admarea-suave: color-mix(in srgb, var(--mod-admarea) 14%, transparent);
+  /* Finanzas (2026-10-06): la bóveda de las finanzas del grupo. */
+  --mod-finanzas: #1C5CAB;    --mod-finanzas-suave: color-mix(in srgb, var(--mod-finanzas) 14%, transparent);
 
   /* --- Tipografia ------------------------------------------------------- */
   --fuente: 'Inter', system-ui, -apple-system, sans-serif;
@@ -211,6 +213,7 @@
     --mod-mi-trabajo: #74B0FF;
     --mod-proyectos: #B794F6;
     --mod-calidad: #2DD4BF;
+    --mod-finanzas: #6DA7EC;
     --mod-control: #A3D65C;
     --mod-contab: #A3D65C; --mod-rrhh: #FDBA74; --mod-prev: #FACC15; --mod-mkt: #E879F9; --mod-fact: #38BDF8; --mod-admarea: #CBD5E1;
 
@@ -273,6 +276,7 @@
   --mod-mi-trabajo: #74B0FF;
   --mod-proyectos: #B794F6;
   --mod-calidad: #2DD4BF;
+    --mod-finanzas: #6DA7EC;
     --mod-control: #A3D65C;
     --mod-contab: #A3D65C; --mod-rrhh: #FDBA74; --mod-prev: #FACC15; --mod-mkt: #E879F9; --mod-fact: #38BDF8; --mod-admarea: #CBD5E1;
 

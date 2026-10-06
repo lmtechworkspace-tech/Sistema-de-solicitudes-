@@ -35,10 +35,10 @@ function claveDiaSantiago_(fecha) {
   }).format(fecha || new Date());
 }
 
-function respaldarLocal_(dbPath, backupDir, fecha) {
+function respaldarLocal_(dbPath, backupDir, fecha, prefijo) {
   if (!fs.existsSync(dbPath)) throw new Error('No existe la base: ' + dbPath);
   fs.mkdirSync(backupDir, { recursive: true });
-  const archivo = path.join(backupDir, 'sigso-' + fecha + '.db');
+  const archivo = path.join(backupDir, (prefijo || 'sigso') + '-' + fecha + '.db');
   const db = new DatabaseSync(dbPath, { readOnly: true });
   try {
     db.exec("VACUUM INTO '" + archivo.replace(/'/g, "''") + "'");
@@ -56,17 +56,17 @@ function limpiarAntiguos_(backupDir, retencionDias) {
   const limite = Date.now() - retencionDias * 24 * 3600 * 1000;
   let borrados = 0;
   fs.readdirSync(backupDir).forEach((nombre) => {
-    if (!/^sigso-\d{4}-\d{2}-\d{2}\.db$/.test(nombre)) return;
+    if (!/^(sigso|finanzas)-\d{4}-\d{2}-\d{2}\.db$/.test(nombre)) return;
     const ruta = path.join(backupDir, nombre);
     if (fs.statSync(ruta).mtimeMs < limite) { fs.unlinkSync(ruta); borrados++; }
   });
   return borrados;
 }
 
-async function subirAR2_(archivoLocal, fecha) {
+async function subirAR2_(archivoLocal, fecha, prefijo) {
   if (!Almacenamiento.disponible_()) return { subido: false, motivo: 'r2_no_configurado' };
   const contenidoBase64 = fs.readFileSync(archivoLocal).toString('base64');
-  const clave = 'backups/sigso-' + fecha + '.db';
+  const clave = 'backups/' + (prefijo || 'sigso') + '-' + fecha + '.db';
   const resultado = await Almacenamiento.subirArchivo_(clave, contenidoBase64, 'application/x-sqlite3');
   if (!resultado.ok) throw new Error('No se pudo subir el respaldo a R2: ' + resultado.message);
   return { subido: true, clave };
@@ -78,7 +78,16 @@ async function ejecutar_(opciones) {
   const tamano = fs.statSync(archivoLocal).size;
   const borrados = limpiarAntiguos_(opciones.backupDir, opciones.retencionDias || RETENCION_DIAS);
   const r2 = await subirAR2_(archivoLocal, fecha);
-  return { archivoLocal, tamano, borrados, r2 };
+  const resultado = { archivoLocal, tamano, borrados, r2 };
+  // Finanzas (2026-10-06): la bóveda vive en su propio archivo junto a
+  // sigso.db. Sus datos van cifrados con una llave que NO está en el archivo,
+  // así que la copia en R2 sola no se puede leer.
+  const finPath = opciones.finanzasDbPath || path.join(path.dirname(opciones.dbPath), 'finanzas.db');
+  if (fs.existsSync(finPath)) {
+    const finLocal = respaldarLocal_(finPath, opciones.backupDir, fecha, 'finanzas');
+    resultado.finanzas = { archivoLocal: finLocal, tamano: fs.statSync(finLocal).size, r2: await subirAR2_(finLocal, fecha, 'finanzas') };
+  }
+  return resultado;
 }
 
 async function main() {

@@ -92,6 +92,7 @@ const ReportePdf = require('../logica/reportePdf');
 const ReporteExcel = require('../logica/reporteExcel');
 const ArchivosSolicitud = require('../logica/archivosSolicitud');
 const Preferencias = require('../logica/preferencias');
+const FinanzasBoveda = require('../logica/finanzasBoveda');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -663,6 +664,16 @@ const ACCIONES = {
   rrhhImpuestoUnico: (db, data, contexto) => require('../logica/rrhhInformes').impuestoUnico(db, data, contexto),
   rrhhPlataformas: (db, data, contexto) => require('../logica/rrhhInformes').plataformas(db, data, contexto),
   // Barra lateral (2026-10-05): fijados de cada persona.
+  // Finanzas (2026-10-06): la bóveda de las finanzas del grupo. Para quien no
+  // está en su lista fija (SIGSO_FINANZAS_ACCESO) estas acciones responden lo
+  // mismo que una acción inexistente -- ver finanzasBoveda.js.
+  finanzasEstado: (db, data, contexto) => FinanzasBoveda.estado(db, data, contexto),
+  finanzasPrepararAutenticador: (db, data, contexto) => FinanzasBoveda.prepararAutenticador(db, data, contexto),
+  finanzasActivarAutenticador: (db, data, contexto) => FinanzasBoveda.activarAutenticador(db, data, contexto),
+  finanzasEntrar: (db, data, contexto) => FinanzasBoveda.entrar(db, data, contexto),
+  finanzasSalir: (db, data, contexto) => FinanzasBoveda.salir(db, data, contexto),
+  finanzasResumen: (db, data, contexto) => FinanzasBoveda.resumen(db, data, contexto),
+  finanzasBitacora: (db, data, contexto) => FinanzasBoveda.bitacora(db, data, contexto),
   obtenerPreferencias: (db, data, contexto) => Preferencias.obtener(db, data, contexto),
   guardarFijados: (db, data, contexto) => Preferencias.guardarFijados(db, data, contexto),
   // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y
@@ -701,7 +712,9 @@ function responderResultado_(resultado) {
     return { status: 400, body: { ok: false, error: 'validation', message: resultado.message, fields: resultado.fields } };
   }
   if (resultado && resultado._forbidden) {
-    return { status: 403, body: { ok: false, error: 'forbidden', message: resultado.message } };
+    const body = { ok: false, error: 'forbidden', message: resultado.message };
+    if (resultado.boveda_cerrada) body.boveda_cerrada = true;
+    return { status: 403, body };
   }
   return { status: 200, body: { ok: true, data: resultado } };
 }
@@ -760,7 +773,14 @@ async function ejecutarAccion(db, action, data, meta) {
   if (!contexto) {
     return { status: 403, body: { ok: false, error: 'forbidden', message: 'Sesión inválida o expirada. Ingresa de nuevo.' } };
   }
-  return responderResultado_(await fn(db, data, contexto));
+  // La IP (que fija Caddy) solo la usa hoy la bitácora de Finanzas.
+  contexto.ip = meta.ip || '';
+  const resultado = await fn(db, data, contexto);
+  // Finanzas, para quien no está en la lista: idéntico a una acción que no existe.
+  if (resultado && resultado._noEncontrado) {
+    return { status: 404, body: { ok: false, error: 'Acción desconocida: ' + action } };
+  }
+  return responderResultado_(resultado);
 }
 
 module.exports = { ejecutarAccion, ACCIONES, resolverContextoPortal_ };

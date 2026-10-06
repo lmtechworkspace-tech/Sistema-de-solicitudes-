@@ -49,7 +49,7 @@ const HASH_RELLENO_LOGIN = Hash.hashPassword('relleno-sin-significado', SALT_REL
 // Perfil que viaja al navegador: SOLO lo que el shell necesita. Nunca el
 // hash ni la sal.
 function perfilPublico(cuenta, db) {
-  return {
+  const perfil = {
     cuenta_id: cuenta.cuenta_id,
     usuario: cuenta.usuario,
     nombre: cuenta.nombre,
@@ -74,6 +74,11 @@ function perfilPublico(cuenta, db) {
     // pedidos aparece en la Bandeja aunque la cuenta no tenga ese módulo).
     colas_solicitudes: db ? colasDe_(db, cuenta) : []
   };
+  // Finanzas (2026-10-06): el campo solo viaja a la lista fija de la bóveda;
+  // para el resto ni aparece. Solo pinta el menú: cada acción de Finanzas lo
+  // vuelve a verificar en el servidor.
+  if (db && finanzasDe_(db, cuenta)) perfil.finanzas = true;
+  return perfil;
 }
 function contextoDe_(cuenta) {
   return {
@@ -85,6 +90,7 @@ function contextoDe_(cuenta) {
 // require tardío: controlInterno carga Calidad/Prestaciones, que no hacen falta para el login.
 function departamentosDe_(db, cuenta) { return require('./controlInterno').modulosDeDepartamento_(db, contextoDe_(cuenta)); }
 function colasDe_(db, cuenta) { try { return require('./serviciosSolicitud').colasDe_(db, contextoDe_(cuenta)); } catch (e) { return []; } }
+function finanzasDe_(db, cuenta) { try { return require('./finanzasBoveda').tieneAcceso(db, { cuenta_id: cuenta.cuenta_id, email: parsearListaPortal(cuenta.emails)[0] || '' }); } catch (e) { return false; } }
 function jefaturaDe_(db, cuenta) { return require('./controlInterno').jefaturaDeDepartamentos_(db, contextoDe_(cuenta)); }
 
 function login(db, data, ip) {
