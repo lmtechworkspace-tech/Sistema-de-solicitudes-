@@ -304,6 +304,8 @@
     r.querySelectorAll('.js-hp2e-l-texto').forEach(autoalto);
     if (focoNueva) { var chat = r.querySelector('.js-hp2e-chat'); chat.scrollTop = chat.scrollHeight; r.querySelector('.js-hp2e-nueva').focus(); }
   }
+  function reajustarAltos() { var r = H().raiz && H().raiz(); if (r) r.querySelectorAll('.js-hp2e-l-texto, .js-hp2e-titulo').forEach(autoalto); }
+  window.addEventListener('resize', function () { clearTimeout(reajustarAltos.t); reajustarAltos.t = setTimeout(reajustarAltos, 150); });
   function autoalto(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 2, 240) + 'px'; }
   function agregarLinea() {
     var r = H().raiz(), t = r.querySelector('.js-hp2e-nueva'), texto = t.value.trim();
@@ -591,9 +593,11 @@
     var r = H().raiz(), f = r.querySelector('.js-hp2e-form');
     if (!f) return;
     H().enlazarChips(f, programar);
-    r.querySelectorAll('.js-hp2e-l-texto').forEach(autoalto);
+    reajustarAltos();
+    // La altura se mide con la fuente final: si Inter todavía no cargó, se vuelve a medir al llegar.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(reajustarAltos);
     var t = r.querySelector('.js-hp2e-titulo');
-    if (t) { autoalto(t); t.addEventListener('input', function () { t.value = t.value.replace(/[\r\n]+/g, ' '); autoalto(t); programar(); }); }
+    if (t) { t.addEventListener('input', function () { t.value = t.value.replace(/[\r\n]+/g, ' '); autoalto(t); programar(); }); }
   }
   function dentro(ev) { var r = H().raiz && H().raiz(); return r && r.contains(ev.target) && r.querySelector('.hp2e-tablero, .hp2e-taller, .hp2e-portada'); }
 

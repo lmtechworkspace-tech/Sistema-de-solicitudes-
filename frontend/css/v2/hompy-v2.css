@@ -666,6 +666,8 @@
 .hp2e-radios--seg .hp2e-radio span { min-width: 58px; justify-content: center; font-variant-numeric: tabular-nums; }
 
 /* Diálogo: chat. */
+/* Sin el alto mínimo global de los textarea (80 px): se ajustan a su texto. */
+.hp2e-titulo, .hp2e-burbuja { min-height: 0 !important; }
 .hp2e-reparto { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .hp2e-reparto__lista { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .hp2e-actor { display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px 3px 3px; border-radius: 999px; background: var(--sx-superficie-2, var(--sx-fondo)); font-size: .8125rem; font-weight: 600; color: var(--sx-texto); }

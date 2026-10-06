@@ -1,0 +1,151 @@
+/**
+ * Manual de Hompy, la mascota: calendario, reporte de salida a terreno,
+ * Estudio TikTok, marcas colaboradoras, reporte mensual y tipos de evento.
+ * Capturas de la empresa de demostración (personas, lugares y marcas ficticias).
+ */
+(function () {
+  'use strict';
+
+  SigsoManual.registrar({
+    id: 'hompy', titulo: 'Hompy: la agenda, los videos y las marcas de la mascota',
+    para: 'El equipo que lleva a Hompy',
+    resumen: ['Cómo agendar las actividades de Hompy, llenar el reporte de cada salida a terreno, llevar una idea de TikTok hasta el video publicado, registrar las marcas con las que colabora y sacar el reporte del mes.'],
+    antes: ['Hompy solo lo ven las cuentas que tienen el módulo **Hompy** (se asigna en Administración → Cuentas).',
+      'Todo lo que anotan queda guardado con su nombre y la hora: no hace falta avisar por otro lado.',
+      'En los ejemplos trabajan Camila Rojas y Diego Muñoz, con marcas y lugares inventados (empresa de demostración).'],
+    capitulos: [
+      { id: 'portada', titulo: 'La portada de Hompy', ruta: '#/hompy/inicio',
+        intro: ['La portada dice lo que viene y lo que falta, y Hompy lo comenta en su globo. En la barra lateral, Hompy aparece con su cara, en el bloque **Áreas**; el número naranja son los reportes de salida por llenar.'],
+        pasos: [
+          { titulo: 'Lo que muestra la portada', img: 'portada',
+            texto: ['Abre **Hompy** en la barra lateral.'],
+            marcas: [{ n: 1, t: 'Hompy y su globo: toca a Hompy para que cuente otra cosa (lo que viene hoy, reportes pendientes, ideas votadas…).' },
+              { n: 2, t: '[[Nueva actividad]], [[Ver calendario]] y, si hay pendientes, [[Llenar reportes]].' },
+              { n: 3, t: 'Las cifras del mes: actividades, salidas realizadas, público alcanzado y reportes por llenar.' },
+              { n: 4, t: '**Próximas actividades**: toca una para ver su detalle.' },
+              { n: 5, t: '**Reportes por llenar**: las salidas que ya pasaron y todavía no tienen su reporte cerrado.' },
+              { n: 6, t: 'El **Estudio TikTok**: cuántas ideas hay en cada etapa y la más votada.' },
+              { n: 7, t: 'Accesos a **Marcas colaboradoras** y al **Reporte del mes**.' }] }
+        ] },
+      { id: 'calendario', titulo: 'Agenda las actividades', ruta: '#/hompy/calendario',
+        intro: ['Cada actividad de Hompy (una salida a terreno, un evento con una marca, una grabación…) va en el calendario con su tipo, su color y quiénes van.'],
+        pasos: [
+          { titulo: 'El calendario', img: 'calendario',
+            texto: ['Abre **Calendario** en el menú de Hompy.'],
+            marcas: [{ n: 1, t: 'Cambia de mes con las flechas; [[Hoy]] vuelve al mes actual.' }, { n: 2, t: '**Mes** (la grilla) o **Agenda** (la lista del mes, día por día).' },
+              { n: 3, t: 'Los tipos de evento con su color y cuántas actividades tiene cada uno: toca uno para ocultarlo o mostrarlo.' },
+              { n: 4, t: 'El día de hoy. Toca el número de un día para agendar en esa fecha.' }, { n: 5, t: 'Una actividad: toca para ver el detalle. El punto naranja avisa que le falta el reporte.' },
+              { n: 6, t: '[[Nueva actividad]].' }],
+            consejo: ['En el celular la grilla muestra puntos de colores: toca un día y sus actividades aparecen abajo.'] },
+          { titulo: 'Agenda una actividad', img: 'actividad-nueva',
+            texto: [['Toca [[Nueva actividad]] (o el número de un día).', 'Elige el **Tipo de evento** ((1)) y escribe **qué actividad es** ((2)).', 'Si es con una marca colaboradora, elígela en **Marca** ((3)): así queda en la historia de esa marca.',
+              'Indica la **fecha** y el horario ((4)), el **lugar** ((5)) y **quiénes van** ((6)): escribe un nombre y presiona Enter (incluye a quien usará el traje).', 'Toca [[Agendar]] ((7)).']],
+            marcas: [{ n: 1, t: 'Tipo de evento.' }, { n: 2, t: 'Qué actividad es.' }, { n: 3, t: 'Marca (opcional).' }, { n: 4, t: 'Fecha, desde y hasta.' }, { n: 5, t: 'Lugar.' }, { n: 6, t: 'Quiénes van.' }, { n: 7, t: 'Agendar.' }] },
+          { titulo: 'El detalle de una actividad', img: 'actividad-detalle',
+            texto: ['Toca una actividad en el calendario o en la portada.'],
+            marcas: [{ n: 1, t: 'Tipo y estado: Planificada, Confirmada, **¿Se realizó?** (ya pasó y no tiene reporte), Falta el reporte, Reporte cerrado o Cancelada.' },
+              { n: 2, t: 'Fecha, horario, lugar, marca y quiénes van.' }, { n: 3, t: 'El reporte de salida: si ya pasó la fecha, te invita a llenarlo.' },
+              { n: 4, t: '[[Llenar reporte]] (o [[Ver reporte]] y [[PDF]] si ya está cerrado).' }, { n: 5, t: '[[Cancelar actividad]], con el motivo.' }],
+            ojo: ['Si una actividad no se hizo, **cancélala** con el motivo en vez de eliminarla: así queda el registro. Antes de la fecha también puedes [[Confirmar]]la.'] }
+        ] },
+      { id: 'salida', titulo: 'Llena el reporte de salida a terreno', ruta: '#/hompy/salidas',
+        intro: ['Cada actividad realizada lleva su reporte: horarios, quiénes fueron, el traje, el público y cómo les fue. Se llena el mismo día o después, se puede guardar en borrador y se cierra cuando está completo.'],
+        pasos: [
+          { titulo: 'Lugar, horarios y quiénes fueron', img: 'salida',
+            texto: ['Desde la actividad, toca [[Llenar reporte]] (o abre **Salidas a terreno** y toca [[Llenar reporte]] en la fila).'],
+            marcas: [{ n: 1, t: 'La actividad del reporte.' }, { n: 2, t: 'Los horarios: salida de la oficina, llegada, **inicio** y **término** de la actividad (necesarios) y regreso. SIGSO calcula cuánto duró.' },
+              { n: 3, t: '**Quién usó el traje de Hompy** (necesario).' }, { n: 4, t: 'Quién apoyó: escribe un nombre y presiona Enter.' },
+              { n: 5, t: 'Cuántos datos necesarios van y cuáles faltan.' }] },
+          { titulo: 'El traje, el público y la evaluación', img: 'salida-traje',
+            marcas: [{ n: 1, t: 'Minutos dentro del traje, pausas y si se hidrató.' }, { n: 2, t: '**Cómo quedó el traje** (necesario): en buen estado, necesita limpieza o necesita reparación.' },
+              { n: 3, t: '**Público estimado** (necesario; si no fue nadie, anota 0), fotos y videos.' }, { n: 4, t: 'El material que llevaron y si volvió completo.' },
+              { n: 5, t: '**La nota de la salida**, de 1 a 5 estrellas (necesaria), lo que salió bien, qué mejorar e incidentes.' }],
+            texto: ['Más abajo están los **gastos** (transporte, estacionamiento, colación; opcionales) y los **comentarios**. Al final de la página, [[Guardar borrador]] y [[Cerrar reporte]].'],
+            ojo: ['Si alguien pasó más de 40 minutos en el traje sin pausas, SIGSO lo avisa: el traje es caluroso.'],
+            consejo: ['Pega el enlace de la carpeta de fotos (Drive o Google Fotos) para que quede junto al reporte.'] },
+          { titulo: 'Cierra el reporte y descarga el PDF', img: 'salida-cerrada',
+            texto: ['Cuando estén los datos necesarios, toca [[Cerrar reporte]]: Hompy lo celebra y el reporte queda en modo lectura.'],
+            marcas: [{ n: 1, t: 'La actividad y su evaluación.' }, { n: 2, t: 'Duración, público, fotos y videos, y minutos en el traje.' }, { n: 3, t: '[[Descargar PDF]]: el reporte con la marca SIGSO.' }, { n: 4, t: '[[Reabrir]] para corregir algo (después hay que volver a cerrarlo).' }] },
+          { titulo: 'Todas las salidas', img: 'salidas',
+            texto: ['**Salidas a terreno** reúne lo que falta y lo cerrado.'],
+            marcas: [{ n: 1, t: '**Por llenar** y **Cerradas**.' }, { n: 2, t: 'Una salida con su estado.' }, { n: 3, t: '[[Llenar reporte]] o [[Seguir]] el borrador. Si no se hizo, [[No se hizo]] la cancela con el motivo.' }] }
+        ] },
+      { id: 'estudio', titulo: 'El Estudio TikTok: de la idea al video', ruta: '#/hompy/estudio',
+        intro: ['Cada video pasa por cinco etapas: **Idea → Diálogo → Guión → Producción → Publicado**. Se avanza de a una y solo con lo mínimo de cada etapa; lo que escriben se guarda solo.'],
+        pasos: [
+          { titulo: 'El tablero', img: 'estudio',
+            texto: ['Abre **Estudio TikTok** en el menú de Hompy.'],
+            marcas: [{ n: 1, t: '**Anota una idea** en una frase y presiona Enter: no hace falta más para empezar.' }, { n: 2, t: 'Cuántas ideas hay en cada etapa.' },
+              { n: 3, t: 'Una columna por etapa. En el computador puedes **arrastrar** una tarjeta a la siguiente columna.' }, { n: 4, t: 'Una idea: tócala para abrir su taller.' },
+              { n: 5, t: 'Vota las ideas que te gustan 🔥: las más votadas quedan primero.' }, { n: 6, t: 'Ver las ideas descartadas (con su motivo).' }] },
+          { titulo: 'La idea y el gancho', img: 'idea',
+            texto: ['El **gancho** es lo que pasa en los primeros 3 segundos: si no engancha, la gente sigue de largo.'],
+            marcas: [{ n: 1, t: 'El título de la idea: tócalo para cambiarlo.' }, { n: 2, t: 'Las etapas: toca una para ver o editar su contenido.' },
+              { n: 3, t: '**El gancho** (necesario para pasar a Diálogo).' }, { n: 4, t: 'Ideas para empezar el gancho: tócalas para usarlas.' },
+              { n: 5, t: 'Para qué es el video; más abajo: formato, duración, marca, referencia, audio, hashtags y notas.' },
+              { n: 6, t: '**Siguiente paso**: lo que falta y [[Pasar a «Diálogo»]].' }, { n: 7, t: 'El consejo de Hompy para esta etapa.' }] },
+          { titulo: 'El diálogo', img: 'dialogo',
+            texto: ['Se escribe como un chat: quién dice qué, línea por línea.'],
+            marcas: [{ n: 1, t: 'El reparto: Hompy y los demás personajes. Escribe un nombre y presiona Enter para agregar uno.' },
+              { n: 2, t: 'Una línea: toca el texto para corregirlo; arriba puedes cambiar quién la dice, subirla, bajarla o borrarla.' },
+              { n: 3, t: 'Una **acción**: lo que se ve, no lo que se dice (Hompy no habla con el traje, ¡pero actúa!).' },
+              { n: 4, t: 'Elige quién habla.' }, { n: 5, t: 'Marca **Acción** si es algo que se hace.' },
+              { n: 6, t: 'Escribe la línea y presiona Enter.' }, { n: 7, t: '[[Ensayar en voz alta]]: SIGSO lee el diálogo con una voz por personaje.' }, { n: 8, t: '[[Pasar a «Guión»]].' }] },
+          { titulo: 'El guión', img: 'guion',
+            texto: ['El guión ordena el video escena por escena.'],
+            marcas: [{ n: 1, t: 'La línea de tiempo: cada escena con sus segundos, contra la duración objetivo.' }, { n: 2, t: '[[Armar desde el diálogo]]: convierte cada línea en una escena.' },
+              { n: 3, t: 'Una escena: qué se ve, el texto en pantalla y el audio.' }, { n: 4, t: 'El plano: general, medio, primer plano, detalle…' }, { n: 5, t: 'Los segundos de la escena.' }, { n: 6, t: '[[Copiar guión]] para pegarlo donde quieras.' }],
+            consejo: ['Pongan texto en pantalla: mucha gente ve TikTok sin sonido.'] },
+          { titulo: 'La producción', img: 'produccion',
+            marcas: [{ n: 1, t: 'Cuánto de la lista está listo.' }, { n: 2, t: 'La lista: traje, lugar, autorización de quienes aparecen, grabado, editado, subtítulos, audio, portada y aprobado. **Grabado** y **Revisado y aprobado** son necesarios para publicar.' },
+              { n: 3, t: 'Día, hora y lugar de la grabación; [[Agendar en el calendario]] la deja en el calendario de Hompy.' },
+              { n: 4, t: 'La grabación ya agendada: tócala para ver la actividad.' }, { n: 5, t: '[[Pasar a «Publicado»]]: te pide el enlace del video.' }] },
+          { titulo: 'Publicado y sus métricas', img: 'publicado',
+            texto: ['Al publicar, pega el enlace del video y Hompy lo celebra. Después anoten cómo le fue.'],
+            marcas: [{ n: 1, t: 'El enlace del video en TikTok y la fecha.' }, { n: 2, t: 'Vistas, me gusta, comentarios, compartidos y guardados, a las 24 horas y a los 7 días.' },
+              { n: 3, t: 'La interacción y cuánto crecieron las vistas, calculadas solas.' }, { n: 4, t: 'Qué aprendimos para el próximo video.' }, { n: 5, t: 'Ver el video en TikTok.' }] }
+        ] },
+      { id: 'marcas', titulo: 'Marcas colaboradoras', ruta: '#/hompy/marcas',
+        intro: ['Cada marca con la que trabaja Hompy tiene su ficha y su historia: las colaboraciones (lo que Hompy entregó y lo que se recibió), las actividades y los videos.'],
+        pasos: [
+          { titulo: 'Las marcas', img: 'marcas',
+            marcas: [{ n: 1, t: 'Marcas activas, colaboraciones del año, las que están en curso y el valor estimado del año.' }, { n: 2, t: 'Filtra por estado o busca por nombre o rubro.' },
+              { n: 3, t: 'Una marca: cuántas colaboraciones, actividades y videos tiene y la última colaboración. Tócala para abrir su ficha.' }, { n: 4, t: '[[Nueva marca]]: nombre, rubro, estado, color, contacto, sitio y notas.' }] },
+          { titulo: 'La ficha de una marca', img: 'marca',
+            marcas: [{ n: 1, t: 'La marca, su estado y su sitio.' }, { n: 2, t: 'El contacto: correo, teléfono y WhatsApp a un toque.' },
+              { n: 3, t: 'Colaboraciones, actividades, público alcanzado, vistas de los videos y valor estimado.' }, { n: 4, t: 'Una colaboración en la historia, con su tipo, estado, fechas y valor.' },
+              { n: 5, t: '**Hompy entregó** y **Recibimos**.' }, { n: 6, t: '[[Nueva colaboración]].' }],
+            texto: ['La historia junta, de lo más nuevo a lo más antiguo, las colaboraciones, las actividades del calendario y los videos del Estudio que tienen esta marca.'] },
+          { titulo: 'Registra una colaboración', img: 'colaboracion',
+            texto: [['En la ficha de la marca, toca [[Nueva colaboración]].', 'Escribe qué colaboración es ((1)) y elige el tipo ((2)) y el estado ((3)).', 'Indica las fechas y el valor estimado de lo recibido ((4)).', 'Anota lo que **Hompy entregó** y lo que **recibimos** ((5)).', 'Más abajo, marca las actividades y videos de esta colaboración, el resultado y la nota.', 'Toca [[Guardar]] ((6)).']],
+            marcas: [{ n: 1, t: 'Qué colaboración es.' }, { n: 2, t: 'Tipo: video, evento, sorteo, canje, auspicio u otro.' }, { n: 3, t: 'Estado: propuesta, acordada, en curso, realizada o cancelada.' }, { n: 4, t: 'Fechas y valor estimado.' }, { n: 5, t: 'Lo que entregamos y lo que recibimos.' }, { n: 6, t: 'Guardar.' }],
+            ojo: ['Una marca que ya tiene historia no se elimina: déjala como **Terminada**.'] }
+        ] },
+      { id: 'reporte', titulo: 'El reporte del mes', ruta: '#/hompy/reportes',
+        intro: ['**Reportes** arma solo el resumen del mes de Hompy, comparado con el mes anterior, y lo entrega en PDF.'],
+        pasos: [
+          { titulo: 'El reporte mensual', img: 'reporte',
+            marcas: [{ n: 1, t: 'Elige el mes.' }, { n: 2, t: '[[Descargar PDF]].' }, { n: 3, t: 'El mes en una frase.' },
+              { n: 4, t: 'Actividades, salidas con reporte, público, horas en terreno, videos y vistas, con la diferencia contra el mes anterior.' },
+              { n: 5, t: 'Lo que falta: actividades sin reporte cerrado y el estado del traje si necesita limpieza o reparación.' }, { n: 6, t: 'Las actividades por tipo.' }],
+            texto: ['Más abajo: la tabla de salidas, los videos publicados con sus métricas, las colaboraciones vigentes y cómo está el Estudio TikTok.'] }
+        ] },
+      { id: 'tipos', titulo: 'Los tipos de evento', ruta: '#/hompy/tipos',
+        intro: ['Los 5 tipos de evento los define el equipo. SIGSO parte con una propuesta que se puede cambiar.'],
+        pasos: [
+          { titulo: 'Cambia los tipos de evento', img: 'tipos',
+            texto: ['Toca [[Editar]] en un tipo para cambiar su nombre, su color o su ícono, o apagarlo para que no aparezca al agendar.'],
+            marcas: [{ n: 1, t: 'Mientras sean la propuesta, SIGSO lo recuerda.' }, { n: 2, t: 'Un tipo, con cuántas actividades tiene.' }, { n: 3, t: '[[Agregar tipo]] (hasta 8).' }],
+            consejo: ['Al renombrar un tipo, lo que ya estaba agendado se actualiza solo.'] }
+        ] }
+    ],
+    preguntas: [
+      { p: '¿Por qué no puedo pasar una idea a la siguiente etapa?', r: ['Cada etapa pide lo mínimo: el gancho para pasar a Diálogo, al menos una línea para pasar a Guión, escenas con sus segundos para Producción, y «Grabado» y «Revisado y aprobado» para publicar. El recuadro **Siguiente paso** dice qué falta.'] },
+      { p: '¿Se pierde lo que escribo en el Estudio si cierro la pantalla?', r: ['No: se guarda solo un segundo después de escribir. Arriba, junto al título, dice «Guardado ✓».'] },
+      { p: 'Una actividad no se hizo, ¿la elimino?', r: ['Mejor cancélala con el motivo: así queda el registro y no aparece como reporte pendiente.'] },
+      { p: '¿Cómo aparece una actividad o un video en la historia de una marca?', r: ['Elige la marca al agendar la actividad (campo **Marca**) o en la etapa **Idea** del video. Aparecen solos en la ficha de la marca.'] },
+      { p: 'Cerré un reporte con un error, ¿se puede corregir?', r: ['Sí: ábrelo y toca [[Reabrir]]. Queda en borrador; corrige y vuelve a cerrarlo.'] },
+      { p: '¿Quién más puede ver Hompy?', r: ['Solo las cuentas con el módulo **Hompy**. Lo asigna la administración del sistema en Administración → Cuentas.'] }
+    ]
+  });
+})();

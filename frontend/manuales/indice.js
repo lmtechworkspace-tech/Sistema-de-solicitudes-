@@ -29,5 +29,7 @@ SigsoManual.indice([
   { id: 'area-cobranzas', archivo: 'areas', grupo: 'Áreas', titulo: 'Facturación y Cobranzas', icono: 'recibo', color: 'var(--mod-fact)', modulos: ['dep_cobranzas'],
     resumen: 'Recordatorios de cobro, agenda, matriz de cobranza y el informe de plataformas de RR.HH.' },
   { id: 'area-administracion', archivo: 'administracion', grupo: 'Áreas', titulo: 'Administración', icono: 'maletin', color: 'var(--mod-admarea)', modulos: ['dep_administracion'],
-    resumen: 'Recibir los reportes de las áreas y armar el informe de gestión para la gerencia.' }
-], '2026-10-06d');
+    resumen: 'Recibir los reportes de las áreas y armar el informe de gestión para la gerencia.' },
+  { id: 'hompy', archivo: 'hompy', grupo: 'Áreas', titulo: 'Hompy, la mascota', icono: 'hompy', color: 'var(--mod-hompy)', modulos: ['hompy'],
+    resumen: 'Calendario, reporte de salida a terreno, Estudio TikTok, marcas colaboradoras y reporte del mes.' }
+], '2026-10-06e');
