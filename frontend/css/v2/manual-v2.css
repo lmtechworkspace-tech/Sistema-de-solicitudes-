@@ -76,7 +76,7 @@ html.mn-abierto, html.mn-abierto body { overflow: hidden; }
 .mn-btn { display: inline-block; padding: 0 7px; border-radius: 6px; border: 1px solid var(--sx-borde-fuerte); background: var(--sx-superficie-2); color: var(--sx-texto); font: 600 .86em/1.6 var(--fuente); white-space: nowrap; }
 .mn-num { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--mn-senal); color: #fff; font: 800 .72rem/1 var(--fuente); vertical-align: 1px; cursor: default; transition: transform .12s; }
 .mn-num.mn-on { transform: scale(1.18); }
-kbd { display: inline-block; padding: 0 6px; border-radius: 5px; border: 1px solid var(--sx-borde-fuerte); border-bottom-width: 2px; background: var(--sx-superficie); font: 600 .8em/1.6 var(--fuente); }
+.mn kbd { display: inline-block; padding: 0 6px; border-radius: 5px; border: 1px solid var(--sx-borde-fuerte); border-bottom-width: 2px; background: var(--sx-superficie); font: 600 .8em/1.6 var(--fuente); }
 
 /* Captura con señales */
 .mn-fig { margin: 4px 0 0; display: flex; flex-direction: column; gap: 10px; }
@@ -151,8 +151,11 @@ kbd { display: inline-block; padding: 0 6px; border-radius: 5px; border: 1px sol
 }
 
 /* Imprimir / PDF: solo el manual, sin barra ni índice. */
+/* Ojo: los PDF del servidor (documentoV2.cssPara) reutilizan estas hojas y toman toda regla
+   cuyas clases aparezcan en el documento; una regla sin clase propia (como «body > *») se
+   colaría y dejaría el PDF en blanco. Por eso todo cuelga de html.mn-abierto. */
 @media print {
-  body > *:not(.mn) { display: none !important; }
+  html.mn-abierto body > *:not(.mn) { display: none !important; }
   html.mn-abierto, html.mn-abierto body { overflow: visible; }
   .mn { position: static; overflow: visible; background: #fff; }
   .mn-barra, .mn-toc, .mn-ir, .mn-fig__lupa, .mn-toc__todos { display: none !important; }
