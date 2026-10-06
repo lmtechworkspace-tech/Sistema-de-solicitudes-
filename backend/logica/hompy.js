@@ -5,8 +5,8 @@
  *
  * Lo llevan Bárbara y Lisseth (y el dueño). Etapa 1: el calendario de las
  * actividades de Hompy y el REPORTE DE SALIDA A TERRENO de cada una, con su
- * PDF. Etapa 2 suma el Estudio TikTok (idea → diálogo → guión → video) y la
- * Etapa 3 las marcas colaboradoras y el reporte mensual.
+ * PDF. Etapa 2: el Estudio TikTok (idea → diálogo → guión → producción →
+ * publicado, con métricas). Etapa 3: las marcas colaboradoras y el reporte mensual.
  *
  * Acceso: el módulo `hompy` de la cuenta (Administración → Cuentas). A
  * diferencia del resto de `modulos` (que solo pinta el menú), aquí cada acción
@@ -138,7 +138,7 @@ function eventoPublico_(e) {
     evento_id: e.evento_id, tipo_id: e.tipo_id, titulo: e.titulo, fecha: fecha_(e.fecha), hora_inicio: e.hora_inicio || '', hora_fin: e.hora_fin || '',
     lugar: e.lugar || '', direccion: e.direccion || '', comuna: e.comuna || '', participantes: json_(e.participantes, []),
     descripcion: e.descripcion || '', estado: ESTADOS_EVENTO.indexOf(e.estado) !== -1 ? e.estado : 'PLANIFICADO',
-    motivo_cancelacion: e.motivo_cancelacion || '', creado_por: e.creado_por || '', fecha_creacion: e.fecha_creacion || ''
+    motivo_cancelacion: e.motivo_cancelacion || '', idea_id: e.idea_id || '', creado_por: e.creado_por || '', fecha_creacion: e.fecha_creacion || ''
   };
 }
 function eventos_(db) { return leer_(db, 'HOMPY_EVENTOS').filter((e) => esVerdadero_(e.activo)).map(eventoPublico_); }
@@ -293,13 +293,220 @@ function reabrirSalida(db, data, contexto) {
   return { salida: salidaDe_(db, data.evento_id) };
 }
 
+// --- Estudio TikTok (Etapa 2) -------------------------------------------------------------------
+// Una idea avanza por 5 etapas: IDEA → DIALOGO → GUION → PRODUCCION → PUBLICADO (o DESCARTADA).
+// Hacia adelante, de a una y con lo mínimo de la etapa que deja; hacia atrás, libre.
+const ETAPAS = ['IDEA', 'DIALOGO', 'GUION', 'PRODUCCION', 'PUBLICADO'];
+const NOMBRE_ETAPA = { IDEA: 'Idea', DIALOGO: 'Diálogo', GUION: 'Guión', PRODUCCION: 'Producción', PUBLICADO: 'Publicado', DESCARTADA: 'Descartada' };
+const OBJETIVOS = ['EDUCAR', 'ENTRETENER', 'MARCA', 'TENDENCIA'];
+const FORMATOS = ['Sketch / actuado', 'Tutorial / consejo', 'Detrás de cámaras', 'Tendencia / baile', 'Pregunta y respuesta', 'Colaboración con marca'];
+const DURACIONES = [15, 30, 60, 90];
+const PLANOS = ['General', 'Medio', 'Primer plano', 'Detalle', 'POV', 'Pantalla / texto'];
+const CHECKLIST = [
+  ['traje', 'Traje listo y limpio'], ['locacion', 'Lugar confirmado'], ['permisos', 'Autorización de quienes aparecen'],
+  ['grabado', 'Grabado'], ['editado', 'Editado'], ['subtitulos', 'Subtítulos'], ['audio', 'Música o audio con derechos'],
+  ['portada', 'Portada'], ['aprobado', 'Revisado y aprobado']
+];
+const METRICAS = ['vistas', 'me_gusta', 'comentarios', 'compartidos', 'guardados'];
+
+function limpiarIdea_(d) {
+  d = d || {};
+  return {
+    gancho: texto_(d.gancho, 200), objetivo: OBJETIVOS.indexOf(d.objetivo) !== -1 ? d.objetivo : '',
+    formato: FORMATOS.indexOf(d.formato) !== -1 ? d.formato : '', duracion: DURACIONES.indexOf(Number(d.duracion)) !== -1 ? Number(d.duracion) : 30,
+    referencia: url_(d.referencia), audio: linea_(d.audio, 120),
+    hashtags: lista_(d.hashtags, 12, 40).map((h) => '#' + h.replace(/^#+/, '').replace(/\s+/g, '')).filter((h) => h.length > 1),
+    notas: texto_(d.notas, 2000)
+  };
+}
+function limpiarDialogo_(d) {
+  d = d || {};
+  const personajes = lista_(d.personajes, 8, 30);
+  if (!personajes.some((p) => p.toLowerCase() === 'hompy')) personajes.unshift('Hompy');
+  const lineas = (Array.isArray(d.lineas) ? d.lineas : []).slice(0, 80).map((l) => ({
+    personaje: linea_(l && l.personaje, 30) || 'Hompy', tipo: l && l.tipo === 'accion' ? 'accion' : 'dice', texto: texto_(l && l.texto, 400)
+  })).filter((l) => l.texto);
+  lineas.forEach((l) => { if (!personajes.some((p) => p.toLowerCase() === l.personaje.toLowerCase()) && personajes.length < 8) personajes.push(l.personaje); });
+  return { personajes: personajes.slice(0, 8), lineas };
+}
+function limpiarGuion_(d) {
+  d = d || {};
+  const escenas = (Array.isArray(d.escenas) ? d.escenas : []).slice(0, 40).map((e) => ({
+    plano: PLANOS.indexOf(e && e.plano) !== -1 ? e.plano : 'Medio', accion: texto_(e && e.accion, 400), pantalla: texto_(e && e.pantalla, 200),
+    audio: texto_(e && e.audio, 400), segundos: entero_(e && e.segundos, 600) || 0
+  })).filter((e) => e.accion || e.pantalla || e.audio);
+  return { escenas };
+}
+function limpiarProduccion_(d, previa) {
+  d = d || {};
+  const check = {};
+  CHECKLIST.forEach(([k]) => { check[k] = esVerdadero_(d.checklist && d.checklist[k]); });
+  return {
+    checklist: check, fecha_grabacion: fecha_(d.fecha_grabacion), hora_grabacion: hora_(d.hora_grabacion), lugar: linea_(d.lugar, 120),
+    responsable: linea_(d.responsable, 60), enlace_borrador: url_(d.enlace_borrador), notas: texto_(d.notas, 1500),
+    // El enlace al calendario solo lo pone agendarGrabacion: nunca llega del navegador.
+    evento_id: (previa && previa.evento_id) || ''
+  };
+}
+function limpiarPublicacion_(d) {
+  d = d || {};
+  const m = (x) => { const o = {}; METRICAS.forEach((k) => { o[k] = entero_(x && x[k]); }); return o; };
+  return { url: url_(d.url), fecha: fecha_(d.fecha), h24: m(d.h24), d7: m(d.d7), aprendizajes: texto_(d.aprendizajes, 1500) };
+}
+function ideaPublica_(f) {
+  const prod = json_(f.produccion, {});
+  return {
+    idea_id: f.idea_id, titulo: f.titulo, etapa: ETAPAS.concat(['DESCARTADA']).indexOf(f.etapa) !== -1 ? f.etapa : 'IDEA',
+    idea: limpiarIdea_(json_(f.idea, {})), dialogo: limpiarDialogo_(json_(f.dialogo, {})), guion: limpiarGuion_(json_(f.guion, {})),
+    produccion: limpiarProduccion_(prod, prod), publicacion: limpiarPublicacion_(json_(f.publicacion, {})),
+    votos: json_(f.votos, []), motivo_descarte: f.motivo_descarte || '',
+    creado_por: f.creado_por || '', fecha_creacion: f.fecha_creacion || '', actualizado_por: f.actualizado_por || '', fecha_actualizacion: f.fecha_actualizacion || ''
+  };
+}
+function ideaFila_(db, id) { return leer_(db, 'HOMPY_IDEAS').find((f) => f.idea_id === id && esVerdadero_(f.activo)) || null; }
+function ideas_(db) { return leer_(db, 'HOMPY_IDEAS').filter((f) => esVerdadero_(f.activo)).map(ideaPublica_); }
+
+/** Lo que falta para dejar la etapa actual: [{ campo, mensaje }]. */
+function faltaParaAvanzar_(idea) {
+  const f = [];
+  if (idea.etapa === 'IDEA') {
+    if (!idea.titulo) f.push({ campo: 'titulo', mensaje: 'Ponle un título a la idea.' });
+    if (!idea.idea.gancho) f.push({ campo: 'gancho', mensaje: 'Escribe el gancho: lo que pasa en los primeros 3 segundos.' });
+  } else if (idea.etapa === 'DIALOGO') {
+    if (!idea.dialogo.lineas.length) f.push({ campo: 'lineas', mensaje: 'Escribe al menos una línea del diálogo.' });
+  } else if (idea.etapa === 'GUION') {
+    if (!idea.guion.escenas.length) f.push({ campo: 'escenas', mensaje: 'Arma al menos una escena del guión.' });
+    else if (!idea.guion.escenas.some((e) => e.segundos > 0)) f.push({ campo: 'segundos', mensaje: 'Indica cuántos segundos dura cada escena.' });
+  } else if (idea.etapa === 'PRODUCCION') {
+    if (!idea.produccion.checklist.grabado) f.push({ campo: 'grabado', mensaje: 'Marca el video como grabado.' });
+    if (!idea.produccion.checklist.aprobado) f.push({ campo: 'aprobado', mensaje: 'Falta que alguien lo revise y apruebe.' });
+  }
+  return f;
+}
+
+function guardarIdea(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  data = data || {};
+  const titulo = linea_(data.titulo, 120);
+  if (!data.idea_id) {
+    if (!titulo) return errorValidacion('titulo', 'Anota la idea en una frase.');
+    const nueva = {
+      idea_id: id_('HI'), titulo, etapa: 'IDEA', idea: JSON.stringify(limpiarIdea_(data.idea)), dialogo: JSON.stringify(limpiarDialogo_({})),
+      guion: JSON.stringify({ escenas: [] }), produccion: JSON.stringify(limpiarProduccion_({})), publicacion: JSON.stringify(limpiarPublicacion_({})),
+      votos: '[]', motivo_descarte: '', creado_por: contexto.email, fecha_creacion: ahora_(), actualizado_por: contexto.email, fecha_actualizacion: ahora_(), activo: true
+    };
+    agregarFila_(db, 'HOMPY_IDEAS', nueva);
+    return { idea: ideaPublica_(nueva) };
+  }
+  const f = ideaFila_(db, data.idea_id);
+  if (!f) return errorValidacion('idea_id', 'Esa idea ya no existe.');
+  const cambios = { actualizado_por: contexto.email, fecha_actualizacion: ahora_() };
+  if (data.titulo !== undefined) { if (!titulo) return errorValidacion('titulo', 'La idea necesita un título.'); cambios.titulo = titulo; }
+  if (data.idea) cambios.idea = JSON.stringify(limpiarIdea_(data.idea));
+  if (data.dialogo) cambios.dialogo = JSON.stringify(limpiarDialogo_(data.dialogo));
+  if (data.guion) cambios.guion = JSON.stringify(limpiarGuion_(data.guion));
+  if (data.produccion) cambios.produccion = JSON.stringify(limpiarProduccion_(data.produccion, json_(f.produccion, {})));
+  if (data.publicacion) cambios.publicacion = JSON.stringify(limpiarPublicacion_(data.publicacion));
+  actualizarFilaPorId_(db, 'HOMPY_IDEAS', 'idea_id', f.idea_id, cambios);
+  return { idea: ideaPublica_(ideaFila_(db, f.idea_id)) };
+}
+
+function moverIdea(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  data = data || {};
+  const f = ideaFila_(db, data.idea_id);
+  if (!f) return errorValidacion('idea_id', 'Esa idea ya no existe.');
+  const idea = ideaPublica_(f);
+  const destino = String(data.etapa || '');
+  const cambios = { actualizado_por: contexto.email, fecha_actualizacion: ahora_() };
+  if (destino === 'DESCARTADA') {
+    const motivo = linea_(data.motivo, 300);
+    if (!motivo) return errorValidacion('motivo', 'Cuenta brevemente por qué se descarta (sirve para no repetirla).');
+    if (idea.etapa === 'PUBLICADO') return errorValidacion('etapa', 'Un video publicado no se descarta.');
+    Object.assign(cambios, { etapa: 'DESCARTADA', motivo_descarte: motivo });
+  } else {
+    const iDest = ETAPAS.indexOf(destino);
+    if (iDest === -1) return errorValidacion('etapa', 'Etapa no válida.');
+    if (idea.etapa === 'DESCARTADA') {
+      if (iDest !== 0) return errorValidacion('etapa', 'Una idea descartada vuelve primero a «Idea».');
+    } else {
+      const iAct = ETAPAS.indexOf(idea.etapa);
+      if (iDest > iAct + 1) return errorValidacion('etapa', 'Se avanza de a una etapa: primero «' + NOMBRE_ETAPA[ETAPAS[iAct + 1]] + '».');
+      if (iDest === iAct + 1) {
+        const falta = faltaParaAvanzar_(idea);
+        if (falta.length) {
+          return { _validationError: true, message: 'Para pasar a «' + NOMBRE_ETAPA[destino] + '» falta: ' + falta.map((x) => x.mensaje.replace(/\.$/, '')).join('; ') + '.', fields: falta };
+        }
+        if (destino === 'PUBLICADO' && !idea.publicacion.url) {
+          const url = url_(data.url);
+          if (!url) return errorValidacion('url', 'Pega el enlace del video publicado en TikTok.');
+          cambios.publicacion = JSON.stringify(Object.assign({}, idea.publicacion, { url, fecha: idea.publicacion.fecha || hoy_() }));
+        }
+      }
+    }
+    Object.assign(cambios, { etapa: destino, motivo_descarte: '' });
+  }
+  actualizarFilaPorId_(db, 'HOMPY_IDEAS', 'idea_id', f.idea_id, cambios);
+  return { idea: ideaPublica_(ideaFila_(db, f.idea_id)) };
+}
+
+function votarIdea(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  const f = ideaFila_(db, data && data.idea_id);
+  if (!f) return errorValidacion('idea_id', 'Esa idea ya no existe.');
+  const yo = String(contexto.email || '').toLowerCase();
+  const votos = json_(f.votos, []).filter(Boolean);
+  const i = votos.indexOf(yo);
+  if (i === -1) votos.push(yo); else votos.splice(i, 1);
+  actualizarFilaPorId_(db, 'HOMPY_IDEAS', 'idea_id', f.idea_id, { votos: JSON.stringify(votos) });
+  return { idea: ideaPublica_(ideaFila_(db, f.idea_id)) };
+}
+
+function eliminarIdea(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  const f = ideaFila_(db, data && data.idea_id);
+  if (!f) return errorValidacion('idea_id', 'Esa idea ya no existe.');
+  if (f.etapa === 'PUBLICADO') return errorValidacion('idea_id', 'Un video publicado no se elimina: queda como registro.');
+  actualizarFilaPorId_(db, 'HOMPY_IDEAS', 'idea_id', f.idea_id, { activo: false, actualizado_por: contexto.email, fecha_actualizacion: ahora_() });
+  return { eliminado: f.idea_id };
+}
+
+/** Agenda (o mueve) la grabación en el calendario de Hompy y la deja enlazada a la idea. */
+function agendarGrabacion(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  data = data || {};
+  const f = ideaFila_(db, data.idea_id);
+  if (!f) return errorValidacion('idea_id', 'Esa idea ya no existe.');
+  const fecha = fecha_(data.fecha);
+  if (!fecha) return errorValidacion('fecha', 'Elige el día de la grabación.');
+  const lista = tipos_(db).filter((t) => t.activo);
+  const tipo = lista.find((t) => t.tipo_id === data.tipo_id) || lista.find((t) => /grab/i.test(t.nombre)) || lista.find((t) => t.icono === 'camara') || lista[0];
+  const idea = ideaPublica_(f);
+  const datosEv = {
+    tipo_id: tipo.tipo_id, titulo: 'Grabación TikTok: ' + idea.titulo, fecha, hora_inicio: data.hora || '', lugar: data.lugar || '',
+    descripcion: (idea.idea.gancho ? 'Gancho: ' + idea.idea.gancho + '\n' : '') + 'Agendada desde el Estudio TikTok.'
+  };
+  const previo = idea.produccion.evento_id && eventoFila_(db, idea.produccion.evento_id);
+  const r = previo
+    ? guardarEvento(db, Object.assign({ evento_id: previo.evento_id, participantes: json_(previo.participantes, []) }, datosEv), contexto)
+    : guardarEvento(db, datosEv, contexto);
+  if (!r.evento) return r;
+  actualizarFilaPorId_(db, 'HOMPY_EVENTOS', 'evento_id', r.evento.evento_id, { idea_id: idea.idea_id });
+  const prod = Object.assign({}, idea.produccion, {
+    fecha_grabacion: fecha, hora_grabacion: hora_(data.hora), lugar: linea_(data.lugar, 120) || idea.produccion.lugar, evento_id: r.evento.evento_id
+  });
+  actualizarFilaPorId_(db, 'HOMPY_IDEAS', 'idea_id', idea.idea_id, { produccion: JSON.stringify(prod), actualizado_por: contexto.email, fecha_actualizacion: ahora_() });
+  return { idea: ideaPublica_(ideaFila_(db, idea.idea_id)), evento: eventoPublico_(eventoFila_(db, r.evento.evento_id)) };
+}
+
 // --- todo lo del módulo en una llamada ------------------------------------------------------
 function datos(db, data, contexto) {
   if (!puede_(contexto)) return sinAcceso_();
   const salidas = leer_(db, 'HOMPY_SALIDAS').filter((s) => esVerdadero_(s.activo)).map(salidaPublica_);
   return {
-    hoy: hoy_(), tipos: tipos_(db), eventos: eventos_(db), salidas, personas: personas_(db), nombres: nombres_(db),
-    catalogos: { colores: COLORES, iconos: ICONOS, estados_traje: ESTADOS_TRAJE, material: MATERIAL, max_tipos: MAX_TIPOS }
+    hoy: hoy_(), tipos: tipos_(db), eventos: eventos_(db), salidas, ideas: ideas_(db), personas: personas_(db), nombres: nombres_(db),
+    catalogos: { colores: COLORES, iconos: ICONOS, estados_traje: ESTADOS_TRAJE, material: MATERIAL, max_tipos: MAX_TIPOS,
+      etapas: ETAPAS, nombres_etapa: NOMBRE_ETAPA, objetivos: OBJETIVOS, formatos: FORMATOS, duraciones: DURACIONES, planos: PLANOS, checklist: CHECKLIST, metricas: METRICAS }
   };
 }
 
@@ -407,6 +614,7 @@ async function pdfSalida(db, data, contexto) {
 
 module.exports = {
   datos, guardarTipo, guardarEvento, cambiarEstadoEvento, eliminarEvento, guardarSalida, reabrirSalida, pdfSalida,
+  guardarIdea, moverIdea, votarIdea, eliminarIdea, agendarGrabacion,
   // para las pruebas
-  puede_, limpiarDatosSalida_, faltantesParaCerrar_, cuerpoPdf_, TIPOS_PROPUESTA, MODULO
+  puede_, limpiarDatosSalida_, faltaParaAvanzar_, limpiarDialogo_, limpiarGuion_, faltantesParaCerrar_, cuerpoPdf_, TIPOS_PROPUESTA, MODULO
 };

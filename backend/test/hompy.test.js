@@ -141,3 +141,79 @@ test('PDF: el cuerpo trae la portada, el traje, la evaluación y los gastos', ()
   assert.match(html, /Reporte cerrado por Bárbara Álvarez/);
   assert.equal((html.match(/class="on"/g) || []).length, 8, '4 estrellas, en la portada y en la evaluación');
 });
+
+test('Estudio TikTok: la idea avanza de a una etapa, con lo mínimo de cada una', () => {
+  const db = crear();
+  assert.ok(rechazado(H.guardarIdea(db, { titulo: 'x' }, OTRA)));
+  assert.ok(invalido(H.guardarIdea(db, { titulo: '  ' }, BARBARA)));
+  let idea = H.guardarIdea(db, { titulo: 'Hompy explica el casco' }, BARBARA).idea;
+  assert.equal(idea.etapa, 'IDEA');
+  assert.deepEqual(idea.dialogo.personajes, ['Hompy'], 'Hompy siempre está en el reparto');
+  // Sin gancho no pasa a Diálogo; tampoco se salta etapas.
+  let r = H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'DIALOGO' }, BARBARA);
+  assert.ok(invalido(r)); assert.equal(r.fields[0].campo, 'gancho');
+  assert.ok(invalido(H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'GUION' }, BARBARA)), 'no se salta etapas');
+  H.guardarIdea(db, { idea_id: idea.idea_id, idea: { gancho: '¿Sabías que el casco tiene fecha de vencimiento?', objetivo: 'EDUCAR', duracion: 45, hashtags: 'seguridad, #prevencion, #' } }, BARBARA);
+  idea = H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'DIALOGO' }, BARBARA).idea;
+  assert.equal(idea.etapa, 'DIALOGO');
+  assert.equal(idea.idea.duracion, 30, 'duración fuera de la lista vuelve a 30');
+  assert.deepEqual(idea.idea.hashtags, ['#seguridad', '#prevencion']);
+  assert.ok(invalido(H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'GUION' }, BARBARA)), 'sin diálogo no hay guión');
+  idea = H.guardarIdea(db, { idea_id: idea.idea_id, dialogo: { personajes: ['Hompy', 'Trabajador'], lineas: [
+    { personaje: 'Trabajador', texto: 'Mi casco está perfecto.' }, { personaje: 'Hompy', tipo: 'accion', texto: 'Niega con la cabeza' },
+    { personaje: 'Voz en off', texto: 'Los cascos vencen.' }, { personaje: 'Hompy', texto: '' }] } }, BARBARA).idea;
+  assert.equal(idea.dialogo.lineas.length, 3, 'las líneas vacías no se guardan');
+  assert.equal(idea.dialogo.lineas[1].tipo, 'accion');
+  assert.ok(idea.dialogo.personajes.includes('Voz en off'), 'un personaje nuevo entra al reparto');
+  idea = H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'GUION' }, BARBARA).idea;
+  H.guardarIdea(db, { idea_id: idea.idea_id, guion: { escenas: [{ plano: 'Inventado', accion: 'Trabajador posa', segundos: 0 }] } }, BARBARA);
+  r = H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'PRODUCCION' }, BARBARA);
+  assert.ok(invalido(r)); assert.equal(r.fields[0].campo, 'segundos');
+  idea = H.guardarIdea(db, { idea_id: idea.idea_id, guion: { escenas: [{ plano: 'Inventado', accion: 'Trabajador posa', segundos: 4 }, { accion: '', pantalla: '' }] } }, BARBARA).idea;
+  assert.equal(idea.guion.escenas.length, 1); assert.equal(idea.guion.escenas[0].plano, 'Medio');
+  idea = H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'PRODUCCION' }, BARBARA).idea;
+  // Producción: el enlace al calendario no se puede inventar desde el navegador.
+  idea = H.guardarIdea(db, { idea_id: idea.idea_id, produccion: { checklist: { grabado: true }, evento_id: 'HE-falso' } }, BARBARA).idea;
+  assert.equal(idea.produccion.evento_id, '');
+  r = H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'PUBLICADO' }, BARBARA);
+  assert.ok(invalido(r)); assert.deepEqual(r.fields.map((f) => f.campo), ['aprobado']);
+  H.guardarIdea(db, { idea_id: idea.idea_id, produccion: { checklist: { grabado: true, aprobado: true } } }, BARBARA);
+  assert.ok(invalido(H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'PUBLICADO' }, BARBARA)), 'publicar pide el enlace');
+  idea = H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'PUBLICADO', url: 'https://www.tiktok.com/@homepymes/video/1' }, BARBARA).idea;
+  assert.equal(idea.etapa, 'PUBLICADO'); assert.equal(idea.publicacion.fecha, hoy());
+  idea = H.guardarIdea(db, { idea_id: idea.idea_id, publicacion: Object.assign({}, idea.publicacion, { h24: { vistas: '1.500', me_gusta: 120 } }) }, BARBARA).idea;
+  assert.equal(idea.publicacion.h24.vistas, 1500);
+  assert.ok(invalido(H.eliminarIdea(db, { idea_id: idea.idea_id }, BARBARA)), 'publicado no se elimina');
+  assert.ok(invalido(H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'DESCARTADA', motivo: 'x' }, BARBARA)));
+  // Hacia atrás, libre.
+  assert.equal(H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'GUION' }, BARBARA).idea.etapa, 'GUION');
+});
+
+test('Estudio TikTok: descartar con motivo, votar y agendar la grabación en el calendario', () => {
+  const db = crear();
+  const idea = H.guardarIdea(db, { titulo: 'Baile del chaleco', idea: { gancho: 'Hompy baila' } }, BARBARA).idea;
+  assert.ok(invalido(H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'DESCARTADA' }, BARBARA)), 'descartar pide motivo');
+  assert.equal(H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'DESCARTADA', motivo: 'Ya lo hizo otra marca' }, BARBARA).idea.motivo_descarte, 'Ya lo hizo otra marca');
+  assert.ok(invalido(H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'GUION' }, BARBARA)), 'descartada vuelve primero a Idea');
+  assert.equal(H.moverIdea(db, { idea_id: idea.idea_id, etapa: 'IDEA' }, BARBARA).idea.motivo_descarte, '');
+  const LIS = { email: 'Lisseth@homepymes.cl', rol: 'DEV', modulos: ['hompy'] };
+  H.votarIdea(db, { idea_id: idea.idea_id }, BARBARA);
+  assert.deepEqual(H.votarIdea(db, { idea_id: idea.idea_id }, LIS).idea.votos, ['barbara@homepymes.cl', 'lisseth@homepymes.cl']);
+  assert.deepEqual(H.votarIdea(db, { idea_id: idea.idea_id }, BARBARA).idea.votos, ['lisseth@homepymes.cl'], 'votar de nuevo quita el voto');
+
+  assert.ok(invalido(H.agendarGrabacion(db, { idea_id: idea.idea_id, fecha: '' }, BARBARA)));
+  const f = mover(hoy(), 3);
+  let r = H.agendarGrabacion(db, { idea_id: idea.idea_id, fecha: f, hora: '15:00', lugar: 'Oficina' }, BARBARA);
+  assert.equal(r.evento.titulo, 'Grabación TikTok: Baile del chaleco');
+  assert.equal(r.evento.idea_id, idea.idea_id);
+  assert.equal(r.idea.produccion.evento_id, r.evento.evento_id);
+  const tipos = H.datos(db, {}, BARBARA).tipos;
+  assert.equal(tipos.find((t) => t.tipo_id === r.evento.tipo_id).nombre, 'Grabación de contenido', 'elige el tipo de grabación');
+  // Re-agendar mueve el mismo evento, no crea otro.
+  r = H.agendarGrabacion(db, { idea_id: idea.idea_id, fecha: mover(hoy(), 4), hora: '10:00' }, BARBARA);
+  assert.equal(H.datos(db, {}, BARBARA).eventos.length, 1);
+  assert.equal(r.evento.fecha, mover(hoy(), 4));
+  assert.equal(H.datos(db, {}, BARBARA).ideas.length, 1);
+  H.eliminarIdea(db, { idea_id: idea.idea_id }, BARBARA);
+  assert.equal(H.datos(db, {}, BARBARA).ideas.length, 0);
+});

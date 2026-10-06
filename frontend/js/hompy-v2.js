@@ -7,15 +7,16 @@
  * tocarlo, mira hacia el cursor y celebra al cerrar un reporte). Todo el
  * movimiento se apaga con «reducir movimiento» del sistema.
  *
- * Vistas: Portada · Calendario · Salidas a terreno (+ el reporte de cada una)
- * · Tipos de evento. Lo vienen: Estudio TikTok (Etapa 2) y Marcas (Etapa 3).
+ * Vistas: Portada · Calendario · Estudio TikTok (hompy-estudio-v2.js, Etapa 2)
+ * · Salidas a terreno (+ el reporte de cada una) · Tipos de evento. Viene:
+ * Marcas (Etapa 3).
  */
 (function () {
   'use strict';
 
   var U = UIv2;
   var IMG = 'assets/hompy/hompy.webp';
-  var VISTAS = { inicio: 1, calendario: 1, salidas: 1, tipos: 1, salida: 1 };
+  var VISTAS = { inicio: 1, calendario: 1, salidas: 1, tipos: 1, salida: 1, estudio: 1, idea: 1 };
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   var DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   var DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -122,10 +123,12 @@
       ir(v, arg, true);
     });
   }
+  // El Estudio TikTok vive en su propio archivo (hompy-estudio-v2.js).
+  function E() { return window.SigsoHompyEstudio || null; }
   function refrescar() {
     if (!raiz_ || raiz_.classList.contains('sigso-oculto')) return;
-    // Nunca por debajo de un formulario abierto o de un reporte a medio llenar.
-    if (sucio_ || document.querySelector('.sx2-drawer, .sx2-dialogo, .hp2-celebra')) return;
+    // Nunca por debajo de un formulario abierto, de un reporte a medio llenar ni de una idea guardándose.
+    if (sucio_ || (E() && E().ocupado()) || document.querySelector('.sx2-drawer, .sx2-dialogo, .hp2-celebra')) return;
     traer(vista_, arg_, true);
   }
   function irAItem(item) {
@@ -134,6 +137,8 @@
     confirmarSalir().then(function (ok) { if (ok) ir(p.vista, p.arg); });
   }
   function confirmarSalir() {
+    // Las ideas se guardan solas: antes de salir se termina de guardar lo pendiente.
+    if (E() && E().ocupado()) return E().guardarYa().then(function () { return true; });
     if (!sucio_) return Promise.resolve(true);
     return U.confirmar({ titulo: 'Tienes cambios sin guardar', texto: 'El reporte de salida tiene cambios que no se han guardado. ¿Salir de todas formas?', boton: 'Salir sin guardar', peligro: true })
       .then(function (si) { if (si) sucio_ = false; return si; });
@@ -141,13 +146,17 @@
   function ir(v, arg, sinRuta) {
     vista_ = VISTAS[v] ? v : 'inicio'; arg_ = arg || '';
     if (vista_ === 'salida' && !evento(arg_)) { vista_ = 'salidas'; arg_ = ''; }
+    if ((vista_ === 'estudio' || vista_ === 'idea') && !E()) { vista_ = 'inicio'; arg_ = ''; }
+    if (vista_ === 'idea' && !(D.ideas || []).some(function (x) { return x.idea_id === arg_; })) { vista_ = 'estudio'; arg_ = ''; }
     sucio_ = false;
-    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(vista_ === 'salida' ? 'salidas' : vista_);
+    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(vista_ === 'salida' ? 'salidas' : vista_ === 'idea' ? 'estudio' : vista_);
     if (vista_ === 'inicio') pintarInicio();
     else if (vista_ === 'calendario') pintarCalendario();
     else if (vista_ === 'salidas') pintarSalidas();
     else if (vista_ === 'tipos') pintarTipos();
     else if (vista_ === 'salida') pintarSalida(arg_);
+    else if (vista_ === 'estudio') E().tablero();
+    else if (vista_ === 'idea') E().taller(arg_);
     if (!sinRuta) window.scrollTo({ top: 0, behavior: sinMov() ? 'auto' : 'smooth' });
   }
   function pagina(html) {
@@ -162,6 +171,7 @@
   var ARQUITECTURA = [
     { id: 'inicio', nombre: 'Portada', icono: 'inicio', items: [{ id: 'inicio', nombre: 'Portada' }] },
     { id: 'calendario', nombre: 'Calendario', icono: 'calendario', items: [{ id: 'calendario', nombre: 'Calendario' }] },
+    { id: 'estudio', nombre: 'Estudio TikTok', icono: 'camara', items: [{ id: 'estudio', nombre: 'Estudio TikTok' }] },
     { id: 'salidas', nombre: 'Salidas a terreno', icono: 'ubicacion', items: [{ id: 'salidas', nombre: 'Salidas a terreno' }] },
     { id: 'tipos', nombre: 'Tipos de evento', icono: 'ajustes', items: [{ id: 'tipos', nombre: 'Tipos de evento' }] }
   ];
@@ -198,7 +208,7 @@
     if (D.tipos.every(function (t) { return t.origen === 'PROPUESTA'; })) f.push('Mis tipos de evento son una propuesta: pónganles los nombres reales en «Tipos de evento».');
     f.push('Tómense pausas con el traje: ¡aquí adentro hace calor!');
     f.push('Seguridad primero: casco, chaleco… y una buena sonrisa.');
-    f.push('Pronto voy a tener mi Estudio TikTok. ¡Vayan juntando ideas!');
+    if (E()) f = f.concat(E().frases());
     return f;
   }
   function decir(texto) {
@@ -308,14 +318,14 @@
     var cardPend = U.card({ titulo: 'Reportes por llenar', icono: 'portapapeles', i: 6, accion: pend.length ? { texto: 'Todas las salidas', clase: 'js-hp2-ir', datos: { ir: 'salidas' } } : null,
       cuerpo: listaPend ? '<ul class="hp2-lista">' + listaPend + '</ul>' : '<div class="hp2-todo-listo"><img src="assets/hompy/hompy-cara.webp" alt="" width="56" height="56"><p><b>¡Todo al día!</b> No hay reportes de salida pendientes.</p></div>' });
 
-    var pronto = '<section class="hp2-pronto sx2-entra" style="--i:7">' +
+    var estudio = E() ? E().tarjetaPortada() : '';
+    var pronto = '<section class="hp2-pronto sx2-entra" style="--i:8">' +
       '<h2>' + U.ico('estrella', 16) + 'Lo que viene para Hompy</h2>' +
       '<div class="hp2-pronto__grilla">' +
-        '<article><span class="hp2-pronto__ico hp2-color-rosa">' + U.ico('camara', 18) + '</span><div><b>Estudio TikTok</b><p>De la idea al video: gancho, diálogo, guión por escenas, producción y métricas.</p></div><span class="sx2-badge sx2-tono-hito sx2-badge--sin-punto">Etapa 2</span></article>' +
         '<article><span class="hp2-pronto__ico hp2-color-azul">' + U.ico('megafono', 18) + '</span><div><b>Marcas colaboradoras</b><p>Cada marca (como BCI), sus colaboraciones, lo entregado y recibido, y el reporte mensual.</p></div><span class="sx2-badge sx2-tono-hito sx2-badge--sin-punto">Etapa 3</span></article>' +
       '</div></section>';
 
-    pagina(heroe + kpis + '<div class="sx2-grid hp2-dos"><div class="sx2-col-7">' + cardProx + '</div><div class="sx2-col-5">' + cardPend + '</div></div>' + pronto);
+    pagina(heroe + kpis + '<div class="sx2-grid hp2-dos"><div class="sx2-col-7">' + cardProx + '</div><div class="sx2-col-5">' + cardPend + '</div></div>' + estudio + pronto);
     animarMascota();
   }
   function filaEvento(e, i, pendiente) {
@@ -446,6 +456,7 @@
     }
     if (!cancelada && !pasado && e.estado === 'PLANIFICADO') acc.push(U.boton({ texto: 'Confirmar', icono: 'check', variante: 'primario', clase: 'js-hp2-d-estado', datos: { estado: 'CONFIRMADO' } }));
     if (!cancelada && !pasado && e.estado === 'CONFIRMADO') acc.push(U.boton({ texto: 'Volver a planificada', icono: 'derivar', variante: 'fantasma', clase: 'js-hp2-d-estado', datos: { estado: 'PLANIFICADO' } }));
+    if (e.idea_id && E()) acc.unshift(U.boton({ texto: 'Abrir en el Estudio', icono: 'camara', variante: 'fantasma', clase: 'js-hp2-d-idea' }));
     if (cancelada) acc.push(U.boton({ texto: 'Reactivar', icono: 'derivar', clase: 'js-hp2-d-estado', datos: { estado: 'PLANIFICADO' } }));
     var cerrada = s && s.estado === 'CERRADO';
     var menu = (cerrada ? '' : U.boton({ texto: 'Editar', icono: 'editar', variante: 'fantasma', clase: 'js-hp2-d-editar' })) +
@@ -463,6 +474,7 @@
       var b = ev.target.closest('button');
       if (!b) return;
       if (b.classList.contains('js-hp2-d-reporte')) { d.cerrar(true); ir('salida', id); }
+      else if (b.classList.contains('js-hp2-d-idea')) { d.cerrar(true); ir('idea', e.idea_id); }
       else if (b.classList.contains('js-hp2-d-pdf')) descargarPdf(id, b);
       else if (b.classList.contains('js-hp2-d-editar')) { d.cerrar(true); formularioEvento(e); }
       else if (b.classList.contains('js-hp2-d-estado')) cambiarEstado(id, b.getAttribute('data-estado'), '', d);
@@ -508,10 +520,10 @@
     (extra || []).concat(D.personas || []).forEach(function (p) { var k = String(p).toLowerCase(); if (p && !vistos[k]) { vistos[k] = 1; l.push(p); } });
     return '<datalist id="hp2-personas">' + l.map(function (p) { return '<option value="' + txt(p) + '"></option>'; }).join('') + '</datalist>';
   }
-  function chipsInput(nombre, valores, placeholder) {
+  function chipsInput(nombre, valores, placeholder, lista) {
     return '<div class="hp2-chips js-hp2-chips" data-name="' + txt(nombre) + '">' +
       (valores || []).map(chipHtml).join('') +
-      '<input class="hp2-chips__input" list="hp2-personas" placeholder="' + txt(placeholder || 'Escribe un nombre y presiona Enter') + '" aria-label="' + txt(placeholder || 'Agregar persona') + '">' +
+      '<input class="hp2-chips__input"' + (lista === false ? '' : ' list="' + (lista || 'hp2-personas') + '"') + ' placeholder="' + txt(placeholder || 'Escribe un nombre y presiona Enter') + '" aria-label="' + txt(placeholder || 'Agregar persona') + '">' +
       '<input type="hidden" name="' + txt(nombre) + '" value="' + txt((valores || []).join('\n')) + '"></div>';
   }
   function chipHtml(v) { return '<span class="hp2-chip" data-v="' + txt(v) + '">' + txt(v) + '<button type="button" class="hp2-chip__x" aria-label="Quitar ' + txt(v) + '">' + U.ico('equis', 11) + '</button></span>'; }
@@ -808,7 +820,7 @@
       D.salidas = D.salidas.filter(function (x) { return x.evento_id !== s.evento_id; }).concat([s]);
       D.eventos = D.eventos.map(function (x) { return x.evento_id === ev.evento_id ? ev : x; });
       pintarBadge();
-      if (cerrar) { celebrar(e); pintarSalidaLectura(ev, s); }
+      if (cerrar) { celebrar({ titulo: '¡Reporte cerrado!', texto: '«' + e.titulo + '» quedó registrada. ¡Buen trabajo, equipo!', pdf: e.evento_id }); pintarSalidaLectura(ev, s); }
       else { form.querySelector('.js-hp2-sucio').textContent = 'Borrador guardado ' + horaDe(s.fecha_actualizacion); aviso('Borrador guardado.', 'exito'); }
     });
   }
@@ -868,27 +880,28 @@
     });
   }
 
-  // Al cerrar un reporte: Hompy celebra (confeti con los colores de su ropa).
-  function celebrar(e) {
+  // Al cerrar un reporte o publicar un video: Hompy celebra (confeti con los colores de su ropa).
+  // o: { titulo, texto, pdf (evento_id, opcional) }.
+  function celebrar(o) {
     var el = document.createElement('div');
     el.className = 'sx2 hp2-celebra';
-    el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Reporte cerrado');
+    el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', o.titulo);
     var confeti = '';
     if (!sinMov()) for (var i = 0; i < 42; i++) {
       confeti += '<i style="--x:' + Math.round(Math.random() * 100) + ';--r:' + Math.round(Math.random() * 360) + 'deg;--d:' + (0.9 + Math.random() * 1.1).toFixed(2) + 's;--w:' + (i * 0.025).toFixed(2) + 's;--c:' +
         ['var(--hp-naranja)', 'var(--hp-azul)', '#ffffff', '#ffd166', '#c9d2dd'][i % 5] + '"></i>';
     }
     el.innerHTML = '<div class="hp2-celebra__telon"></div><div class="hp2-celebra__confeti" aria-hidden="true">' + confeti + '</div>' +
-      '<div class="hp2-celebra__caja"><img src="' + IMG + '" alt="" width="559" height="900"><h2>¡Reporte cerrado!</h2>' +
-      '<p>«' + txt(e.titulo) + '» quedó registrada. ¡Buen trabajo, equipo!</p>' +
-      '<div class="hp2-celebra__acc">' + U.boton({ texto: 'Descargar PDF', icono: 'descargar', clase: 'js-hp2-cel-pdf' }) + U.boton({ texto: 'Listo', icono: 'check', variante: 'primario', clase: 'js-hp2-cel-ok hp2-boton-hompy' }) + '</div></div>';
+      '<div class="hp2-celebra__caja"><img src="' + IMG + '" alt="" width="559" height="900"><h2>' + txt(o.titulo) + '</h2>' +
+      '<p>' + txt(o.texto) + '</p>' +
+      '<div class="hp2-celebra__acc">' + (o.pdf ? U.boton({ texto: 'Descargar PDF', icono: 'descargar', clase: 'js-hp2-cel-pdf' }) : '') + U.boton({ texto: 'Listo', icono: 'check', variante: 'primario', clase: 'js-hp2-cel-ok hp2-boton-hompy' }) + '</div></div>';
     document.body.appendChild(el);
     var previo = document.activeElement;
     function cerrar() { document.removeEventListener('keydown', tecla, true); el.classList.add('hp2-celebra--sale'); setTimeout(function () { el.remove(); }, sinMov() ? 0 : 220); if (previo && previo.focus) try { previo.focus(); } catch (x) { /* */ } }
     function tecla(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); } }
     document.addEventListener('keydown', tecla, true);
     el.addEventListener('click', function (ev) {
-      if (ev.target.closest('.js-hp2-cel-pdf')) descargarPdf(e.evento_id, ev.target.closest('button'));
+      if (ev.target.closest('.js-hp2-cel-pdf')) descargarPdf(o.pdf, ev.target.closest('button'));
       else if (ev.target.closest('.js-hp2-cel-ok') || ev.target.classList.contains('hp2-celebra__telon')) cerrar();
     });
     el.querySelector('.js-hp2-cel-ok').focus();
@@ -971,6 +984,15 @@
   });
   window.addEventListener('beforeunload', function (ev) { if (sucio_) { ev.preventDefault(); ev.returnValue = ''; } });
 
-  window.SigsoHompy = { cargar: cargar, refrescar: refrescar, irAItem: irAItem };
+  window.SigsoHompy = {
+    cargar: cargar, refrescar: refrescar, irAItem: irAItem,
+    // Lo que comparte con el Estudio TikTok (hompy-estudio-v2.js).
+    _interno: {
+      datos: function () { return D; }, raiz: function () { return raiz_; }, api: api, aviso: aviso, txt: txt, sinMov: sinMov,
+      pagina: pagina, cabecera: cabecera, ir: ir, irAItem: irAItem, traer: function (v, a) { return traer(v, a, true); },
+      chipsInput: chipsInput, enlazarChips: enlazarChips, chispas: chispas, celebrar: celebrar, abrirEvento: abrirEvento,
+      fechaLarga: fechaLarga, fechaCorta: fechaCorta, cuando: cuando, nombreDe: nombreDe, horaDe: horaDe, tipo: tipo, IMG: IMG
+    }
+  };
   registrarArbol();
 })();

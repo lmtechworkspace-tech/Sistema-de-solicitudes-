@@ -685,6 +685,11 @@ const ACCIONES = {
   hompyGuardarSalida: (db, data, contexto) => Hompy.guardarSalida(db, data, contexto),
   hompyReabrirSalida: (db, data, contexto) => Hompy.reabrirSalida(db, data, contexto),
   hompyPdfSalida: (db, data, contexto) => Hompy.pdfSalida(db, data, contexto),
+  hompyGuardarIdea: (db, data, contexto) => Hompy.guardarIdea(db, data, contexto),
+  hompyMoverIdea: (db, data, contexto) => Hompy.moverIdea(db, data, contexto),
+  hompyVotarIdea: (db, data, contexto) => Hompy.votarIdea(db, data, contexto),
+  hompyEliminarIdea: (db, data, contexto) => Hompy.eliminarIdea(db, data, contexto),
+  hompyAgendarGrabacion: (db, data, contexto) => Hompy.agendarGrabacion(db, data, contexto),
   obtenerPreferencias: (db, data, contexto) => Preferencias.obtener(db, data, contexto),
   guardarFijados: (db, data, contexto) => Preferencias.guardarFijados(db, data, contexto),
   // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y

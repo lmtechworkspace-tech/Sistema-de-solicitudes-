@@ -874,11 +874,18 @@ const COLUMNAS = {
   ],
   HOMPY_EVENTOS: [
     'evento_id', 'tipo_id', 'titulo', 'fecha', 'hora_inicio', 'hora_fin', 'lugar', 'direccion', 'comuna',
-    'participantes', 'descripcion', 'estado', 'motivo_cancelacion',
+    'participantes', 'descripcion', 'estado', 'motivo_cancelacion', 'idea_id',
     'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
   ],
   HOMPY_SALIDAS: [
     'salida_id', 'evento_id', 'datos', 'estado', 'cerrado_por', 'fecha_cierre',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
+  ],
+  // Estudio TikTok (Etapa 2): cada idea con su etapa y el contenido de cada
+  // una en JSON (idea, diálogo, guión por escenas, producción, publicación con
+  // métricas a 24 h y 7 días). `votos`: correos de quienes la apoyan.
+  HOMPY_IDEAS: [
+    'idea_id', 'titulo', 'etapa', 'idea', 'dialogo', 'guion', 'produccion', 'publicacion', 'votos', 'motivo_descarte',
     'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
   ]
 };
