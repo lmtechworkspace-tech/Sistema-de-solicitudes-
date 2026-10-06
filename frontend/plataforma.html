@@ -15,7 +15,7 @@
        de render. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/tokens.css" />
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/components.css" />
@@ -205,36 +205,34 @@
        estandar de herramienta seria (Linear/Notion/Stripe). En movil el
        sidebar es un drawer que se abre con el boton hamburguesa. -->
   <div id="vista-shell" class="plataforma-shell" hidden>
-    <!-- 2026-10-05: riel + panel (barra-lateral.js). El riel lleva el ícono de
-         cada módulo con su contador, siempre a la vista; el panel, el menú
-         completo del módulo abierto, tus fijados y la acción principal.
-         Angostada (escritorio) queda solo el riel y el panel se abre flotando. -->
+    <!-- 2026-10-06, propuesta 2b «Bloques» (barra-lateral.js, barra-v2.css):
+         RIEL de íconos (68 px) que se despliega sobre el panel al pasar el mouse
+         o con el teclado (236 px, nombres completos y conteos), y PANEL del área
+         abierta (268 px): cada módulo principal es una tarjeta; sus secciones,
+         filas; y lo de tercer nivel, una bandeja hundida. Se oculta con Ctrl+B. -->
     <aside class="plataforma-sidebar sb" id="plataforma-sidebar" aria-label="Navegación de SIGSO">
-      <div class="sb-riel">
+      <div class="sb-riel" id="sb-riel-caja">
         <div class="sb-riel__cab">
           <div class="plataforma-header__marca" title="SIGSO">
-            <svg class="sigso-marca" width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
-              <rect width="32" height="32" rx="8" fill="#fff"></rect>
-              <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#14213D" text-anchor="middle">S</text>
-            </svg>
-            <span class="sb-oculto-visual">SIGSO</span>
+            <span class="sb-logo" aria-hidden="true">S</span>
+            <span class="sb-txt sb-logo__t">SIGSO</span>
           </div>
         </div>
         <button type="button" class="sb-nueva" id="sb-accion" hidden></button>
-        <nav class="sb-riel__mods" id="sb-riel" aria-label="Módulos"></nav>
+        <nav class="sb-riel__mods" id="sb-riel" aria-label="Navegación principal"></nav>
         <div class="sb-riel__pie">
-          <button type="button" class="sb-rb sb-expandir" id="btn-expandir-sidebar" aria-label="Mostrar el menú" title="Mostrar el menú ([)">
-            <span id="ico-expandir"></span>
+          <button type="button" class="sb-rb sb-expandir" id="btn-expandir-sidebar" aria-label="Ocultar el menú del área" aria-expanded="true" title="Ocultar el menú del área (Ctrl+B)">
+            <span class="sb-rb__ico" id="ico-expandir"></span><span class="sb-txt sb-rb__t" id="txt-expandir">Ocultar menú</span>
           </button>
           <!-- SIGSO v2, Módulo 9A: la campana vive en el marco. La llena notificaciones-vivas.js. -->
-          <button type="button" class="shell-campana js-shell-campana" hidden aria-label="Notificaciones"></button>
+          <div class="sb-campana"><button type="button" class="shell-campana js-shell-campana" hidden aria-label="Notificaciones"></button><span class="sb-txt sb-rb__t">Notificaciones</span></div>
           <!-- Tu foto: perfil, modo oscuro, atajos y cerrar sesión. -->
           <div class="plataforma-header__usuario">
             <button type="button" class="plataforma-usuario sb-usuario" id="btn-menu-usuario"
                     aria-haspopup="menu" aria-expanded="false" title="Tu cuenta">
               <span class="plataforma-avatar" id="nav-avatar"></span>
-              <span class="sb-oculto-visual">
-                <span id="nav-nombre-usuario"></span>, <span id="nav-rol-usuario"></span>
+              <span class="sb-txt sb-usuario__t">
+                <b id="nav-nombre-usuario"></b><small id="nav-rol-usuario"></small>
               </span>
               <span id="nav-chevron" hidden></span>
             </button>
@@ -261,33 +259,38 @@
         </div>
       </div>
 
-      <div class="sb-panel" id="sb-panel">
-        <!-- Portada del módulo abierto: su color, su nombre y para qué sirve (segunda versión, 2026-10-05). -->
-        <div class="sb-portada" id="sb-portada">
-          <div class="sb-portada__fila">
-            <span class="sb-tile" id="sb-panel-tile" aria-hidden="true"></span>
-            <div class="sb-panel__tit">
-              <strong id="sb-panel-titulo">Inicio</strong>
-              <small id="sb-panel-sub"></small>
+      <div class="sb-panel-caja" id="sb-panel-caja">
+        <nav class="sb-panel" id="sb-panel" aria-label="Menú del área">
+          <!-- En el celular, volver de un área a la lista de áreas. -->
+          <button type="button" class="sb-volver" id="sb-volver" hidden></button>
+          <div class="sb-portada" id="sb-portada">
+            <div class="sb-portada__fila">
+              <div class="sb-panel__tit">
+                <strong id="sb-panel-titulo">Inicio</strong>
+                <small id="sb-panel-sub"></small>
+              </div>
+              <div class="sb-portada__acc">
+                <button type="button" class="sb-fijar sb-fijar--cab" id="sb-fijar-actual" hidden aria-pressed="false" aria-label="Agregar esta pantalla a tus atajos"></button>
+                <button type="button" class="plataforma-sidebar__colapsar" id="btn-colapsar-sidebar"
+                        aria-label="Ocultar el menú del área" aria-expanded="true" title="Ocultar el menú (Ctrl+B)">
+                  <span id="ico-colapsar"></span>
+                </button>
+              </div>
             </div>
-            <div class="sb-portada__acc">
-              <button type="button" class="sb-fijar sb-fijar--cab" id="sb-fijar-actual" hidden aria-pressed="false" aria-label="Agregar esta pantalla a tus atajos"></button>
-              <button type="button" class="plataforma-sidebar__colapsar" id="btn-colapsar-sidebar"
-                      aria-label="Angostar el menú" aria-expanded="true" title="Angostar el menú ([)">
-                <span id="ico-colapsar"></span>
-              </button>
-            </div>
+            <div class="sb-estado" id="sb-panel-estado"></div>
+            <!-- Manuales de uso (2026-10-06): el paso a paso de este módulo (manual-v2.js). -->
+            <button type="button" class="sb-manual" id="sb-manual" hidden></button>
           </div>
-          <div class="sb-estado" id="sb-panel-estado"></div>
-          <!-- Manuales de uso (2026-10-06): el paso a paso de este módulo (manual-v2.js). -->
-          <button type="button" class="sb-manual" id="sb-manual" hidden></button>
-        </div>
-        <!-- SIGSO v2, Módulo 9B: "Buscar y saltar" (Ctrl+K). -->
-        <button type="button" class="shell-buscar" id="btn-shell-buscar" aria-label="Buscar (Ctrl+K)">
-          <span id="ico-shell-buscar"></span><span class="shell-buscar__txt">Buscar en SIGSO</span><kbd>Ctrl K</kbd>
-        </button>
-        <nav class="sb-panel__nav" id="nav-modulos" aria-label="Menú del módulo"></nav>
-        <p class="sb-leyenda" aria-hidden="true"><span><i class="sb-leyenda--rojo"></i>atrasado</span><span><i class="sb-leyenda--ambar"></i>para hoy</span><span><i class="sb-leyenda--gris"></i>por revisar</span></p>
+          <!-- Filtra el menú del área. Ctrl+K sigue abriendo el buscador de todo SIGSO (el botón de la derecha). -->
+          <div class="sb-buscar" id="sb-buscar-caja">
+            <span class="sb-buscar__ico" id="ico-sb-buscar" aria-hidden="true"></span>
+            <input type="search" class="sb-buscar__input" id="sb-buscar" placeholder="Buscar" autocomplete="off" aria-label="Buscar en el menú">
+            <button type="button" class="shell-buscar" id="btn-shell-buscar" aria-label="Buscar en todo SIGSO (Ctrl+K)" title="Buscar en todo SIGSO (Ctrl+K)">
+              <span id="ico-shell-buscar" hidden></span><span class="shell-buscar__txt">Buscar en SIGSO</span><kbd>Ctrl K</kbd>
+            </button>
+          </div>
+          <div class="sb-panel__nav" id="nav-modulos"></div>
+        </nav>
       </div>
     </aside>
 

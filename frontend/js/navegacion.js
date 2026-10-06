@@ -235,12 +235,15 @@
       var activo = opts.activo || '';
       (def.submodulos || []).forEach(function (sub) {
         (sub.items || []).forEach(function (it) {
-          if (it.id !== activo) return;
+          // Tercer nivel (barra «Bloques», 2026-10-06): el ítem agrupa, sus hijos son las pantallas.
+          var hijo = (it.hijos || []).filter(function (h) { return h.id === activo; })[0];
+          if (it.id !== activo && !hijo) return;
           // Un submódulo aplanado no aporta un tramo propio: sería repetir
           // el mismo nombre dos veces seguidas.
           // El submódulo NO lleva ruta: no es un destino, es una agrupación.
           // Enlazarlo al primero de sus ítems mentiría sobre a dónde va.
           if (!esPlano_(sub, sub.items || [])) tramos.push({ texto: sub.nombre });
+          if (hijo) { tramos.push({ texto: it.nombre }); tramos.push({ texto: hijo.nombre, ruta: opts.modulo, item: hijo.id }); return; }
           tramos.push({ texto: it.nombre, ruta: opts.modulo, item: it.id });
         });
       });

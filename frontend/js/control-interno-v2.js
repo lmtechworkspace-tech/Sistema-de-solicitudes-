@@ -135,7 +135,12 @@
     var subs;
     try { subs = arbol(); } catch (e) { return ''; }
     for (var i = 0; i < subs.length; i++) {
-      if (!subs[i].plano && (subs[i].items || []).some(function (it) { return it.id === vista_; })) return subs[i].nombre;
+      if (subs[i].plano) continue;
+      var items = subs[i].items || [];
+      if (items.some(function (it) { return it.id === vista_; })) return subs[i].nombre;
+      // Tercer nivel de la barra (Convenios TGR › Recibir desde la TGR).
+      var padre = items.filter(function (it) { return (it.hijos || []).some(function (h) { return h.id === vista_; }); })[0];
+      if (padre) return subs[i].nombre + ' › ' + padre.nombre;
     }
     return '';
   }
@@ -207,8 +212,12 @@
     if (d && cfg_.matrices.length) {
       var top = principales(d);
       var tiene = function (clave) { return cfg_.matrices.some(function (m) { return m.clave === clave && m.depto === d.clave; }); };
-      subs.push({ id: 'trabajo', nombre: 'Trabajo', icono: OPC.icono, items: top.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; })
-        .concat(tiene('CONVENIOS') ? [{ id: 'conv', nombre: 'Seguimiento de cuotas TGR' }] : [])
+      // Barra «Bloques» (2026-10-06): los convenios TGR con su tercer nivel, y
+      // la matriz de convenios adentro (antes salía suelta, al lado, como «Convenios»).
+      var conv = tiene('CONVENIOS');
+      subs.push({ id: 'trabajo', nombre: 'Trabajo', icono: OPC.icono, items: top.filter(function (m) { return !(conv && m.clave === 'CONVENIOS'); }).map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; })
+        .concat(conv ? [{ id: 'conv-tgr', nombre: 'Convenios TGR', hijos: [
+          { id: 'm:CONVENIOS', nombre: 'Matriz de convenios' }, { id: 'conv', nombre: 'Seguimiento de cuotas' }, { id: 'conv:tgr', nombre: 'Recibir desde la TGR' }] }] : [])
         .concat(tiene('IVA') ? [{ id: 'sii', nombre: 'Recibir desde el SII' }] : [])
         .concat(inf)
         .concat([{ id: 'inicio', nombre: 'Todo el trabajo' }]) });

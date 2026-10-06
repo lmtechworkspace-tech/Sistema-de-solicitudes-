@@ -78,7 +78,7 @@
     ['dep_rrhh', 'Recursos Humanos', 'gafete', 'Matrices del área, reporte mensual y su equipo'],
     ['dep_prevencion', 'Prevención de riesgos', 'casco', 'Trabajo del área, reporte mensual y su equipo'],
     ['dep_marketing', 'Marketing corporativo', 'megafono', 'Trabajo del área, reporte mensual y su equipo'],
-    ['dep_cobranzas', 'Facturación y Cobranzas', 'recibo', 'Lo que HomePymes factura y cobra a sus clientes'],
+    ['dep_cobranzas', 'Facturación y cobranzas', 'recibo', 'Lo que HomePymes factura y cobra a sus clientes'],
     ['dep_administracion', 'Administración', 'maletin', 'Los reportes mensuales de las áreas, ya validados por su jefatura']
   ];
   var IDS_DEPARTAMENTO = DEPARTAMENTOS_SHELL.map(function (d) { return d[0]; });
@@ -597,35 +597,36 @@
   // se le da la bienvenida de siempre.
   // 2026-10-05 (segunda versión de la barra): llave nueva para que todos vean
   // una vez cómo se lee la barra con nombres, colores y secciones.
-  var LLAVE_TOUR = 'sigso_tour_barra_2'; // ojo: una llave terminada en _v2 la borra la limpieza de abajo (preferencias de la versión clásica)
+  // 2026-10-06 (barra «Bloques»): llave nueva, todos ven una vez cómo se lee la barra nueva.
+  var LLAVE_TOUR = 'sigso_tour_barra_3'; // ojo: una llave terminada en _v2 la borra la limpieza de abajo (preferencias de la versión clásica)
   var LLAVE_TOUR_ANTERIOR = 'sigso_tour_visto';
   var TOUR_PASOS = [
     { selector: '#plataforma-sidebar .plataforma-header__marca', titulo: 'Bienvenido a SIGSO',
       texto: 'Este es tu panel: desde aquí llegas a todo lo que tu cuenta puede ver.' },
-    { selector: '#sb-riel', titulo: 'Tus módulos',
-      texto: 'Cada módulo tiene su nombre, su ícono y su color. El número dice cuánto te espera: rojo, atrasado; ámbar, para hoy; gris, por revisar.' },
-    { selector: '#sb-portada', titulo: 'Dónde estás',
-      texto: 'Arriba del menú, el módulo abierto con su color y para qué sirve. La página repite ese mismo color e ícono.' },
-    { selector: '#nav-modulos', titulo: 'El menú, por secciones',
-      texto: 'Cada sección se abre y se cierra con un clic. Con la estrella de una pantalla la dejas en tus atajos de Inicio; con Alt+1 a Alt+8 vas directo a ellos.' },
-    { selector: '#btn-shell-buscar', titulo: 'Busca y salta rápido',
-      texto: 'Encuentra una pantalla o una solicitud por su número. También con Ctrl+K (Cmd+K en Mac) desde cualquier parte.' },
+    { selector: '#sb-riel', titulo: 'Tus áreas, a la izquierda',
+      texto: 'Pasa el mouse por los íconos y se despliegan con su nombre completo y cuánto te espera: rojo, atrasado; ámbar, para hoy.' },
+    { selector: '#sb-portada', titulo: 'El área abierta',
+      texto: 'Su nombre, para qué sirve y cuánto tiene atrasado. Con la estrella dejas la pantalla en tus atajos de Inicio.' },
+    { selector: '#nav-modulos', titulo: 'El menú, en bloques',
+      texto: 'Cada tarjeta es un módulo: ábrela y aparecen sus secciones. Si una sección tiene más, se abre su bandeja. Solo queda abierta una a la vez.' },
+    { selector: '#sb-buscar-caja', titulo: 'Busca en el área o en todo SIGSO',
+      texto: 'Escribe para filtrar el menú del área. Con Ctrl+K (Cmd+K en Mac) buscas en todo SIGSO, incluso una solicitud por su número.' },
     { selector: '#plataforma-sidebar .js-shell-campana', titulo: 'Tus avisos',
       texto: 'Lo que requiere tu atención llega aquí: asignaciones, novedades por leer y cambios en tus solicitudes.' },
     { selector: '#btn-menu-usuario', titulo: 'Tu cuenta',
-      texto: 'Tu perfil y foto, el modo oscuro, los atajos de teclado y cerrar sesión. Con [ angostas la barra y queda solo el riel.' }
+      texto: 'Tu perfil y foto, el modo oscuro, los atajos de teclado y cerrar sesión. Con Ctrl+B ocultas o muestras el menú del área.' }
   ];
   var tourPasoActual_ = 0;
 
   function iniciarTourSiCorresponde_() {
     var visto = false;
     try { visto = localStorage.getItem(LLAVE_TOUR) === '1'; } catch (err) { visto = true; }
-    if (visto || window.innerWidth <= 900) return;
+    if (visto || window.innerWidth <= UMBRAL_ANGOSTO) return;
     var conocia = false;
-    try { conocia = localStorage.getItem(LLAVE_TOUR_ANTERIOR) === '1' || localStorage.getItem('sigso_tour_barra_v1') === '1'; } catch (err) { conocia = false; }
+    try { conocia = localStorage.getItem(LLAVE_TOUR_ANTERIOR) === '1' || localStorage.getItem('sigso_tour_barra_v1') === '1' || localStorage.getItem('sigso_tour_barra_2') === '1'; } catch (err) { conocia = false; }
     if (conocia) {
       TOUR_PASOS[0] = { selector: '#plataforma-sidebar .plataforma-header__marca', titulo: 'Tu barra lateral, renovada',
-        texto: 'Cada módulo ahora muestra su nombre y su color, y el menú se ordena por secciones. Te muestro lo nuevo en unos pasos.' };
+        texto: 'La barra cambió: íconos que se despliegan al pasar el mouse y un menú en bloques que se abre de a uno. Te muestro lo nuevo en unos pasos.' };
     }
     tourPasoActual_ = 0;
     mostrarPasoTour_();
@@ -726,8 +727,9 @@
       super_admin: cuenta.super_admin === true
     };
     document.getElementById('nav-nombre-usuario').textContent = cuenta.nombre;
+    // El riel desplegado muestra nombre y cargo (sin cargo, el rol).
     document.getElementById('nav-rol-usuario').textContent =
-      ETIQUETA_ROL[cuenta.rol] || cuenta.rol;
+      cuenta.cargo || ETIQUETA_ROL[cuenta.rol] || cuenta.rol;
     // v6.4: el avatar pasa a ser el componente unico (foto si la hay,
     // iniciales si no). El contenedor #nav-avatar se conserva para no tocar
     // el layout del header; dentro va ahora Componentes.avatar.
@@ -823,11 +825,15 @@
   }
 
   // v5.0 F2: sidebar colapsable (escritorio) + drawer (movil) + conmutador
-  // de tema. El colapso y el tema se recuerdan entre sesiones -- nadie
-  // quiere volver a elegir lo mismo cada vez que entra.
-  var LLAVE_SIDEBAR_COLAPSADO = 'sigso_sidebar_colapsado';
+  // de tema. El colapso y el tema se recuerdan entre sesiones.
+  // 2026-10-06 (barra «Bloques»): lo que se oculta es el PANEL del área (Ctrl+B,
+  // «[» o su botón); el riel queda siempre. La llave anterior se migra una vez.
+  var LLAVE_SIDEBAR_COLAPSADO = 'sigso.sidebar.panelCollapsed';
+  var LLAVE_SIDEBAR_ANTERIOR = 'sigso_sidebar_colapsado';
   var LLAVE_TEMA = 'sigso_tema';
-  var UMBRAL_MOVIL = 900;
+  // Bajo 1024 px la barra es un cajón; entre 1024 y 1279 el panel parte oculto y se abre encima.
+  var UMBRAL_MOVIL = 1023;
+  var UMBRAL_ANGOSTO = 1279;
 
   function guardar_(llave, valor) {
     try { localStorage.setItem(llave, valor); } catch (err) { /* sin storage */ }
@@ -846,46 +852,65 @@
     var btnTema = document.getElementById('btn-tema');
     if (!sidebar || !btnColapsar || !btnAbrir || !btnTema) return;
 
-    document.getElementById('ico-colapsar').innerHTML = Iconos.svg('colapsar', { tam: 16 });
-    if (btnExpandir) document.getElementById('ico-expandir').innerHTML = Iconos.svg('colapsar', { tam: 18 });
+    document.getElementById('ico-colapsar').innerHTML = Iconos.svg('colapsar', { tam: 17 });
     document.getElementById('ico-hamburguesa').innerHTML = Iconos.svg('menu', { tam: 18 });
-
-    function esMovil_() {
-      return window.innerWidth <= UMBRAL_MOVIL;
+    if (leer_(LLAVE_SIDEBAR_COLAPSADO) === null && leer_(LLAVE_SIDEBAR_ANTERIOR) !== null) {
+      guardar_(LLAVE_SIDEBAR_COLAPSADO, leer_(LLAVE_SIDEBAR_ANTERIOR) === '1' ? '1' : '0');
     }
 
+    function esMovil_() { return window.innerWidth <= UMBRAL_MOVIL; }
+    function esAngosto_() { return !esMovil_() && window.innerWidth <= UMBRAL_ANGOSTO; }
+    function ocultoGuardado_() { return leer_(LLAVE_SIDEBAR_COLAPSADO) === '1'; }
+
+    // --- celular: un cajón con el riel desplegado; al tocar un área, su menú (con «← Áreas») ---
     function cerrarDrawer_() {
-      sidebar.classList.remove('plataforma-sidebar--abierto');
+      sidebar.classList.remove('plataforma-sidebar--abierto', 'sb--ver-panel');
       telon.classList.remove('plataforma-sidebar__telon--visible');
       telon.classList.add('sigso-oculto');
       btnAbrir.setAttribute('aria-expanded', 'false');
+      var volver = document.getElementById('sb-volver');
+      if (volver) volver.hidden = true;
     }
-
     function abrirDrawer_() {
+      sidebar.classList.remove('sb--ver-panel');
       sidebar.classList.add('plataforma-sidebar--abierto');
       telon.classList.remove('sigso-oculto');
       telon.classList.add('plataforma-sidebar__telon--visible');
       btnAbrir.setAttribute('aria-expanded', 'true');
     }
-
     btnAbrir.addEventListener('click', function () {
-      var abierto = sidebar.classList.contains('plataforma-sidebar--abierto');
-      if (abierto) cerrarDrawer_(); else abrirDrawer_();
+      if (sidebar.classList.contains('plataforma-sidebar--abierto')) cerrarDrawer_(); else abrirDrawer_();
     });
     telon.addEventListener('click', cerrarDrawer_);
+    volverAreasBarra_ = function () {
+      sidebar.classList.remove('sb--ver-panel');
+      document.getElementById('sb-volver').hidden = true;
+      var act = sidebar.querySelector('.sb-rb--act') || sidebar.querySelector('.sb-rb');
+      if (act) act.focus();
+    };
 
-    // 2026-10-05: angostada, la barra es solo el riel y el menú del módulo se
-    // abre FLOTANDO al tocar su ícono; se cierra al elegir una pantalla, al
-    // hacer clic fuera o con Esc.
+    // --- 1024-1279: el panel se abre ENCIMA del contenido y se cierra al hacer clic fuera ---
     function cerrarFlotante_() { sidebar.classList.remove('sb--flotante'); }
-    // Al elegir una pantalla: en el celular se cierra el cajón (si no, taparía
-    // lo recién elegido) y, angostada, el menú flotante.
+    // Al elegir una pantalla: se cierra el cajón (celular) o el panel encima.
     alNavegarBarra_ = function () { if (esMovil_()) cerrarDrawer_(); cerrarFlotante_(); };
+    // Al tocar en el riel un área con menú.
     abrirMenuBarra_ = function (mismo) {
-      if (esMovil_() || !sidebar.classList.contains('plataforma-sidebar--colapsado')) return;
-      // Tocar de nuevo el módulo abierto cierra su menú flotante.
-      if (mismo && sidebar.classList.contains('sb--flotante')) { cerrarFlotante_(); return; }
-      sidebar.classList.add('sb--flotante');
+      if (esMovil_()) {
+        sidebar.classList.add('sb--ver-panel');
+        var volver = document.getElementById('sb-volver');
+        if (volver) { volver.hidden = false; setTimeout(function () { volver.focus(); }, 0); }
+        return;
+      }
+      if (!sidebar.classList.contains('plataforma-sidebar--colapsado')) return;
+      if (esAngosto_()) {
+        // Tocar de nuevo el área abierta cierra su panel.
+        if (mismo && sidebar.classList.contains('sb--flotante')) { cerrarFlotante_(); return; }
+        sidebar.classList.add('sb--flotante');
+        return;
+      }
+      // Pantalla amplia con el panel oculto: tocar un área lo vuelve a mostrar.
+      aplicarColapso_(false);
+      guardar_(LLAVE_SIDEBAR_COLAPSADO, '0');
     };
     document.addEventListener('click', function (ev) { if (!sidebar.contains(ev.target)) cerrarFlotante_(); });
     document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') cerrarFlotante_(); });
@@ -893,42 +918,62 @@
     function aplicarColapso_(colapsado) {
       sidebar.classList.toggle('plataforma-sidebar--colapsado', colapsado);
       cerrarFlotante_();
-      btnColapsar.setAttribute('aria-expanded', String(!colapsado));
-      if (btnExpandir) btnExpandir.setAttribute('aria-expanded', String(!colapsado));
+      var texto = colapsado ? 'Mostrar el menú del área' : 'Ocultar el menú del área';
+      [btnColapsar, btnExpandir].forEach(function (b) {
+        if (!b) return;
+        b.setAttribute('aria-expanded', String(!colapsado));
+        b.setAttribute('aria-label', texto);
+        b.setAttribute('title', texto + ' (Ctrl+B)');
+      });
+      if (btnExpandir) {
+        document.getElementById('ico-expandir').innerHTML = Iconos.svg('colapsar', { tam: 20 });
+        btnExpandir.classList.toggle('sb-expandir--mostrar', colapsado);
+        var txt = document.getElementById('txt-expandir');
+        if (txt) txt.textContent = colapsado ? 'Mostrar menú' : 'Ocultar menú';
+      }
     }
     function alternarColapso_() {
       if (esMovil_()) return;
+      if (esAngosto_()) {
+        // Angosto: el panel no se fija; el botón lo abre o lo cierra encima.
+        if (sidebar.classList.contains('sb--flotante')) cerrarFlotante_();
+        else { aplicarColapso_(true); sidebar.classList.add('sb--flotante'); }
+        return;
+      }
       var colapsado = !sidebar.classList.contains('plataforma-sidebar--colapsado');
       aplicarColapso_(colapsado);
       guardar_(LLAVE_SIDEBAR_COLAPSADO, colapsado ? '1' : '0');
     }
+    function aplicarSegunAncho_() {
+      if (esMovil_()) { sidebar.classList.remove('plataforma-sidebar--colapsado'); cerrarFlotante_(); return; }
+      cerrarDrawer_();
+      aplicarColapso_(esAngosto_() ? true : ocultoGuardado_());
+    }
+    aplicarSegunAncho_();
 
-    var colapsadoGuardado = leer_(LLAVE_SIDEBAR_COLAPSADO) === '1';
-    aplicarColapso_(colapsadoGuardado);
-
-    btnColapsar.addEventListener('click', alternarColapso_);
-    if (btnExpandir) btnExpandir.addEventListener('click', alternarColapso_);
-    // "[" angosta o ensancha, salvo mientras se escribe.
+    btnColapsar.addEventListener('click', function (ev) { ev.stopPropagation(); alternarColapso_(); });
+    if (btnExpandir) btnExpandir.addEventListener('click', function (ev) { ev.stopPropagation(); alternarColapso_(); });
+    // Ctrl/Cmd+B (y «[», como antes) ocultan o muestran el panel, salvo mientras se escribe.
     document.addEventListener('keydown', function (ev) {
-      if (ev.key !== '[' || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      var conB = (ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && (ev.key === 'b' || ev.key === 'B');
+      var corchete = ev.key === '[' && !ev.ctrlKey && !ev.metaKey && !ev.altKey;
+      if (!conB && !corchete) return;
       var t = ev.target;
-      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (corchete && t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (conB && t && t.isContentEditable) return;
       if (document.getElementById('vista-shell').hidden) return;
       ev.preventDefault();
       alternarColapso_();
     });
 
-    // El colapso es de escritorio y el drawer es de movil: si la ventana
-    // cruza el umbral con el otro estado activo, se limpia para no mezclar
-    // ambos (ej. un sidebar angosto atascado como drawer movil).
+    // Al cruzar un umbral se limpia el estado del otro ancho (un panel encima
+    // atascado como cajón, o al revés).
+    var anchoPrevio_ = esMovil_() ? 'movil' : esAngosto_() ? 'angosto' : 'amplio';
     window.addEventListener('resize', function () {
-      if (esMovil_()) {
-        sidebar.classList.remove('plataforma-sidebar--colapsado');
-        cerrarFlotante_();
-      } else {
-        cerrarDrawer_();
-        aplicarColapso_(leer_(LLAVE_SIDEBAR_COLAPSADO) === '1');
-      }
+      var ahora = esMovil_() ? 'movil' : esAngosto_() ? 'angosto' : 'amplio';
+      if (ahora === anchoPrevio_) return;
+      anchoPrevio_ = ahora;
+      aplicarSegunAncho_();
     });
 
     // Sin preferencia guardada, el SO manda (media query de tokens.css);
@@ -1055,11 +1100,13 @@
         (sub.items || []).forEach(function (it) {
           var llave = it.permiso || SigsoNav.partes(it.id).seccion;
           if (typeof reg.visible === 'function' && reg.visible(llave, it) === false) return;
-          lista.push({
-            modulo: id, item: it.id, nombre: it.nombre,
-            ruta: sub.plano || sub.nombre === it.nombre ? def.nombre : def.nombre + ' › ' + sub.nombre,
-            icono: sub.icono || def.icono
-          });
+          var ruta = sub.plano || sub.nombre === it.nombre ? def.nombre : def.nombre + ' › ' + sub.nombre;
+          // Un ítem con tercer nivel (barra «Bloques») no es una pantalla: lo son sus hijos.
+          if (it.hijos && it.hijos.length) {
+            it.hijos.forEach(function (h) { lista.push({ modulo: id, item: h.id, nombre: h.nombre, ruta: ruta + ' › ' + it.nombre, icono: sub.icono || def.icono }); });
+            return;
+          }
+          lista.push({ modulo: id, item: it.id, nombre: it.nombre, ruta: ruta, icono: sub.icono || def.icono });
         });
       });
     });
@@ -1275,17 +1322,15 @@
   //
   // Un modulo que no este aca igual aparece (al final): agregar uno nuevo y
   // olvidar clasificarlo nunca puede hacerlo desaparecer del menu.
+  // 2026-10-06 (barra «Bloques»): tres grupos. «Mis solicitudes» y «Pausas
+  // activas» salen del riel y viven en el panel de Inicio (FUERA_DEL_RIEL).
   var GRUPOS_SIDEBAR = [
-    // Inicio va primero y SIN encabezado: no es una familia, es el punto de
-    // partida. Si cayera en 'sueltos' terminaria abajo del todo.
-    { titulo: '', modulos: ['home'] },
-    { titulo: 'Mi espacio', modulos: ['novedades', 'mis_solicitudes', 'mi_trabajo', 'pausas'] },
-    { titulo: 'Solicitudes', modulos: ['nueva_solicitud', 'bandeja'] },
+    { titulo: 'Mi espacio', modulos: ['home', 'novedades', 'mi_trabajo', 'bandeja'] },
     // Cada persona ve solo su(s) área(s); el orden es el del organigrama.
-    { titulo: 'Departamentos', modulos: IDS_DEPARTAMENTO },
-    { titulo: 'Gestión', modulos: ['proyectos', 'jefatura', 'gerencia', 'pausas_coordinacion', 'calidad'] },
+    { titulo: 'Áreas', modulos: IDS_DEPARTAMENTO.concat(['proyectos', 'jefatura', 'gerencia', 'pausas_coordinacion', 'calidad']) },
     { titulo: 'Sistema', modulos: ['administracion'] }
   ];
+  var FUERA_DEL_RIEL = ['mis_solicitudes', 'pausas'];
 
   // Una sola navegacion dispara hasta tres repintados (el modulo se monta,
   // publica su item y refresca sus permisos). Cada uno reconstruia el arbol
@@ -1318,6 +1363,8 @@
     SigsoBarra.actualizar({
       modulos: modulos,
       grupos: GRUPOS_SIDEBAR,
+      fueraDelRiel: FUERA_DEL_RIEL,
+      volverAreas: function () { if (volverAreasBarra_) volverAreasBarra_(); },
       moduloActivo: moduloActivo_,
       itemActivo: itemActivoDelModulo_,
       accion: puedeAbrirModulo_('nueva_solicitud') ? { modulo: 'nueva_solicitud', texto: 'Nueva solicitud', icono: 'nueva', ir: function () { mostrarModulo_('nueva_solicitud'); } } : null,
@@ -1332,6 +1379,7 @@
   // Los define wireSidebar_: cerrar el cajón (celular) o el menú flotante (barra angosta).
   var alNavegarBarra_ = null;
   var abrirMenuBarra_ = null;
+  var volverAreasBarra_ = null;
 
   // Cada módulo expone cómo ir a una de sus secciones. Se busca por convención
   // (SigsoX.irAItem) para no tener que enumerarlos acá y que agregar un módulo

@@ -1,25 +1,30 @@
 /**
  * barra-lateral.js — la barra lateral de la plataforma.
  *
- * Segunda versión (2026-10-05, decisiones del dueño tras la primera semana:
- * el equipo no distinguía el módulo, veía «todo como una lista» y no entendía
- * los íconos solos):
- *   A   RIEL CON NOMBRES + PANEL CON PORTADA: cada módulo con su ícono, su
- *       nombre y su color, agrupados (Mi espacio, Solicitudes, Áreas…). Al lado,
- *       la portada del módulo abierto (color, nombre, para qué sirve, cuánto
- *       espera) y su menú por SECCIONES que se pliegan, con ícono y línea guía.
- *   2   Un ícono y un color propios por módulo (iconos.js, tokens.css).
- *   3   Los FIJADOS salen del menú de cada módulo: viven en Inicio como «Mis
- *       atajos» (hasta 8, en la cuenta), junto a lo pendiente y lo reciente.
- *   4   Para todos de una vez, reemplazando la versión anterior.
+ * Tercera versión (2026-10-06): propuesta 2b «Bloques» del dueño.
+ *   RIEL (68 px): solo íconos, agrupados (Mi espacio · Áreas · Sistema). Al
+ *       pasar el mouse (180 ms de espera) o al entrar con el teclado se
+ *       despliega SOBRE el panel (236 px) con nombres completos y conteos;
+ *       sale el mouse o Esc, se contrae. Contraído, el conteo es un punto;
+ *       desplegado, una píldora con el número. Nunca los dos.
+ *   PANEL (268 px): el área abierta. Divulgación progresiva:
+ *       nivel 1 = TARJETA (cada módulo principal: Agenda, Trabajo, Reportes),
+ *       nivel 2 = FILA dentro de la tarjeta,
+ *       nivel 3 = BANDEJA hundida dentro de su fila (p. ej. Convenios TGR).
+ *       Acordeón: un solo abierto por nivel. Los niveles con hijos solo abren
+ *       o cierran; navegan las hojas. Al entrar a un área desde el riel todo
+ *       parte cerrado (el módulo de la página activa queda MARCADO); al cargar
+ *       o al llegar por una dirección, se abre la ruta de la página.
+ *   Una sola marca de «dónde estás»: fondo índigo sólido en la página activa.
  *
- * Se mantiene de la primera versión: contadores de tres colores (rojo
- * atrasado, ámbar para hoy, gris por revisar), Alt+1…8 a los atajos,
- * angostar con «[» (queda el riel, que ahora sí dice qué es cada cosa).
+ * Se mantiene: los atajos (fijados) y lo reciente en Inicio, la estrella del
+ * encabezado, Alt+1…8, el manual de cada módulo y los contadores de tres
+ * tonos (rojo atrasado, ámbar para hoy, gris por revisar).
  *
  * El shell (plataforma.js) le pasa qué módulos ve la cuenta y dónde está la
- * persona; los menús de cada módulo salen del mismo registro que ya usaban el
- * árbol y el buscador (SigsoNav), con el mismo permiso `visible`.
+ * persona; los menús salen del mismo registro que ya usaban el buscador y las
+ * migas (SigsoNav), con el mismo permiso `visible`. Un ítem puede traer
+ * `hijos` (tercer nivel).
  */
 (function () {
   'use strict';
@@ -27,56 +32,84 @@
   var MAX_FIJADOS = 8;
   var MAX_RECIENTES = 5;
   var TONOS = { rojo: 'atrasado', ambar: 'para hoy', gris: 'por revisar' };
-  // Cómo se lee el contador de un módulo en su portada.
-  var ESTADO_TXT = { rojo: ['pendiente con atraso', 'pendientes, con atrasos'], ambar: ['para hoy', 'para hoy'], gris: ['por revisar', 'por revisar'] };
-  // Títulos cortos de los grupos del riel (92 px).
-  var GRUPO_CORTO = { Departamentos: 'Áreas' };
+  var ESTADO_TXT = { rojo: ['atrasado', 'atrasados'], ambar: ['para hoy', 'para hoy'], gris: ['por revisar', 'por revisar'] };
+  var ESPERA_RIEL = 180;
   // Lo que se propone como atajo la primera vez, por área.
   var SUGERIDOS_AREA = { dep_contabilidad: ['hoy', 'm:IVA', 'conv'] };
   var SUGERIDOS_MODULO = ['bandeja', 'mi_trabajo', 'mis_solicitudes', 'proyectos', 'calidad', 'gerencia', 'dep_administracion', 'novedades'];
 
-  var est_ = { opts: null, badges: {}, fijados: null, recientes: [], cuenta: '', cerradas: {} };
+  var est_ = {
+    opts: null, badges: {}, fijados: null, recientes: [], cuenta: '',
+    abierto1: null, abierto2: null, q: '',
+    ultMod: null, abrirRuta: true, cerrarTodo: false
+  };
   var raiz_ = null;
+  var timerRiel_ = null;
 
   function esc(t) { return window.Componentes ? Componentes.escaparHtml(t) : String(t == null ? '' : t); }
   function ico(n, t) { return window.Iconos ? Iconos.svg(n, { tam: t || 18 }) : ''; }
   function leerLS(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
   function guardarLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* sin storage */ } }
   function llave(base) { return base + (est_.cuenta ? '_' + est_.cuenta : ''); }
+  // Para buscar sin importar mayúsculas ni tildes.
+  function norm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function idSeguro(t) { return String(t || '').replace(/[^a-zA-Z0-9_-]/g, '_'); }
 
   function modulo(id) { return ((est_.opts && est_.opts.modulos) || []).filter(function (m) { return m.id === id; })[0] || null; }
   function puedeIr(f) { return !!f && (modulo(f.modulo) || (est_.opts && est_.opts.accion && est_.opts.accion.modulo === f.modulo)); }
   function colorDe(m) { return (m && m.acento) || 'var(--mod-inicio)'; }
+  function tonoDe(t) { return t === 'peligro' ? 'rojo' : (TONOS[t] ? t : 'ambar'); }
 
   /**
-   * Menú de un módulo: secciones con título, ícono y sus pantallas. Las
-   * secciones de una sola pantalla («Hoy», «Reporte mensual») quedan sueltas,
-   * sin título, y se muestran destacadas arriba de su bloque.
+   * Menú de un módulo, en los tres niveles de la barra:
+   *   [{ id, titulo, icono, nota, plano, items: [{ id, nombre, badge, tono, hijos: [...] }] }]
+   * Un submódulo de una sola pantalla homónima («Hoy», «Reporte mensual») es
+   * `plano`: una tarjeta que lleva directo a su pantalla.
    */
-  function secciones(moduloId) {
+  function menu(moduloId) {
     var def = window.SigsoNav && SigsoNav.obtener(moduloId);
     if (!def || !(def.submodulos || []).length) return [];
-    var out = [], sueltas = null;
+    var hoja = function (it, nombre) {
+      var hijos = it.hijos && it.hijos.length ? SigsoNav.itemsVisibles({ items: it.hijos }, def.visible).map(function (h) { return hoja(h); }) : [];
+      return { id: it.id, nombre: nombre || it.nombre, badge: it.badge, tono: tonoDe(it.tono), hijos: hijos };
+    };
+    var out = [];
     def.submodulos.forEach(function (sub) {
       var items = SigsoNav.itemsVisibles(sub, def.visible);
       if (!items.length) return;
-      var hoja = function (it, nombre) { return { id: it.id, nombre: nombre || it.nombre, badge: it.badge, tono: it.tono === 'peligro' ? 'rojo' : (it.tono || 'ambar'), icono: sub.icono || '' }; };
-      if (SigsoNav.esPlano(sub, items)) {
-        if (!sueltas) { sueltas = { titulo: '', items: [] }; out.push(sueltas); }
-        sueltas.items.push(hoja(items[0], sub.nombre));
+      if (SigsoNav.esPlano(sub, items) && !(items[0].hijos && items[0].hijos.length)) {
+        out.push({ id: sub.id || items[0].id, titulo: sub.nombre, icono: sub.icono || 'derecha', nota: sub.descripcion || '', plano: true, items: [hoja(items[0], sub.nombre)] });
         return;
       }
-      sueltas = null;
-      out.push({ titulo: sub.nombre, nota: sub.descripcion || '', icono: sub.icono || '', items: items.map(function (it) { return hoja(it); }) });
+      out.push({ id: sub.id || sub.nombre, titulo: sub.nombre, icono: sub.icono || 'lista', nota: sub.descripcion || '', plano: false, items: items.map(function (it) { return hoja(it); }) });
+    });
+    return out;
+  }
+  // Todas las hojas (pantallas) del menú, con su ruta: [{ hoja, mod1, item2 }].
+  function hojas(moduloId) {
+    var out = [];
+    menu(moduloId).forEach(function (c) {
+      c.items.forEach(function (it) {
+        if (it.hijos.length) it.hijos.forEach(function (h) { out.push({ hoja: h, mod1: c.id, item2: it.id }); });
+        else out.push({ hoja: it, mod1: c.id, item2: null });
+      });
     });
     return out;
   }
   function hojaDe(moduloId, itemId) {
-    var r = null;
-    secciones(moduloId).forEach(function (s) { s.items.forEach(function (it) { if (it.id === itemId) r = it; }); });
-    return r;
+    var r = hojas(moduloId).filter(function (x) { return x.hoja.id === itemId; })[0];
+    return r ? r.hoja : null;
   }
-  function tieneMenu(moduloId) { return secciones(moduloId).length > 0; }
+  // La hoja de la página activa. Una pantalla que no está en el menú (la ficha
+  // «conv:123») se atribuye a la hoja de la que cuelga («conv»).
+  function rutaActiva(moduloId, itemId) {
+    if (!itemId) return null;
+    var todas = hojas(moduloId);
+    var r = todas.filter(function (x) { return x.hoja.id === itemId; })[0];
+    if (!r) r = todas.filter(function (x) { return itemId.indexOf(x.hoja.id + ':') === 0; }).sort(function (a, b) { return b.hoja.id.length - a.hoja.id.length; })[0];
+    return r || null;
+  }
+  function tieneMenu(moduloId) { return menu(moduloId).length > 0; }
 
   // --- atajos (fijados) y recientes ---------------------------------------------------------
   function sugeridos() {
@@ -84,8 +117,9 @@
     var dep = ((est_.opts && est_.opts.modulos) || []).filter(function (m) { return /^dep_/.test(m.id) && m.id !== 'dep_administracion'; })[0];
     if (dep) {
       var pref = SUGERIDOS_AREA[dep.id];
+      var trabajo = menu(dep.id).filter(function (c) { return c.titulo === 'Trabajo'; })[0];
       var candidatos = pref ? pref.map(function (id) { return hojaDe(dep.id, id); })
-        : [hojaDe(dep.id, 'hoy')].concat((secciones(dep.id).filter(function (s) { return s.titulo === 'Trabajo'; })[0] || { items: [] }).items.filter(function (it) { return it.id !== 'inicio'; }).slice(0, 2));
+        : [hojaDe(dep.id, 'hoy')].concat(((trabajo && trabajo.items) || []).filter(function (it) { return it.id !== 'inicio' && !it.hijos.length; }).slice(0, 2));
       candidatos.forEach(function (it) { if (it) out.push({ modulo: dep.id, item: it.id, nombre: it.nombre, ruta: dep.corto }); });
     }
     SUGERIDOS_MODULO.forEach(function (id) {
@@ -137,80 +171,165 @@
     guardarLS(llave('sigso_barra_recientes'), est_.recientes);
   }
 
-  // --- HTML ---------------------------------------------------------------------------------
-  function contador(b, attrs) {
-    var n = b && b.n ? (b.n > 99 ? '99+' : String(b.n)) : '';
-    return '<span class="sb-n sb-n--' + ((b && b.tono) || 'ambar') + (n ? '' : ' sigso-oculto') + '"' + (attrs || '') + '>' + n + '</span>';
+  // --- piezas -------------------------------------------------------------------------------
+  function cifra(n) { return n > 99 ? '99+' : String(n); }
+  function textoEstado(b) {
+    if (!b || !b.n) return '';
+    var t = ESTADO_TXT[b.tono] || ESTADO_TXT.ambar;
+    return b.n + ' ' + (b.n === 1 ? t[0] : t[1]);
   }
-  function etiquetaContador(b) { return b && b.n ? ', ' + b.n + ' ' + (TONOS[b.tono] || '') : ''; }
+  /** Píldora con número (riel desplegado, tarjetas, filas). */
+  function pildora(b, attrs, clase) {
+    var n = b && b.n ? cifra(b.n) : '';
+    return '<span class="sb-pill sb-pill--' + ((b && b.tono) || 'ambar') + (clase ? ' ' + clase : '') + (n ? '' : ' sigso-oculto') + '"' + (attrs || '') +
+      (n ? ' title="' + esc(textoEstado(b)) + '"' : '') + '>' + n + '</span>';
+  }
+  function badgeHoja(it) { return it && it.badge ? { n: Number(it.badge) || 0, tono: it.tono } : null; }
 
-  /** El riel: grupos con título corto y cada módulo con ícono, nombre y color. */
+  /** El riel: grupos con su título (desplegado) o una línea (contraído). */
   function rielHtml() {
     var o = est_.opts, usados = {}, bloques = [];
+    var fuera = o.fueraDelRiel || [];
     (o.grupos || []).forEach(function (g) {
       var b = [];
-      (g.modulos || []).forEach(function (id) { if (modulo(id) && !usados[id]) { usados[id] = true; b.push(id); } });
+      (g.modulos || []).forEach(function (id) { if (modulo(id) && !usados[id] && fuera.indexOf(id) === -1) { usados[id] = true; b.push(id); } });
       if (b.length) bloques.push({ titulo: g.titulo, ids: b });
     });
-    var resto = o.modulos.filter(function (m) { return !usados[m.id]; }).map(function (m) { return m.id; });
+    var resto = o.modulos.filter(function (m) { return !usados[m.id] && fuera.indexOf(m.id) === -1; }).map(function (m) { return m.id; });
     if (resto.length) bloques.push({ titulo: '', ids: resto });
-    return bloques.map(function (b) {
-      return (b.titulo ? '<p class="sb-grupo">' + esc(GRUPO_CORTO[b.titulo] || b.titulo) + '</p>' : '') + b.ids.map(function (id) {
-        var m = modulo(id), act = id === o.moduloActivo, bd = est_.badges[id];
-        return '<button type="button" class="sb-rb' + (act ? ' sb-rb--act' : '') + '" data-modulo="' + esc(id) + '" data-tip="' + esc(m.titulo || m.nombre) + '" data-desc="' + esc(m.desc || '') + '"' +
-          ' aria-label="' + esc((m.titulo || m.nombre) + etiquetaContador(bd)) + '"' + (act ? ' aria-current="page"' : '') + ' style="--sb-c:' + colorDe(m) + '">' +
-          ico(m.icono, 20) + '<span class="sb-rb__t">' + esc(m.corto || m.nombre) + '</span>' + contador(bd, ' data-badge="' + esc(id) + '"') + '</button>';
-      }).join('');
+    return bloques.map(function (b, i) {
+      return '<div class="sb-grupo-r" role="group"' + (b.titulo ? ' aria-label="' + esc(b.titulo) + '"' : '') + '>' +
+        (b.titulo || i ? '<p class="sb-grupo" aria-hidden="true"><span class="sb-grupo__linea"></span><span class="sb-txt">' + esc(b.titulo) + '</span></p>' : '') +
+        b.ids.map(function (id) {
+          var m = modulo(id), act = id === o.moduloActivo, bd = est_.badges[id];
+          var nombre = m.titulo || m.nombre;
+          return '<button type="button" class="sb-rb' + (act ? ' sb-rb--act' : '') + '" data-modulo="' + esc(id) + '"' +
+            ' aria-label="' + esc(nombre + (bd && bd.n ? ', ' + textoEstado(bd) : '')) + '"' + (act ? ' aria-current="true"' : '') + '>' +
+            '<span class="sb-rb__ico">' + ico(m.icono, 20) +
+              '<i class="sb-punto sb-punto--' + ((bd && bd.tono) || 'ambar') + (bd && bd.n ? '' : ' sigso-oculto') + '" data-punto="' + esc(id) + '"></i></span>' +
+            '<span class="sb-txt sb-rb__t">' + esc(nombre) + '</span>' +
+            pildora(bd, ' data-badge="' + esc(id) + '"', 'sb-txt') +
+          '</button>';
+        }).join('') +
+      '</div>';
     }).join('');
   }
 
-  function filaHoja(mod, it, act) {
-    var fij = esFijado(mod, it.id);
-    return '<div class="sb-fila' + (act ? ' sb-fila--act' : '') + '">' +
-      '<button type="button" class="sb-hoja" data-item="' + esc(it.id) + '" data-de-modulo="' + esc(mod) + '"' + (act ? ' aria-current="page"' : '') + '>' +
-        '<span class="sb-hoja__t">' + esc(it.nombre) + '</span>' + (it.badge ? contador({ n: Number(it.badge) || it.badge, tono: it.tono }) : '') + '</button>' +
-      '<button type="button" class="sb-fijar' + (fij ? ' sb-fijar--on' : '') + '" data-fmod="' + esc(mod) + '" data-fitem="' + esc(it.id) + '" data-fnombre="' + esc(it.nombre) + '"' +
-        ' aria-pressed="' + fij + '" aria-label="' + (fij ? 'Quitar ' + esc(it.nombre) + ' de tus atajos' : 'Agregar ' + esc(it.nombre) + ' a tus atajos') + '" title="' + (fij ? 'Quitar de tus atajos' : 'Agregar a tus atajos (Inicio)') + '">' + ico('estrella', 14) + '</button>' +
+  // Nivel 3: la bandeja hundida.
+  function bandejaHtml(mod, it, abierta, activa) {
+    var idc = 'sb3-' + idSeguro(mod + '-' + it.id);
+    return '<div class="sb-plegable sb-plegable--3' + (abierta ? ' sb-plegable--abierto' : '') + '" id="' + idc + '"><div><div class="sb-bandeja">' +
+      it.hijos.map(function (h) {
+        var act = activa && activa.hoja.id === h.id;
+        return '<button type="button" class="sb-n3' + (act ? ' sb-n3--act' : '') + '" data-item="' + esc(h.id) + '" data-de-modulo="' + esc(mod) + '"' + (act ? ' aria-current="page"' : '') + (abierta ? '' : ' tabindex="-1"') + '>' +
+          '<i class="sb-vineta" aria-hidden="true"></i><span class="sb-n3__t">' + esc(h.nombre) + '</span>' + pildora(badgeHoja(h)) + '</button>';
+      }).join('') +
+    '</div></div></div>';
+  }
+  // Nivel 2: una fila (hoja) o una fila que abre su bandeja.
+  function filaHtml(mod, c, it, activa, abierta1, q) {
+    var tab = abierta1 ? '' : ' tabindex="-1"';
+    if (!it.hijos.length) {
+      var act = activa && activa.hoja.id === it.id;
+      return '<button type="button" class="sb-n2' + (act ? ' sb-n2--act' : '') + '" data-item="' + esc(it.id) + '" data-de-modulo="' + esc(mod) + '"' + (act ? ' aria-current="page"' : '') + tab + '>' +
+        '<span class="sb-n2__t">' + esc(it.nombre) + '</span>' + pildora(badgeHoja(it)) + '</button>';
+    }
+    var padre = activa && activa.item2 === it.id;
+    var abierta = q ? true : est_.abierto2 === it.id && abierta1;
+    var idc = 'sb3-' + idSeguro(mod + '-' + it.id);
+    return '<div class="sb-n2-grupo' + (abierta ? ' sb-n2-grupo--abierto' : '') + '">' +
+      '<button type="button" class="sb-n2 sb-n2--rama' + (padre ? ' sb-n2--padre' : '') + '" data-abrir2="' + esc(it.id) + '" aria-expanded="' + abierta + '" aria-controls="' + idc + '"' + tab + '>' +
+        '<span class="sb-n2__t">' + esc(it.nombre) + '</span><span class="sb-n2__cuenta">' + it.hijos.length + '</span><span class="sb-n2__flecha">' + ico('abajo', 14) + '</span></button>' +
+      bandejaHtml(mod, it, abierta, activa) +
     '</div>';
   }
-  /** Una pantalla suelta («Hoy», «Reporte mensual»): tarjeta destacada con su ícono. */
-  function destacada(mod, it, act) {
-    var b = it.badge ? { n: Number(it.badge) || it.badge, tono: it.tono } : null;
-    return '<div class="sb-fila sb-dest' + (act ? ' sb-fila--act' : '') + '">' +
-      '<button type="button" class="sb-hoja" data-item="' + esc(it.id) + '" data-de-modulo="' + esc(mod) + '"' + (act ? ' aria-current="page"' : '') + '>' +
-        '<span class="sb-sec__ico">' + ico(it.icono || 'derecha', 15) + '</span><span class="sb-hoja__t"><b>' + esc(it.nombre) + '</b>' +
-        (b && b.n ? '<small>' + esc(b.n + ' ' + (b.n === 1 ? (ESTADO_TXT[b.tono] || ESTADO_TXT.ambar)[0] : (ESTADO_TXT[b.tono] || ESTADO_TXT.ambar)[1])) + '</small>' : '') + '</span>' + (b ? contador(b) : '') + '</button>' +
+  // Nivel 1: la tarjeta de un módulo principal.
+  function tarjetaHtml(mod, c, activa, q) {
+    var contiene = activa && activa.mod1 === c.id;
+    if (c.plano) {
+      var it = c.items[0], pag = activa && activa.hoja.id === it.id;
+      return '<div class="sb-mod sb-mod--hoja' + (contiene ? ' sb-mod--act' : '') + (pag ? ' sb-mod--pagina' : '') + '">' +
+        '<button type="button" class="sb-mod__cab" data-item="' + esc(it.id) + '" data-de-modulo="' + esc(mod) + '"' + (pag ? ' aria-current="page"' : '') + (c.nota ? ' title="' + esc(c.nota) + '"' : '') + '>' +
+          '<span class="sb-mod__tile">' + ico(c.icono, 17) + '</span><span class="sb-mod__t"><b>' + esc(c.titulo) + '</b>' +
+          (badgeHoja(it) && badgeHoja(it).n ? '<small>' + esc(textoEstado(badgeHoja(it))) + '</small>' : '') + '</span>' + pildora(badgeHoja(it)) + '</button></div>';
+    }
+    var abierta = q ? true : est_.abierto1 === c.id;
+    var idc = 'sb1-' + idSeguro(mod + '-' + c.id);
+    // El conteo de la tarjeta: lo que esperan sus pantallas (rojo si algo está atrasado).
+    var suma = 0, rojo = false;
+    c.items.forEach(function (it) { [it].concat(it.hijos).forEach(function (h) { var b = badgeHoja(h); if (b && b.n) { suma += b.n; if (b.tono === 'rojo') rojo = true; } }); });
+    var n = c.items.length;
+    return '<div class="sb-mod' + (abierta ? ' sb-mod--abierto' : '') + (contiene ? ' sb-mod--act' : '') + '" data-mod1="' + esc(c.id) + '">' +
+      '<button type="button" class="sb-mod__cab" data-abrir1="' + esc(c.id) + '" aria-expanded="' + abierta + '" aria-controls="' + idc + '"' + (c.nota ? ' title="' + esc(c.nota) + '"' : '') + '>' +
+        '<span class="sb-mod__tile">' + ico(c.icono, 17) + '</span>' +
+        '<span class="sb-mod__t"><b>' + esc(c.titulo) + '</b><small>' + n + (n === 1 ? ' sección' : ' secciones') + '</small></span>' +
+        (suma ? pildora({ n: suma, tono: rojo ? 'rojo' : 'ambar' }) : '') +
+        '<span class="sb-mod__flecha">' + ico('derecha', 16) + '</span></button>' +
+      '<div class="sb-plegable" id="' + idc + '"><div><div class="sb-mod__cuerpo">' +
+        c.items.map(function (it) { return filaHtml(mod, c, it, activa, abierta, q); }).join('') +
+      '</div></div></div>' +
     '</div>';
   }
-  function bloque(m, s, o) {
-    var k = m.id + '|' + s.titulo;
-    var activa = s.items.some(function (it) { return it.id === o.itemActivo; });
-    var abierta = activa || !est_.cerradas[k];
-    var urg = s.items.filter(function (it) { return it.badge; }).length;
-    return '<div class="sb-bloque' + (abierta ? '' : ' sb-bloque--cerrado') + '">' +
-      '<button type="button" class="sb-sec" data-sec="' + esc(k) + '" aria-expanded="' + abierta + '"' + (s.nota ? ' title="' + esc(s.nota) + '"' : '') + '>' +
-        '<span class="sb-sec__ico">' + ico(s.icono || 'lista', 15) + '</span><span class="sb-sec__t">' + esc(s.titulo) + '</span>' +
-        (urg && !abierta ? '<span class="sb-sec__punto" title="Hay pendientes adentro"></span>' : '') +
-        '<span class="sb-sec__cuenta">' + s.items.length + '</span><span class="sb-sec__flecha">' + ico('abajo', 14) + '</span></button>' +
-      '<div class="sb-lista">' + s.items.map(function (it) { return filaHoja(m.id, it, it.id === o.itemActivo); }).join('') + '</div></div>';
+
+  /** Lo que coincide con lo buscado: tarjeta completa, fila con sus hijos o hijo con su ruta. */
+  function filtrar(cards, q) {
+    var p = norm(q).trim();
+    if (!p) return cards;
+    var calza = function (t) { return norm(t).indexOf(p) !== -1; };
+    return cards.map(function (c) {
+      if (calza(c.titulo)) return c;
+      if (c.plano) return null;
+      var items = c.items.map(function (it) {
+        if (calza(it.nombre)) return it;
+        var hijos = it.hijos.filter(function (h) { return calza(h.nombre); });
+        return hijos.length ? Object.assign({}, it, { hijos: hijos }) : null;
+      }).filter(Boolean);
+      return items.length ? Object.assign({}, c, { items: items }) : null;
+    }).filter(Boolean);
   }
+
+  function areaHtml(m) {
+    var o = est_.opts;
+    var cards = menu(m.id);
+    if (!cards.length && o.conMenu && o.conMenu(m.id)) return '<p class="sb-pista sb-cargando">Cargando el menú…</p>';
+    if (!cards.length) {
+      return '<div class="sb-directo">' + ico('derecha', 14) + '<span><b>' + esc(m.titulo || m.nombre) + '</b> abre directo, sin submenú: todo está a la derecha.</span></div>';
+    }
+    var activa = rutaActiva(m.id, o.itemActivo);
+    var vista = filtrar(cards, est_.q);
+    if (!vista.length) return '<p class="sb-pista sb-sin">Sin resultados en este módulo.</p>';
+    return vista.map(function (c) { return tarjetaHtml(m.id, c, activa, est_.q.trim()); }).join('');
+  }
+
+  function mini(m) { return '<span class="sb-mini" style="--sb-c:' + colorDe(m) + '">' + ico((m && m.icono) || 'derecha', 14) + '</span>'; }
   function badgeDe(f) {
-    if (f.item) { var h = hojaDe(f.modulo, f.item); return h && h.badge ? { n: Number(h.badge) || h.badge, tono: h.tono } : null; }
+    if (f.item) { var h = hojaDe(f.modulo, f.item); return badgeHoja(h); }
     return est_.badges[f.modulo] || null;
   }
-  function mini(m) { return '<span class="sb-mini" style="--sb-c:' + colorDe(m) + '">' + ico((m && m.icono) || 'derecha', 14) + '</span>'; }
+  function filaInicio(attrs, m, nombre, sub, b, extra) {
+    return '<div class="sb-fila"><button type="button" class="sb-n2 sb-n2--ini" ' + attrs + '>' + mini(m) +
+      '<span class="sb-n2__t">' + esc(nombre) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span>' + (b ? pildora(b) : '') + '</button>' + (extra || '') + '</div>';
+  }
 
-  /** Inicio: tus atajos (los fijados), lo pendiente de cada módulo y lo reciente. */
+  /** Inicio: lo tuyo que salió del riel (Mis solicitudes, Pausas), tus atajos, lo pendiente y lo reciente. */
   function inicioHtml() {
     var o = est_.opts, html = '';
+    var propios = (o.fueraDelRiel || []).filter(function (id) { return modulo(id); });
+    if (propios.length) {
+      html += '<p class="sb-titulo">' + ico('persona', 12) + 'Lo tuyo</p><div class="sb-lista">' + propios.map(function (id) {
+        var m = modulo(id), act = o.moduloActivo === id;
+        return filaInicio('data-irmod="' + esc(id) + '"' + (act ? ' aria-current="page"' : ''), m, m.titulo || m.nombre, '', est_.badges[id] && est_.badges[id].n ? est_.badges[id] : null)
+          .replace('sb-n2 sb-n2--ini', 'sb-n2 sb-n2--ini' + (act ? ' sb-n2--act' : ''));
+      }).join('') + '</div>';
+    }
     var l = fijadosVisibles(), sug = est_.fijados === null;
     html += '<p class="sb-titulo sb-titulo--fij">' + ico('estrella', 12) + (sug ? 'Atajos sugeridos' : 'Mis atajos') + '</p>' +
-      (sug ? '<p class="sb-pista">Agrega tus pantallas de todos los días con la estrella ' + ico('estrella', 11) + ' que aparece al pasar por cada una. Mientras, te sugerimos estas.</p>' : '') +
+      (sug ? '<p class="sb-pista">Agrega tus pantallas de todos los días con la estrella ' + ico('estrella', 11) + ' de arriba, junto al nombre del área. Mientras, te sugerimos estas.</p>' : '') +
       (l.length ? '<div class="sb-lista sb-fijados">' + l.map(function (f, i) {
         var m = modulo(f.modulo) || (o.accion && o.accion.modulo === f.modulo ? { icono: o.accion.icono || 'nueva', acento: 'var(--mod-nueva)' } : null);
         return '<div class="sb-fila sb-atajo" draggable="true" data-pos="' + i + '">' +
-          '<button type="button" class="sb-hoja" data-fijado="' + i + '"' + (i < 8 ? ' title="Alt+' + (i + 1) + '"' : '') + '>' + mini(m) + '<span class="sb-hoja__t">' + esc(f.nombre) +
-            (f.ruta && f.nombre.indexOf(f.ruta) === -1 ? '<small>' + esc(f.ruta) + '</small>' : '') + '</span>' + (badgeDe(f) ? contador(badgeDe(f)) : '') + '</button>' +
+          '<button type="button" class="sb-n2 sb-n2--ini" data-fijado="' + i + '"' + (i < 8 ? ' title="Alt+' + (i + 1) + '"' : '') + '>' + mini(m) + '<span class="sb-n2__t">' + esc(f.nombre) +
+            (f.ruta && f.nombre.indexOf(f.ruta) === -1 ? '<small>' + esc(f.ruta) + '</small>' : '') + '</span>' + (badgeDe(f) ? pildora(badgeDe(f)) : '') + '</button>' +
           (sug ? '' : '<button type="button" class="sb-quitar" data-quitar="' + i + '" aria-label="Quitar ' + esc(f.nombre) + ' de tus atajos" title="Quitar de tus atajos">' + ico('equis', 12) + '</button>') +
         '</div>';
       }).join('') + '</div>' : '<p class="sb-pista">Todavía no tienes atajos.</p>');
@@ -219,63 +338,79 @@
     if (pend.length) {
       html += '<p class="sb-titulo">' + ico('campana', 12) + 'Lo pendiente</p><div class="sb-lista">' + pend.map(function (m) {
         var b = est_.badges[m.id];
-        return '<div class="sb-fila sb-atajo"><button type="button" class="sb-hoja" data-irmod="' + esc(m.id) + '">' + mini(m) + '<span class="sb-hoja__t">' + esc(m.nombre) +
-          '<small>' + esc(TONOS[b.tono] === 'atrasado' ? 'Con atrasos' : (TONOS[b.tono] || '').charAt(0).toUpperCase() + (TONOS[b.tono] || '').slice(1)) + '</small></span>' + contador(b) + '</button></div>';
+        return filaInicio('data-irmod="' + esc(m.id) + '"', m, m.titulo || m.nombre, textoEstado(b), b);
       }).join('') + '</div>';
     }
     var rec = est_.recientes.filter(function (r) { return puedeIr(r) && !esFijado(r.modulo, r.item); }).slice(0, MAX_RECIENTES);
     if (rec.length) {
       html += '<p class="sb-titulo">' + ico('reloj', 12) + 'Recientes</p><div class="sb-lista">' + rec.map(function (r) {
-        return '<div class="sb-fila sb-atajo"><button type="button" class="sb-hoja" data-reciente="' + esc(r.modulo) + '|' + esc(r.item || '') + '">' + mini(modulo(r.modulo)) + '<span class="sb-hoja__t">' + esc(r.nombre) +
-          (r.ruta && r.nombre.indexOf(r.ruta) === -1 ? '<small>' + esc(r.ruta) + '</small>' : '') + '</span></button></div>';
+        return filaInicio('data-reciente="' + esc(r.modulo) + '|' + esc(r.item || '') + '"', modulo(r.modulo), r.nombre, r.ruta && r.nombre.indexOf(r.ruta) === -1 ? r.ruta : '', null);
       }).join('') + '</div>';
     }
     return html;
   }
 
-  function panelHtml(m) {
-    var o = est_.opts;
-    if (m.id === 'home') return inicioHtml();
-    var secs = secciones(m.id);
-    if (!secs.length && o.conMenu && o.conMenu(m.id)) return '<p class="sb-pista sb-cargando">Cargando el menú…</p>';
-    if (!secs.length) {
-      return '<div class="sb-directo">' + ico('derecha', 14) + '<span><b>' + esc(m.nombre) + '</b> se abre directo, sin submenú: lo que haces aquí está a la derecha.</span></div>' +
-        '<p class="sb-pista">Para tenerlo a mano, agrégalo a tus atajos con la estrella de arriba.</p>';
-    }
-    return secs.map(function (s) {
-      if (!s.titulo) return '<div class="sb-destacadas">' + s.items.map(function (it) { return destacada(m.id, it, it.id === o.itemActivo); }).join('') + '</div>';
-      return bloque(m, s, o);
-    }).join('');
-  }
-
   function estadoHtml(m) {
     var b = est_.badges[m.id];
     if (!b || !b.n || m.id === 'home') return '';
-    var t = ESTADO_TXT[b.tono] || ESTADO_TXT.ambar;
-    return '<span class="sb-chip sb-chip--' + b.tono + '"><i></i>' + (b.n > 99 ? '99+' : b.n) + ' ' + esc(b.n === 1 ? t[0] : t[1]) + '</span>';
+    return '<span class="sb-chip sb-chip--' + b.tono + '"><i aria-hidden="true"></i>' + esc(textoEstado(b)) + '</span>';
+  }
+
+  // Qué módulo de primer nivel abrir para que se vea la página activa.
+  function abrirRutaDe(moduloId, itemId) {
+    var r = rutaActiva(moduloId, itemId);
+    if (!r) return false;
+    est_.abierto1 = r.mod1;
+    est_.abierto2 = r.item2;
+    return true;
+  }
+
+  function moduloVisible() {
+    var o = est_.opts;
+    return modulo(o.moduloActivo) || (o.accion && o.accion.modulo === o.moduloActivo ? { id: o.accion.modulo, nombre: o.accion.texto, titulo: o.accion.texto, icono: o.accion.icono || 'nueva', desc: 'Ingresa un pedido a cualquier área' } : null) ||
+      { id: 'home', nombre: 'Inicio', titulo: 'Inicio', icono: 'inicio', desc: 'Tus atajos y lo pendiente de todos tus módulos' };
   }
 
   function pintar() {
     if (!raiz_ || !est_.opts) return;
     var o = est_.opts;
-    var m = modulo(o.moduloActivo) || (o.accion && o.accion.modulo === o.moduloActivo ? { id: o.accion.modulo, nombre: o.accion.texto, titulo: o.accion.texto, icono: o.accion.icono || 'nueva', acento: 'var(--mod-nueva)', desc: 'Ingresa un pedido a cualquier área' } : null) ||
-      { id: 'home', nombre: 'Inicio', titulo: 'Inicio', icono: 'inicio', acento: 'var(--mod-inicio)', desc: 'Tus atajos y lo pendiente de todos tus módulos' };
+    var m = moduloVisible();
+    // Cambió el área: desde el riel todo parte cerrado (la página queda marcada);
+    // por otro camino (dirección, atajo, buscador) se abre la ruta de la página.
+    if (m.id !== est_.ultMod) {
+      est_.ultMod = m.id;
+      est_.q = '';
+      est_.abierto1 = null; est_.abierto2 = null;
+      est_.abrirRuta = !est_.cerrarTodo;
+      est_.cerrarTodo = false;
+      var input = raiz_.querySelector('#sb-buscar');
+      if (input) input.value = '';
+    }
+    if (est_.abrirRuta && o.itemActivo && abrirRutaDe(m.id, o.itemActivo)) est_.abrirRuta = false;
+
     var riel = raiz_.querySelector('#sb-riel');
     var nav = raiz_.querySelector('#nav-modulos');
-    var panel = raiz_.querySelector('#sb-panel');
     var scroll = nav ? nav.scrollTop : 0;
     var foco = document.activeElement && raiz_.contains(document.activeElement) ? refFoco(document.activeElement) : null;
     if (riel) riel.innerHTML = rielHtml();
-    if (panel) panel.style.setProperty('--sb-c', colorDe(m));
-    var tile = raiz_.querySelector('#sb-panel-tile');
-    if (tile) tile.innerHTML = ico(m.icono || 'inicio', 22);
     var tit = raiz_.querySelector('#sb-panel-titulo');
     var sub = raiz_.querySelector('#sb-panel-sub');
     var estado = raiz_.querySelector('#sb-panel-estado');
     if (tit) tit.textContent = m.titulo || m.nombre;
-    if (sub) sub.textContent = m.desc || m.grupo || '';
+    if (sub) sub.textContent = m.desc || '';
     if (estado) { estado.innerHTML = estadoHtml(m); estado.hidden = !estado.innerHTML; }
-    // La estrella de la portada agrega a tus atajos lo que estás mirando (un módulo sin menú o la pantalla abierta).
+    var panel = raiz_.querySelector('#sb-panel');
+    if (panel) panel.setAttribute('aria-label', 'Menú de ' + (m.titulo || m.nombre));
+    // El buscador filtra el menú del área; sin menú (Inicio, áreas directas) queda solo el de todo SIGSO.
+    var caja = raiz_.querySelector('#sb-buscar-caja');
+    var conMenu = m.id !== 'home' && tieneMenu(m.id);
+    if (caja) {
+      caja.classList.toggle('sb-buscar--global', m.id === 'home');
+      caja.hidden = !conMenu && m.id !== 'home';
+      var inp = caja.querySelector('#sb-buscar');
+      if (inp) inp.placeholder = 'Buscar en ' + (m.titulo || m.nombre);
+    }
+    // La estrella del encabezado agrega a tus atajos lo que estás mirando.
     var estrella = raiz_.querySelector('#sb-fijar-actual');
     if (estrella) {
       if (!estrella.firstChild) estrella.innerHTML = ico('estrella', 15);
@@ -302,13 +437,16 @@
     if (accion) {
       accion.hidden = !o.accion;
       if (o.accion) {
-        accion.innerHTML = ico(o.accion.icono || 'nueva', 18) + '<span>' + esc(o.accion.texto) + '</span>';
+        accion.innerHTML = '<span class="sb-rb__ico">' + ico('nueva', 20) + '</span><span class="sb-txt">' + esc(o.accion.texto) + '</span>';
+        accion.setAttribute('aria-label', o.accion.texto);
         accion.classList.toggle('sb-nueva--act', o.moduloActivo === o.accion.modulo);
       }
     }
-    if (nav) { nav.innerHTML = panelHtml(m); nav.scrollTop = scroll; }
+    var volver = raiz_.querySelector('#sb-volver');
+    if (volver && !volver.firstChild) volver.innerHTML = ico('izquierda', 16) + '<span>Áreas</span>';
+    if (nav) { nav.innerHTML = m.id === 'home' ? inicioHtml() : areaHtml(m); nav.scrollTop = scroll; }
     if (foco) { var el = raiz_.querySelector(foco); if (el) el.focus(); }
-    // El módulo abierto, a la vista en el riel (cuentas con muchos módulos).
+    // El área abierta, a la vista en el riel (cuentas con muchas).
     var act = riel && riel.querySelector('.sb-rb--act');
     if (act && act.offsetTop !== est_.ultimoAct) {
       est_.ultimoAct = act.offsetTop;
@@ -316,13 +454,69 @@
     }
   }
   function refFoco(el) {
-    var attrs = ['data-modulo', 'data-item', 'data-fijado', 'data-quitar', 'data-reciente', 'data-sec', 'data-irmod', 'data-fitem'];
+    var attrs = ['data-modulo', 'data-item', 'data-abrir1', 'data-abrir2', 'data-fijado', 'data-quitar', 'data-reciente', 'data-irmod', 'data-fitem'];
     for (var i = 0; i < attrs.length; i++) {
       var v = el.getAttribute(attrs[i]);
       if (v !== null) return '[' + attrs[i] + '="' + String(v).replace(/"/g, '\\"') + '"]' + (attrs[i] === 'data-fitem' ? '.sb-fijar' : '');
     }
     return el.id ? '#' + el.id : null;
   }
+
+  // --- acordeón sin repintar (para que se vea la animación) ---------------------------------
+  function marcarAbierto(el, abierto) {
+    el.setAttribute('aria-expanded', String(abierto));
+    var cuerpo = document.getElementById(el.getAttribute('aria-controls'));
+    if (cuerpo) {
+      cuerpo.classList.toggle('sb-plegable--abierto', abierto);
+      // Lo de adentro de algo cerrado no se recorre con Tab.
+      cuerpo.querySelectorAll('.sb-n2, .sb-n3').forEach(function (b) {
+        var enBandeja = b.classList.contains('sb-n3');
+        var visible = abierto && (!enBandeja || (b.closest('.sb-plegable--3') || {}).classList.contains('sb-plegable--abierto'));
+        if (visible) b.removeAttribute('tabindex'); else b.setAttribute('tabindex', '-1');
+      });
+    }
+  }
+  function alternar1(id) {
+    if (est_.q.trim()) return;
+    est_.abierto1 = est_.abierto1 === id ? null : id;
+    est_.abierto2 = null;
+    raiz_.querySelectorAll('#nav-modulos .sb-mod[data-mod1]').forEach(function (card) {
+      var abre = card.getAttribute('data-mod1') === est_.abierto1;
+      card.classList.toggle('sb-mod--abierto', abre);
+      card.querySelectorAll('.sb-n2-grupo').forEach(function (g) {
+        g.classList.remove('sb-n2-grupo--abierto');
+        var b = g.querySelector('[data-abrir2]');
+        if (b) marcarAbierto(b, false);
+      });
+      marcarAbierto(card.querySelector('[data-abrir1]'), abre);
+    });
+  }
+  function alternar2(btn) {
+    if (est_.q.trim()) return;
+    var id = btn.getAttribute('data-abrir2');
+    est_.abierto2 = est_.abierto2 === id ? null : id;
+    var card = btn.closest('.sb-mod');
+    (card || raiz_).querySelectorAll('[data-abrir2]').forEach(function (b) {
+      var abre = b.getAttribute('data-abrir2') === est_.abierto2;
+      b.parentNode.classList.toggle('sb-n2-grupo--abierto', abre);
+      marcarAbierto(b, abre);
+    });
+  }
+
+  // --- riel que se despliega ----------------------------------------------------------------
+  // Mientras se anima el ancho los nombres van en una línea (no saltan); ya
+  // desplegado, uno largo («Administración del sistema») baja a dos líneas
+  // dentro de la misma fila: nunca se corta.
+  var timerListo_ = null;
+  function desplegar(si) {
+    clearTimeout(timerRiel_);
+    clearTimeout(timerListo_);
+    if (!raiz_) return;
+    raiz_.classList.toggle('sb--riel-abierto', !!si);
+    if (!si) { raiz_.classList.remove('sb--riel-listo'); return; }
+    timerListo_ = setTimeout(function () { if (raiz_.classList.contains('sb--riel-abierto')) raiz_.classList.add('sb--riel-listo'); }, 270);
+  }
+  function esCajon() { return window.innerWidth < 1024; }
 
   // --- interacción --------------------------------------------------------------------------
   function ir(f) {
@@ -338,20 +532,16 @@
     if (!t || !raiz_.contains(t)) return;
     if (t.hasAttribute('data-modulo')) {
       var id = t.getAttribute('data-modulo');
-      if (id !== o.moduloActivo) o.onModulo(id);
-      // Con menú, se queda abierto para elegir la pantalla (angostada, flotando); sin menú, ya llegaste.
-      if (tieneMenu(id) || (o.conMenu && o.conMenu(id))) { if (o.abrirMenu) o.abrirMenu(id === o.moduloActivo); }
+      var cambia = id !== o.moduloActivo;
+      if (cambia) { est_.cerrarTodo = true; o.onModulo(id); }
+      if (!esCajon()) desplegar(false);
+      // Con menú, se muestra el panel del área para elegir; sin menú, ya llegaste.
+      if (tieneMenu(id) || (o.conMenu && o.conMenu(id))) { if (o.abrirMenu) o.abrirMenu(!cambia); }
       else if (o.alNavegar) o.alNavegar();
       return;
     }
-    if (t.hasAttribute('data-sec')) {
-      var k = t.getAttribute('data-sec');
-      est_.cerradas[k] = t.getAttribute('aria-expanded') === 'true';
-      if (!est_.cerradas[k]) delete est_.cerradas[k];
-      guardarLS(llave('sigso_barra_cerradas'), est_.cerradas);
-      pintar();
-      return;
-    }
+    if (t.hasAttribute('data-abrir1')) { alternar1(t.getAttribute('data-abrir1')); return; }
+    if (t.hasAttribute('data-abrir2')) { alternar2(t); return; }
     if (t.hasAttribute('data-item')) { ir({ modulo: t.getAttribute('data-de-modulo'), item: t.getAttribute('data-item') }); return; }
     if (t.hasAttribute('data-irmod')) { ir({ modulo: t.getAttribute('data-irmod'), item: '' }); return; }
     if (t.hasAttribute('data-fijado')) { ir(fijadosVisibles()[Number(t.getAttribute('data-fijado'))]); return; }
@@ -360,16 +550,31 @@
       var l = fijadosVisibles().slice(); l.splice(Number(t.getAttribute('data-quitar')), 1); guardarFijados(l); return;
     }
     if (t.hasAttribute('data-fmod')) { alternarFijado(t.getAttribute('data-fmod'), t.getAttribute('data-fitem'), t.getAttribute('data-fnombre')); return; }
-    if (t.id === 'sb-accion' && o.accion) { o.accion.ir(); if (o.alNavegar) o.alNavegar(); return; }
-    if (t.id === 'sb-manual' && window.SigsoManual) { SigsoManual.abrir(t.getAttribute('data-manual')); if (o.alNavegar) o.alNavegar(); }
+    if (t.id === 'sb-accion' && o.accion) { desplegar(false); o.accion.ir(); if (o.alNavegar) o.alNavegar(); return; }
+    if (t.id === 'sb-manual' && window.SigsoManual) { SigsoManual.abrir(t.getAttribute('data-manual')); if (o.alNavegar) o.alNavegar(); return; }
+    if (t.id === 'sb-volver' && o.volverAreas) o.volverAreas();
   }
 
-  // Flechas arriba/abajo dentro del riel o del panel; Inicio/Fin a los extremos.
+  // Teclado: flechas arriba/abajo recorren lo visible; derecha abre, izquierda cierra o sube al padre.
   function alTeclado(ev) {
-    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].indexOf(ev.key) === -1) return;
-    var zona = ev.target.closest('#sb-riel, #nav-modulos');
+    if (ev.key === 'Escape' && raiz_.classList.contains('sb--riel-abierto')) { desplegar(false); return; }
+    var zona = ev.target.closest('#sb-riel-caja, #nav-modulos');
     if (!zona) return;
-    var lista = Array.prototype.slice.call(zona.querySelectorAll('.sb-rb, .sb-sec, .sb-hoja')).filter(function (b) { return b.offsetParent !== null; });
+    if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
+      var t = ev.target;
+      var rama = t.hasAttribute('data-abrir1') || t.hasAttribute('data-abrir2');
+      var abierto = t.getAttribute('aria-expanded') === 'true';
+      if (ev.key === 'ArrowRight' && rama && !abierto) { ev.preventDefault(); t.click(); return; }
+      if (ev.key === 'ArrowLeft') {
+        if (rama && abierto) { ev.preventDefault(); t.click(); return; }
+        var padre = t.closest('.sb-n2-grupo') && !t.hasAttribute('data-abrir2') ? t.closest('.sb-n2-grupo').querySelector('[data-abrir2]')
+          : (t.closest('.sb-mod[data-mod1]') && !t.hasAttribute('data-abrir1') ? t.closest('.sb-mod[data-mod1]').querySelector('[data-abrir1]') : null);
+        if (padre) { ev.preventDefault(); padre.focus(); }
+      }
+      return;
+    }
+    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].indexOf(ev.key) === -1) return;
+    var lista = Array.prototype.slice.call(zona.querySelectorAll('.sb-rb, .sb-nueva, .sb-mod__cab, .sb-n2, .sb-n3')).filter(function (b) { return b.offsetParent !== null && b.getAttribute('tabindex') !== '-1'; });
     var i = lista.indexOf(ev.target);
     if (i === -1) return;
     ev.preventDefault();
@@ -414,21 +619,6 @@
     if (ev.type === 'dragend') { arrastre_ = -1; pintar(); }
   }
 
-  // Al pasar por el riel: el nombre completo, para qué sirve y qué significa su número.
-  var tip_ = null;
-  function mostrarTip(btn) {
-    if (!tip_) { tip_ = document.createElement('div'); tip_.className = 'sb-tip'; tip_.setAttribute('role', 'tooltip'); document.body.appendChild(tip_); }
-    var bd = est_.badges[btn.getAttribute('data-modulo')];
-    var desc = btn.getAttribute('data-desc');
-    tip_.innerHTML = '<b>' + esc(btn.getAttribute('data-tip')) + '</b>' + (desc ? '<span class="sb-tip__d">' + esc(desc) + '</span>' : '') +
-      (bd && bd.n ? '<span class="sb-tip__s"><span class="sb-n sb-n--' + bd.tono + '">' + bd.n + '</span>' + esc(TONOS[bd.tono] || '') + '</span>' : '');
-    var r = btn.getBoundingClientRect();
-    tip_.style.top = Math.round(r.top + r.height / 2) + 'px';
-    tip_.style.left = Math.round(r.right + 10) + 'px';
-    tip_.classList.add('sb-tip--ver');
-  }
-  function ocultarTip() { if (tip_) tip_.classList.remove('sb-tip--ver'); }
-
   // --- API ----------------------------------------------------------------------------------
   function iniciar(cfg) {
     raiz_ = document.getElementById('plataforma-sidebar');
@@ -437,12 +627,40 @@
     raiz_.addEventListener('click', alClic);
     raiz_.addEventListener('keydown', alTeclado);
     ['dragstart', 'dragover', 'dragleave', 'drop', 'dragend'].forEach(function (t) { raiz_.addEventListener(t, alArrastrar); });
-    raiz_.addEventListener('mouseover', function (ev) { var b = ev.target.closest('.sb-rb'); if (b) mostrarTip(b); });
-    raiz_.addEventListener('mouseout', function (ev) { if (ev.target.closest('.sb-rb')) ocultarTip(); });
-    raiz_.addEventListener('focusin', function (ev) { if (ev.target.classList && ev.target.classList.contains('sb-rb')) mostrarTip(ev.target); });
-    raiz_.addEventListener('focusout', ocultarTip);
-    var nav = raiz_.querySelector('#sb-riel');
-    if (nav) nav.addEventListener('scroll', ocultarTip);
+    // El riel se despliega sobre el panel: con el mouse (tras una pausa, para
+    // que no se abra al cruzarlo de pasada) o al entrar con el teclado.
+    var riel = raiz_.querySelector('#sb-riel-caja');
+    if (riel) {
+      riel.addEventListener('mouseenter', function () {
+        if (esCajon()) return;
+        clearTimeout(timerRiel_);
+        timerRiel_ = setTimeout(function () { desplegar(true); }, ESPERA_RIEL);
+      });
+      riel.addEventListener('mouseleave', function () {
+        if (esCajon()) return;
+        var menuAbierto = document.getElementById('btn-menu-usuario');
+        if (menuAbierto && menuAbierto.getAttribute('aria-expanded') === 'true') { clearTimeout(timerRiel_); return; }
+        desplegar(false);
+      });
+      riel.addEventListener('focusin', function (ev) { if (!esCajon() && ev.target.matches(':focus-visible')) desplegar(true); });
+      riel.addEventListener('focusout', function (ev) { if (!esCajon() && !riel.contains(ev.relatedTarget)) desplegar(false); });
+    }
+    // Buscador del panel: filtra mientras se escribe; Esc lo vacía.
+    var input = raiz_.querySelector('#sb-buscar');
+    if (input) {
+      input.addEventListener('input', function () {
+        est_.q = input.value;
+        var nav = raiz_.querySelector('#nav-modulos');
+        if (nav && est_.opts) nav.innerHTML = areaHtml(moduloVisible());
+      });
+      input.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape' && input.value) { ev.stopPropagation(); input.value = ''; est_.q = ''; pintar(); }
+      });
+    }
+    var icoB = raiz_.querySelector('#ico-sb-buscar');
+    if (icoB) icoB.innerHTML = ico('lupa', 15);
+    // Llegar por una dirección (o con atrás/adelante) abre la ruta de la página.
+    window.addEventListener('hashchange', function () { est_.abrirRuta = true; });
     document.addEventListener('keydown', alAtajo);
     if (cfg && cfg.cuenta) cargarCuenta(cfg.cuenta);
   }
@@ -452,7 +670,6 @@
     var cache = leerLS(llave('sigso_barra_fijados'));
     est_.fijados = Array.isArray(cache) ? cache : null;
     est_.recientes = leerLS(llave('sigso_barra_recientes')) || [];
-    est_.cerradas = leerLS(llave('sigso_barra_cerradas')) || {};
     pintar();
     if (typeof llamarApi !== 'function') return;
     llamarApi(null, 'obtenerPreferencias', {}).then(function (r) {
@@ -466,14 +683,18 @@
   function badge(id, n, tono) {
     est_.badges[id] = { n: Number(n) || 0, tono: TONOS[tono] ? tono : 'ambar' };
     if (!raiz_) return;
+    var b = est_.badges[id];
     raiz_.querySelectorAll('[data-badge="' + id + '"]').forEach(function (el) {
-      var b = est_.badges[id];
-      el.textContent = b.n > 99 ? '99+' : String(b.n);
-      el.className = 'sb-n sb-n--' + b.tono + (b.n ? '' : ' sigso-oculto');
+      el.textContent = b.n ? cifra(b.n) : '';
+      el.className = 'sb-pill sb-pill--' + b.tono + ' sb-txt' + (b.n ? '' : ' sigso-oculto');
+      el.title = textoEstado(b);
       var btn = el.closest('.sb-rb');
-      if (btn) btn.setAttribute('aria-label', btn.getAttribute('data-tip') + etiquetaContador(b));
+      if (btn) { var m = modulo(id); btn.setAttribute('aria-label', ((m && (m.titulo || m.nombre)) || id) + (b.n ? ', ' + textoEstado(b) : '')); }
     });
-    // La portada del módulo abierto e Inicio (lo pendiente, tus atajos) muestran el mismo número.
+    raiz_.querySelectorAll('[data-punto="' + id + '"]').forEach(function (el) {
+      el.className = 'sb-punto sb-punto--' + b.tono + (b.n ? '' : ' sigso-oculto');
+    });
+    // El encabezado del área abierta e Inicio (lo pendiente, tus atajos) muestran el mismo número.
     var o = est_.opts;
     if (o && (o.moduloActivo === id || o.moduloActivo === 'home' || !modulo(o.moduloActivo))) pintar();
   }
@@ -484,13 +705,14 @@
     badge: badge,
     visita: visita,
     tieneMenu: tieneMenu,
+    desplegar: desplegar,
     // Para pruebas y para el buscador: lo que hoy se ve como atajo.
     fijados: function () { return fijadosVisibles(); },
     // Para los manuales: repintar cuando llega su índice, qué módulos ve la cuenta y cuál está abierto.
     refrescar: function () { pintar(); },
     modulos: function () { return ((est_.opts && est_.opts.modulos) || []).map(function (m) { return m.id; }).concat(est_.opts && est_.opts.accion ? [est_.opts.accion.modulo] : []); },
     moduloActivo: function () { return est_.opts ? est_.opts.moduloActivo : ''; },
-    _secciones: secciones,
+    _menu: menu,
     MAX_FIJADOS: MAX_FIJADOS
   };
 })();
