@@ -1,0 +1,2 @@
+/* Señales de las capturas (capturar.js, empresa de demostración). */
+SigsoManual.marcas("novedades", {"inicio":{"w":1626,"h":1808,"marcas":[{"n":1,"forma":"caja","x":2.6,"y":10.5,"w":94.9,"h":11.5},{"n":2,"forma":"caja","x":2.6,"y":23,"w":94.9,"h":27.5},{"n":3,"forma":"caja","x":2.6,"y":51.5,"w":94.9,"h":3.2},{"n":4,"forma":"caja","x":2.6,"y":75.8,"w":94.7,"h":10.6}]},"leer":{"w":1140,"h":1350,"marcas":[{"n":1,"forma":"caja","x":2.1,"y":93.6,"w":55,"h":5.1}]}});

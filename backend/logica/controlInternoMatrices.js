@@ -30,14 +30,14 @@ const COLUMNAS = require('./controlInternoColumnas');
 // ya validados por su jefatura (`recibe`). Pedido del dueño, 2026-10-03.
 const DEPARTAMENTOS = [
   { clave: 'CONTABILIDAD', nombre: 'Contabilidad', area: 'CONTABILIDAD', modulo: 'dep_contabilidad', icono: 'dinero' },
-  { clave: 'RRHH', nombre: 'Recursos Humanos', area: 'RRHH', modulo: 'dep_rrhh', icono: 'equipo' },
-  { clave: 'PREVENCION', nombre: 'Prevención de riesgos', area: 'PREVENCION', modulo: 'dep_prevencion', icono: 'escudoCheck' },
+  { clave: 'RRHH', nombre: 'Recursos Humanos', area: 'RRHH', modulo: 'dep_rrhh', icono: 'gafete' },
+  { clave: 'PREVENCION', nombre: 'Prevención de riesgos', area: 'PREVENCION', modulo: 'dep_prevencion', icono: 'casco' },
   { clave: 'MARKETING', nombre: 'Marketing corporativo', area: 'MARKETING', modulo: 'dep_marketing', icono: 'megafono' },
   // Facturación y Cobranzas (organigrama DOC-09): lo que HomePymes cobra a sus
   // clientes. No entrega reporte mensual del área (reporta: false): revisa el
   // informe de gestión en la cadena, y sus cifras van en él.
-  { clave: 'COBRANZAS', nombre: 'Facturación y Cobranzas', area: 'COBRANZAS', modulo: 'dep_cobranzas', icono: 'tabla', reporta: false },
-  { clave: 'ADMINISTRACION', nombre: 'Administración', area: 'ADMINISTRACION', modulo: 'dep_administracion', icono: 'empresa', recibe: true }
+  { clave: 'COBRANZAS', nombre: 'Facturación y Cobranzas', area: 'COBRANZAS', modulo: 'dep_cobranzas', icono: 'recibo', reporta: false },
+  { clave: 'ADMINISTRACION', nombre: 'Administración', area: 'ADMINISTRACION', modulo: 'dep_administracion', icono: 'maletin', recibe: true }
 ];
 
 // --- situación de una fila --------------------------------------------------------------
