@@ -218,8 +218,15 @@ function tieneAcceso(db, contexto) {
   if (!lista.length) return false;
   const cuenta = cuentaDe_(db, contexto);
   if (!cuenta) return false;
-  return claves_(cuenta, contexto).some((k) => lista.indexOf(k) !== -1);
+  // En producción la lista lleva cuenta_id (UUID): un ADM puede cambiar el
+  // usuario o el correo de una cuenta, pero no su cuenta_id. Por eso una
+  // entrada con forma de UUID solo calza con el cuenta_id, nunca con un
+  // usuario o correo que alguien haya escrito igual.
+  const id = String(cuenta.cuenta_id || '').toLowerCase();
+  const otras = claves_(cuenta, contexto);
+  return lista.some((k) => (UUID_.test(k) ? k === id : otras.indexOf(k) !== -1));
 }
+const UUID_ = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 function nombreDe_(cuenta, contexto) { return String((cuenta && cuenta.nombre) || (contexto && contexto.email) || ''); }
 
 // ---------------------------------------------------------------- bitácora

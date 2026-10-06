@@ -111,6 +111,17 @@ test('la lista acepta usuario o correo (sin importar mayúsculas) y la sesión l
   assert.equal((await login(db, 'balvarez')).cuenta.finanzas, undefined, 'lista vacía = nadie');
 });
 
+test('con cuenta_id en la lista, renombrar otra cuenta con ese usuario, correo o id no da acceso', async (t) => {
+  const db = preparar(t);
+  const ID = '0f0e0d0c-0b0a-4090-8070-605040302010';
+  require('../db/sqliteRepo').actualizarFilaPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', 'C-BAR', { cuenta_id: ID });
+  process.env.SIGSO_FINANZAS_ACCESO = ID;
+  assert.equal((await login(db, 'balvarez')).cuenta.finanzas, true);
+  // El ADM se pone como usuario el UUID de Bárbara: no calza.
+  require('../db/sqliteRepo').actualizarFilaPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', 'C-ADM', { usuario: ID, emails: JSON.stringify([ID]) });
+  assert.equal((await login(db, ID)).cuenta.finanzas, undefined);
+});
+
 test('sin llave en el servidor la bóveda no abre (pero a la lista le explica por qué)', async (t) => {
   const db = preparar(t);
   const s = await login(db, 'balvarez');
