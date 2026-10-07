@@ -440,3 +440,55 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
 .bj2-completa { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--sx-alerta-suave, var(--sx-superficie-2)); color: var(--sx-texto); font: var(--sx-t-chico); }
 .bj2-completa > svg { flex: none; margin-top: 2px; color: var(--sx-alerta); }
 @media (max-width: 600px) { .bj2-camino { grid-template-columns: repeat(5, minmax(56px, 1fr)); overflow-x: auto; } }
+
+/* 2026-10-07 (Etapa 2): la Bandeja por solicitud. */
+.bj2-tabla--sol .bj2-tc-n { width: 158px; max-width: none !important; white-space: nowrap; }
+.bj2-sol-n { display: block; font: 700 .75rem/1.25 var(--fuente-mono, ui-monospace, monospace); color: var(--sx-texto); }
+.bj2-sol-cuenta { display: block; font: 600 .6875rem/1.2 var(--fuente); color: var(--sx-primario); }
+.bj2-tr-sol { cursor: pointer; }
+.bj2-tr-sol--abierta td { background: var(--sx-superficie-2); border-bottom-color: transparent; }
+.bj2-expandir { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 1px solid var(--sx-borde); border-radius: 7px; background: var(--sx-superficie); color: var(--sx-texto-2); cursor: pointer; }
+.bj2-expandir svg { transition: transform var(--sx-dur-rapida, .15s) var(--sx-curva, ease); }
+.bj2-expandir[aria-expanded="true"] svg { transform: rotate(90deg); }
+.bj2-expandir:hover { border-color: var(--sx-primario); color: var(--sx-primario); }
+.bj2-tabla--sol .bj2-tr--hijo td { background: color-mix(in srgb, var(--sx-superficie-2) 55%, var(--sx-superficie)); }
+.bj2-tabla--sol .bj2-tr--hijo td:nth-child(3) { padding-left: 18px; }
+.bj2-tr--otro { opacity: .6; }
+.bj2-avance { display: flex; gap: 3px; width: 100%; max-width: 160px; }
+.bj2-avance__t { flex: 1; height: 7px; border-radius: 4px; background: var(--sx-borde); }
+.bj2-avance__t--c1 { background: color-mix(in srgb, var(--sx-info, #2a6fd6) 55%, var(--sx-borde)); }
+.bj2-avance__t--c2 { background: var(--sx-info, #2a6fd6); }
+.bj2-avance__t--c3 { background: var(--sx-hito, #7b4fd6); }
+.bj2-avance__t--c4, .bj2-avance__t--c5 { background: var(--sx-ok); }
+.bj2-avance__t--pausa { background: var(--sx-alerta); }
+.bj2-avance__t--fuera { background: var(--sx-texto-3); opacity: .5; }
+.bj2-avance__txt { display: block; margin-top: 3px; font: 500 .6875rem/1.25 var(--fuente); color: var(--sx-texto-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bj2-avance__txt--falta { color: var(--sx-alerta); }
+.bj2-grupo__res .bj2-avance { display: inline-flex; width: 90px; margin-right: 8px; vertical-align: middle; }
+.bj2-mini { display: flex; gap: 2px; width: 100%; max-width: 160px; }
+.bj2-mini__t { flex: 1; height: 5px; border-radius: 3px; background: var(--sx-borde); }
+.bj2-mini__t--hecho { background: var(--sx-ok); }
+.bj2-mini__t--actual { background: var(--sx-primario); }
+.bj2-mini__t--pausa, .bj2-mini__t--falta { background: var(--sx-alerta); }
+.bj2-sig { display: inline-block; font: 600 .75rem/1.2 var(--fuente); color: var(--sx-texto-2); white-space: nowrap; }
+.bj2-sig--falta { color: var(--sx-alerta); }
+/* Anchos de la tabla por solicitud: que quepa entera en la tarjeta (el número nunca se corta). */
+.bj2-tabla--sol { table-layout: auto; }
+.bj2-tabla--sol .bj2-tc-acc { width: 118px; white-space: nowrap; max-width: none !important; }
+.bj2-tabla--sol .bj2-tc-n { overflow: visible; }
+.bj2-tabla--sol td.bj2-tc-n, .bj2-tabla--sol th.bj2-tc-n { min-width: 150px; }
+/* Las celdas con max-width:0 no respetan min-width: el ancho mínimo lo da el contenido. */
+.bj2-tabla--sol .bj2-sol-n { min-width: 136px; }
+.bj2-tabla--sol .bj2-tc-acc { padding-right: 14px; }
+.bj2-tabla--sol .bj2-sig { white-space: normal; max-width: 96px; text-align: right; }
+/* Columnas fijas: el número y «Sigue» nunca se cortan; el resto reparte. */
+.bj2-tabla.bj2-tabla--sol { table-layout: fixed; }
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(1) { width: 40px; }
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(2) { width: 26px; }
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(3) { width: 156px; }
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(5) { width: 15%; }
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(6) { width: 12%; }
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(7) { width: 124px; }
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(8) { width: 58px; }
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(9) { width: 120px; }
+.bj2-tabla--sol td { overflow: hidden; }

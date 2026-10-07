@@ -417,7 +417,7 @@
         if (g.i.cantidad_items <= 1) return '<li class="bj2-grupo bj2-grupo--solo"><ul class="bj2-lista">' + g.items.map(fila).join('') + '</ul></li>';
         return '<li class="bj2-grupo"><button type="button" class="bj2-grupo__cab js-bj2-abrir-sol" data-sol="' + U.esc(g.id) + '" title="Abrir la solicitud completa">' +
           U.ico('capas', 15) + '<strong>' + U.esc(g.id) + '</strong><span class="sx2-tenue sx2-cortar">' + U.esc(g.i.solicitante_nombre || g.i.solicitante_email) + ' · ' + U.esc(g.i.empresa_nombre || '') + '</span>' +
-          '<span class="bj2-grupo__res">' + U.esc(resumenSolicitud(g.id)) + '</span></button>' +
+          '<span class="bj2-grupo__res">' + barraAvance(itemsDeSolicitud(g.id)) + U.esc(pasosTxt(itemsDeSolicitud(g.id)).texto) + '</span></button>' +
           '<ul class="bj2-lista">' + g.items.map(fila).join('') + '</ul></li>';
       }).join('');
       cuerpo = '<ul class="bj2-lista bj2-lista--grupos">' + cuerpo + '</ul>';
@@ -425,11 +425,12 @@
       cuerpo = '<ul class="bj2-lista">' + visibles.map(fila).join('') + '</ul>';
     }
     var todosMarcados = !datos_.solo_lectura && visibles.length && visibles.every(function (i) { return sel_[i.subsolicitud_id]; });
+    var nSol = Object.keys(items.reduce(function (m, i) { m[i.solicitud_id] = 1; return m; }, {})).length;
     return '<section class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:3">' + barraFiltros() +
       '<div class="bj2-lista__cab">' +
         (datos_.solo_lectura || dens === 'estado' ? '' : '<label class="bj2-check" title="Seleccionar todo lo visible"><input type="checkbox" class="js-bj2-sel-todo"' + (todosMarcados ? ' checked' : '') + ' aria-label="Seleccionar todo lo visible"></label>') +
-        '<strong>' + (dens === 'estado' ? 'Por estado' : items.length + (items.length === 1 ? ' ítem' : ' ítems')) + '</strong><span class="sx2-tenue">' + U.esc(dens === 'estado' ? 'lo que está en curso (lo resuelto espera al solicitante)' : kpiDe(f.kpi).etiqueta.toLowerCase() + (f.agrupar ? ', por solicitud' : '')) + '</span>' +
-        '<span class="bj2-lista__cab-acc">' + bannerRezago() + (dens === 'estado' ? '' : U.chip({ texto: 'Agrupar', icono: 'capas', activo: f.agrupar, clase: 'js-bj2-agrupar', titulo: 'Agrupar por solicitud' }) +
+        '<strong>' + (dens === 'estado' ? 'Por estado' : (f.agrupar ? nSol + (nSol === 1 ? ' solicitud' : ' solicitudes') + ' · ' : '') + items.length + (items.length === 1 ? ' ítem' : ' ítems')) + '</strong><span class="sx2-tenue">' + U.esc(dens === 'estado' ? 'lo que está en curso (lo resuelto espera al solicitante)' : kpiDe(f.kpi).etiqueta.toLowerCase()) + '</span>' +
+        '<span class="bj2-lista__cab-acc">' + bannerRezago() + (dens === 'estado' ? '' : U.chip({ texto: 'Por solicitud', icono: 'capas', activo: f.agrupar, clase: 'js-bj2-agrupar', titulo: 'Una fila por solicitud, con sus ítems adentro (apágalo para ver cada ítem suelto)' }) +
           U.chip({ texto: 'Con cerrados', activo: f.kpi === 'todos', clase: 'js-bj2-todos', titulo: 'Incluir los cerrados, rechazados y cancelados' })) +
           U.segmento([{ id: 'tabla', texto: 'Tabla', icono: 'tabla' }, { id: 'lista', texto: 'Lista', icono: 'lista' }, { id: 'estado', texto: 'Por estado', icono: 'kanban' }], f.densidad, 'js-bj2-densidad') + '</span>' +
       '</div>' + cuerpo +
@@ -437,8 +438,148 @@
     '</section>';
   }
 
+  // 2026-10-07 (Etapa 2 del camino, decisión D1 del dueño): la Bandeja muestra SOLICITUDES.
+  // Una fila por solicitud con su número completo, quién pide, una barra con un tramo por ítem
+  // (el color dice en qué paso va cada uno) y el paso que sigue. Al desplegarla, sus ítems con su
+  // camino. Una solicitud de un solo ítem es una sola fila que se comporta como el ítem.
+  var expandidas_ = {};
+  function tramoDe(it) {
+    if (it.estado === 'S06') return 'pausa';
+    if (['S10', 'S11'].indexOf(it.estado) !== -1) return 'fuera';
+    return 'c' + caminoDe(it).filter(function (p) { return p.est === 'hecho'; }).length;
+  }
+  function itemsDeSolicitud(solId) { return datos_.items.filter(function (x) { return x.solicitud_id === solId; }).sort(function (a, b) { return a.numero_item - b.numero_item; }); }
+  // En palabras, cuántos ítems hay en cada paso: «2 por recibir · 1 en curso · 1 resuelto».
+  function pasosTxt(items) {
+    var c = { recibir: 0, fecha: 0, empezar: 0, curso: 0, pausa: 0, resuelto: 0, cerrado: 0 };
+    items.forEach(function (it) {
+      var e = it.estado;
+      if (e === 'S01') c.recibir++;
+      else if (['S09', 'S10', 'S11'].indexOf(e) !== -1) c.cerrado++;
+      else if (e === 'S08') c.resuelto++;
+      else if (e === 'S06') c.pausa++;
+      else if (!it.fecha_comprometida) c.fecha++;
+      else if (['S02', 'S03', 'S04'].indexOf(e) !== -1) c.empezar++;
+      else c.curso++;
+    });
+    var t = [];
+    if (c.recibir) t.push(c.recibir + ' por recibir');
+    if (c.fecha) t.push(c.fecha + ' sin fecha');
+    if (c.empezar) t.push(c.empezar + ' por empezar');
+    if (c.curso) t.push(c.curso + ' en curso');
+    if (c.pausa) t.push(c.pausa + ' esperando respuesta');
+    if (c.resuelto) t.push(c.resuelto + (c.resuelto === 1 ? ' resuelto' : ' resueltos'));
+    if (c.cerrado) t.push(c.cerrado + (c.cerrado === 1 ? ' cerrado' : ' cerrados'));
+    return { texto: t.join(' · '), c: c };
+  }
+  function barraAvance(items) {
+    return '<span class="bj2-avance" role="img" aria-label="' + U.esc(pasosTxt(items).texto) + '">' + items.map(function (it) {
+      return '<i class="bj2-avance__t bj2-avance__t--' + tramoDe(it) + '" title="Ítem ' + it.numero_item + ': ' + U.esc(it.titulo || '') + '"></i>';
+    }).join('') + '</span>';
+  }
+  var ORDEN_SEM = { rojo: 0, ambar: 1, verde: 2, gris: 3 };
+  function semaforoPeor(items) {
+    var peor = items.slice().sort(function (a, b) {
+      var c = function (i) { return !abierto(i) ? 'gris' : (i.situacion_sla === 'FUERA_DE_PLAZO' ? 'rojo' : (i.situacion_sla === 'EN_RIESGO' ? 'ambar' : (i.situacion_sla ? 'verde' : 'gris'))); };
+      return ORDEN_SEM[c(a)] - ORDEN_SEM[c(b)];
+    })[0];
+    return peor ? semaforo(peor) : '';
+  }
+  // El paso que sigue para la solicitud: recibir lo nuevo primero; después, lo que falta.
+  function siguienteSolicitud(g, todos) {
+    if (datos_.solo_lectura) return '';
+    var nuevos = g.items.filter(function (i) { return i.estado === 'S01' && (i.puede_tomar || !i.depto || i.puede_asignar || i.asignado === datos_.mi_email); });
+    if (nuevos.length) return U.boton({ texto: nuevos.length > 1 ? 'Recibir ' + nuevos.length : 'Recibir', icono: 'check', sm: true, variante: 'primario', clase: 'js-bj2-recibir-sol', datos: { sol: g.id, id: nuevos[0].subsolicitud_id, n: nuevos.length }, titulo: 'Recibir y dar fecha' });
+    var p = pasosTxt(todos).c;
+    var etiqueta = p.fecha ? 'Dar fecha' : (p.empezar ? 'Empezar' : (p.curso ? 'Resolver' : (p.pausa ? 'Esperando respuesta' : (p.resuelto ? 'Espera confirmación' : ''))));
+    return etiqueta ? '<span class="bj2-sig' + (p.fecha ? ' bj2-sig--falta' : '') + '">' + U.esc(etiqueta) + '</span>' : '';
+  }
+  function tablaSolicitudes(visibles) {
+    var grupos = agrupar(visibles);
+    var buscando = !!f.texto;
+    return '<div class="bj2-tabla-caja"><table class="bj2-tabla bj2-tabla--sol"><thead><tr>' +
+      '<th class="bj2-tc-check"><span class="sx2-oculto-visual">Abrir o seleccionar</span></th><th class="bj2-tc-sem"><span class="sx2-oculto-visual">Plazo</span></th>' +
+      '<th class="bj2-tc-n">N°</th><th>Pedido</th><th>Pide · ' + (f.cola ? 'servicio' : 'a quién') + '</th><th>Responsable</th><th class="bj2-tc-av">Avance</th><th class="bj2-tc-num" title="Desde que llegó">Antig.</th><th class="bj2-tc-acc">Sigue</th>' +
+      '</tr></thead><tbody>' + grupos.map(function (g) {
+        var todos = itemsDeSolicitud(g.id);
+        var multi = todos.length > 1;
+        if (!multi) return filaSolicitudSola(g.items[0], todos);
+        var abierta = buscando || !!expandidas_[g.id];
+        var i0 = g.i;
+        var titulos = todos.map(function (x) { return x.numero_item + '. ' + (x.titulo || ''); });
+        var personas = {}, lista = [];
+        todos.forEach(function (x) { if (x.asignado && !personas[x.asignado]) { personas[x.asignado] = true; lista.push(PY.persona(x.asignado, x.asignado_nombre)); } });
+        var donde = i0.depto ? (f.cola ? '' : i0.depto_nombre + ' · ') + (i0.servicio_nombre || 'Otro pedido') : (i0.empresa_nombre || '');
+        var resumen = pasosTxt(todos).texto;
+        return '<tr class="bj2-tr bj2-tr-sol' + (abierta ? ' bj2-tr-sol--abierta' : '') + '" data-sol="' + U.esc(g.id) + '" tabindex="0" title="Abrir la solicitud completa">' +
+            '<td class="bj2-tc-check"><button type="button" class="bj2-expandir js-bj2-expandir" data-sol="' + U.esc(g.id) + '" aria-expanded="' + abierta + '" aria-label="' + (abierta ? 'Ocultar' : 'Ver') + ' los ' + todos.length + ' ítems de ' + U.esc(g.id) + '">' + U.ico('derecha', 14) + '</button></td>' +
+            '<td class="bj2-tc-sem">' + semaforoPeor(g.items) + '</td>' +
+            '<td class="bj2-tc-n"><span class="bj2-sol-n">' + U.esc(g.id) + '</span><small class="bj2-sol-cuenta">' + todos.length + ' ítems</small></td>' +
+            '<td title="' + U.esc(titulos.join(' · ')) + '"><span class="bj2-tc-cortar"><span class="bj2-prio-mini sx2-tono-' + tonoPrioridad(i0.prioridad) + '">' + U.esc(i0.prioridad || '—') + '</span><strong>' + U.esc(todos[0].titulo || '') + '</strong><small class="sx2-tenue">' + (todos.length > 1 ? ' y ' + (todos.length - 1) + ' más' : '') + '</small>' +
+              (g.items.some(function (x) { return x.respuesta_pendiente; }) ? U.badge('Te escribió', 'info', true) : '') + '</span></td>' +
+            '<td title="' + U.esc((i0.solicitante_nombre || '') + (donde ? ' · ' + donde : '')) + '"><span class="bj2-tc-cortar"><b class="bj2-pide">' + U.esc(i0.solicitante_nombre || i0.solicitante_email || '') + '</b>' + (donde ? '<small class="sx2-tenue">· ' + U.esc(donde) + '</small>' : '') + '</span></td>' +
+            '<td>' + (lista.length === 1 ? '<span class="bj2-tc-quien">' + U.avatar(lista[0], 'xs') + '<span class="bj2-tc-cortar">' + U.esc(lista[0].nombre) + '</span></span>'
+              : (lista.length ? '<span class="bj2-tc-quien">' + U.avatares(lista, 3) + '<span class="bj2-tc-cortar">' + lista.length + ' personas</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>')) + '</td>' +
+            '<td class="bj2-tc-av" title="' + U.esc(resumen) + '">' + barraAvance(todos) + '<small class="bj2-avance__txt">' + U.esc(resumen) + '</small></td>' +
+            '<td class="bj2-tc-num">' + antiguedad(todos.slice().sort(function (a, b) { return new Date(a.fecha_creacion) - new Date(b.fecha_creacion); })[0]) + '</td>' +
+            '<td class="bj2-tc-acc">' + siguienteSolicitud(g, todos) + '</td></tr>' +
+          (abierta ? todos.map(function (it) { return filaItemDeSolicitud(it, g.items.indexOf(it) !== -1); }).join('') : '');
+      }).join('') + '</tbody></table></div>';
+  }
+  // Una solicitud de un solo ítem: una fila que se comporta como el ítem (se selecciona y se abre en él).
+  function filaSolicitudSola(i, todos) {
+    var marcado = !!sel_[i.subsolicitud_id];
+    var persona = i.asignado ? PY.persona(i.asignado, i.asignado_nombre) : null;
+    var donde = i.depto ? (f.cola ? '' : i.depto_nombre + ' · ') + (i.servicio_nombre || 'Otro pedido') : (i.empresa_nombre || '') + (i.tipo_nombre ? ' · ' + i.tipo_nombre : '');
+    var paso = caminoDe(i).filter(function (p) { return p.est === 'actual' || p.est === 'falta'; })[0];
+    return '<tr class="bj2-tr bj2-tr-sol bj2-tr-sol--uno' + (marcado ? ' bj2-fila--sel' : '') + '" data-bj2-item="' + U.esc(i.subsolicitud_id) + '" data-sol="' + U.esc(i.solicitud_id) + '" tabindex="0">' +
+      '<td class="bj2-tc-check">' + (datos_.solo_lectura ? '' : '<label class="bj2-check" title="Seleccionar"><input type="checkbox" class="js-bj2-sel"' + (marcado ? ' checked' : '') + ' aria-label="Seleccionar ' + U.esc(i.titulo) + '"></label>') + '</td>' +
+      '<td class="bj2-tc-sem">' + semaforo(i) + '</td>' +
+      '<td class="bj2-tc-n"><span class="bj2-sol-n">' + U.esc(i.solicitud_id) + '</span></td>' +
+      '<td class="bj2-tc-titulo"><span class="bj2-tc-cortar"><span class="bj2-prio-mini sx2-tono-' + tonoPrioridad(i.prioridad) + '" title="Prioridad ' + U.esc(i.prioridad || '') + '">' + U.esc(i.prioridad || '—') + '</span><strong>' + U.esc(i.titulo || '(sin título)') + '</strong>' +
+        (i.respuesta_pendiente ? U.badge('Te escribió', 'info', true) : '') + (i.empresa_cliente ? '<small class="sx2-tenue"> · ' + U.esc(i.empresa_cliente) + '</small>' : '') + '</span></td>' +
+      '<td title="' + U.esc((i.solicitante_nombre || i.solicitante_email || '') + (donde ? ' · ' + donde : '')) + '"><span class="bj2-tc-cortar"><b class="bj2-pide">' + U.esc(i.solicitante_nombre || i.solicitante_email || '') + '</b>' + (donde ? '<small class="sx2-tenue">· ' + U.esc(donde) + '</small>' : '') + '</span></td>' +
+      '<td>' + (persona ? '<span class="bj2-tc-quien">' + U.avatar(persona, 'xs') + '<span class="bj2-tc-cortar">' + U.esc(persona.nombre) + '</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>') + '</td>' +
+      '<td class="bj2-tc-av">' + barraAvance(todos) + '<small class="bj2-avance__txt' + (notaPaso(i).falta ? ' bj2-avance__txt--falta' : '') + '">' + U.esc(notaPaso(i).t) + '</small></td>' +
+      '<td class="bj2-tc-num">' + antiguedad(i) + '</td>' +
+      '<td class="bj2-tc-acc">' + siguienteSolicitud({ id: i.solicitud_id, items: [i] }, todos) + '</td></tr>';
+  }
+  // Un ítem dentro de una solicitud desplegada: «Ítem n de N», su camino y su botón.
+  function filaItemDeSolicitud(it, visible) {
+    var marcado = !!sel_[it.subsolicitud_id];
+    var persona = it.asignado ? PY.persona(it.asignado, it.asignado_nombre) : null;
+    var paso = caminoDe(it).filter(function (p) { return p.est === 'actual' || p.est === 'falta'; })[0];
+    var nota = it.estado === 'S06' ? 'esperando respuesta' : (it.estado === 'S08' ? 'resuelto: espera a quien pidió' : (paso ? (paso.est === 'falta' ? 'falta: ' : 'sigue: ') + paso.nombre.toLowerCase() : estadoVis(it.estado)));
+    return '<tr class="bj2-tr bj2-tr--hijo' + (visible ? '' : ' bj2-tr--otro') + (marcado ? ' bj2-fila--sel' : '') + '" data-bj2-item="' + U.esc(it.subsolicitud_id) + '" data-sol="' + U.esc(it.solicitud_id) + '" tabindex="0">' +
+      '<td class="bj2-tc-check">' + (datos_.solo_lectura || !visible ? '' : '<label class="bj2-check" title="Seleccionar"><input type="checkbox" class="js-bj2-sel"' + (marcado ? ' checked' : '') + ' aria-label="Seleccionar ' + U.esc(it.titulo) + '"></label>') + '</td>' +
+      '<td class="bj2-tc-sem">' + semaforo(it) + '</td>' +
+      '<td class="bj2-tc-n"><span class="bj2-nitem">Ítem ' + it.numero_item + ' de ' + it.cantidad_items + '</span></td>' +
+      '<td class="bj2-tc-titulo"><span class="bj2-tc-cortar"><span class="bj2-prio-mini sx2-tono-' + tonoPrioridad(it.prioridad) + '">' + U.esc(it.prioridad || '—') + '</span><strong>' + U.esc(it.titulo || '(sin título)') + '</strong></span></td>' +
+      '<td><span class="bj2-tc-cortar sx2-tenue">' + (it.fecha_comprometida ? U.ico('calendario', 12) + ' para el ' + U.esc(fechaCorta(it.fecha_comprometida)) : '') + '</span></td>' +
+      '<td>' + (persona ? '<span class="bj2-tc-quien">' + U.avatar(persona, 'xs') + '<span class="bj2-tc-cortar">' + U.esc(persona.nombre) + '</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>') + '</td>' +
+      '<td class="bj2-tc-av">' + caminoMini(it) + '<small class="bj2-avance__txt' + (notaPaso(it).falta ? ' bj2-avance__txt--falta' : '') + '">' + U.esc(notaPaso(it).t) + '</small></td>' +
+      '<td class="bj2-tc-num">' + antiguedad(it) + '</td>' +
+      '<td class="bj2-tc-acc">' + (datos_.solo_lectura || it.estado !== 'S01' ? '' : U.boton({ texto: 'Recibir', sm: true, variante: 'primario', clase: 'js-bj2-recibir', datos: { id: it.subsolicitud_id }, titulo: 'Recibir y dar fecha' })) + '</td></tr>';
+  }
+  // El camino del ítem en cinco tramos finos (el mismo del detalle).
+  var SIGUE_TXT = { 'Recibido': 'por recibir', 'Con fecha': 'por dar fecha', 'En curso': 'por empezar', 'Resuelto': 'en curso', 'Confirmado': 'espera confirmación' };
+  var FALTA_TXT = { 'Recibido': 'falta recibirlo', 'Con fecha': 'falta la fecha', 'En curso': 'falta empezarlo' };
+  function notaPaso(it) {
+    if (it.estado === 'S06') return { t: 'esperando respuesta', falta: false };
+    if (it.estado === 'S08') return { t: 'resuelto: espera a quien pidió', falta: false };
+    if (['S09', 'S10', 'S11'].indexOf(it.estado) !== -1) return { t: estadoVis(it.estado).toLowerCase(), falta: false };
+    var c = caminoDe(it), falta = c.filter(function (p) { return p.est === 'falta'; })[0], actual = c.filter(function (p) { return p.est === 'actual'; })[0];
+    if (falta) return { t: FALTA_TXT[falta.nombre] || 'falta: ' + falta.nombre.toLowerCase(), falta: true };
+    return { t: actual ? SIGUE_TXT[actual.nombre] || actual.nombre.toLowerCase() : estadoVis(it.estado), falta: false };
+  }
+  function caminoMini(it) {
+    return '<span class="bj2-mini" role="img" aria-label="Camino: ' + U.esc(caminoDe(it).map(function (p) { return p.nombre + ' ' + (p.est === 'hecho' ? 'hecho' : p.est); }).join(', ')) + '">' +
+      caminoDe(it).map(function (p) { return '<i class="bj2-mini__t bj2-mini__t--' + p.est + '" title="' + U.esc(p.nombre) + '"></i>'; }).join('') + '</span>';
+  }
+
   // Etapa 4: una línea por ítem (~44 px). Las mismas acciones que la lista.
   function tabla(visibles) {
+    if (f.agrupar) return tablaSolicitudes(visibles);
     return '<div class="bj2-tabla-caja"><table class="bj2-tabla"><thead><tr>' +
       '<th class="bj2-tc-check"><span class="sx2-oculto-visual">Seleccionar</span></th><th class="bj2-tc-sem"><span class="sx2-oculto-visual">Plazo</span></th>' +
       '<th>N°</th><th>Pedido</th><th>Pide · ' + (f.cola ? 'servicio' : 'a quién') + '</th><th>Responsable</th><th>Estado</th><th class="bj2-tc-num" title="Desde que llegó">Antig.</th><th class="bj2-tc-comp">Compromiso</th><th class="bj2-tc-acc"><span class="sx2-oculto-visual">Acciones</span></th>' +
@@ -1011,7 +1152,7 @@
     var d = U.drawer({ titulo: solicitudId, subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">Cargando…</span>', cuerpo: U.esqueleto('tabla', 6), pie: ' ' });
     d.el.classList.add('bj2-drawer');
     var pestana = 'seguimiento', abiertoAcc = {}, detalle = null;
-    if (subFoco && accInicial) abiertoAcc[subFoco] = accInicial;
+    if (subFoco && accInicial) { if (accInicial === '__todos') abiertoAcc.__todos = true; else abiertoAcc[subFoco] = accInicial; }
 
     function cargarDetalle() {
       return api('getSolicitudDetalle', { solicitud_id: solicitudId }).then(function (r) {
@@ -1512,6 +1653,22 @@
     if ((b = t.closest('.js-bj2-lote'))) { lote(b.getAttribute('data-accion')); return; }
     if ((b = t.closest('.js-bj2-abrir-sol'))) { abrirDetalle(b.getAttribute('data-sol')); return; }
     if (t.closest('.bj2-check')) return; // el checkbox se maneja en 'change'
+    if ((b = t.closest('.js-bj2-expandir'))) {
+      ev.stopPropagation();
+      var sid = b.getAttribute('data-sol');
+      expandidas_[sid] = !expandidas_[sid];
+      pintar(true);
+      var bt = document.querySelector('.js-bj2-expandir[data-sol="' + sid + '"]');
+      if (bt) bt.focus();
+      return;
+    }
+    if ((b = t.closest('.js-bj2-recibir-sol'))) {
+      ev.stopPropagation();
+      var n = Number(b.getAttribute('data-n')) || 1;
+      var dt = abrirDetalle(b.getAttribute('data-sol'), b.getAttribute('data-id'), n > 1 ? '__todos' : 'recibir');
+      return;
+    }
+    if ((b = t.closest('tr.bj2-tr-sol:not([data-bj2-item])'))) { abrirDetalle(b.getAttribute('data-sol')); return; }
     if ((b = t.closest('.js-bj2-recibir'))) {
       ev.stopPropagation();
       // El camino: recibir va junto con la fecha (decisión del dueño, 2026-10-07).
@@ -1555,7 +1712,11 @@
     }, 220);
   });
   document.addEventListener('keydown', function (ev) {
-    if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('#bandeja-v2 [data-bj2-item], #bandeja-v2 tr.js-bj2-abrir-sol')) { ev.preventDefault(); ev.target.click(); }
+    if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('#bandeja-v2 [data-bj2-item], #bandeja-v2 tr.js-bj2-abrir-sol, #bandeja-v2 tr.bj2-tr-sol')) { ev.preventDefault(); ev.target.click(); }
+    if ((ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') && ev.target.matches && ev.target.matches('#bandeja-v2 tr.bj2-tr-sol:not([data-bj2-item])')) {
+      var sid2 = ev.target.getAttribute('data-sol');
+      if ((ev.key === 'ArrowRight') !== !!expandidas_[sid2]) { ev.preventDefault(); expandidas_[sid2] = ev.key === 'ArrowRight'; pintar(true); var tr = document.querySelector('#bandeja-v2 tr.bj2-tr-sol[data-sol="' + sid2 + '"]'); if (tr) tr.focus(); }
+    }
   });
   // La tabla densa no cabe en pantallas angostas: al cruzar los 900 px se repinta con la vista que corresponde.
   var angosta_ = window.innerWidth < 900;
