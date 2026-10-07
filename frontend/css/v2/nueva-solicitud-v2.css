@@ -265,3 +265,7 @@
 .ns2-persona__jefa { align-self: flex-start; padding: 0 6px; margin: 1px 0; border-radius: 999px; background: var(--sx-primario-suave); color: var(--sx-primario); font-size: .7rem; }
 .ns2-destino-a .js-ns2-persona { margin-left: 24px; max-width: calc(100% - 24px); }
 @media (max-width: 560px) { .ns2-personas { padding-left: 0; } .ns2-destino-a .js-ns2-persona { margin-left: 0; max-width: 100%; } }
+
+/* 2026-10-07: aviso al pegar un enlace de Drive (quien atiende no puede abrirlo si no se comparte). */
+.ns2-drive { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--sx-alerta, #d97706) 40%, transparent); background: var(--sx-alerta-suave, #fff7e6); color: var(--sx-texto, #1f2937); font: var(--sx-t-chico, 400 .8125rem/1.45 var(--fuente)); }
+.ns2-drive > svg { flex: none; margin-top: 2px; color: var(--sx-alerta, #d97706); }

@@ -400,7 +400,9 @@
       var ms = det.mensajes || [];
       var abierta = (det.subsolicitudes || []).some(function (s) { return CERRADOS.indexOf(s.estado) === -1; });
       var form = abierta ? '<form class="sx2-form ms2-conv__form js-ms2-form" data-id="" data-acc="mensaje" novalidate>' +
-          PY.campo('Escribe al equipo', '<textarea class="sx2-input" name="texto" maxlength="4000" placeholder="Una duda, un dato que faltó, cómo va…"></textarea>') + error() +
+          PY.campo('Escribe al equipo', '<textarea class="sx2-input" name="texto" maxlength="4000" placeholder="Una duda, un dato que faltó, cómo va…"></textarea>') +
+          // 2026-10-07 (Leo): si el equipo pide un archivo (o no puede abrir un enlace de Drive), se sube aquí, en cualquier momento.
+          PY.campo('Adjuntar archivos (opcional)', '<input class="sx2-input" type="file" name="archivos" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt">', 'Mejor que un enlace de Drive: el equipo lo abre sin pedirte acceso. Hasta 10 MB cada uno.') + error() +
           '<div class="sx2-flex" style="justify-content:flex-end">' + U.boton({ texto: 'Enviar', icono: 'derecha', sm: true, variante: 'primario', tipo: 'submit' }) + '</div></form>'
         : '<p class="sx2-tenue" style="margin:0;font-size:.8125rem">Esta solicitud está cerrada. Si necesitas algo más, crea una nueva.</p>';
       if (!ms.length) return U.vacio({ icono: 'comentario', titulo: 'Sin mensajes', texto: 'Aquí verás lo que el equipo te escriba (también te llega por correo), y puedes escribirles.' }) + form;
@@ -419,7 +421,7 @@
 
     function archivos() {
       var grupos = (det.subsolicitudes || []).filter(function (s) { return (s.archivos || []).length; });
-      if (!grupos.length) return U.vacio({ icono: 'carpeta', titulo: 'Sin archivos', texto: 'No adjuntaste imágenes ni documentos. Puedes agregarlas con "Corregir" mientras el ítem no esté en desarrollo.' });
+      if (!grupos.length) return U.vacio({ icono: 'carpeta', titulo: 'Sin archivos', texto: 'No hay archivos. Puedes adjuntarlos cuando quieras desde la conversación (Seguimiento › Adjuntar archivos).' });
       return grupos.map(function (s) {
         return '<section class="sx2-seccion-drawer"><h3 class="sx2-seccion-drawer__titulo">' + U.esc(s.titulo || 'Ítem') + '</h3><ul class="bj2-archivos">' + s.archivos.map(function (a) {
           var img = /^image\//.test(a.tipo_mime || '');
@@ -485,8 +487,30 @@
         return correr('responderConsulta', { texto: x.texto }, function () { PY.aviso('Respuesta enviada: el ítem vuelve a En curso.', 'exito'); });
       }
       if (acc === 'mensaje') {
-        if (!x.texto) return mal('Escribe tu mensaje antes de enviar.');
-        return correr('enviarMensajeSolicitud', { texto: x.texto }, function () { PY.aviso('Mensaje enviado al equipo.', 'exito'); });
+        var files = [].slice.call((form.archivos && form.archivos.files) || []);
+        if (!x.texto && !files.length) return mal('Escribe tu mensaje o adjunta un archivo antes de enviar.');
+        if (files.some(function (fl) { return fl.size > 10 * 1024 * 1024; })) return mal('Cada archivo puede pesar hasta 10 MB.');
+        if (!files.length) return correr('enviarMensajeSolicitud', { texto: x.texto }, function () { PY.aviso('Mensaje enviado al equipo.', 'exito'); });
+        // Primero los archivos (al ítem que espera tu respuesta o, si no, al primero abierto); después el
+        // mensaje, que dice qué se subió y avisa al equipo.
+        var abiertos = (det.subsolicitudes || []).filter(function (it) { return CERRADOS.indexOf(it.estado) === -1; });
+        var destino = (abiertos.filter(function (it) { return it.estado === 'S06'; })[0] || abiertos[0] || {}).subsolicitud_id || '';
+        btn.disabled = true;
+        var subidos = [], fallas = 0;
+        return files.reduce(function (p, fl) {
+          return p.then(function () {
+            return leerBase64(fl).then(function (b64) {
+              return intake('subirArchivo', { solicitud_id: solicitudId, subsolicitud_id: destino, nombre_archivo: fl.name, contenido_base64: b64, email: email });
+            }).then(function (r) { if (r && r.ok) subidos.push(fl.name); else fallas++; }).catch(function () { fallas++; });
+          });
+        }, Promise.resolve()).then(function () {
+          btn.disabled = false;
+          if (!subidos.length) return mal('No se pudo subir ningún archivo (revisa el tipo y el tamaño: imágenes, PDF, Word o Excel).');
+          var texto = (x.texto ? x.texto + '\n\n' : '') + 'Adjunté: ' + subidos.join(', ') + '.';
+          return correr('enviarMensajeSolicitud', { texto: texto }, function () {
+            PY.aviso(subidos.length + (subidos.length === 1 ? ' archivo subido' : ' archivos subidos') + ' y el equipo ya está avisado.' + (fallas ? ' ' + fallas + ' no se pudieron subir.' : ''), fallas ? 'info' : 'exito');
+          });
+        });
       }
       if (acc === 'confirmar') {
         return correr('validarCierre', { accion: 'confirmar', comentario: '', atencion_directa: null }, function () { PY.aviso('Listo: ítem cerrado. ¡Gracias por confirmar!', 'exito'); });

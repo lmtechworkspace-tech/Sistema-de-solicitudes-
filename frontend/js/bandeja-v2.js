@@ -41,7 +41,11 @@
   var datos_ = null, turno_ = 0, mostrar_ = POR_PAGINA;
   var sel_ = {};  // subsolicitud_id -> true
   var f = { kpi: 'abiertos', texto: '', empresa: '', prioridad: '', orden: 'urgencia', agrupar: false, verBandeja: '', vista: 'cola' };
-  try { f.agrupar = localStorage.getItem('sigso_bj2_agrupar') === '1'; } catch (e) { /* sin storage */ }
+  // 2026-10-07 (Leo, soporte de plataformas: «las primeras 2 son iguales… hay duplicidad o se está
+  // agrupando mal la información»): una solicitud con varios ítems se veía como filas repetidas con el
+  // mismo número. Ahora se agrupa por solicitud por defecto (se puede desagrupar con el chip).
+  f.agrupar = true;
+  try { f.agrupar = localStorage.getItem('sigso_bj2_agrupar_2') !== '0'; } catch (e) { /* sin storage */ }
   // Etapa 2: '' = mi bandeja (o toda, ADM); 'CONTABILIDAD'… = cola de ese departamento.
   f.cola = '';
   // Etapa 4: cómo se ve la cola (tabla densa por defecto) y el reporte.
@@ -299,6 +303,32 @@
     '</div>';
   }
 
+  // «3 ítems: 1 nueva · 1 esperando respuesta · 1 resuelta (espera validación)».
+  var VIS_TXT = { NUEVA: ['nueva', 'nuevas'], EN_CURSO: ['en curso', 'en curso'], ESPERANDO: ['esperando respuesta', 'esperando respuesta'], RESUELTA: ['resuelta (espera validación)', 'resueltas (esperan validación)'], CERRADA: ['cerrada', 'cerradas'] };
+  function resumenSolicitud(solId, corto) {
+    var todos = datos_.items.filter(function (x) { return x.solicitud_id === solId; });
+    var cuenta = {}, orden = [];
+    todos.forEach(function (x) {
+      var v = CERRADOS.indexOf(x.estado) !== -1 ? 'CERRADA' : (visible(x.estado) || 'EN_CURSO');
+      if (!cuenta[v]) { cuenta[v] = 0; orden.push(v); }
+      cuenta[v]++;
+    });
+    var ORD = ['NUEVA', 'EN_CURSO', 'ESPERANDO', 'RESUELTA', 'CERRADA'];
+    orden.sort(function (a, b) { return ORD.indexOf(a) - ORD.indexOf(b); });
+    var n = Math.max(todos.length, (todos[0] && todos[0].cantidad_items) || 0);
+    return n + (n === 1 ? ' ítem' : ' ítems') + ': ' + orden.map(function (v) { var t = VIS_TXT[v] || [v, v]; var x = cuenta[v] === 1 ? t[0] : t[1]; return cuenta[v] + ' ' + (corto ? x.replace(/ \(.*\)$/, '') : x); }).join(' · ');
+  }
+  // Los ítems visibles, en grupos por solicitud (en el orden de la lista: el grupo va donde aparece su ítem más urgente).
+  function agrupar(visibles) {
+    var grupos = [], porSol = {};
+    visibles.forEach(function (i) {
+      if (!porSol[i.solicitud_id]) { porSol[i.solicitud_id] = { id: i.solicitud_id, i: i, items: [] }; grupos.push(porSol[i.solicitud_id]); }
+      porSol[i.solicitud_id].items.push(i);
+    });
+    return grupos;
+  }
+  function nItem(i) { return i.cantidad_items > 1 ? 'Ítem ' + i.numero_item + ' de ' + i.cantidad_items : ''; }
+
   function fila(i, n) {
     var marcado = !!sel_[i.subsolicitud_id];
     var persona = i.asignado ? PY.persona(i.asignado, i.asignado_nombre) : null;
@@ -308,7 +338,7 @@
       '<span class="sx2-apilado bj2-fila__cuerpo">' +
         '<strong class="sx2-cortar">' + U.esc(i.titulo || '(sin título)') + '</strong>' +
         '<span class="sx2-flex bj2-fila__meta">' +
-          '<span class="bj2-id">' + U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? ' · ítem ' + i.numero_item + '/' + i.cantidad_items : '') + '</span>' +
+          '<span class="bj2-id">' + (f.agrupar && i.cantidad_items > 1 ? U.esc(nItem(i)) : U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? ' · ítem ' + i.numero_item + '/' + i.cantidad_items : '')) + '</span>' +
           '<span class="sx2-cortar">' + (i.solicitante_nombre ? '<b class="bj2-pide">' + U.esc(i.solicitante_nombre) + '</b> · ' : '') + (i.depto && !f.cola ? U.esc(i.depto_nombre) + ' · ' : '') + (i.servicio_nombre ? U.esc(i.servicio_nombre) : U.esc(i.empresa_nombre || '') + (i.tipo_nombre ? ' · ' + U.esc(i.tipo_nombre) : '')) + '</span>' +
           (i.es_cliente || i.empresa_cliente ? U.badge('Cliente' + (i.empresa_cliente ? ': ' + i.empresa_cliente : ''), 'hito', true) : '') +
           (i.respuesta_pendiente ? U.badge('Te escribió', 'info') : '') +
@@ -340,18 +370,14 @@
     var dens = f.densidad === 'tabla' && window.innerWidth < 900 ? 'lista' : f.densidad;
     if (dens === 'estado') {
       cuerpo = tablero();
-    } else if (dens === 'tabla' && !f.agrupar) {
+    } else if (dens === 'tabla') {
       cuerpo = tabla(visibles);
     } else if (f.agrupar) {
-      var grupos = [], porSol = {};
-      visibles.forEach(function (i) {
-        if (!porSol[i.solicitud_id]) { porSol[i.solicitud_id] = { id: i.solicitud_id, i: i, items: [] }; grupos.push(porSol[i.solicitud_id]); }
-        porSol[i.solicitud_id].items.push(i);
-      });
-      cuerpo = grupos.map(function (g) {
-        return '<li class="bj2-grupo"><button type="button" class="bj2-grupo__cab js-bj2-abrir-sol" data-sol="' + U.esc(g.id) + '">' +
-          U.ico('capas', 15) + '<strong>' + U.esc(g.id) + '</strong><span class="sx2-tenue sx2-cortar">' + U.esc(g.i.empresa_nombre) + ' · ' + U.esc(g.i.solicitante_nombre || g.i.solicitante_email) + '</span>' +
-          '<span class="sx2-tenue" style="margin-left:auto">' + g.items.length + ' de ' + g.i.cantidad_items + (g.i.cantidad_items === 1 ? ' ítem' : ' ítems') + '</span></button>' +
+      cuerpo = agrupar(visibles).map(function (g) {
+        if (g.i.cantidad_items <= 1) return '<li class="bj2-grupo bj2-grupo--solo"><ul class="bj2-lista">' + g.items.map(fila).join('') + '</ul></li>';
+        return '<li class="bj2-grupo"><button type="button" class="bj2-grupo__cab js-bj2-abrir-sol" data-sol="' + U.esc(g.id) + '" title="Abrir la solicitud completa">' +
+          U.ico('capas', 15) + '<strong>' + U.esc(g.id) + '</strong><span class="sx2-tenue sx2-cortar">' + U.esc(g.i.solicitante_nombre || g.i.solicitante_email) + ' · ' + U.esc(g.i.empresa_nombre || '') + '</span>' +
+          '<span class="bj2-grupo__res">' + U.esc(resumenSolicitud(g.id)) + '</span></button>' +
           '<ul class="bj2-lista">' + g.items.map(fila).join('') + '</ul></li>';
       }).join('');
       cuerpo = '<ul class="bj2-lista bj2-lista--grupos">' + cuerpo + '</ul>';
@@ -362,7 +388,7 @@
     return '<section class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:3">' + barraFiltros() +
       '<div class="bj2-lista__cab">' +
         (datos_.solo_lectura || dens === 'estado' ? '' : '<label class="bj2-check" title="Seleccionar todo lo visible"><input type="checkbox" class="js-bj2-sel-todo"' + (todosMarcados ? ' checked' : '') + ' aria-label="Seleccionar todo lo visible"></label>') +
-        '<strong>' + (dens === 'estado' ? 'Por estado' : items.length + (items.length === 1 ? ' ítem' : ' ítems')) + '</strong><span class="sx2-tenue">' + U.esc(dens === 'estado' ? 'lo abierto y lo resuelto' : kpiDe(f.kpi).etiqueta.toLowerCase()) + '</span>' +
+        '<strong>' + (dens === 'estado' ? 'Por estado' : items.length + (items.length === 1 ? ' ítem' : ' ítems')) + '</strong><span class="sx2-tenue">' + U.esc(dens === 'estado' ? 'lo que está en curso (lo resuelto espera al solicitante)' : kpiDe(f.kpi).etiqueta.toLowerCase() + (f.agrupar ? ', por solicitud' : '')) + '</span>' +
         '<span class="bj2-lista__cab-acc">' + bannerRezago() + (dens === 'estado' ? '' : U.chip({ texto: 'Agrupar', icono: 'capas', activo: f.agrupar, clase: 'js-bj2-agrupar', titulo: 'Agrupar por solicitud' }) +
           U.chip({ texto: 'Con cerrados', activo: f.kpi === 'todos', clase: 'js-bj2-todos', titulo: 'Incluir los cerrados, rechazados y cancelados' })) +
           U.segmento([{ id: 'tabla', texto: 'Tabla', icono: 'tabla' }, { id: 'lista', texto: 'Lista', icono: 'lista' }, { id: 'estado', texto: 'Por estado', icono: 'kanban' }], f.densidad, 'js-bj2-densidad') + '</span>' +
@@ -376,14 +402,28 @@
     return '<div class="bj2-tabla-caja"><table class="bj2-tabla"><thead><tr>' +
       '<th class="bj2-tc-check"><span class="sx2-oculto-visual">Seleccionar</span></th><th class="bj2-tc-sem"><span class="sx2-oculto-visual">Plazo</span></th>' +
       '<th>N°</th><th>Pedido</th><th>Pide · ' + (f.cola ? 'servicio' : 'a quién') + '</th><th>Responsable</th><th>Estado</th><th class="bj2-tc-num" title="Desde que llegó">Antig.</th><th class="bj2-tc-comp">Compromiso</th><th class="bj2-tc-acc"><span class="sx2-oculto-visual">Acciones</span></th>' +
-      '</tr></thead><tbody>' + visibles.map(function (i) {
+      '</tr></thead><tbody>' + (f.agrupar ? agrupar(visibles) : visibles.map(function (i) { return { id: i.solicitud_id, i: i, items: [i], suelto: true }; })).map(function (g) {
+        var multi = !g.suelto && g.i.cantidad_items > 1;
+        // La fila de la solicitud usa las mismas columnas (una celda a lo ancho desordenaba los anchos):
+        // N° en N°, en qué van sus ítems en Pedido y quién pide en su columna. Un clic abre la solicitud.
+        var res = resumenSolicitud(g.id), resCorto = resumenSolicitud(g.id, true);
+        return (multi ? '<tr class="bj2-tr-grupo js-bj2-abrir-sol" data-sol="' + U.esc(g.id) + '" tabindex="0" title="Abrir la solicitud completa">' +
+            '<td class="bj2-tc-check">' + U.ico('capas', 14) + '</td><td class="bj2-tc-sem"></td>' +
+            '<td class="bj2-id"><strong class="bj2-tr-grupo__id">' + U.esc(g.id) + '</strong></td>' +
+            '<td title="' + U.esc(res) + '"><span class="bj2-tc-cortar bj2-grupo__res">' + U.esc(resCorto) + '</span></td>' +
+            '<td><span class="bj2-tc-cortar"><b class="bj2-pide">' + U.esc(g.i.solicitante_nombre || g.i.solicitante_email || '') + '</b>' + (g.i.empresa_nombre ? '<small class="sx2-tenue">· ' + U.esc(g.i.empresa_nombre) + '</small>' : '') + '</span></td>' +
+            '<td></td><td></td><td></td><td class="bj2-tc-comp"></td><td class="bj2-tc-acc"></td></tr>' : '') +
+          g.items.map(function (i) { return filaTabla(i, multi); }).join('');
+      }).join('') + '</tbody></table></div>';
+  }
+  function filaTabla(i, enGrupo) {
         var marcado = !!sel_[i.subsolicitud_id];
         var persona = i.asignado ? PY.persona(i.asignado, i.asignado_nombre) : null;
         var donde = i.depto ? (f.cola ? '' : i.depto_nombre + ' · ') + (i.servicio_nombre || 'Otro pedido') : (i.empresa_nombre || '') + (i.tipo_nombre ? ' · ' + i.tipo_nombre : '');
-        return '<tr class="bj2-tr' + (marcado ? ' bj2-fila--sel' : '') + '" data-bj2-item="' + U.esc(i.subsolicitud_id) + '" data-sol="' + U.esc(i.solicitud_id) + '" tabindex="0">' +
+        return '<tr class="bj2-tr' + (enGrupo ? ' bj2-tr--hijo' : '') + (marcado ? ' bj2-fila--sel' : '') + '" data-bj2-item="' + U.esc(i.subsolicitud_id) + '" data-sol="' + U.esc(i.solicitud_id) + '" tabindex="0">' +
           '<td class="bj2-tc-check">' + (datos_.solo_lectura ? '' : '<label class="bj2-check" title="Seleccionar"><input type="checkbox" class="js-bj2-sel"' + (marcado ? ' checked' : '') + ' aria-label="Seleccionar ' + U.esc(i.titulo) + '"></label>') + '</td>' +
           '<td class="bj2-tc-sem">' + semaforo(i) + '</td>' +
-          '<td class="bj2-id">' + U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? '<small> ·' + i.numero_item + '</small>' : '') + '</td>' +
+          '<td class="bj2-id">' + (enGrupo ? '<span class="bj2-nitem">' + U.esc(nItem(i)) + '</span>' : U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? '<small> · ítem ' + i.numero_item + '</small>' : '')) + '</td>' +
           '<td class="bj2-tc-titulo"><span class="bj2-tc-cortar"><span class="bj2-prio-mini sx2-tono-' + tonoPrioridad(i.prioridad) + '" title="Prioridad ' + U.esc(i.prioridad || '') + '">' + U.esc(i.prioridad || '—') + '</span><strong>' + U.esc(i.titulo || '(sin título)') + '</strong>' +
             (i.respuesta_pendiente ? U.badge('Te escribió', 'info', true) : '') + (i.empresa_cliente ? '<small class="sx2-tenue"> · ' + U.esc(i.empresa_cliente) + '</small>' : '') + '</span></td>' +
           '<td title="' + U.esc((i.solicitante_nombre || i.solicitante_email || '') + (donde ? ' · ' + donde : '')) + '"><span class="bj2-tc-cortar"><b class="bj2-pide">' + U.esc(i.solicitante_nombre || i.solicitante_email || '') + '</b>' + (donde ? '<small class="sx2-tenue">· ' + U.esc(donde) + '</small>' : '') + '</span></td>' +
@@ -395,22 +435,24 @@
             ? U.boton({ texto: 'Tomar', sm: true, variante: 'primario', clase: 'js-bj2-tomar', datos: { id: i.subsolicitud_id }, titulo: 'Queda a tu nombre' })
             : (i.estado === 'S01' && (!i.depto || i.puede_asignar || i.asignado === datos_.mi_email) ? U.boton({ texto: 'Recibir', sm: true, variante: 'primario', clase: 'js-bj2-recibir', datos: { id: i.subsolicitud_id } }) : ''))) + '</td>' +
         '</tr>';
-      }).join('') + '</tbody></table></div>';
   }
 
   // Etapa 4: por estado visible. Sin arrastrar: cada cambio se hace con su botón en el detalle.
   function tablero() {
     var q = f.texto.toLowerCase();
     var base = datos_.items.filter(function (i) {
-      if (CERRADOS.indexOf(i.estado) !== -1) return false;
+      if (CERRADOS.indexOf(i.estado) !== -1 || i.estado === 'S08') return false;
       if (f.empresa && i.empresa_id !== f.empresa) return false;
       if (f.prioridad && i.prioridad !== f.prioridad) return false;
       if (q && [i.solicitud_id, i.titulo, i.solicitante_nombre, i.asignado_nombre, i.servicio_nombre, i.depto_nombre, i.empresa_cliente].join(' ').toLowerCase().indexOf(q) === -1) return false;
       return true;
     });
-    var COLS = [['NUEVA', 'Nueva', 'info'], ['EN_CURSO', 'En curso', 'hito'], ['ESPERANDO', 'Esperando respuesta', 'alerta'], ['RESUELTA', 'Resuelta', 'primario']];
+    var COLS = [['NUEVA', 'Nueva', 'info'], ['EN_CURSO', 'En curso', 'hito'], ['ESPERANDO', 'Esperando respuesta', 'alerta']];
     var MAX = 40;
-    return '<div class="bj2-tablero">' + COLS.map(function (c) {
+    var resueltas = datos_.items.filter(function (i) { return i.estado === 'S08'; }).length;
+    return (resueltas ? '<p class="bj2-resueltas">' + U.ico('check', 14) + '<span><b>' + resueltas + (resueltas === 1 ? ' resuelta espera' : ' resueltas esperan') + '</b> que quien pidió confirme (si no responde, se cierra sola a los 5 días hábiles). Ya no están en tu lista de trabajo.</span>' +
+        U.boton({ texto: 'Ver por validar', sm: true, variante: 'fantasma', clase: 'js-bj2-ver-validar' }) + '</p>' : '') +
+      '<div class="bj2-tablero">' + COLS.map(function (c) {
       var lista = base.filter(function (i) { return visible(i.estado) === c[0]; }).sort(function (a, b) {
         var ORD = { FUERA_DE_PLAZO: 0, EN_RIESGO: 1 };
         var sa = ORD[a.situacion_sla] !== undefined ? ORD[a.situacion_sla] : 2, sb = ORD[b.situacion_sla] !== undefined ? ORD[b.situacion_sla] : 2;
@@ -420,7 +462,7 @@
         '<ul class="bj2-col__lista">' + lista.slice(0, MAX).map(function (i) {
           var persona = i.asignado ? PY.persona(i.asignado, i.asignado_nombre) : null;
           return '<li class="bj2-tarj" data-bj2-item="' + U.esc(i.subsolicitud_id) + '" data-sol="' + U.esc(i.solicitud_id) + '" tabindex="0">' +
-            '<span class="bj2-tarj__cab">' + semaforo(i) + '<span class="bj2-id">' + U.esc(i.solicitud_id) + '</span><span class="sx2-tenue bj2-tarj__edad">' + antiguedad(i) + '</span></span>' +
+            '<span class="bj2-tarj__cab">' + semaforo(i) + '<span class="bj2-id">' + U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? ' · ítem ' + i.numero_item + ' de ' + i.cantidad_items : '') + '</span><span class="sx2-tenue bj2-tarj__edad">' + antiguedad(i) + '</span></span>' +
             '<strong class="bj2-tarj__tit">' + U.esc(i.titulo || '(sin título)') + '</strong>' +
             '<span class="sx2-tenue bj2-tarj__meta">' + U.esc(i.solicitante_nombre || '') + (i.servicio_nombre ? ' · ' + U.esc(i.servicio_nombre) : '') + '</span>' +
             '<span class="bj2-tarj__pie">' + (persona ? U.avatar(persona, 'xs') + '<span class="sx2-cortar">' + U.esc(persona.nombre) + '</span>' : '<span class="bj2-sin">' + U.ico('persona', 12) + 'Sin asignar</span>') +
@@ -1005,6 +1047,35 @@
         (s.observaciones_generales ? '<section class="sx2-seccion-drawer"><h3 class="sx2-seccion-drawer__titulo">Observaciones</h3><p class="sx2-py-descripcion">' + U.esc(s.observaciones_generales) + '</p></section>' : '');
     }
 
+    // 2026-10-07 (Leo: «los drive que comparten no se comparten, hay que pedir acceso… que suban el
+    // archivo mejor»): los enlaces del ítem a la vista; los de Drive, marcados, con un botón que deja
+    // escrito el pedido del archivo en la conversación (se revisa y se envía).
+    function enlacesDe(it) {
+      var out = [];
+      if (it.url_modulo) out.push({ titulo: 'Dónde ocurre', url: it.url_modulo });
+      var extra = [];
+      try { extra = typeof it.urls_adicionales === 'string' ? JSON.parse(it.urls_adicionales || '[]') : (it.urls_adicionales || []); } catch (e) { extra = []; }
+      (extra || []).forEach(function (u) { if (u && u.url) out.push({ titulo: u.titulo || 'Enlace', url: u.url }); });
+      [it.descripcion, it.contexto, it.resultado_esperado, it.observaciones].join(' ').replace(/https?:\/\/[^\s<>"']+/g, function (u) {
+        u = u.replace(/[.,;:)]+$/, '');
+        if (!out.some(function (x) { return x.url === u; })) out.push({ titulo: 'En el texto', url: u });
+        return u;
+      });
+      return out;
+    }
+    function esDrive(u) { return /(^|\/\/)(drive|docs|sheets|slides)\.google\.com\//i.test(u); }
+    function enlacesHtml(it) {
+      var ls = enlacesDe(it);
+      if (!ls.length) return '';
+      var drive = ls.filter(function (l) { return esDrive(l.url); }).length;
+      return '<div class="bj2-enlaces"><span class="bj2-enlaces__tit">' + U.ico('enlace', 13) + ' Enlaces</span><ul>' + ls.map(function (l) {
+          return '<li>' + (esDrive(l.url) ? U.badge('Drive', 'alerta', true) : '') + '<a class="sx2-enlace" href="' + U.esc(l.url) + '" target="_blank" rel="noopener">' + U.esc(l.titulo !== 'Enlace' && l.titulo !== l.url ? l.titulo + ': ' : '') + U.esc(l.url.length > 70 ? l.url.slice(0, 67) + '…' : l.url) + '</a></li>';
+        }).join('') + '</ul>' +
+        (drive && !soloLectura() ? '<p class="bj2-enlaces__drive">' + U.ico('alerta', 13) + '<span>Un enlace de Drive solo se abre si quien pidió lo compartió contigo. Si te pide acceso, pídele el archivo:</span>' +
+          U.boton({ texto: 'Pedir el archivo', icono: 'comentario', sm: true, variante: 'secundario', clase: 'js-bj2-pedir-archivo', datos: { id: it.subsolicitud_id, n: it.numero_item } }) + '</p>' : '') +
+      '</div>';
+    }
+
     function itemsHtml(subs) {
       var trans = detalle.transiciones_por_subsolicitud || {};
       return '<div class="sx2-apilado" style="gap:12px">' + subs.map(function (it) {
@@ -1021,6 +1092,7 @@
             slaBadge(it) +
           '</span>' +
           (it.descripcion ? '<p class="sx2-py-descripcion" style="margin:0">' + U.esc(it.descripcion) + '</p>' : '') +
+          enlacesHtml(it) +
           (it.contexto || it.resultado_esperado ? '<details class="bj2-mas"><summary>Contexto y resultado esperado</summary>' +
             (it.contexto ? '<p><b>Contexto:</b> ' + U.esc(it.contexto) + '</p>' : '') + (it.resultado_esperado ? '<p><b>Resultado esperado:</b> ' + U.esc(it.resultado_esperado) + '</p>' : '') + '</details>' : '') +
           (soloLectura() ? '' : pasos(it, acc) + (acc ? formItem(it, acc, trans[id] || []) : '')) +
@@ -1261,6 +1333,16 @@
         });
       }
     });
+    d.el.addEventListener('click', function (ev) {
+      var b = ev.target.closest('.js-bj2-pedir-archivo');
+      if (!b) return;
+      var form = d.el.querySelector('.js-bj2-comentar[data-destino="solicitante"]');
+      if (!form) return;
+      var multi = (detalle.subsolicitudes || []).length > 1;
+      form.texto.value = 'Hola, no tengo acceso al enlace de Drive' + (multi ? ' del ítem ' + b.getAttribute('data-n') : '') + '. ¿Puedes subir el archivo en SIGSO? En Mis solicitudes abre esta solicitud y usa «Adjuntar archivos», junto a la conversación. O compártelo como «Cualquier persona con el enlace». Gracias.';
+      form.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      form.texto.focus();
+    });
     d.el.addEventListener('submit', function (ev) {
       ev.preventDefault();
       var form = ev.target;
@@ -1312,7 +1394,8 @@
     if ((b = t.closest('.js-bj2-rep-abrir'))) { abrirDetalle(b.getAttribute('data-sol'), b.getAttribute('data-sub')); return; }
     if ((b = t.closest('.sx2-kpi[data-filtro], .bj2-banda__op[data-filtro]'))) { f.kpi = b.getAttribute('data-filtro'); f.vista = 'cola'; mostrar_ = POR_PAGINA; pintar(true); return; }
     if (t.closest('.js-bj2-todos')) { f.kpi = f.kpi === 'todos' ? 'abiertos' : 'todos'; pintar(true); return; }
-    if (t.closest('.js-bj2-agrupar')) { f.agrupar = !f.agrupar; try { localStorage.setItem('sigso_bj2_agrupar', f.agrupar ? '1' : '0'); } catch (e) { /* sin storage */ } pintar(true); return; }
+    if (t.closest('.js-bj2-ver-validar')) { f.kpi = 'por_validar'; f.densidad = 'tabla'; try { localStorage.setItem('sigso_bj2_densidad', 'tabla'); } catch (e) { /* sin storage */ } mostrar_ = POR_PAGINA; pintar(true); return; }
+    if (t.closest('.js-bj2-agrupar')) { f.agrupar = !f.agrupar; try { localStorage.setItem('sigso_bj2_agrupar_2', f.agrupar ? '1' : '0'); } catch (e) { /* sin storage */ } pintar(true); return; }
     if (t.closest('.js-bj2-rezago')) { f.kpi = 'por_revisar'; f.orden = 'antiguedad'; f.texto = ''; mostrar_ = POR_PAGINA; pintar(true); var l = raiz.querySelector('.bj2-lista'); if (l) l.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
     if (t.closest('.js-bj2-mas')) { mostrar_ += POR_PAGINA; pintar(true); return; }
     if ((b = t.closest('.js-bj2-excel'))) { exportarExcel(b); return; }
@@ -1367,7 +1450,7 @@
     }, 220);
   });
   document.addEventListener('keydown', function (ev) {
-    if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('#bandeja-v2 [data-bj2-item]')) { ev.preventDefault(); ev.target.click(); }
+    if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('#bandeja-v2 [data-bj2-item], #bandeja-v2 tr.js-bj2-abrir-sol')) { ev.preventDefault(); ev.target.click(); }
   });
   // La tabla densa no cabe en pantallas angostas: al cruzar los 900 px se repinta con la vista que corresponde.
   var angosta_ = window.innerWidth < 900;

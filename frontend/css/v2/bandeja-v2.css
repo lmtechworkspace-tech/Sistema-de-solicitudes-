@@ -283,7 +283,7 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
 .bj2-tabla .bj2-fino { display: none; }
 
 /* Por estado: cuatro columnas; cada tarjeta abre el detalle. */
-.bj2-tablero { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 12px; padding: 12px; overflow-x: auto; background: var(--sx-superficie-2); }
+.bj2-tablero { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 12px; padding: 12px; overflow-x: auto; background: var(--sx-superficie-2); }
 .bj2-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .bj2-col__cab { display: flex; align-items: center; gap: 8px; padding: 4px 4px 2px; border-top: 3px solid var(--sx-tono); font: 600 .8125rem/1.3 var(--fuente); color: var(--sx-texto); }
 .bj2-col__n { margin-left: auto; min-width: 22px; padding: 2px 7px; border-radius: 999px; background: var(--sx-tono-suave); color: var(--sx-tono); font: 700 .75rem/1.2 var(--fuente); text-align: center; }
@@ -338,7 +338,7 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
 .bj2-det-conv h3 { display: flex; align-items: center; gap: 6px; }
 
 @media (max-width: 900px) {
-  .bj2-tablero { grid-template-columns: repeat(4, minmax(240px, 80vw)); }
+  .bj2-tablero { grid-template-columns: repeat(3, minmax(240px, 80vw)); }
   .bj2-rep__atr-op { grid-template-columns: 12px auto minmax(0, 1fr); }
   .bj2-rep__atr-op > :nth-child(4) { grid-column: 3; }
   .bj2-rep__atr-op > :nth-child(5) { grid-column: 3; }
@@ -386,3 +386,33 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
 .bj2-tabla thead th { padding-top: 6px; padding-bottom: 6px; }
 
 .bj2-lista__cab > strong { white-space: nowrap; }
+
+/* 2026-10-07 (Leo): una solicitud con varios ítems se agrupa bajo su número. */
+.bj2-tr-grupo { cursor: pointer; }
+.bj2-tr-grupo td { height: 36px; background: var(--sx-superficie-2); border-bottom: 1px solid var(--sx-borde-suave); }
+.bj2-tr-grupo:hover td { background: color-mix(in srgb, var(--sx-primario) 6%, var(--sx-superficie-2)); }
+.bj2-tr-grupo:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: -2px; }
+.bj2-tr-grupo .bj2-tc-check { text-align: center; color: var(--sx-texto-3); }
+.bj2-tr-grupo__id { font: 700 .75rem/1.2 var(--fuente-mono, ui-monospace, monospace); color: var(--sx-texto); }
+.bj2-tr-grupo:hover .bj2-tr-grupo__id { color: var(--sx-primario); }
+.bj2-grupo__res { font: 500 .75rem/1.3 var(--fuente); color: var(--sx-texto-2); }
+.bj2-tr--hijo td:nth-child(3) { padding-left: 22px; }
+.bj2-tr--hijo td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--sx-primario) 30%, transparent); }
+.bj2-nitem { font: 600 .75rem/1.2 var(--fuente); color: var(--sx-texto-2); white-space: nowrap; }
+.bj2-grupo--solo { border-bottom: 1px solid var(--sx-borde); }
+
+/* Por estado: lo resuelto sale del tablero; queda este aviso. */
+.bj2-resueltas { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; padding: 10px 14px; background: var(--sx-ok-suave, var(--sx-superficie-2)); border-bottom: 1px solid var(--sx-borde-suave); font: var(--sx-t-chico); color: var(--sx-texto); }
+.bj2-resueltas > svg { color: var(--sx-ok, var(--sx-primario)); flex: none; }
+.bj2-resueltas > span { flex: 1; min-width: 220px; }
+
+/* Enlaces del ítem (con aviso de Drive). */
+.bj2-enlaces { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio); background: var(--sx-superficie-2); }
+.bj2-enlaces__tit { display: inline-flex; align-items: center; gap: 6px; font: 600 .75rem/1.2 var(--fuente); color: var(--sx-texto-2); text-transform: uppercase; letter-spacing: .04em; }
+.bj2-enlaces ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.bj2-enlaces li { display: flex; align-items: center; gap: 6px; min-width: 0; font: var(--sx-t-chico); }
+.bj2-enlaces li a { overflow-wrap: anywhere; }
+.bj2-enlaces__drive { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 0; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.bj2-enlaces__drive > svg { color: var(--sx-alerta); flex: none; }
+.bj2-enlaces__drive > span { flex: 1; min-width: 200px; }
+.bj2-grupo__cab .bj2-grupo__res { margin-left: auto; white-space: normal; }

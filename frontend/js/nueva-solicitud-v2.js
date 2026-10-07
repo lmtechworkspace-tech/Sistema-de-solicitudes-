@@ -349,6 +349,25 @@
     var res = document.querySelector('#ns2-pedido .js-ns2-res');
     if (res) res.innerHTML = resultados();
   });
+  // 2026-10-07 (Leo, soporte de plataformas: «los drive que comparten no se comparten, hay que pedir
+  // acceso… que suban el archivo mejor»): al pegar un enlace de Drive en cualquier campo del pedido
+  // (formulario técnico o de departamento) se avisa ahí mismo, antes de enviar.
+  var DRIVE = /(^|\/\/|\s)(drive|docs|sheets|slides)\.google\.com\//i;
+  document.addEventListener('input', function (ev) {
+    var t = ev.target, s = seccion();
+    if (!s || !s.contains(t) || !/^(INPUT|TEXTAREA)$/.test(t.tagName) || t.type === 'file' || t.type === 'search') return;
+    var conDrive = DRIVE.test(t.value || '');
+    var aviso = t.nextElementSibling && t.nextElementSibling.classList.contains('ns2-drive') ? t.nextElementSibling : null;
+    if (conDrive && !aviso) {
+      aviso = document.createElement('p');
+      aviso.className = 'ns2-drive';
+      aviso.setAttribute('role', 'note');
+      aviso.innerHTML = ico('alerta', 14) + '<span><b>Ojo con los enlaces de Drive:</b> quien atiende tu pedido no puede abrirlos si no se los compartes, y tiene que pedirte acceso. <b>Mejor sube el archivo</b> en «Adjuntos» (hasta 10 MB cada uno). Si igual usas el enlace, compártelo como «Cualquier persona con el enlace».</span>';
+      t.insertAdjacentElement('afterend', aviso);
+    } else if (!conDrive && aviso) {
+      aviso.remove();
+    }
+  });
   // A todo el equipo / a una persona: solo se repinta ese bloque (lo escrito en el formulario se conserva).
   document.addEventListener('change', function (ev) {
     var t = ev.target;
