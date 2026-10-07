@@ -416,3 +416,4 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
 .bj2-enlaces__drive > svg { color: var(--sx-alerta); flex: none; }
 .bj2-enlaces__drive > span { flex: 1; min-width: 200px; }
 .bj2-grupo__cab .bj2-grupo__res { margin-left: auto; white-space: normal; }
+.bj2-det-mixto { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; background: var(--sx-superficie-2); border: 1px solid var(--sx-borde-suave); font: 600 .75rem/1.3 var(--fuente); color: var(--sx-texto-2); }

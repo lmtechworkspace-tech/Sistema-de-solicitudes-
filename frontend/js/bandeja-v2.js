@@ -305,8 +305,12 @@
 
   // «3 ítems: 1 nueva · 1 esperando respuesta · 1 resuelta (espera validación)».
   var VIS_TXT = { NUEVA: ['nueva', 'nuevas'], EN_CURSO: ['en curso', 'en curso'], ESPERANDO: ['esperando respuesta', 'esperando respuesta'], RESUELTA: ['resuelta (espera validación)', 'resueltas (esperan validación)'], CERRADA: ['cerrada', 'cerradas'] };
+  // En qué va cada parte, desde una lista de ítems (el detalle también se abre desde Mi trabajo e Inicio, sin la cola cargada).
+  function resumenItems(items) { return resumenDe(items, 0, false).replace(/^[^:]*: /, ''); }
   function resumenSolicitud(solId, corto) {
-    var todos = datos_.items.filter(function (x) { return x.solicitud_id === solId; });
+    return resumenDe(datos_.items.filter(function (x) { return x.solicitud_id === solId; }), 0, corto);
+  }
+  function resumenDe(todos, _, corto) {
     var cuenta = {}, orden = [];
     todos.forEach(function (x) {
       var v = CERRADOS.indexOf(x.estado) !== -1 ? 'CERRADA' : (visible(x.estado) || 'EN_CURSO');
@@ -980,11 +984,15 @@
 
     function pintarDetalle() {
       var s = detalle.solicitud, subs = detalle.subsolicitudes || [];
-      d.el.querySelector('.sx2-drawer__titulo').textContent = s.solicitud_id + (subs[0] ? ' · ' + subs[0].titulo : '');
+      // Con varios ítems, el título no es el del primero (parecía que la solicitud era solo eso) y el
+      // estado de la solicitud (el del ítem menos avanzado) se reemplaza por en qué va cada parte.
+      d.el.querySelector('.sx2-drawer__titulo').textContent = s.solicitud_id + (subs.length > 1 ? ' · ' + subs.length + ' ítems' : (subs[0] ? ' · ' + subs[0].titulo : ''));
       var cab = d.el.querySelector('.sx2-drawer__cab > .sx2-drawer__fila-titulo .sx2-apilado');
       var sub = cab.querySelector('.bj2-det-sub') || cab.appendChild(Object.assign(document.createElement('span'), { className: 'bj2-det-sub sx2-flex' }));
       cab.querySelectorAll('.sx2-tenue').forEach(function (e) { if (!e.closest('.bj2-det-sub')) e.remove(); });
-      sub.innerHTML = U.badge(estadoVis(s.estado_derivado), tonoEstado(s.estado_derivado)) + U.badge(s.prioridad_derivada || '—', tonoPrioridad(s.prioridad_derivada), true) +
+      var mixto = subs.length > 1 && subs.some(function (x) { return x.estado !== subs[0].estado; });
+      sub.innerHTML = (mixto ? '<span class="bj2-det-mixto">' + U.esc(resumenItems(subs)) + '</span>' : U.badge(estadoVis(s.estado_derivado), tonoEstado(s.estado_derivado))) +
+        U.badge(s.prioridad_derivada || '—', tonoPrioridad(s.prioridad_derivada), true) +
         '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(s.empresa_nombre || s.empresa_id || '') + ' · ' + U.esc(s.solicitante_nombre || s.solicitante_email || '') + '</span>';
       var nConv = conversacion_().length;
       // Etapa 4: el ítem con su paso siguiente y, debajo, la conversación con quien pidió, en la misma vista.
@@ -1055,7 +1063,12 @@
       if (it.url_modulo) out.push({ titulo: 'Dónde ocurre', url: it.url_modulo });
       var extra = [];
       try { extra = typeof it.urls_adicionales === 'string' ? JSON.parse(it.urls_adicionales || '[]') : (it.urls_adicionales || []); } catch (e) { extra = []; }
-      (extra || []).forEach(function (u) { if (u && u.url) out.push({ titulo: u.titulo || 'Enlace', url: u.url }); });
+      (extra || []).forEach(function (u) {
+        if (!u || !u.url) return;
+        var t = String(u.titulo || '').trim();
+        if (/^https?:\/\/\S+$/i.test(t)) { if (t !== u.url) out.push({ titulo: 'Enlace', url: t }); out.push({ titulo: 'Enlace', url: u.url }); return; }
+        out.push({ titulo: t || 'Enlace', url: u.url });
+      });
       [it.descripcion, it.contexto, it.resultado_esperado, it.observaciones].join(' ').replace(/https?:\/\/[^\s<>"']+/g, function (u) {
         u = u.replace(/[.,;:)]+$/, '');
         if (!out.some(function (x) { return x.url === u; })) out.push({ titulo: 'En el texto', url: u });
@@ -1071,7 +1084,7 @@
       return '<div class="bj2-enlaces"><span class="bj2-enlaces__tit">' + U.ico('enlace', 13) + ' Enlaces</span><ul>' + ls.map(function (l) {
           return '<li>' + (esDrive(l.url) ? U.badge('Drive', 'alerta', true) : '') + '<a class="sx2-enlace" href="' + U.esc(l.url) + '" target="_blank" rel="noopener">' + U.esc(l.titulo !== 'Enlace' && l.titulo !== l.url ? l.titulo + ': ' : '') + U.esc(l.url.length > 70 ? l.url.slice(0, 67) + '…' : l.url) + '</a></li>';
         }).join('') + '</ul>' +
-        (drive && !soloLectura() ? '<p class="bj2-enlaces__drive">' + U.ico('alerta', 13) + '<span>Un enlace de Drive solo se abre si quien pidió lo compartió contigo. Si te pide acceso, pídele el archivo:</span>' +
+        (drive && !soloLectura() && abierto(it) ? '<p class="bj2-enlaces__drive">' + U.ico('alerta', 13) + '<span>Un enlace de Drive solo se abre si quien pidió lo compartió contigo. Si te pide acceso, pídele el archivo:</span>' +
           U.boton({ texto: 'Pedir el archivo', icono: 'comentario', sm: true, variante: 'secundario', clase: 'js-bj2-pedir-archivo', datos: { id: it.subsolicitud_id, n: it.numero_item } }) + '</p>' : '') +
       '</div>';
     }
