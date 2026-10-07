@@ -631,3 +631,27 @@ button.bj2-it__cab:focus-visible { outline: 2px solid var(--sx-primario); outlin
 .bj2-pide2 { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .bj2-pide2 > b, .bj2-pide2 > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bj2-pide2 > small { font: 500 .6875rem/1.25 var(--fuente); color: var(--sx-texto-3); }
+
+/* 2026-10-07 (visual): el pedido con aire (título hasta 2 líneas y una nota debajo), el responsable
+   que se lee completo y «Sigue» siempre igual: botón con el paso, o etiqueta tenue si toca esperar. */
+.bj2-pedido { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.bj2-pedido .bj2-prio-mini { margin-top: 1px; flex: none; }
+.bj2-pedido__txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.bj2-pedido__txt > strong { font: 600 .8125rem/1.3 var(--fuente); color: var(--sx-texto); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.bj2-pedido__txt > small { font: 500 .6875rem/1.25 var(--fuente); color: var(--sx-texto-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bj2-pedido__nuevo { color: var(--sx-info); font-weight: 700; }
+.bj2-tabla--sol td { padding-top: 8px; padding-bottom: 8px; }
+.bj2-tabla--sol .bj2-tr-sol td { height: 58px; }
+.bj2-tabla--sol .bj2-tc-quien .bj2-tc-cortar { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
+
+.bj2-sig-btn { min-width: 108px; justify-content: center; }
+.bj2-sig-btn--alerta { color: var(--sx-alerta); border-color: color-mix(in srgb, var(--sx-alerta) 40%, var(--sx-borde)); background: var(--sx-alerta-suave); }
+.bj2-sig-btn--alerta:hover { border-color: var(--sx-alerta); }
+.bj2-tabla--sol .bj2-sig--espera { display: inline-flex; align-items: center; gap: 5px; max-width: none; padding: 4px 9px; border-radius: 999px; background: var(--sx-superficie-2); color: var(--sx-texto-3); font: 600 .6875rem/1.2 var(--fuente); white-space: nowrap; }
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(9) { width: 146px; }
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(8) { width: 54px; }
+.bj2-sig-btn { min-width: 0; }
+.bj2-tabla--sol .bj2-tc-av .bj2-avance__txt { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.bj2-tabla--sol td.bj2-tc-acc { padding-left: 4px; text-overflow: clip; }
+.bj2-tabla--sol .bj2-sig--espera { padding: 4px 8px; }
+.bj2-tabla--sol td.bj2-tc-sem { padding-left: 2px; padding-right: 2px; text-overflow: clip; text-align: center; }

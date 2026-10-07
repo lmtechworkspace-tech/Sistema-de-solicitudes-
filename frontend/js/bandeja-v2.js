@@ -509,10 +509,21 @@
     if (datos_.solo_lectura) return '';
     var nuevos = g.items.filter(function (i) { return i.estado === 'S01' && (i.puede_tomar || !i.depto || i.puede_asignar || i.asignado === datos_.mi_email); });
     if (nuevos.length) return U.boton({ texto: nuevos.length > 1 ? 'Recibir ' + nuevos.length : 'Recibir', icono: 'check', sm: true, variante: 'primario', clase: 'js-bj2-recibir-sol', datos: { sol: g.id, id: nuevos[0].subsolicitud_id, n: nuevos.length }, titulo: 'Recibir y dar fecha' });
+    // 2026-10-07 (visual): lo que sigue es un botón que abre la solicitud en ese ítem y ese paso;
+    // lo que espera a otro es una etiqueta tenue (no hay nada que hacer).
+    var mios = todos.filter(abierto);
+    var sinF = mios.filter(function (i) { return i.estado !== 'S01' && i.estado !== 'S06' && !i.fecha_comprometida; })[0];
+    var porEmpezar = mios.filter(function (i) { return ['S02', 'S03', 'S04'].indexOf(i.estado) !== -1; })[0];
+    var enCurso = mios.filter(function (i) { return ['S05', 'S07'].indexOf(i.estado) !== -1; })[0];
+    var ir = function (texto, icono, it, acc, tono) { return U.boton({ texto: texto, icono: icono, sm: true, variante: 'secundario', clase: 'js-bj2-sig bj2-sig-btn' + (tono ? ' bj2-sig-btn--' + tono : ''), datos: { sol: g.id, id: it.subsolicitud_id, acc: acc }, titulo: texto + ' (ítem ' + it.numero_item + ')' }); };
+    if (sinF) return ir('Dar fecha', 'calendario', sinF, 'fecha', 'alerta');
+    if (porEmpezar) return ir('Empezar', 'derecha', porEmpezar, '');
+    if (enCurso) return ir('Resolver', 'check', enCurso, 'resolver');
     var p = pasosTxt(todos).c;
-    var etiqueta = p.fecha ? 'Dar fecha' : (p.empezar ? 'Empezar' : (p.curso ? 'Resolver' : (p.pausa ? 'Esperando respuesta' : (p.resuelto ? 'Espera confirmación' : ''))));
-    return etiqueta ? '<span class="bj2-sig' + (p.fecha ? ' bj2-sig--falta' : '') + '">' + U.esc(etiqueta) + '</span>' : '';
+    var espera = p.pausa ? 'Espera respuesta' : (p.resuelto ? 'Por confirmar' : '');
+    return espera ? '<span class="bj2-sig bj2-sig--espera">' + U.ico(p.pausa ? 'comentario' : 'reloj', 12) + U.esc(espera) + '</span>' : '';
   }
+  function nombreCorto(n) { var p = String(n || '').trim().split(/\s+/); return p.length > 2 ? p[0] + ' ' + p[1] : String(n || ''); }
   function tablaSolicitudes(visibles) {
     var grupos = agrupar(visibles);
     var buscando = !!f.texto;
@@ -534,10 +545,10 @@
             '<td class="bj2-tc-check"><button type="button" class="bj2-expandir js-bj2-expandir" data-sol="' + U.esc(g.id) + '" aria-expanded="' + abierta + '" aria-label="' + (abierta ? 'Ocultar' : 'Ver') + ' los ' + todos.length + ' ítems de ' + U.esc(g.id) + '">' + U.ico('derecha', 14) + '</button></td>' +
             '<td class="bj2-tc-sem">' + semaforoPeor(g.items) + '</td>' +
             '<td class="bj2-tc-n"><span class="bj2-sol-n">' + U.esc(g.id) + '</span><small class="bj2-sol-cuenta">' + todos.length + ' ítems</small></td>' +
-            '<td title="' + U.esc(titulos.join(' · ')) + '"><span class="bj2-tc-cortar"><span class="bj2-prio-mini sx2-tono-' + tonoPrioridad(i0.prioridad) + '">' + U.esc(i0.prioridad || '—') + '</span><strong>' + U.esc(todos[0].titulo || '') + '</strong><small class="sx2-tenue">' + (todos.length > 1 ? ' y ' + (todos.length - 1) + ' más' : '') + '</small>' +
-              (g.items.some(function (x) { return x.respuesta_pendiente; }) ? U.badge('Te escribió', 'info', true) : '') + '</span></td>' +
+            '<td title="' + U.esc(titulos.join(' · ')) + '"><span class="bj2-pedido"><span class="bj2-prio-mini sx2-tono-' + tonoPrioridad(i0.prioridad) + '">' + U.esc(i0.prioridad || '—') + '</span><span class="bj2-pedido__txt"><strong>' + U.esc(todos[0].titulo || '') + '</strong>' +
+              '<small>y ' + (todos.length - 1) + ' ítem' + (todos.length > 2 ? 's' : '') + ' más' + (g.items.some(function (x) { return x.respuesta_pendiente; }) ? ' · <b class="bj2-pedido__nuevo">te escribió</b>' : '') + '</small></span></span></td>' +
             '<td title="' + U.esc((i0.solicitante_nombre || '') + (donde ? ' · ' + donde : '')) + '"><span class="bj2-pide2"><b class="bj2-pide">' + U.esc(i0.solicitante_nombre || i0.solicitante_email || '') + '</b>' + (donde ? '<small>' + U.esc(donde) + '</small>' : '') + '</span></td>' +
-            '<td>' + (lista.length === 1 ? '<span class="bj2-tc-quien">' + U.avatar(lista[0], 'xs') + '<span class="bj2-tc-cortar">' + U.esc(lista[0].nombre) + '</span></span>'
+            '<td>' + (lista.length === 1 ? '<span class="bj2-tc-quien">' + U.avatar(lista[0], 'xs') + '<span class="bj2-tc-cortar" title="' + U.esc(lista[0].nombre) + '">' + U.esc(nombreCorto(lista[0].nombre)) + '</span></span>'
               : (lista.length ? '<span class="bj2-tc-quien">' + U.avatares(lista, 3) + '<span class="bj2-tc-cortar">' + lista.length + ' personas</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>')) + '</td>' +
             '<td class="bj2-tc-av" title="' + U.esc(resumen) + '">' + barraAvance(todos) + '<small class="bj2-avance__txt">' + listos(todos) + ' de ' + todos.length + ' listos</small></td>' +
             '<td class="bj2-tc-num">' + antiguedad(todos.slice().sort(function (a, b) { return new Date(a.fecha_creacion) - new Date(b.fecha_creacion); })[0]) + '</td>' +
@@ -557,10 +568,10 @@
       '<td class="bj2-tc-check">' + (datos_.solo_lectura ? '' : '<label class="bj2-check" title="Seleccionar"><input type="checkbox" class="js-bj2-sel"' + (marcado ? ' checked' : '') + ' aria-label="Seleccionar ' + U.esc(i.titulo) + '"></label>') + '</td>' +
       '<td class="bj2-tc-sem">' + semaforo(i) + '</td>' +
       '<td class="bj2-tc-n"><span class="bj2-sol-n">' + U.esc(i.solicitud_id) + '</span></td>' +
-      '<td class="bj2-tc-titulo"><span class="bj2-tc-cortar"><span class="bj2-prio-mini sx2-tono-' + tonoPrioridad(i.prioridad) + '" title="Prioridad ' + U.esc(i.prioridad || '') + '">' + U.esc(i.prioridad || '—') + '</span><strong>' + U.esc(i.titulo || '(sin título)') + '</strong>' +
-        (i.respuesta_pendiente ? U.badge('Te escribió', 'info', true) : '') + (i.empresa_cliente ? '<small class="sx2-tenue"> · ' + U.esc(i.empresa_cliente) + '</small>' : '') + '</span></td>' +
+      '<td class="bj2-tc-titulo" title="' + U.esc(i.titulo || '') + '"><span class="bj2-pedido"><span class="bj2-prio-mini sx2-tono-' + tonoPrioridad(i.prioridad) + '" title="Prioridad ' + U.esc(i.prioridad || '') + '">' + U.esc(i.prioridad || '—') + '</span><span class="bj2-pedido__txt"><strong>' + U.esc(i.titulo || '(sin título)') + '</strong>' +
+        (i.respuesta_pendiente || i.empresa_cliente ? '<small>' + (i.respuesta_pendiente ? '<b class="bj2-pedido__nuevo">te escribió</b>' : '') + (i.respuesta_pendiente && i.empresa_cliente ? ' · ' : '') + U.esc(i.empresa_cliente || '') + '</small>' : '') + '</span></span></td>' +
       '<td title="' + U.esc((i.solicitante_nombre || i.solicitante_email || '') + (donde ? ' · ' + donde : '')) + '"><span class="bj2-pide2"><b class="bj2-pide">' + U.esc(i.solicitante_nombre || i.solicitante_email || '') + '</b>' + (donde ? '<small>' + U.esc(donde) + '</small>' : '') + '</span></td>' +
-      '<td>' + (persona ? '<span class="bj2-tc-quien">' + U.avatar(persona, 'xs') + '<span class="bj2-tc-cortar">' + U.esc(persona.nombre) + '</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>') + '</td>' +
+      '<td>' + (persona ? '<span class="bj2-tc-quien">' + U.avatar(persona, 'xs') + '<span class="bj2-tc-cortar" title="' + U.esc(persona.nombre) + '">' + U.esc(nombreCorto(persona.nombre)) + '</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>') + '</td>' +
       '<td class="bj2-tc-av">' + barraAvance(todos) + '<small class="bj2-avance__txt' + (notaPaso(i).falta ? ' bj2-avance__txt--falta' : '') + '">' + U.esc(notaPaso(i).t) + '</small></td>' +
       '<td class="bj2-tc-num">' + antiguedad(i) + '</td>' +
       '<td class="bj2-tc-acc">' + siguienteSolicitud({ id: i.solicitud_id, items: [i] }, todos) + '</td></tr>';
@@ -1851,6 +1862,7 @@
       if (bt) bt.focus();
       return;
     }
+    if ((b = t.closest('.js-bj2-sig'))) { abrirDetalle(b.getAttribute('data-sol'), b.getAttribute('data-id'), b.getAttribute('data-acc') || undefined); return; }
     if ((b = t.closest('.js-bj2-recibir-sol'))) {
       ev.stopPropagation();
       var n = Number(b.getAttribute('data-n')) || 1;
