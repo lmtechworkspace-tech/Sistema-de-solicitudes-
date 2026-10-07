@@ -306,3 +306,25 @@
 .fin2-celda { width: 86px !important; text-align: right; font-variant-numeric: tabular-nums; }
 .fin2-celda:focus { border-color: var(--fin); box-shadow: 0 0 0 3px var(--fin-suave); outline: 0; }
 .fin2-movs .js-finm-reparto { margin-top: 4px; font-size: .75rem; }
+
+/* --- Etapa 6: cierre y retiro (finanzas-cierre-v2.js) ----------------------- */
+.fin2-meses { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.fin2-mes { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; border: 1px solid var(--sx-borde); background: var(--sx-superficie); }
+.fin2-mes--cerrado { border-color: color-mix(in srgb, var(--sx-ok) 45%, transparent); background: color-mix(in srgb, var(--sx-ok) 5%, var(--sx-superficie)); }
+.fin2-mes__cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-transform: capitalize; }
+.fin2-mes__acc { display: flex; justify-content: flex-end; }
+.fin2-pasos-mes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.fin2-pasos-mes li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; font-size: .8125rem; }
+.fin2-pasos-mes b { display: block; font-size: .8125rem; }
+.fin2-pasos-mes span { color: var(--sx-texto-2); }
+.fin2-ck { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; }
+.fin2-ck--ok { background: color-mix(in srgb, var(--sx-ok) 15%, transparent); color: var(--sx-ok); }
+.fin2-ck--no { background: var(--sx-borde); color: var(--sx-texto-3); }
+.fin2-ck--aviso { background: color-mix(in srgb, var(--sx-alerta) 15%, transparent); color: var(--sx-alerta); }
+.fin2-notas { margin: 10px 0 0; padding-left: 18px; font-size: .8125rem; color: var(--sx-texto-2); display: flex; flex-direction: column; gap: 4px; }
+.fin2-retiro-man { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; cursor: pointer; }
+.fin2-retiro-man input { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--fin); }
+.fin2-retiro-man input:disabled + div { opacity: .55; }
+.fin2-retiro-man span { display: block; }
+.fin2-estado-retiro.sx2-tono-info { background: var(--fin-suave); }
+.fin2-estado-retiro.sx2-tono-alerta { background: color-mix(in srgb, var(--sx-alerta) 12%, transparent); }

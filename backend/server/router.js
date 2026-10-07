@@ -97,6 +97,7 @@ const FinanzasBancos = require('../logica/finanzasBancos');
 const FinanzasCobranza = require('../logica/finanzasCobranza');
 const FinanzasTablero = require('../logica/finanzasTablero');
 const FinanzasPresupuesto = require('../logica/finanzasPresupuesto');
+const FinanzasCierre = require('../logica/finanzasCierre');
 const Hompy = require('../logica/hompy');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
@@ -701,6 +702,12 @@ const ACCIONES = {
   // Etapa 5: presupuesto por año y empresa, comparado con lo real.
   finanzasPresupuesto: (db, data, contexto) => FinanzasPresupuesto.ver(db, data, contexto),
   finanzasGuardarPresupuesto: (db, data, contexto) => FinanzasPresupuesto.guardar(db, data, contexto),
+  // Etapa 6: cierre de mes, paralelo con la planilla SIGECO y retiro.
+  finanzasCierre: (db, data, contexto) => FinanzasCierre.estado(db, data, contexto),
+  finanzasCerrarMes: (db, data, contexto) => FinanzasCierre.cerrar(db, data, contexto),
+  finanzasReabrirMes: (db, data, contexto) => FinanzasCierre.reabrir(db, data, contexto),
+  finanzasParalelo: (db, data, contexto) => FinanzasCierre.paralelo(db, data, contexto),
+  finanzasPasoRetiro: (db, data, contexto) => FinanzasCierre.marcarPasoRetiro(db, data, contexto),
   // Hompy, la mascota (2026-10-06): solo cuentas con el módulo `hompy`
   // (cada acción lo verifica -- ver hompy.js).
   hompyDatos: (db, data, contexto) => Hompy.datos(db, data, contexto),

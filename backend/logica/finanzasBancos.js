@@ -137,6 +137,7 @@ function fechaIso_(v) {
   return m ? m[1] + '-' + m[2] + '-' + m[3] : '';
 }
 const texto_ = (v) => String(v == null ? '' : v).trim();
+function mesCerrado_(periodo) { try { return require('./finanzasCierre').mesCerrado_(periodo); } catch (e) { return false; } }
 function soloEscritura_(contexto) {
   const lista = String(process.env.SIGSO_FINANZAS_SOLO_LECTURA || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
   return lista.indexOf(String(contexto.cuenta_id || '').toLowerCase()) !== -1;
@@ -384,6 +385,10 @@ const importarCartola = B.conBoveda('', function (db, data, contexto, x) {
     cuenta = cuentaPorNumero_(c.numero);
     x.registrar('CUENTA_NUEVA', c.banco + ' ···' + c.numero.slice(-4) + ' → ' + empresa);
   }
+  // Etapa 6: no entran movimientos NUEVOS a un mes cerrado (los repetidos se ignoran igual).
+  const cerrados = [...new Set(c.movimientos.filter((m) => mesCerrado_(m.fecha.slice(0, 7)) &&
+    !d.prepare('SELECT 1 FROM FIN_MOVIMIENTOS WHERE huella = ?').get(hmac_(['mov', c.numero, m.fecha, m.doc, m.cargo, m.abono, m.saldo].join('|')))).map((m) => m.fecha.slice(0, 7)))];
+  if (cerrados.length) return errorValidacion('archivo', 'La cartola trae movimientos nuevos de un mes cerrado (' + cerrados.join(', ') + '). Reábrelo en «Cierre» si de verdad faltaban.');
   const ctx = contextoSugerencias_(db, cuenta.empresa);
   const impId = crypto.randomUUID();
   const ahora = new Date().toISOString();
@@ -480,6 +485,8 @@ const clasificar = B.conBoveda('', function (db, data, contexto, x) {
     items.forEach((it) => {
       const r = d.prepare('SELECT * FROM FIN_MOVIMIENTOS WHERE id = ?').get(texto_(it.id));
       if (!r) { errores.push({ id: it.id, mensaje: 'No existe.' }); return; }
+      // Etapa 6: un mes cerrado queda fijo (se reabre con motivo en «Cierre»).
+      if (mesCerrado_(r.periodo)) { errores.push({ id: it.id, mensaje: 'El mes ' + r.periodo + ' está cerrado. Reábrelo en «Cierre» si hay que corregir algo.' }); return; }
       const datos = des_(r.datos);
       const c = {
         tipo: texto_(it.tipo), cuenta: texto_(it.cuenta), cliente_id: texto_(it.cliente_id), empresa: texto_(it.empresa), nota: texto_(it.nota).slice(0, 300)
