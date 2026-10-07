@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Un mes con Hompy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,600..900&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!-- Ejemplo del módulo Hompy con datos de DEMOSTRACIÓN (personas, lugares y marcas inventados). Se abre con «Ver ejemplo» en la barra de Hompy. -->
+<style>
+/* Recorrido de un caso: índice fijo a la izquierda, pasos en orden a la derecha; cada paso = qué se hizo + lo que se llenó + la pantalla. */
+:root {
+  --bg: #F2F4F7; --surface: #FFFFFF; --ink: #172033; --muted: #586377; --line: #DCE1E9;
+  --vest: #E0560B; --vest-soft: #FDEBDD; --work: #1F5FD6; --work-soft: #E3ECFC; --reflect: #C9D1DC;
+  --ok: #157A3B; --ok-soft: #E1F3E7;
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0F131A; --surface: #171D28; --ink: #E7EBF2; --muted: #9AA4B5; --line: #283143;
+  --vest: #FF7B36; --vest-soft: #3A2417; --work: #7AA4F5; --work-soft: #1B2944; --reflect: #3B4659;
+  --ok: #5BC583; --ok-soft: #16301F; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0F131A; --surface: #171D28; --ink: #E7EBF2; --muted: #9AA4B5; --line: #283143;
+  --vest: #FF7B36; --vest-soft: #3A2417; --work: #7AA4F5; --work-soft: #1B2944; --reflect: #3B4659;
+  --ok: #5BC583; --ok-soft: #16301F; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 1rem/1.6 var(--f-body); }
+.envoltura { max-width: 1240px; margin: 0 auto; padding-inline: clamp(16px, 4vw, 40px); padding-block: 0 72px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+a { color: var(--work); }
+:focus-visible { outline: 3px solid var(--vest); outline-offset: 3px; border-radius: 4px; }
+
+/* Franja reflectante del chaleco: el separador propio de esta página. */
+.reflectante { height: 14px; display: grid; grid-template-rows: 4px 4px; gap: 6px; }
+.reflectante::before, .reflectante::after { content: ""; background: var(--reflect); border-radius: 2px; }
+
+/* Encabezado */
+.cabeza { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 24px; padding-top: 40px; }
+.cabeza__ceja { font: 600 .75rem/1 var(--f-body); letter-spacing: .12em; text-transform: uppercase; color: var(--vest); }
+.cabeza h1 { font-size: clamp(2.4rem, 1.6rem + 3.6vw, 4.4rem); font-weight: 900; font-stretch: 112%; line-height: .98; margin: 14px 0 16px; }
+.cabeza p { margin: 0; max-width: 62ch; color: var(--muted); font-size: 1.0625rem; }
+.cabeza img { width: clamp(110px, 16vw, 190px); height: auto; display: block; margin-bottom: -6px; }
+.aviso-demo { display: inline-flex; gap: 8px; align-items: center; margin-top: 18px; padding: 8px 12px; border-radius: 8px; background: var(--work-soft); color: var(--ink); font-size: .875rem; }
+.aviso-demo b { font-weight: 700; }
+.cabeza + .reflectante { margin: 28px 0 32px; }
+
+/* Cuerpo: índice + pasos */
+.cuerpo { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 40px; align-items: start; }
+.indice { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); font-size: .875rem; }
+.indice h2 { font: 700 .75rem/1 var(--f-body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+.indice ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.indice a { display: grid; grid-template-columns: 26px 1fr; gap: 6px; padding: 7px 8px; border-radius: 8px; color: var(--ink); text-decoration: none; line-height: 1.3; }
+.indice a span { font-family: var(--f-mono); color: var(--muted); font-size: .75rem; padding-top: 2px; }
+.indice a:hover { background: var(--surface); }
+
+.capitulo { padding-bottom: 28px; }
+.capitulo + .capitulo { border-top: 1px solid var(--line); padding-top: 40px; }
+.capitulo__cab { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: baseline; margin-bottom: 8px; }
+.capitulo__n { font: 800 2.6rem/1 var(--f-display); font-stretch: 115%; color: var(--vest); font-variant-numeric: tabular-nums; }
+.capitulo h2 { font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem); font-weight: 800; font-stretch: 105%; }
+.capitulo__intro { margin: 0 0 24px; color: var(--muted); max-width: 66ch; }
+
+/* Línea del caso */
+.linea-caso { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 28px; padding: 0; counter-reset: c; }
+.linea-caso li { counter-increment: c; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: .875rem; }
+.linea-caso li::before { content: counter(c); width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--vest); color: #fff; font: 700 .75rem/1 var(--f-body); }
+
+/* Paso */
+.paso { display: grid; gap: 14px; margin-bottom: 40px; }
+.paso__cab { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.paso__n { font: 500 .8125rem/1 var(--f-mono); color: var(--vest); }
+.paso h3 { font-size: 1.25rem; font-weight: 700; font-stretch: 102%; }
+.paso__texto { margin: 0; max-width: 70ch; }
+.paso__texto b { font-weight: 700; }
+.lleno { margin: 0; padding: 14px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 22px; }
+.lleno__titulo { grid-column: 1 / -1; font: 700 .6875rem/1 var(--f-body); letter-spacing: .1em; text-transform: uppercase; color: var(--vest); }
+.lleno div { min-width: 0; }
+.lleno dt { font-size: .75rem; color: var(--muted); }
+.lleno dd { margin: 1px 0 0; font: 500 .875rem/1.45 var(--f-mono); overflow-wrap: anywhere; }
+.nota { margin: 0; display: flex; gap: 10px; padding: 10px 14px; border-radius: 10px; background: var(--vest-soft); font-size: .9375rem; max-width: 76ch; }
+.nota::before { content: "!"; flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--vest); color: #fff; font: 800 .75rem/1 var(--f-body); margin-top: 2px; }
+
+/* Pantallas */
+.pantallas { display: grid; gap: 14px; }
+.pantallas--celular { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.pantalla { margin: 0; display: grid; gap: 6px; }
+.pantalla__marco { position: relative; display: block; width: 100%; max-height: 72vh; overflow: auto; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: zoom-in; text-align: left; }
+.pantalla__marco img { display: block; width: 100%; height: auto; max-width: 100%; }
+.pantalla__lupa { position: sticky; float: right; top: 10px; margin: 10px 10px -40px 0; padding: 5px 10px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 78%, transparent); color: var(--bg); font: 600 .75rem/1.2 var(--f-body); }
+.pantalla figcaption { font-size: .8125rem; color: var(--muted); }
+
+/* Ampliar */
+dialog.zoom { width: min(1500px, 96vw); max-height: 94vh; padding: 0; border: 0; border-radius: 14px; background: var(--surface); color: var(--ink); }
+dialog.zoom::backdrop { background: rgba(10, 14, 22, .72); }
+.zoom__barra { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--line); z-index: 1; }
+.zoom__barra b { font-size: .9375rem; }
+.zoom__cerrar { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 6px 12px; font: 600 .875rem/1 var(--f-body); cursor: pointer; }
+.zoom img { display: block; width: 100%; height: auto; }
+
+.pie { margin-top: 48px; color: var(--muted); font-size: .875rem; }
+.pie .reflectante { margin-bottom: 18px; }
+
+@media (max-width: 900px) {
+  .cuerpo { grid-template-columns: minmax(0, 1fr); }
+  .indice { position: static; }
+  .indice ol { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+}
+@media (max-width: 560px) {
+  .cabeza { grid-template-columns: minmax(0, 1fr); }
+  .cabeza img { order: -1; width: 96px; }
+  .capitulo__n { font-size: 2rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pantalla__marco { transition: border-color .2s, box-shadow .2s; }
+  .pantalla__marco:hover { border-color: var(--vest); box-shadow: 0 10px 30px -18px var(--vest); }
+}
+.volver { margin-left: 12px; font: 600 .8125rem/1 var(--f-body); }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+
+<div class="envoltura">
+  <header class="cabeza">
+    <div>
+      <span class="cabeza__ceja">SIGSO · Módulo Hompy · Ejemplo completo</span> <a class="volver" href="../../plataforma.html#/hompy/inicio">Volver a SIGSO</a>
+      <h1>Un mes con Hompy</h1>
+      <p>Así se ve el módulo una vez que el equipo lo usa: el calendario con un mes de actividades, los reportes de salida con su dinero, los videos del Estudio TikTok, las marcas y el reporte del mes. El hilo del ejemplo es una activación con una marca, desde que se agenda hasta que aparece en el reporte.</p>
+      <span class="aviso-demo"><b>Datos de demostración.</b> Personas, lugares y marcas son inventados. No es información de producción.</span>
+    </div>
+    <img src="img/hompy.webp" alt="Hompy, la mascota de HomePymes" width="559" height="900">
+  </header>
+  <div class="reflectante" aria-hidden="true"></div>
+
+  <div class="cuerpo">
+    <nav class="indice" aria-label="Contenido">
+      <h2>Recorrido</h2>
+      <ol id="indice"></ol>
+    </nav>
+    <main id="pasos"></main>
+  </div>
+
+  <footer class="pie">
+    <div class="reflectante" aria-hidden="true"></div>
+    Capturas tomadas de SIGSO con una empresa de demostración (Camila Rojas, Diego Muñoz y Valeria Soto; Banco Austral, Ferretería Norte y Seguros Cordillera). El paso a paso para el equipo está en el «Manual de uso» del módulo.
+  </footer>
+</div>
+
+<dialog class="zoom" id="zoom" aria-label="Pantalla ampliada">
+  <div class="zoom__barra"><b id="zoom-titulo"></b><button type="button" class="zoom__cerrar" id="zoom-cerrar">Cerrar</button></div>
+  <img id="zoom-img" alt="">
+</dialog>
+
+<script>
+(function () {
+  var DIM = {"01-portada":[1800,1894],"02-calendario":[1800,1241],"03-agenda":[1800,2069],"04-nueva-actividad":[1800,1125],"05-detalle-activacion":[1800,1125],"06-detalle-feria":[1800,1125],"07-salida-llenando":[1800,3944],"08-salida-cerrada":[1800,2156],"09-salidas-por-llenar":[1800,1125],"10-salidas-cerradas":[1800,1125],"11-estudio":[1800,1371],"12-idea":[1800,1605],"13-dialogo":[1800,1125],"14-guion":[1800,1849],"15-produccion":[1800,1364],"16-publicado":[1800,1141],"17-marcas":[1800,1125],"18-marca":[1800,1791],"19-colaboracion":[1800,1125],"20-reporte-mensual":[1800,2934],"21-tipos":[1800,1125],"22-celebracion":[1800,1125],"23-celular-portada":[780,1688],"24-celular-calendario":[780,1688],"25-celular-estudio":[780,1688],"26-pdf-salida":[1230,2264],"27-pdf-mensual":[1230,3123]};
+
+  var CAPITULOS = [
+    { id: 'portada', titulo: 'La portada con el mes en marcha',
+      intro: 'Es lo primero que ve el equipo al abrir Hompy: lo que viene hoy (Hompy lo comenta en su globo), las cifras del mes, las próximas actividades, los reportes que faltan, el Estudio TikTok y los accesos a Marcas y al reporte.',
+      pasos: [
+        { titulo: 'La portada', img: ['01-portada'], texto: 'Hoy hay una salida a terreno a las 15:30, por eso Hompy dice «¡Hoy salimos!». Queda <b>1 reporte por llenar</b> (la charla de ayer, en borrador) y el Estudio muestra dos videos publicados.' }
+      ] },
+    { id: 'tipos', titulo: 'Antes de empezar: los tipos de evento',
+      intro: 'El equipo definió sus 5 tipos de evento. Cada uno tiene su color y su ícono, y así se reconocen en todo el módulo.',
+      pasos: [
+        { titulo: 'Los 5 tipos, ya definidos', img: ['21-tipos'],
+          lleno: [['Tipo 1', 'Salida a terreno · naranja'], ['Tipo 2', 'Evento con marca · azul'], ['Tipo 3', 'Grabación de contenido · rosa'], ['Tipo 4', 'Charla en empresa · verde'], ['Tipo 5', 'Actividad con la comunidad · ámbar']] }
+      ] },
+    { id: 'caso', titulo: 'El caso: la activación con Banco Austral',
+      intro: 'Una marca pide a Hompy para una activación en su sucursal. Seguimos esa actividad de punta a punta.',
+      linea: ['Se agenda con presupuesto', 'Se confirma', 'El día: reporte de salida', 'Se cierra el reporte', 'Se devuelve el reembolso', 'Queda el PDF'],
+      pasos: [
+        { titulo: 'Agendar la actividad', img: ['04-nueva-actividad'],
+          texto: 'En el calendario, <b>Nueva actividad</b>. Se elige el tipo y la marca para que la actividad quede en la historia de Banco Austral. Como tiene costo, se anota el presupuesto.',
+          lleno: [['Tipo', 'Evento con marca'], ['Actividad', 'Activación en sucursal Centro'], ['Marca', 'Banco Austral'], ['Horario', '10:00 – 13:00'], ['Lugar', 'Banco Austral, sucursal Centro · Av. Libertador 1450, Santiago'], ['Presupuesto', '$30.000'], ['En qué se gastará', 'Uber, estacionamiento y regalos para niños'], ['Van', 'Diego Muñoz, Camila Rojas']] },
+        { titulo: 'La actividad en el calendario', img: ['02-calendario', '03-agenda'],
+          texto: 'Queda en la grilla del mes con el color de su tipo, junto al resto de las actividades. La vista <b>Agenda</b> lista el mes día por día. Las actividades que necesitan atención llevan un punto naranja, y la cancelada aparece tachada con su motivo.' },
+        { titulo: 'Una actividad confirmada, con presupuesto', img: ['06-detalle-feria'],
+          texto: 'Así se ve el detalle antes del día. En el ejemplo es la feria de la semana siguiente, también con Banco Austral: está <b>Confirmada</b>, con presupuesto de $45.000 y tres personas.' },
+        { titulo: 'El día: llenar el reporte de salida', img: ['07-salida-llenando'],
+          texto: 'Después de la actividad se llena el reporte. La captura muestra el formulario <b>mientras se llena</b>, con otra actividad del mes (una charla en una empresa). Los campos con * son los necesarios para cerrar, y el recuadro de la derecha dice cuántos van.',
+          lleno: [['Horarios', 'Salida 15:10 · llegada 15:45 · inicio 16:00 · término 16:55 · regreso 17:40'], ['Usó el traje', 'Valeria Soto · 45 min · 1 pausa · se hidrató'], ['Estado del traje', 'En buen estado'], ['Público', '28 personas · 30 fotos · 3 videos'], ['Evaluación', '★★★★ «Muy bien»'], ['Gasto 1', 'Transporte · Uber ida y vuelta · $11.200 · pagó Valeria Soto (por devolver)'], ['Gasto 2', 'Colación · café y galletas · $6.500 · pagó la empresa · boleta 55210'], ['Comentario', 'Quieren una segunda charla en noviembre']],
+          nota: 'Si alguien paga de su bolsillo, se elige «Pagó una persona» y se escribe su nombre. Sin ese nombre, el reporte no se cierra.' },
+        { titulo: 'Cerrar el reporte', img: ['22-celebracion'],
+          texto: 'Con lo necesario completo, <b>Cerrar reporte</b>. Hompy lo celebra y ofrece descargar el PDF.' },
+        { titulo: 'El reporte cerrado de la activación', img: ['08-salida-cerrada'],
+          texto: 'Queda en modo lectura: la evaluación, las cifras, el lugar y los horarios, quiénes fueron, el traje, el material y, al final, el <b>dinero de la actividad</b>. El Uber que pagó Diego ya está marcado como devuelto, sin necesidad de reabrir el reporte.',
+          lleno: [['Duración', '2 h 40 min (10:00 – 12:40)'], ['Público', '180 personas · 64 fotos · 5 videos'], ['Traje', 'Diego Muñoz · 50 min · 2 pausas · necesita limpieza'], ['Gastado', '$37.990 de $30.000 presupuestados (+$7.990)'], ['Gastos', 'Uber $14.500 (devuelto a Diego) · estacionamiento $4.500 · globos y dulces $18.990'], ['Aporte de la marca', '$50.000 · transferencia de Banco Austral'], ['Evaluación', '★★★★★']] },
+        { titulo: 'El detalle, después del día', img: ['05-detalle-activacion'],
+          texto: 'La misma actividad abierta desde el calendario: dice <b>Reporte cerrado</b>, muestra el presupuesto contra lo gastado y permite ver el reporte o bajar el PDF.' },
+        { titulo: 'El PDF del reporte de salida', img: ['26-pdf-salida'],
+          texto: 'El documento que se descarga, con la marca SIGSO: todo el reporte y el detalle del dinero, con el respaldo de cada gasto.' },
+        { titulo: 'Todas las salidas', img: ['09-salidas-por-llenar', '10-salidas-cerradas'],
+          texto: '<b>Por llenar</b> junta lo que falta (aquí, la charla en borrador). <b>Cerradas</b> muestra cada salida con su público, evaluación, quién usó el traje y cuánto se gastó.' }
+      ] },
+    { id: 'estudio', titulo: 'Del día al video: el Estudio TikTok',
+      intro: 'Con lo grabado en la activación se arma un video. Cada idea pasa por cinco etapas, y el tablero muestra en cuál está cada una.',
+      pasos: [
+        { titulo: 'El tablero', img: ['11-estudio'],
+          texto: 'Arriba se anota una idea nueva en una frase. Las columnas son las etapas; las ideas más votadas 🔥 quedan primero. El video de la activación ya está en <b>Publicado</b>.' },
+        { titulo: 'Una idea: el gancho primero', img: ['12-idea'],
+          texto: 'El gancho es lo que pasa en los primeros 3 segundos. Sin gancho la idea no avanza a Diálogo.',
+          lleno: [['Idea', 'Hompy explica por qué el casco vence'], ['Gancho', '¿Sabías que tu casco tiene fecha de vencimiento?'], ['Objetivo', 'Educar · Tutorial / consejo · 30 s'], ['Hashtags', '#seguridad #prevencion #casco'], ['Votos', '🔥 2']] },
+        { titulo: 'El diálogo del video de la activación', img: ['13-dialogo'],
+          texto: 'Se escribe como un chat. Hompy no habla con el traje, por eso sus líneas son <b>acciones</b> (lo que se ve).',
+          lleno: [['Voz en off', 'Hompy fue al banco… y esto pasó.'], ['Hompy (acción)', 'Entra al hall y saluda a todos'], ['Niña', '¡Mamá, es Hompy!'], ['Hompy (acción)', 'Le regala un llavero y hace el gesto del casco'], ['Voz en off', 'Gracias, Banco Austral, por cuidar a los que trabajan.']] },
+        { titulo: 'El guión por escenas', img: ['14-guion'],
+          texto: 'Cada línea pasa a ser una escena, con plano, texto en pantalla, audio y segundos. La barra compara la duración con el objetivo (28 s de 30 s).' },
+        { titulo: 'La producción', img: ['15-produccion'],
+          texto: 'Lista de chequeo y grabación agendada en el calendario. En el ejemplo, el video de los guantes está grabado y le falta la edición y la aprobación.' },
+        { titulo: 'Publicado, con sus métricas', img: ['16-publicado'],
+          texto: 'El video de la activación, con el enlace de TikTok y las métricas a las 24 horas. SIGSO calcula la interacción.',
+          lleno: [['Vistas (24 h)', '3.240'], ['Me gusta · comentarios', '410 · 37'], ['Compartidos · guardados', '58 · 64'], ['Interacción', '17,6 %'], ['Qué aprendimos', 'Los niños reconociendo a Hompy enganchan. Repetir en la feria.']] }
+      ] },
+    { id: 'marca', titulo: 'La marca: Banco Austral',
+      intro: 'Todo lo que Hompy hizo con la marca queda junto en su ficha: las colaboraciones, las actividades y los videos.',
+      pasos: [
+        { titulo: 'Las marcas', img: ['17-marcas'],
+          texto: 'Tres marcas en distintos estados: <b>Activa</b>, <b>En conversación</b> y <b>Terminada</b>. Arriba, las colaboraciones del año y el valor estimado.' },
+        { titulo: 'La ficha de Banco Austral', img: ['18-marca'],
+          texto: 'El contacto (correo, teléfono y WhatsApp), las cifras con la marca y la historia: la colaboración con lo que Hompy entregó y lo que se recibió, la actividad del calendario y el video publicado.',
+          lleno: [['Colaboración', 'Activación en sucursales · Evento · Realizada'], ['Hompy entregó', 'Hompy 3 horas en la sucursal, fotos con clientes y un video para sus redes'], ['Recibimos', 'Aporte de $50.000, 200 llaveros y difusión en su Instagram'], ['Resultado', 'Quieren repetir en 3 sucursales el próximo mes · ★★★★★']] },
+        { titulo: 'Registrar la próxima colaboración', img: ['19-colaboracion'],
+          texto: 'Desde la ficha, <b>Nueva colaboración</b>. Después se marcan las actividades y los videos que la componen.',
+          lleno: [['Colaboración', 'Activación en 3 sucursales (noviembre)'], ['Tipo · estado', 'Evento · Propuesta'], ['Valor estimado', '$150.000'], ['Hompy entregará', 'Medio día en cada sucursal y un video resumen'], ['Recibiremos', 'Aporte de $150.000 y difusión en sus redes']] }
+      ] },
+    { id: 'reporte', titulo: 'El reporte del mes',
+      intro: 'SIGSO arma solo el resumen del mes comparado con septiembre, y lo entrega en PDF.',
+      pasos: [
+        { titulo: 'El reporte mensual en pantalla', img: ['20-reporte-mensual'],
+          texto: 'Hompy resume el mes en una frase. Después vienen las cifras contra septiembre, el aviso de las dos actividades sin reporte cerrado, las salidas, el <b>dinero del mes</b> y los videos y marcas.',
+          lleno: [['Gastado', '$51.390 (septiembre: $35.490)'], ['Presupuestado', '$112.000 en las actividades del mes'], ['Costo por persona', '$234 (gasto ÷ público)'], ['Aportes de marcas', '$50.000'], ['Por devolver', '$9.800 a Diego Muñoz (bencina de la visita a obra)'], ['Sobre el presupuesto', 'Activación ($37.990 de $30.000) · Visita a obra ($13.400 de $12.000)'], ['En qué se gastó', 'Transporte $24.300 · material $18.990 · estacionamiento $4.500 · otro $3.600']],
+          nota: 'El dinero del mes cuenta solo los reportes cerrados. La charla sigue en borrador: lo que se anote en ella sumará cuando se cierre.' },
+        { titulo: 'El PDF del mes', img: ['27-pdf-mensual'],
+          texto: 'El mismo resumen como documento: cifras, salidas, dinero, videos, colaboraciones y el estado del Estudio.' }
+      ] },
+    { id: 'celular', titulo: 'En el celular',
+      intro: 'El módulo se adapta a pantallas chicas: en el calendario, cada día muestra puntos de colores y sus actividades aparecen abajo.',
+      celular: true,
+      pasos: [
+        { titulo: 'Portada, calendario y Estudio', img: ['23-celular-portada', '24-celular-calendario', '25-celular-estudio'] }
+      ] }
+  ];
+
+  var NOMBRES = { '01-portada': 'Portada', '02-calendario': 'Calendario · vista Mes', '03-agenda': 'Calendario · vista Agenda', '04-nueva-actividad': 'Nueva actividad (formulario lleno)', '05-detalle-activacion': 'Detalle de la activación', '06-detalle-feria': 'Detalle de la feria', '07-salida-llenando': 'Reporte de salida mientras se llena', '08-salida-cerrada': 'Reporte de salida cerrado', '09-salidas-por-llenar': 'Salidas · Por llenar', '10-salidas-cerradas': 'Salidas · Cerradas', '11-estudio': 'Estudio TikTok', '12-idea': 'Idea', '13-dialogo': 'Diálogo', '14-guion': 'Guión', '15-produccion': 'Producción', '16-publicado': 'Publicado', '17-marcas': 'Marcas colaboradoras', '18-marca': 'Ficha de Banco Austral', '19-colaboracion': 'Nueva colaboración (formulario lleno)', '20-reporte-mensual': 'Reporte mensual', '21-tipos': 'Tipos de evento', '22-celebracion': 'Reporte cerrado', '23-celular-portada': 'Celular · portada', '24-celular-calendario': 'Celular · calendario', '25-celular-estudio': 'Celular · Estudio', '26-pdf-salida': 'PDF del reporte de salida', '27-pdf-mensual': 'PDF del reporte mensual' };
+
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function pantalla(id) {
+    var d = DIM[id] || [1600, 1000];
+    return '<figure class="pantalla"><button type="button" class="pantalla__marco" data-img="' + id + '" aria-label="Ampliar: ' + esc(NOMBRES[id]) + '">' +
+      '<span class="pantalla__lupa" aria-hidden="true">Ampliar</span>' +
+      '<img src="img/' + id + '.webp" alt="' + esc(NOMBRES[id]) + '" width="' + d[0] + '" height="' + d[1] + '" loading="lazy" decoding="async"></button>' +
+      '<figcaption>' + esc(NOMBRES[id]) + '</figcaption></figure>';
+  }
+  var html = '', indice = '', n = 0;
+  CAPITULOS.forEach(function (c, ci) {
+    indice += '<li><a href="#' + c.id + '"><span>' + String(ci + 1).padStart(2, '0') + '</span>' + esc(c.titulo) + '</a></li>';
+    html += '<section class="capitulo" id="' + c.id + '"><div class="capitulo__cab"><span class="capitulo__n">' + String(ci + 1).padStart(2, '0') + '</span><h2>' + esc(c.titulo) + '</h2></div>' +
+      '<p class="capitulo__intro">' + esc(c.intro) + '</p>' +
+      (c.linea ? '<ol class="linea-caso" aria-label="El caso, en orden">' + c.linea.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ol>' : '');
+    c.pasos.forEach(function (p, pi) {
+      n++;
+      html += '<article class="paso"><div class="paso__cab"><span class="paso__n">' + (ci + 1) + '.' + (pi + 1) + '</span><h3>' + esc(p.titulo) + '</h3></div>' +
+        (p.texto ? '<p class="paso__texto">' + p.texto + '</p>' : '') +
+        (p.lleno ? '<dl class="lleno"><span class="lleno__titulo">Así quedó lleno</span>' + p.lleno.map(function (kv) { return '<div><dt>' + esc(kv[0]) + '</dt><dd>' + esc(kv[1]) + '</dd></div>'; }).join('') + '</dl>' : '') +
+        (p.nota ? '<p class="nota">' + esc(p.nota) + '</p>' : '') +
+        '<div class="pantallas' + (c.celular ? ' pantallas--celular' : '') + '">' + p.img.map(pantalla).join('') + '</div></article>';
+    });
+    html += '</section>';
+  });
+  document.getElementById('pasos').innerHTML = html;
+  document.getElementById('indice').innerHTML = indice;
+
+  var dlg = document.getElementById('zoom'), zimg = document.getElementById('zoom-img'), ztit = document.getElementById('zoom-titulo');
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-img]');
+    if (!b) return;
+    var id = b.getAttribute('data-img'), d = DIM[id] || [1600, 1000];
+    zimg.src = 'img/' + id + '.webp'; zimg.alt = NOMBRES[id]; zimg.width = d[0]; zimg.height = d[1];
+    zimg.style.maxWidth = (id.indexOf('celular') !== -1 ? '420px' : '100%'); zimg.style.margin = '0 auto';
+    ztit.textContent = NOMBRES[id];
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  });
+  document.getElementById('zoom-cerrar').addEventListener('click', function () { dlg.close ? dlg.close() : dlg.removeAttribute('open'); });
+  dlg.addEventListener('click', function (ev) { if (ev.target === dlg) dlg.close(); });
+})();
+</script>
+
+</body>
+</html>

@@ -322,6 +322,9 @@
 .sb-manual:hover { background: var(--sb-hover-row); color: #fff; }
 .sb-manual[hidden] { display: none; }
 .sb-manual svg { color: var(--sb-text-muted); }
+a.sb-manual { text-decoration: none; }
+.sb-ayudas { align-self: flex-start; display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-ayudas:not(:has(> :not([hidden]))) { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .sb-riel, .sb-riel .sb-txt, .sb-punto, .sb-grupo__linea, .sb-panel-caja, .sb-mod, .sb-mod__flecha, .sb-n2__flecha, .sb-plegable,

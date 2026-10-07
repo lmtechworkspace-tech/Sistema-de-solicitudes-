@@ -12,7 +12,8 @@
     resumen: ['Cómo agendar las actividades de Hompy, llenar el reporte de cada salida a terreno (con su dinero: gastos, reembolsos y aportes), llevar una idea de TikTok hasta el video publicado, registrar las marcas con las que colabora y sacar el reporte del mes.'],
     antes: ['Hompy solo lo ven las cuentas que tienen el módulo **Hompy** (se asigna en Administración → Cuentas).',
       'Todo lo que anotan queda guardado con su nombre y la hora: no hace falta avisar por otro lado.',
-      'En los ejemplos trabajan Camila Rojas y Diego Muñoz, con marcas y lugares inventados (empresa de demostración).'],
+      'En los ejemplos trabajan Camila Rojas y Diego Muñoz, con marcas y lugares inventados (empresa de demostración).',
+      'Para ver cómo se ve todo el módulo lleno con un mes de actividades, toca **Ver ejemplo**, al lado de «Manual de uso».'],
     capitulos: [
       { id: 'portada', titulo: 'La portada de Hompy', ruta: '#/hompy/inicio',
         intro: ['La portada dice lo que viene y lo que falta, y Hompy lo comenta en su globo. En la barra lateral, Hompy aparece con su cara, en el bloque **Áreas**; el número naranja son los reportes de salida por llenar.'],

@@ -47,6 +47,8 @@
   var timerRiel_ = null;
 
   function esc(t) { return window.Componentes ? Componentes.escaparHtml(t) : String(t == null ? '' : t); }
+  // Páginas de ejemplo por módulo (frontend/ejemplos/): se abren en otra pestaña.
+  var EJEMPLOS = { hompy: 'ejemplos/hompy/' };
   function ico(n, t) { return window.Iconos ? Iconos.svg(n, { tam: t || 18 }) : ''; }
   function leerLS(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
   function guardarLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* sin storage */ } }
@@ -457,6 +459,13 @@
       var mn = window.SigsoManual ? SigsoManual.de(esDeInicio(o.moduloActivo) ? o.moduloActivo : m.id) : null;
       manual.hidden = !mn;
       if (mn) { manual.innerHTML = ico('libro', 14) + '<span>Manual de uso</span>'; manual.setAttribute('data-manual', mn.id); manual.title = 'Paso a paso de ' + (m.nombre || '') + ' (F1)'; }
+    }
+    // El ejemplo completo del módulo (datos de demostración), al lado del manual. Hoy solo Hompy.
+    var ejemplo = raiz_.querySelector('#sb-ejemplo');
+    if (ejemplo) {
+      var ej = EJEMPLOS[m.id];
+      ejemplo.hidden = !ej;
+      if (ej) { ejemplo.innerHTML = ico('ojo', 14) + '<span>Ver ejemplo</span>'; ejemplo.href = ej; ejemplo.title = 'Un mes de ' + (m.nombre || '') + ' con datos de demostración (se abre en otra pestaña)'; }
     }
     var accion = raiz_.querySelector('#sb-accion');
     if (accion) {
