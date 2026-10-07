@@ -155,6 +155,11 @@ const importarDetalle = B.conBoveda('', function (db, data, contexto, x) {
 
 // ---------------------------------------------------------------- pagadores
 
+/** Lo que se sabe de un pagador (o null). */
+function pagadorDe_(nombre) {
+  const r = db_().prepare('SELECT datos FROM FIN_PAGADORES WHERE huella = ?').get(huella_('pagador', nombre));
+  return r ? I.des_(r.datos) : null;
+}
 function pagadores_() {
   const m = new Map();
   db_().prepare('SELECT huella, datos FROM FIN_PAGADORES').all().forEach((r) => m.set(r.huella, I.des_(r.datos)));
@@ -400,5 +405,5 @@ function contextoPagadores_() {
 
 module.exports = {
   importarDetalle, revisarExcelBancos, guardarAlias, aprenderExcelBancos,
-  piezas_, sugerirConPagador_, contextoPagadores_, registrarPagador_, leerDetalle, leerExcelBancos, analizarDescripcion_, proponerAlias_, clientePorNombre_
+  piezas_, pagadorDe_, sugerirConPagador_, contextoPagadores_, registrarPagador_, leerDetalle, leerExcelBancos, analizarDescripcion_, proponerAlias_, clientePorNombre_
 };

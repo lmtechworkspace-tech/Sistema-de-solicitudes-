@@ -457,3 +457,15 @@
 /* Etapa B: las 9 pestañas de la bóveda bajan de línea en vez de ensanchar la página. */
 .fin2 .sx2-cabecera__acciones { min-width: 0; max-width: 100%; }
 .fin2 .sx2-cabecera__acciones .sx2-segmento { flex-wrap: wrap; max-width: 100%; }
+
+/* --- Etapa C: avisos antes de guardar --------------------------------------- */
+.fin2-avisos { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--sx-borde); background: var(--sx-superficie-2); font-size: .8125rem; }
+.fin2-avisos ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.fin2-aviso { display: flex; gap: 8px; align-items: flex-start; line-height: 1.35; }
+.fin2-aviso svg { flex: none; margin-top: 2px; }
+.fin2-aviso--alerta svg { color: var(--sx-alerta); }
+.fin2-aviso--info { color: var(--sx-texto-2); } .fin2-aviso--info svg { color: var(--sx-texto-3); }
+.fin2-avisos--insiste { border-color: var(--sx-alerta); background: var(--sx-alerta-suave); animation: fin2-insiste .4s ease; }
+@keyframes fin2-insiste { 0%, 100% { transform: none; } 30% { transform: translateX(-4px); } 60% { transform: translateX(4px); } }
+@media (prefers-reduced-motion: reduce) { .fin2-avisos--insiste { animation: none; } }
+.fin2-mov--aviso { background: color-mix(in srgb, var(--sx-alerta) 8%, transparent); border-left-color: var(--sx-alerta); }

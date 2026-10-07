@@ -100,6 +100,7 @@ const FinanzasPresupuesto = require('../logica/finanzasPresupuesto');
 const FinanzasCierre = require('../logica/finanzasCierre');
 const FinanzasPagadores = require('../logica/finanzasPagadores');
 const FinanzasMes = require('../logica/finanzasMes');
+const FinanzasAvisos = require('../logica/finanzasAvisos');
 const Credenciales = require('../logica/credenciales');
 const Hompy = require('../logica/hompy');
 
@@ -729,6 +730,7 @@ const ACCIONES = {
   finanzasParalelo: (db, data, contexto) => FinanzasCierre.paralelo(db, data, contexto),
   finanzasPasoRetiro: (db, data, contexto) => FinanzasCierre.marcarPasoRetiro(db, data, contexto),
   // Etapa A del rediseño: detalle del banco, Excel BANCOS (nombres cortos) y pagadores.
+  finanzasRevisarAntes: (db, data, contexto) => FinanzasAvisos.revisarAntes(db, data, contexto),
   finanzasElMes: (db, data, contexto) => FinanzasMes.elMes(db, data, contexto),
   finanzasImportarDetalle: (db, data, contexto) => FinanzasPagadores.importarDetalle(db, data, contexto),
   finanzasRevisarExcelBancos: (db, data, contexto) => FinanzasPagadores.revisarExcelBancos(db, data, contexto),

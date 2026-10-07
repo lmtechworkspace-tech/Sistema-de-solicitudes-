@@ -16,7 +16,7 @@
   var U = UIv2;
   var x_ = null;                 // contexto que entrega finanzas-v2.js
   var cat_ = null;               // tipos, empresas, clientes
-  var mov_ = { periodo: '', filtro: 'pendientes', datos: null, sel: {} };
+  var mov_ = { periodo: '', filtro: 'pendientes', datos: null, sel: {}, avisos: {} };   // avisos: id → texto (Etapa C, lotes)
   var revisiones_ = [];          // cartolas leídas y revisadas, aún sin importar
 
   function txt(v) { return U.esc(String(v == null ? '' : v)); }
@@ -320,7 +320,7 @@
       if (!x.vigente(t)) return;
       var r = rs[0];
       if (!r || !r.ok) { if (r && !r.boveda_cerrada) x.pagina(x.cab('Movimientos') + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: r.message || '' }) })); return; }
-      mov_.datos = r.data; mov_.periodo = r.data.periodo; mov_.sel = {};
+      mov_.datos = r.data; mov_.periodo = r.data.periodo; mov_.sel = {}; mov_.avisos = {};
       pintarMovimientos();
     });
   }
@@ -432,7 +432,9 @@
     var estado = m.estado === 'CONFIRMADO' ? '<span class="fin2-que__eti fin2-que__eti--ok">' + U.ico('check', 12) + 'Confirmado</span>'
       : g === 'propuesta' ? '<span class="fin2-que__eti fin2-que__eti--' + cert + '">' + (cert === 'alta' ? 'Segura' : 'Propuesta') + '</span>'
       : '<span class="fin2-que__eti fin2-que__eti--baja">Falta decir qué es</span>';
-    return '<div class="fin2-mov fin2-mov--' + cert + (panel_ && panel_.id === m.id ? ' fin2-mov--abierto' : '') + '" role="listitem" tabindex="0" data-id="' + txt(m.id) + '">' +
+    if (conAviso) estado = '<span class="fin2-que__eti fin2-que__eti--media">' + U.ico('alerta', 12) + 'Revisar el aviso</span>';
+    var conAviso = m.estado !== 'CONFIRMADO' && mov_.avisos[m.id];
+    return '<div class="fin2-mov fin2-mov--' + cert + (panel_ && panel_.id === m.id ? ' fin2-mov--abierto' : '') + (conAviso ? ' fin2-mov--aviso' : '') + '" role="listitem" tabindex="0" data-id="' + txt(m.id) + '"' + (conAviso ? ' title="' + txt(conAviso) + '"' : '') + '>' +
       '<span class="fin2-chk"><input type="checkbox" class="js-finm-chk"' + (mov_.sel[m.id] ? ' checked' : '') + (g !== 'propuesta' ? ' disabled' : '') + ' aria-label="Marcar"></span>' +
       '<span class="fin2-mov__fecha">' + txt(fechaCorta(m.fecha)) + '</span>' +
       '<span class="fin2-mov__txt"><b class="fin2-glosa">' + txt(m.glosa) + '</b>' + pistas(m, true) + '</span>' +
@@ -529,6 +531,7 @@
           '<span><b>' + txt(t.nombre) + '</b><small>' + txt(AYUDA_TIPO[t.id] || '') + '</small></span></label>';
       }).join('') + '</div></section>' +
       '<section class="fin2-p-sec js-finm-det">' + (c.partes ? '' : detalle(c)) + '</section>' +
+      '<div class="js-finm-avisos" aria-live="polite"></div>' +
       '<label class="fin2-campo"><span>Nota (opcional)</span><input class="fin2-input fin2-input--sm js-finm-nota" value="' + txt(c.nota || '') + '" maxlength="300" placeholder="Ej.: pagó la hija del cliente"></label>' +
       '<div class="js-finm-zona-dividir">' + (c.partes ? cajaDividir(m, c.partes) : '<button type="button" class="fin2-enlace js-finm-dividir">' + U.ico('derivar', 14) + 'Esta transferencia es de varios clientes o conceptos: dividirla</button>') + '</div>' +
     '</div>';
@@ -545,6 +548,7 @@
     panel_.api.el.classList.add('fin2-panel');
     enlazarPanel(panel_.api.el);
     var cajaYa = panel_.api.el.querySelector('.fin2-dividir'); if (cajaYa) faltaDividir(cajaYa);
+    revisarPanel(panel_.api.el.querySelector('.fin2-p'));
     marcarAbierto();
     var fila_ = document.querySelector('.fin2-mov[data-id="' + id + '"]'); if (fila_ && fila_.scrollIntoView) fila_.scrollIntoView({ block: 'nearest' });
   }
@@ -553,12 +557,72 @@
     if (panel_) { var f = document.querySelector('.fin2-mov[data-id="' + panel_.id + '"]'); if (f) f.classList.add('fin2-mov--abierto'); }
   }
   function cambiarPanel(id) { if (panel_) panel_.cambiando = true; abrirPanel(id); }
+  // --- Etapa C: avisos antes de guardar ---------------------------------------------------
+  // El panel revisa mientras se llena; al guardar, si hay alertas, la primera vez solo
+  // las muestra y cambia el botón a «Guardar igual».
+  function itemPanel(el) {
+    var caja = el.querySelector('.fin2-dividir');
+    if (caja) return itemDividir(caja);
+    var it = leerFila(el);
+    if (it._clienteEscrito) { aviso('Hay un cliente escrito que no está en la lista de SIGSO. Elígelo de la lista.'); return null; }
+    return it;
+  }
+  function pintarAvisos(el, avisos, insistir) {
+    var z = el.querySelector('.js-finm-avisos'); if (!z) return;
+    if (!avisos.length) { z.innerHTML = ''; return; }
+    var alertas = avisos.filter(function (a) { return a.nivel === 'alerta'; }).length;
+    z.innerHTML = '<div class="fin2-avisos' + (insistir ? ' fin2-avisos--insiste' : '') + '">' +
+      (insistir ? '<b>Antes de guardar, revisa ' + (alertas === 1 ? 'esto' : 'estos ' + alertas + ' avisos') + '.</b> Si está bien así, presiona «Guardar igual».' : '') +
+      '<ul>' + avisos.map(function (a) {
+        return '<li class="fin2-aviso fin2-aviso--' + a.nivel + '">' + U.ico(a.nivel === 'alerta' ? 'alerta' : 'info', 14) + '<span>' + txt(a.texto) + '</span></li>';
+      }).join('') + '</ul></div>';
+  }
+  var revisarT_ = null;
+  function revisarPanel(el, luego) {
+    clearTimeout(revisarT_);
+    revisarT_ = setTimeout(function () { revisarAhora(el); }, luego || 0);
+  }
+  function revisarAhora(el) {
+    if (!el || !el.isConnected) return Promise.resolve(null);
+    var caja = el.querySelector('.fin2-dividir');
+    var it = caja ? itemDividir(caja, true) : leerFila(el);
+    if (!it || (!it.tipo && !it.partes)) { pintarAvisos(el, []); return Promise.resolve({ avisos: [], alertas: 0 }); }
+    delete it._clienteEscrito;
+    var firma = JSON.stringify(it);
+    return x_.api('finanzasRevisarAntes', { items: [it] }).then(function (r) {
+      if (!r || !r.ok || !el.isConnected) return null;
+      var av = (r.data.items[0] || {}).avisos || [];
+      // Si cambió lo elegido, el permiso de «Guardar igual» ya no vale.
+      if (el.dataset.firma !== firma) { el.dataset.firma = firma; el.dataset.guardarIgual = ''; botonesGuardar(el, false); }
+      pintarAvisos(el, av, el.dataset.guardarIgual === '1');
+      return { avisos: av, alertas: av.filter(function (a) { return a.nivel === 'alerta'; }).length, firma: firma };
+    });
+  }
+  function botonesGuardar(el, igual) {
+    var pie = el.closest('.sx2-drawer__panel'); if (!pie) return;
+    var b1 = pie.querySelector('.js-finm-p-ok'), b2 = pie.querySelector('.js-finm-p-ok-sig');
+    if (b1) b1.lastChild.textContent = igual ? 'Guardar igual' : 'Guardar';
+    if (b2) b2.lastChild.textContent = igual ? 'Guardar igual y seguir' : 'Guardar y siguiente';
+  }
   function guardarPanel(el, siguiente) {
+    var it = itemPanel(el);
+    if (!it) return;
+    clearTimeout(revisarT_);
+    revisarAhora(el).then(function (rv) {
+      if (rv && rv.alertas && el.dataset.guardarIgual !== '1') {
+        el.dataset.guardarIgual = '1';
+        botonesGuardar(el, true);
+        pintarAvisos(el, rv.avisos, true);
+        var z = el.querySelector('.js-finm-avisos'); if (z && z.scrollIntoView) z.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
+      }
+      guardarPanelYa(el, it, siguiente);
+    });
+  }
+  function guardarPanelYa(el, it, siguiente) {
     var id = el.dataset.id;
     var sig = vecino(id, 1);
-    var caja = el.querySelector('.fin2-dividir');
-    var p = caja ? guardarDividir(caja) : guardar([leerFila(el)]);
-    if (!p) return;
+    var p = guardar([it]);
     p.then(function (res) {
       if (!res || !res.hechos) return;
       if (!siguiente) { if (panel_) { panel_.cambiando = false; panel_.api.cerrar(); } return; }
@@ -601,9 +665,9 @@
     el.innerHTML = dif === 0 ? '<span class="fin2-pos">✓ Suma exacta</span>' : dif > 0 ? 'Falta asignar <b>' + plata(dif) + '</b>' : '<span class="fin2-neg">Te pasaste por ' + plata(-dif) + '</span>';
     caja.dataset.cuadra = dif === 0 ? '1' : '';
   }
-  function guardarDividir(caja) {
+  function itemDividir(caja, callado) {
     var el = caja.closest('.fin2-p');
-    if (!caja.dataset.cuadra) { aviso('Las partes tienen que sumar exacto el monto del movimiento.'); return null; }
+    if (!caja.dataset.cuadra) { if (!callado) aviso('Las partes tienen que sumar exacto el monto del movimiento.'); return null; }
     var partes = [], malo = '';
     caja.querySelectorAll('.js-finm-parte').forEach(function (d) {
       var q = function (s) { var e = d.querySelector(s); return e ? e.value.trim() : ''; };
@@ -614,9 +678,32 @@
       partes.push({ monto: montoDe(q('.js-finm-pmonto')), tipo: q('.js-finm-ptipo'), cuenta: q('.js-finm-cuenta'), cliente_id: cli ? cli.id : '', empresa: q('.js-finm-empresa') });
     });
     if (partes.length < 2) malo = malo || 'Para dividir se necesitan al menos dos partes.';
-    if (malo) { aviso(malo); return null; }
+    if (malo) { if (!callado) aviso(malo); return null; }
     var nota = el.querySelector('.js-finm-nota') ? el.querySelector('.js-finm-nota').value.trim() : '';
-    return guardar([{ id: el.dataset.id, partes: partes, nota: nota }]);
+    return { id: el.dataset.id, partes: partes, nota: nota };
+  }
+
+  // Lotes (aceptar de a una, marcadas, seguras): lo que tiene alertas NO se confirma solo.
+  function confirmarConRevision(items, boton) {
+    if (!items.length) return;
+    if (boton) boton.disabled = true;
+    x_.api('finanzasRevisarAntes', { items: items }).then(function (r) {
+      if (!r || !r.ok) { if (boton) boton.disabled = false; if (r && !r.boveda_cerrada) aviso((r && r.message) || 'No se pudo revisar.'); return; }
+      var conAlerta = {};
+      r.data.items.forEach(function (x) {
+        var al = x.avisos.filter(function (a) { return a.nivel === 'alerta'; });
+        if (al.length) conAlerta[x.id] = al.map(function (a) { return a.texto; }).join(' · ');
+      });
+      var limpios = items.filter(function (it) { return !conAlerta[it.id]; });
+      var n = Object.keys(conAlerta).length;
+      if (items.length === 1 && n) { abrirPanel(items[0].id); aviso('Esta propuesta tiene un aviso: revísalo antes de confirmar.'); return; }
+      var hecho = limpios.length ? guardar(limpios) : Promise.resolve(null);
+      hecho.then(function () {
+        Object.keys(conAlerta).forEach(function (id) { mov_.avisos[id] = conAlerta[id]; });
+        if (n) { refrescarLista(); aviso((limpios.length ? limpios.length + ' confirmado(s). ' : '') + n + ' quedaron sin confirmar porque tienen avisos: están marcados «Revisar el aviso».'); }
+        if (boton) boton.disabled = false;
+      });
+    });
   }
 
   // =====================================================================================
@@ -636,6 +723,10 @@
     });
     el.addEventListener('input', function (ev) {
       if (ev.target.classList.contains('js-finm-pmonto')) faltaDividir(ev.target.closest('.fin2-dividir'));
+      if (!ev.target.classList.contains('js-finm-nota')) revisarPanel(el.querySelector('.fin2-p'), 450);
+    });
+    el.addEventListener('change', function (ev) {
+      if (!ev.target.classList.contains('js-finm-nota')) revisarPanel(el.querySelector('.fin2-p'), 150);
     });
     el.addEventListener('keydown', function (ev) {
       if (ev.key === 'Enter' && ev.target.tagName !== 'BUTTON' && ev.target.tagName !== 'TEXTAREA' && ev.target.closest('.fin2-p')) {
@@ -725,18 +816,18 @@
       else if (b.classList.contains('js-finb-ir-bancos')) { x_.ir('bancos'); }
       else if (b.classList.contains('js-finm-filtro') && b.dataset.id) { mov_.filtro = b.dataset.id; mov_.sel = {}; refrescarLista(); }
       else if (b.classList.contains('js-finm-abrir')) { abrirPanel(b.closest('.fin2-mov').dataset.id); }
-      else if (b.classList.contains('js-finm-aceptar')) { var m0 = movDe(b.closest('.fin2-mov').dataset.id); if (m0) { b.disabled = true; guardar([desdeSugerencia(m0)]); } }
+      else if (b.classList.contains('js-finm-aceptar')) { var m0 = movDe(b.closest('.fin2-mov').dataset.id); if (m0) confirmarConRevision([desdeSugerencia(m0)], b); }
       else if (b.classList.contains('js-finm-seguras')) {
-        b.disabled = true;
-        x_.api('finanzasConfirmarSugeridas', { periodo: mov_.periodo }).then(function (r) {
-          if (r && r.ok) { aviso(r.data.hechos + ' movimiento(s) confirmados.'); recargar(); }
-        });
+        // Etapa C: también las seguras pasan por los avisos (lo que tiene alerta queda para revisar).
+        var seguras = mov_.datos.movimientos.filter(function (m) { return m.estado !== 'CONFIRMADO' && m.sugerencia && m.sugerencia.certeza === 'alta' && completa(m.sugerencia, sentidoDe(m)); })
+          .map(function (m) { return Object.assign(desdeSugerencia(m), { recordar: false }); });
+        confirmarConRevision(seguras, b);
       } else if (b.classList.contains('js-finm-marcar')) {
         document.querySelectorAll('.fin2-mov .js-finm-chk:not(:disabled)').forEach(function (chk) { chk.checked = true; mov_.sel[chk.closest('.fin2-mov').dataset.id] = true; });
         actualizarSel();
       } else if (b.classList.contains('js-finm-conf-sel')) {
         var items = Object.keys(mov_.sel).filter(function (k) { return mov_.sel[k]; }).map(movDe).filter(Boolean).map(desdeSugerencia);
-        if (items.length) { b.disabled = true; guardar(items); }
+        confirmarConRevision(items, b);
       }
     });
   }
