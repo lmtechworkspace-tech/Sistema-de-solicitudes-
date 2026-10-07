@@ -89,7 +89,7 @@
     });
     var nDeuda = d.clientes.filter(function (c) { return c.por_cobrar > 0; }).length, nFavor = d.clientes.filter(function (c) { return c.saldo_a_favor > 0; }).length;
     x_.pagina(x_.cab('Cobranza') +
-      '<div class="sx2-fila-kpis">' +
+      '<div class="sx2-fila-kpis fin2-kpis5">' +
         U.kpi({ etiqueta: 'Por cobrar', valor: plata(T.por_cobrar), icono: 'recibo', i: 0 }) +
         U.kpi({ etiqueta: 'Vencido', valor: plata(T.vencido), icono: 'alerta', tono: T.vencido > 0 ? 'critico' : 'ok', i: 1 }) +
         U.kpi({ etiqueta: 'Más de 60 días', valor: plata(T.mas_60), icono: 'reloj', tono: T.mas_60 > 0 ? 'critico' : 'ok', i: 2 }) +

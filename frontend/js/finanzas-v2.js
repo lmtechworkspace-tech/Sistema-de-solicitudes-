@@ -243,7 +243,7 @@
       '<div class="fin2-hero sx2-entra">' +
         '<div><p class="fin2-hero__k">Hola, ' + txt(String(d.nombre || '').split(' ')[0]) + '</p>' +
         '<h2>La bóveda está cerrada para el resto de SIGSO.</h2>' +
-        '<p>Ya se pueden subir las cartolas del banco en <b>Bancos</b> y revisarlas en <b>Movimientos</b>. Más adelante aparecerán aquí la caja, la cobranza y el resultado de cada empresa.</p></div>' +
+        '<p>Aquí ves quién tiene acceso, cómo se protege y quién entró. El trabajo del mes está en <b>El mes</b>; las cifras, en <b>Tablero</b>.</p></div>' +
         '<span class="fin2-hero__ico" aria-hidden="true">' + U.ico('escudo', 44) + '</span>' +
       '</div>' +
       '<div class="sx2-fila-kpis">' +
@@ -263,14 +263,12 @@
         '</ul>' }) +
         U.card({ titulo: 'Últimos ingresos', icono: 'reloj', i: 2, accion: { texto: 'Ver bitácora', clase: 'js-fin-ir-bitacora' }, cuerpo:
           (ingresos ? '<ul class="fin2-ing">' + ingresos + '</ul>' : U.vacio({ icono: 'reloj', texto: 'Aún no hay ingresos.' })) }) +
-        U.card({ titulo: 'Lo que viene', icono: 'capas', i: 3, cuerpo: '<ol class="fin2-etapas">' +
-          '<li class="fin2-etapa--hecha"><b>E1 · La bóveda</b><span>Candado, autenticador y bitácora</span></li>' +
-          '<li class="fin2-etapa--hecha"><b>E2 · Bancos y cartolas</b><span>Subir la cartola, cuadrar y clasificar</span></li>' +
-          '<li class="fin2-etapa--hecha"><b>E3 · Clientes y cobranza</b><span>Facturas del SII, abonos y cartera real</span></li>' +
-          '<li class="fin2-etapa--hecha"><b>E4 · Tablero de gerencia</b><span>Gráficos e informe mensual</span></li>' +
-          '<li class="fin2-etapa--hecha"><b>E5 · Presupuesto</b><span>Proyectado vs. real, gastos compartidos y meses de caja</span></li>' +
-          '<li class="fin2-etapa--hecha"><b>E6 · Retiro de la planilla</b><span>Cierre de mes, paralelo y lista de retiro</span></li>' +
-        '</ol>' }) +
+        U.card({ titulo: 'Buenas prácticas', icono: 'bombilla', i: 3, cuerpo: '<ul class="fin2-capas">' +
+          capa(true, 'El código es solo tuyo', 'No lo dictes ni lo mandes por WhatsApp. Nadie de SIGSO te lo va a pedir.') +
+          capa(true, 'Cierra la bóveda al terminar', 'Con [Cerrar bóveda] o cerrando la pestaña. Más aún en un computador compartido.') +
+          capa(true, '¿Cambiaste o perdiste el teléfono?', 'Avisa al administrador: reinicia tu autenticador y lo vuelves a activar.') +
+          capa(true, 'Mira la bitácora de vez en cuando', 'Si ves un ingreso que no reconoces, avisa de inmediato.') +
+        '</ul>' }) +
       '</div>');
     if (U.animar) U.animar(raiz_);
   }

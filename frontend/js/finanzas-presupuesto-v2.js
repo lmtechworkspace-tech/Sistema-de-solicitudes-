@@ -40,6 +40,8 @@
       if (!x.vigente(t)) return;
       if (!r || !r.ok) { if (r && !r.boveda_cerrada) x.pagina(x.cab('Presupuesto', controles()) + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: r.message || '' }) })); return; }
       est_.datos = r.data;
+      // Hasta que se elija otro, el mes es el último con movimientos (el mes en curso suele estar vacío).
+      if (!est_.mesElegido && r.data.ultimo_mes_con_datos !== null && r.data.ultimo_mes_con_datos !== undefined && r.data.ultimo_mes_con_datos < est_.mes) est_.mes = r.data.ultimo_mes_con_datos;
       if (est_.modo === 'editar') pintarEditar(); else pintarComparar();
     });
   }
@@ -164,7 +166,7 @@
       var e = ev.target;
       if (e.classList.contains('js-finp-anio')) { est_.anio = Number(e.value); ver(x_); }
       else if (e.classList.contains('js-finp-emp')) { est_.empresa = e.value; ver(x_); }
-      else if (e.classList.contains('js-finp-mes')) { est_.mes = Number(e.value); pintarComparar(); }
+      else if (e.classList.contains('js-finp-mes')) { est_.mes = Number(e.value); est_.mesElegido = true; pintarComparar(); }
       else if (e.classList.contains('js-finp-todas')) { est_.todas = e.checked; pintarComparar(); }
     });
     raiz.addEventListener('input', function (ev) { if (ev.target.classList.contains('js-finp-celda')) recalcularFila(ev.target.closest('tr')); });

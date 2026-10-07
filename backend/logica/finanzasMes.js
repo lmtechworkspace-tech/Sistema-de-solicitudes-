@@ -61,7 +61,7 @@ function plazo_(fecha, hoy, hecho) {
   const n = diasEntre_(hoy, fecha);
   if (n < 0) return { fecha, estado: 'atrasado', texto: 'atrasado ' + (-n) + ' día' + (n === -1 ? '' : 's') };
   if (n === 0) return { fecha, estado: 'hoy', texto: 'vence hoy' };
-  return { fecha, estado: n <= 2 ? 'pronto' : 'a_tiempo', texto: 'quedan ' + n + ' día' + (n === 1 ? '' : 's') };
+  return { fecha, estado: n <= 2 ? 'pronto' : 'a_tiempo', texto: (n === 1 ? 'queda 1 día' : 'quedan ' + n + ' días') };
 }
 
 /** Los pasos del mes, en orden. */

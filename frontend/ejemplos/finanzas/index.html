@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Un mes en Finanzas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600..800&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!-- Ejemplo del módulo Finanzas con datos de DEMOSTRACIÓN (clientes, personas y montos inventados). Se abre con «Ver ejemplo» en la barra de Finanzas. -->
+<style>
+/* Recorrido de un mes: índice fijo a la izquierda, pasos en orden a la derecha; cada paso = qué se hizo + lo que se llenó + la pantalla.
+   Identidad propia: un libro de cuentas (papel, tinta azul, renglones). */
+:root {
+  --bg: #F4F3EE; --surface: #FFFFFF; --ink: #15233B; --muted: #5B6577; --line: #DDDAD0;
+  --tinta: #1D4ED8; --tinta-soft: #E2E9FB; --verde: #0F7A55; --verde-soft: #DDF2E8; --rojo: #B42318; --rojo-soft: #FBE5E2;
+  --renglon: #C9D6EA;
+  --f-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --f-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10141B; --surface: #171D27; --ink: #E8EBF1; --muted: #9AA3B2; --line: #2A3342;
+  --tinta: #7EA2F7; --tinta-soft: #1B2A47; --verde: #4CC394; --verde-soft: #13301F; --rojo: #F2877B; --rojo-soft: #3A1E1B;
+  --renglon: #2C3A52; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10141B; --surface: #171D27; --ink: #E8EBF1; --muted: #9AA3B2; --line: #2A3342;
+  --tinta: #7EA2F7; --tinta-soft: #1B2A47; --verde: #4CC394; --verde-soft: #13301F; --rojo: #F2877B; --rojo-soft: #3A1E1B;
+  --renglon: #2C3A52; color-scheme: dark }
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 1rem/1.6 var(--f-body); }
+.envoltura { max-width: 1240px; margin: 0 auto; padding-inline: clamp(16px, 4vw, 40px); padding-block: 0 72px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+a { color: var(--tinta); }
+:focus-visible { outline: 3px solid var(--tinta); outline-offset: 3px; border-radius: 4px; }
+
+/* Renglones del libro de cuentas: el separador propio de esta página (doble línea, como el cierre de una columna). */
+.renglones { height: 7px; border-top: 1px solid var(--renglon); border-bottom: 3px double var(--renglon); }
+
+/* Encabezado */
+.cabeza { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 28px; padding-top: 40px; }
+.cabeza__ceja { font: 600 .75rem/1 var(--f-body); letter-spacing: .12em; text-transform: uppercase; color: var(--tinta); }
+.cabeza h1 { font-size: clamp(2.4rem, 1.6rem + 3.4vw, 4.2rem); font-weight: 800; line-height: 1; margin: 14px 0 16px; }
+.cabeza p { margin: 0; max-width: 62ch; color: var(--muted); font-size: 1.0625rem; }
+.aviso-demo { display: inline-flex; gap: 8px; align-items: center; margin-top: 18px; padding: 8px 12px; border-radius: 8px; background: var(--tinta-soft); font-size: .875rem; }
+.aviso-demo b { font-weight: 700; }
+.volver { margin-left: 12px; font: 600 .8125rem/1 var(--f-body); }
+/* El mes en cifras, como el pie de una columna del libro */
+.cifras { margin: 0; display: grid; grid-template-columns: repeat(2, auto); gap: 6px 22px; padding: 16px 18px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); font-size: .875rem; }
+.cifras dt { color: var(--muted); }
+.cifras dd { margin: 0; text-align: right; font: 500 .9375rem/1.4 var(--f-mono); font-variant-numeric: tabular-nums; }
+.cifras .total { border-top: 3px double var(--renglon); padding-top: 6px; font-weight: 700; }
+.cabeza + .renglones { margin: 28px 0 32px; }
+
+/* Cuerpo: índice + pasos */
+.cuerpo { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 40px; align-items: start; }
+.indice { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); font-size: .875rem; }
+.indice h2 { font: 700 .75rem/1 var(--f-body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+.indice ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.indice a { display: grid; grid-template-columns: 26px 1fr; gap: 6px; padding: 7px 8px; border-radius: 8px; color: var(--ink); text-decoration: none; line-height: 1.3; }
+.indice a span { font-family: var(--f-mono); color: var(--muted); font-size: .75rem; padding-top: 2px; }
+.indice a:hover { background: var(--surface); }
+
+.capitulo { padding-bottom: 28px; }
+.capitulo + .capitulo { border-top: 1px solid var(--line); padding-top: 40px; }
+.capitulo__cab { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: baseline; margin-bottom: 8px; }
+.capitulo__n { font: 700 2.4rem/1 var(--f-mono); color: var(--tinta); font-variant-numeric: tabular-nums; }
+.capitulo h2 { font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem); font-weight: 700; }
+.capitulo__intro { margin: 0 0 24px; color: var(--muted); max-width: 66ch; }
+
+.linea-caso { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 28px; padding: 0; counter-reset: c; }
+.linea-caso li { counter-increment: c; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: .875rem; }
+.linea-caso li::before { content: counter(c); width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--tinta); color: #fff; font: 700 .75rem/1 var(--f-body); }
+
+.paso { display: grid; gap: 14px; margin-bottom: 40px; }
+.paso__cab { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.paso__n { font: 500 .8125rem/1 var(--f-mono); color: var(--tinta); }
+.paso h3 { font-size: 1.25rem; font-weight: 700; }
+.paso__texto { margin: 0; max-width: 70ch; }
+.paso__texto b { font-weight: 700; }
+.lleno { margin: 0; padding: 14px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 22px;
+  background-image: repeating-linear-gradient(to bottom, transparent 0 31px, color-mix(in srgb, var(--renglon) 45%, transparent) 31px 32px); }
+.lleno__titulo { grid-column: 1 / -1; font: 700 .6875rem/1 var(--f-body); letter-spacing: .1em; text-transform: uppercase; color: var(--tinta); }
+.lleno div { min-width: 0; }
+.lleno dt { font-size: .75rem; color: var(--muted); }
+.lleno dd { margin: 1px 0 0; font: 500 .875rem/1.45 var(--f-mono); overflow-wrap: anywhere; }
+.nota { margin: 0; display: flex; gap: 10px; padding: 10px 14px; border-radius: 10px; background: var(--tinta-soft); font-size: .9375rem; max-width: 76ch; }
+.nota::before { content: "!"; flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--tinta); color: #fff; font: 800 .75rem/1 var(--f-body); margin-top: 2px; }
+
+.pantallas { display: grid; gap: 14px; }
+.pantallas--panel { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); align-items: start; }
+.pantallas--celular { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.pantalla { margin: 0; display: grid; gap: 6px; }
+.pantalla__marco { position: relative; display: block; width: 100%; max-height: 72vh; overflow: auto; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: zoom-in; text-align: left; }
+.pantalla__marco img { display: block; width: 100%; height: auto; max-width: 100%; }
+.pantalla__lupa { position: sticky; float: right; top: 10px; margin: 10px 10px -40px 0; padding: 5px 10px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 78%, transparent); color: var(--bg); font: 600 .75rem/1.2 var(--f-body); }
+.pantalla figcaption { font-size: .8125rem; color: var(--muted); }
+
+dialog.zoom { width: min(1500px, 96vw); max-height: 94vh; padding: 0; border: 0; border-radius: 14px; background: var(--surface); color: var(--ink); }
+dialog.zoom::backdrop { background: rgba(10, 14, 22, .72); }
+.zoom__barra { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--line); z-index: 1; }
+.zoom__barra b { font-size: .9375rem; }
+.zoom__cerrar { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 6px 12px; font: 600 .875rem/1 var(--f-body); cursor: pointer; }
+.zoom img { display: block; width: 100%; height: auto; }
+
+.pie { margin-top: 48px; color: var(--muted); font-size: .875rem; }
+.pie .renglones { margin-bottom: 18px; }
+
+@media (max-width: 900px) {
+  .cuerpo { grid-template-columns: minmax(0, 1fr); }
+  .indice { position: static; }
+  .indice ol { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .cabeza { grid-template-columns: minmax(0, 1fr); }
+  .capitulo__n { font-size: 1.9rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pantalla__marco { transition: border-color .2s, box-shadow .2s; }
+  .pantalla__marco:hover { border-color: var(--tinta); box-shadow: 0 10px 30px -18px var(--tinta); }
+}
+</style>
+</head>
+<body>
+
+<div class="envoltura">
+  <header class="cabeza">
+    <div>
+      <span class="cabeza__ceja">SIGSO · Finanzas · Ejemplo completo</span> <a class="volver" href="../../plataforma.html#/finanzas">Volver a SIGSO</a>
+      <h1>Un mes en Finanzas</h1>
+      <p>Así se deja listo un mes en la bóveda: se sube la última cartola y el detalle del banco, se enseñan los nombres del Excel BANCOS, se revisan los movimientos (con clientes que pagan desde otra cuenta, una transferencia que hay que dividir y un posible pago doble) y se leen el tablero, la cobranza y el cierre. Es el 2 de octubre y se trabaja septiembre.</p>
+      <span class="aviso-demo"><b>Datos de demostración.</b> Clientes, personas, cuentas y montos son inventados. No es información de producción.</span>
+    </div>
+    <dl class="cifras" aria-label="Septiembre en la demostración">
+      <dt>Movimientos del mes</dt><dd>26</dd>
+      <dt>Confirmados de una vez</dt><dd>4</dd>
+      <dt>Revisados en el panel</dt><dd>2</dd>
+      <dt>Detenidos por un aviso</dt><dd>1</dd>
+      <dt class="total">Agosto</dt><dd class="total">cerrado</dd>
+    </dl>
+  </header>
+  <div class="renglones" aria-hidden="true"></div>
+
+  <div class="cuerpo">
+    <nav class="indice" aria-label="Contenido">
+      <h2>Recorrido</h2>
+      <ol id="indice"></ol>
+    </nav>
+    <main id="pasos"></main>
+  </div>
+
+  <footer class="pie">
+    <div class="renglones" aria-hidden="true"></div>
+    Capturas tomadas de SIGSO con una empresa de demostración (Camila Rojas; Andes Montajes, Constructora Norte, Panadería Sol de Mayo, Inversiones Kappa y otros nombres inventados). El paso a paso está en el «Manual de uso» del módulo.
+  </footer>
+</div>
+
+<dialog class="zoom" id="zoom" aria-label="Pantalla ampliada">
+  <div class="zoom__barra"><b id="zoom-titulo"></b><button type="button" class="zoom__cerrar" id="zoom-cerrar">Cerrar</button></div>
+  <img id="zoom-img" alt="">
+</dialog>
+
+<script>
+(function () {
+  var DIM = {"01-candado":[666,674],"02-el-mes":[1656,2169],"03-bancos":[1656,1794],"04-cartola-revision":[1525,444],"05-detalle-aviso":[869,101],"06-nombres-cortos":[1525,1908],"07-movimientos":[1656,1631],"08-panel":[900,1350],"09-dividir":[900,1350],"10-opciones":[900,1350],"11-aviso":[900,1350],"12-lote":[1656,642],"13-el-mes-avance":[1656,2114],"14-tablero":[1656,3102],"15-cobranza":[1656,1820],"16-presupuesto":[1656,1985],"17-cierre":[1656,2155],"18-seguridad":[1656,1632],"19-bitacora":[1656,1274],"20-celular-el-mes":[780,1688],"21-celular-movimientos":[780,1688],"22-celular-panel":[780,1688]};
+
+  var CAPITULOS = [
+    { id: 'entrar', titulo: 'Abrir la bóveda y ver qué toca',
+      intro: 'Finanzas tiene su propio candado. Al abrirlo, la portada «El mes» dice qué falta para dejar listo septiembre y con qué fecha.',
+      pasos: [
+        { titulo: 'El código del autenticador', img: ['01-candado'],
+          texto: 'Camila abre Finanzas y escribe los 6 dígitos que muestra Google Authenticator en su teléfono. Cada código sirve una sola vez.' },
+        { titulo: 'El mes, paso a paso', img: ['02-el-mes'],
+          texto: 'Septiembre está a medio camino: el detalle del banco y el Excel ya se subieron, pero <b>falta la última cartola</b> (del 26 al 30). Por eso «Lo que toca ahora» es subir cartolas, con plazo el sábado 3. A la derecha, las fechas que vienen: Previred el 10 e IVA el 20.',
+          lleno: [['Trabajando en', 'Septiembre 2026'], ['Pasos listos', '2 de 5'], ['Toca ahora', 'Subir las cartolas del banco · queda 1 día'], ['Revisar', '16 de 23 confirmados · 1 segura, 4 con propuesta, 2 sin pista']] }
+      ] },
+    { id: 'banco', titulo: 'La cartola y el detalle del banco',
+      intro: 'La cartola del banco es la fuente de verdad. El detalle «Mis Movimientos» le pone nombre completo a cada transferencia.',
+      linea: ['Bajar la cartola en Excel', 'Revisar que cuadre', 'Importar', 'Agregar «Mis Movimientos»'],
+      pasos: [
+        { titulo: 'La pantalla Bancos', img: ['03-bancos'],
+          texto: 'La cuenta del BCI con su saldo, los dos botones para subir y la plata de clientes en custodia: lo que cada cliente mandó para sus imposiciones o IVA y lo que ya se pagó por él.' },
+        { titulo: 'La cartola del 26 al 30 de septiembre', img: ['04-cartola-revision'],
+          texto: 'Antes de guardar, el sistema revisa la cartola: <b>el saldo cuadra</b> movimiento a movimiento y con el resumen del banco. Tres movimientos nuevos; reconoce uno seguro, uno con sugerencia y uno sin pista.',
+          lleno: [['Archivo', 'Cartola_BCI_26-30_sep.xlsx'], ['Saldo anterior', '$9.710.300'], ['Entró · salió', '$139.000 · $35.700'], ['Saldo final', '$9.813.600']] },
+        { titulo: 'El detalle del banco', img: ['05-detalle-aviso'],
+          texto: 'Con el Excel «Mis Movimientos» del mes completo, los 26 movimientos quedan con el nombre de quien transfirió de verdad, y los pagos dicen si fueron a Previred, al SII o a la Tesorería.' }
+      ] },
+    { id: 'excel', titulo: 'El Excel BANCOS: los nombres cortos',
+      intro: 'Mientras se siga llenando el Excel BANCOS a mano, se sube: lo anotado queda como propuesta y el sistema aprende quién paga por quién.',
+      pasos: [
+        { titulo: 'Paso 1: los nombres que faltan', img: ['06-nombres-cortos'],
+          texto: 'Casi todos los nombres ya se enseñaron el mes pasado. Faltan dos: <b>KAPPA</b> (Inversiones Kappa, que paga por dos clientes) y <b>GONZALO P</b> (alguien que nunca había pagado). Camila los deja para decidirlos en Movimientos.',
+          nota: 'Cada nombre se enseña una sola vez. Los meses siguientes, la fila del Excel se reconoce sola.' }
+      ] },
+    { id: 'revisar', titulo: 'Revisar los movimientos',
+      intro: 'Cada movimiento hay que decir qué es. El sistema propone; Camila confirma. Aquí aparecen los casos difíciles del mes.',
+      linea: ['La lista del mes', 'Una transferencia doble', 'Un pagador de dos clientes', 'Un posible pago doble', 'El resto, en lote'],
+      pasos: [
+        { titulo: 'La lista del mes', img: ['07-movimientos'],
+          texto: 'Todo en una lista a lo ancho, sin barra hacia el lado. Cada fila trae lo que dice el banco, el nombre completo del detalle y lo que se anotó en el Excel. A la derecha, qué es: <b>Segura</b>, <b>Propuesta</b> o <b>Falta decir qué es</b>.' },
+        { titulo: 'La dueña de la panadería paga todo junto', img: ['08-panel', '09-dividir'],
+          texto: 'Marcela Fuentes transfirió $405.400 por Panadería Sol de Mayo. El Excel dice «ABONO», pero no es todo honorario: trae también la plata de las imposiciones. Camila <b>divide</b> la transferencia en dos partes que suman exacto.',
+          lleno: [['Parte 1', '$119.000 · Ingreso de la empresa · Servicio Mensual · Panadería Sol de Mayo'], ['Parte 2', '$286.400 · Fondo de cliente recibido · Imposiciones · Panadería Sol de Mayo'], ['Nota', 'Lo transfirió la dueña: honorario de septiembre + imposiciones']] },
+        { titulo: 'Inversiones Kappa paga por dos clientes', img: ['10-opciones'],
+          texto: 'Kappa ya había pagado por Eléctrica Pacífico y por Ferretería El Martillo. El sistema <b>no elige solo</b>: muestra los dos. Camila toca Eléctrica Pacífico (el monto calza con su factura) y guarda; el sistema lo recuerda.' },
+        { titulo: 'Andes paga dos veces en el mes', img: ['11-aviso'],
+          texto: 'Llega otra transferencia de $357.000 de Andes Montajes. Al guardar, el sistema avisa: <b>ya hay un pago igual el 01-09</b>. Camila no lo guarda todavía: va a preguntar si es un pago doble o el adelanto de octubre.',
+          nota: 'Con un aviso, el primer «Guardar» solo lo muestra y el botón cambia a «Guardar igual». Nada queda mal por apurarse, pero tampoco se bloquea.' },
+        { titulo: 'El resto, en lote', img: ['12-lote'],
+          texto: 'Con <b>Marcar las con propuesta</b> y <b>Confirmar marcadas</b> se confirma de una vez todo lo que tiene propuesta completa. Lo que tiene un aviso no se confirma: queda marcado «Revisar el aviso». Quedan 3 por revisar: el de Andes y dos sin pista.' },
+        { titulo: 'El mes, después', img: ['13-el-mes-avance'],
+          texto: 'La portada ya marca listas las cartolas, el detalle, el Excel y las ventas del SII. Ahora «toca» terminar de revisar: 23 de 26 confirmados.' }
+      ] },
+    { id: 'leer', titulo: 'Leer el mes',
+      intro: 'Con el mes casi revisado, las cifras ya dicen algo (todavía marcadas como provisorias).',
+      pasos: [
+        { titulo: 'El tablero', img: ['14-tablero'],
+          texto: 'Resultado, ingresos, gastos, caja y plata de clientes contra agosto; la <b>lectura del mes</b> en frases. Avisa que el Restaurante El Fogón quedó en negativo en custodia: se pagó su Previred y no hay registro de que haya mandado la plata.',
+          lleno: [['Resultado de septiembre', '$370 mil (provisorio)'], ['Caja al cierre', '$9,8 M · cubre 4,9 meses de gastos'], ['Plata de clientes', '$76 mil · no se puede gastar'], ['Entre empresas', 'Homeconsulting le debe $200.000 a HomePymes']] },
+        { titulo: 'La cobranza', img: ['15-cobranza'],
+          texto: 'Las facturas vienen del Registro de Ventas del SII y los pagos del banco se cruzan solos con ellas. En el ejemplo, lo de septiembre ya está pagado.' },
+        { titulo: 'El presupuesto', img: ['16-presupuesto'],
+          texto: 'Lo presupuestado contra lo real, por cuenta, del mes y del año. El mes que se muestra es el último con movimientos.' }
+      ] },
+    { id: 'cerrar', titulo: 'Cerrar y cuidar',
+      intro: 'Cuando todo está revisado, el mes se cierra y queda fijo. Agosto ya está cerrado.',
+      pasos: [
+        { titulo: 'El cierre', img: ['17-cierre'],
+          texto: 'Septiembre todavía no se puede cerrar (faltan 3 movimientos). Agosto está cerrado por Camila, con su resultado y su caja. Abajo, lo necesario para dejar la planilla SIGECO.' },
+        { titulo: 'Seguridad y bitácora', img: ['18-seguridad', '19-bitacora'],
+          texto: 'Quién tiene acceso, las capas de protección y todo lo hecho en la bóveda, encadenado: si alguien borrara una entrada, se notaría.' }
+      ] },
+    { id: 'celular', titulo: 'En el celular',
+      intro: 'La bóveda funciona en pantallas chicas: cada movimiento ocupa dos líneas y el panel ocupa toda la pantalla.',
+      celular: true,
+      pasos: [
+        { titulo: 'El mes, la lista y el panel', img: ['20-celular-el-mes', '21-celular-movimientos', '22-celular-panel'] }
+      ] }
+  ];
+
+  var NOMBRES = { '01-candado': 'El candado de la bóveda', '02-el-mes': 'El mes, paso a paso', '03-bancos': 'Bancos', '04-cartola-revision': 'Revisión de la cartola', '05-detalle-aviso': 'Aviso del detalle del banco', '06-nombres-cortos': 'Excel BANCOS · nombres cortos', '07-movimientos': 'Movimientos', '08-panel': 'Panel de un movimiento', '09-dividir': 'Dividir la transferencia', '10-opciones': 'Un pagador de dos clientes', '11-aviso': 'Aviso antes de guardar', '12-lote': 'Después de confirmar en lote', '13-el-mes-avance': 'El mes, después de revisar', '14-tablero': 'Tablero', '15-cobranza': 'Cobranza', '16-presupuesto': 'Presupuesto', '17-cierre': 'Cierre', '18-seguridad': 'Seguridad', '19-bitacora': 'Bitácora', '20-celular-el-mes': 'Celular · El mes', '21-celular-movimientos': 'Celular · Movimientos', '22-celular-panel': 'Celular · panel' };
+  var PANEL = { '08-panel': 1, '09-dividir': 1, '10-opciones': 1, '11-aviso': 1, '01-candado': 1 };
+
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function pantalla(id) {
+    var d = DIM[id] || [1600, 1000];
+    return '<figure class="pantalla"><button type="button" class="pantalla__marco" data-img="' + id + '" aria-label="Ampliar: ' + esc(NOMBRES[id]) + '">' +
+      '<span class="pantalla__lupa" aria-hidden="true">Ampliar</span>' +
+      '<img src="img/' + id + '.webp" alt="' + esc(NOMBRES[id]) + '" width="' + d[0] + '" height="' + d[1] + '" loading="lazy" decoding="async"></button>' +
+      '<figcaption>' + esc(NOMBRES[id]) + '</figcaption></figure>';
+  }
+  var html = '', indice = '';
+  CAPITULOS.forEach(function (c, ci) {
+    indice += '<li><a href="#' + c.id + '"><span>' + String(ci + 1).padStart(2, '0') + '</span>' + esc(c.titulo) + '</a></li>';
+    html += '<section class="capitulo" id="' + c.id + '"><div class="capitulo__cab"><span class="capitulo__n">' + String(ci + 1).padStart(2, '0') + '</span><h2>' + esc(c.titulo) + '</h2></div>' +
+      '<p class="capitulo__intro">' + esc(c.intro) + '</p>' +
+      (c.linea ? '<ol class="linea-caso" aria-label="En orden">' + c.linea.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ol>' : '');
+    c.pasos.forEach(function (p, pi) {
+      var angosta = p.img.every(function (i) { return PANEL[i]; });
+      html += '<article class="paso"><div class="paso__cab"><span class="paso__n">' + (ci + 1) + '.' + (pi + 1) + '</span><h3>' + esc(p.titulo) + '</h3></div>' +
+        (p.texto ? '<p class="paso__texto">' + p.texto + '</p>' : '') +
+        (p.lleno ? '<dl class="lleno"><span class="lleno__titulo">Así quedó</span>' + p.lleno.map(function (kv) { return '<div><dt>' + esc(kv[0]) + '</dt><dd>' + esc(kv[1]) + '</dd></div>'; }).join('') + '</dl>' : '') +
+        (p.nota ? '<p class="nota">' + esc(p.nota) + '</p>' : '') +
+        '<div class="pantallas' + (c.celular ? ' pantallas--celular' : angosta ? ' pantallas--panel' : '') + '">' + p.img.map(pantalla).join('') + '</div></article>';
+    });
+    html += '</section>';
+  });
+  document.getElementById('pasos').innerHTML = html;
+  document.getElementById('indice').innerHTML = indice;
+
+  var dlg = document.getElementById('zoom'), zimg = document.getElementById('zoom-img'), ztit = document.getElementById('zoom-titulo');
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-img]');
+    if (!b) return;
+    var id = b.getAttribute('data-img'), d = DIM[id] || [1600, 1000];
+    zimg.src = 'img/' + id + '.webp'; zimg.alt = NOMBRES[id]; zimg.width = d[0]; zimg.height = d[1];
+    zimg.style.maxWidth = (id.indexOf('celular') !== -1 ? '420px' : PANEL[id] ? '640px' : '100%'); zimg.style.margin = '0 auto';
+    ztit.textContent = NOMBRES[id];
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  });
+  document.getElementById('zoom-cerrar').addEventListener('click', function () { dlg.close ? dlg.close() : dlg.removeAttribute('open'); });
+  dlg.addEventListener('click', function (ev) { if (ev.target === dlg) dlg.close(); });
+})();
+</script>
+
+</body>
+</html>

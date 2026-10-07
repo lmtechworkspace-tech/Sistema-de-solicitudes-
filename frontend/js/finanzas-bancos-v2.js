@@ -91,11 +91,11 @@
           (fondos ? '<div class="fin2-tabla-envoltura"><table class="fin2-tabla"><thead><tr><th>Cliente</th><th>Recibido</th><th>Pagado por su cuenta</th><th>Saldo</th></tr></thead><tbody>' + fondos + '</tbody></table></div>' +
             '<p class="fin2-ayuda" style="margin-top:8px">Un saldo negativo es plata que la empresa puso por el cliente: hay que cobrársela.</p>'
             : U.vacio({ icono: 'equipo', texto: 'Aparece cuando se confirmen movimientos como «Fondo de cliente».' })) }) +
-        U.card({ titulo: 'Aprender del Excel BANCOS', icono: 'bombilla', sub: 'lo que Bárbara y Lisseth anotaban a mano', cuerpo:
-          '<p class="fin2-ayuda">Sube el Excel «BANCOS» del mes. Primero se enseña una sola vez quién es cada nombre corto que usan («OSSES» = Constructora Osses Muñoz). Después cada fila queda como sugerencia en su movimiento y el sistema aprende <b>quién paga por quién</b>.</p>' +
+        U.card({ titulo: 'Aprender del Excel BANCOS', icono: 'bombilla', sub: 'lo que se anotaba a mano', cuerpo:
+          '<p class="fin2-ayuda">Sube el Excel «BANCOS» del mes. Primero se enseña una sola vez quién es cada nombre corto que usan (por ejemplo, «ANDES» = Andes Montajes SpA). Después cada fila queda como sugerencia en su movimiento y el sistema aprende <b>quién paga por quién</b>.</p>' +
           '<label class="sx2-boton sx2-boton--primario" style="margin-top:10px;cursor:pointer"><input type="file" accept=".xlsx" class="js-finb-excel" hidden>' + U.ico('subir', 16) + 'Elegir el Excel BANCOS</label>' }) +
         U.card({ titulo: 'Aprender de la planilla SIGECO', icono: 'documento', cuerpo:
-          '<p class="fin2-ayuda">Sube la planilla de Google Sheets descargada como Excel. Lo que Bárbara y Lisseth ya clasificaron a mano en la hoja CUENTA BANCARIA queda como sugerencia en los movimientos de la cartola (no se confirma solo).</p>' +
+          '<p class="fin2-ayuda">Sube la planilla de Google Sheets descargada como Excel. Lo que ya se clasificó a mano en la hoja CUENTA BANCARIA queda como sugerencia en los movimientos de la cartola (no se confirma solo).</p>' +
           '<label class="sx2-boton sx2-boton--secundario" style="margin-top:10px;cursor:pointer"><input type="file" accept=".xlsx" class="js-finb-planilla" hidden>' + U.ico('subir', 16) + 'Elegir la planilla</label>' +
           '<p class="fin2-ayuda" style="margin-top:8px">Reglas aprendidas hasta hoy: <b>' + d.reglas + '</b></p>' }) +
       '</div>');
@@ -385,7 +385,7 @@
         U.boton({ texto: 'Confirmar las seguras (' + seguras + ')', icono: 'check', variante: 'primario', sm: true, clase: 'js-finm-seguras', deshabilitado: !seguras }) +
         U.boton({ texto: 'Marcar las con propuesta', icono: 'lista', sm: true, clase: 'js-finm-marcar' }) +
         U.boton({ texto: 'Confirmar marcadas', icono: 'check', sm: true, clase: 'js-finm-conf-sel', deshabilitado: true }) +
-        '<span class="fin2-ayuda">Toca un movimiento para ver todo y clasificarlo. Teclas: ↑ ↓ para moverte, Enter para abrir.</span>' +
+        '<span class="fin2-ayuda fin2-ayuda--teclas">Toca un movimiento para ver todo y clasificarlo. Teclas: ↑ ↓ para moverte, Enter para abrir.</span>' +
       '</div>' +
       '<div class="fin2-lista sx2-entra js-finm-lista" role="list">' + listaHtml() + '</div>' +
       '<datalist id="finm-clientes">' + cat_.clientes.map(function (c) { return '<option value="' + txt(c.nombre) + '">' + txt(c.rut) + '</option>'; }).join('') + '</datalist>');
@@ -429,11 +429,11 @@
     var c = m.estado === 'CONFIRMADO' ? m.clasif : m.sugerencia;
     var cert = m.estado === 'CONFIRMADO' ? 'ok' : ({ alta: 'alta', media: 'media' }[(m.sugerencia || {}).certeza] || 'baja');
     var que = resumenClasif(c);
+    var conAviso = m.estado !== 'CONFIRMADO' && mov_.avisos[m.id];
     var estado = m.estado === 'CONFIRMADO' ? '<span class="fin2-que__eti fin2-que__eti--ok">' + U.ico('check', 12) + 'Confirmado</span>'
       : g === 'propuesta' ? '<span class="fin2-que__eti fin2-que__eti--' + cert + '">' + (cert === 'alta' ? 'Segura' : 'Propuesta') + '</span>'
       : '<span class="fin2-que__eti fin2-que__eti--baja">Falta decir qué es</span>';
     if (conAviso) estado = '<span class="fin2-que__eti fin2-que__eti--media">' + U.ico('alerta', 12) + 'Revisar el aviso</span>';
-    var conAviso = m.estado !== 'CONFIRMADO' && mov_.avisos[m.id];
     return '<div class="fin2-mov fin2-mov--' + cert + (panel_ && panel_.id === m.id ? ' fin2-mov--abierto' : '') + (conAviso ? ' fin2-mov--aviso' : '') + '" role="listitem" tabindex="0" data-id="' + txt(m.id) + '"' + (conAviso ? ' title="' + txt(conAviso) + '"' : '') + '>' +
       '<span class="fin2-chk"><input type="checkbox" class="js-finm-chk"' + (mov_.sel[m.id] ? ' checked' : '') + (g !== 'propuesta' ? ' disabled' : '') + ' aria-label="Marcar"></span>' +
       '<span class="fin2-mov__fecha">' + txt(fechaCorta(m.fecha)) + '</span>' +
@@ -646,7 +646,7 @@
       '<h3>Dividir ' + plata(m.abono || m.cargo) + '</h3>' +
       '<p class="fin2-ayuda">Por ejemplo, una transferencia que paga a dos clientes, o que trae honorario y plata para imposiciones. Las partes tienen que sumar exacto.</p>' +
       '<div class="js-finm-partes">' + base.map(function (p) { return parte(p, sentidoDe(m)); }).join('') + '</div>' +
-      '<div class="fin2-acciones" style="align-items:center;justify-content:space-between">' + U.boton({ texto: 'Agregar parte', icono: 'mas', sm: true, clase: 'js-finm-pmas' }) +
+      '<div class="fin2-acciones" style="align-items:center;justify-content:space-between">' + U.boton({ texto: 'Agregar parte', icono: 'nueva', sm: true, clase: 'js-finm-pmas' }) +
         '<span class="fin2-ayuda js-finm-pfalta"></span>' + U.boton({ texto: 'No dividir', sm: true, variante: 'fantasma', clase: 'js-finm-pcancelar' }) + '</div></div>';
   }
   function abrirDividir(el) {

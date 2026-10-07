@@ -31,5 +31,7 @@ SigsoManual.indice([
   { id: 'area-administracion', archivo: 'administracion', grupo: 'Áreas', titulo: 'Administración', icono: 'maletin', color: 'var(--mod-admarea)', modulos: ['dep_administracion'],
     resumen: 'Recibir los reportes de las áreas y armar el informe de gestión para la gerencia.' },
   { id: 'hompy', archivo: 'hompy', grupo: 'Áreas', titulo: 'Hompy, la mascota', icono: 'hompy', color: 'var(--mod-hompy)', modulos: ['hompy'],
-    resumen: 'Calendario, reporte de salida a terreno con su dinero, Estudio TikTok, marcas colaboradoras y reporte del mes.' }
-], '2026-10-07g');
+    resumen: 'Calendario, reporte de salida a terreno con su dinero, Estudio TikTok, marcas colaboradoras y reporte del mes.' },
+  { id: 'finanzas', archivo: 'finanzas', grupo: 'Finanzas', titulo: 'Finanzas (la bóveda)', icono: 'candado', color: 'var(--mod-finanzas)', modulos: ['finanzas'],
+    resumen: 'Abrir la bóveda, el mes paso a paso, cartolas y detalle del banco, revisar movimientos, tablero, cobranza, presupuesto y cierre.' }
+], '2026-10-07h');

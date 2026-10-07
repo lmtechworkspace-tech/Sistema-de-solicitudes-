@@ -48,7 +48,7 @@
 
   function esc(t) { return window.Componentes ? Componentes.escaparHtml(t) : String(t == null ? '' : t); }
   // Páginas de ejemplo por módulo (frontend/ejemplos/): se abren en otra pestaña.
-  var EJEMPLOS = { hompy: 'ejemplos/hompy/' };
+  var EJEMPLOS = { hompy: 'ejemplos/hompy/', finanzas: 'ejemplos/finanzas/' };
   function ico(n, t) { return window.Iconos ? Iconos.svg(n, { tam: t || 18 }) : ''; }
   function leerLS(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
   function guardarLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* sin storage */ } }
@@ -460,7 +460,7 @@
       manual.hidden = !mn;
       if (mn) { manual.innerHTML = ico('libro', 14) + '<span>Manual de uso</span>'; manual.setAttribute('data-manual', mn.id); manual.title = 'Paso a paso de ' + (m.nombre || '') + ' (F1)'; }
     }
-    // El ejemplo completo del módulo (datos de demostración), al lado del manual. Hoy solo Hompy.
+    // El ejemplo completo del módulo (datos de demostración), al lado del manual: Hompy y Finanzas.
     var ejemplo = raiz_.querySelector('#sb-ejemplo');
     if (ejemplo) {
       var ej = EJEMPLOS[m.id];

@@ -106,7 +106,9 @@ const ver = B.conBoveda('VER_PRESUPUESTO', function (db, data) {
   // Primer mes del año con movimientos: antes de eso, "real = 0" no significa que no hubo plata.
   const primero = I.db_().prepare('SELECT MIN(periodo) AS p FROM FIN_MOVIMIENTOS WHERE periodo LIKE ?').get(anio + '-%');
   const primerMes = primero && primero.p ? Number(primero.p.slice(5, 7)) - 1 : null;
-  return { anio, empresa, empresas: FB.EMPRESAS, anios, filas, cargado: Object.keys(ppto).length > 0, actualizado: meta || null, primer_mes_con_datos: primerMes };
+  const ultimo = I.db_().prepare('SELECT MAX(periodo) AS p FROM FIN_MOVIMIENTOS WHERE periodo LIKE ?').get(anio + '-%');
+  const ultimoMes = ultimo && ultimo.p ? Number(ultimo.p.slice(5, 7)) - 1 : null;
+  return { anio, empresa, empresas: FB.EMPRESAS, anios, filas, cargado: Object.keys(ppto).length > 0, actualizado: meta || null, primer_mes_con_datos: primerMes, ultimo_mes_con_datos: ultimoMes };
 });
 
 /** Guarda el presupuesto de un año y una empresa (reemplaza el anterior). */

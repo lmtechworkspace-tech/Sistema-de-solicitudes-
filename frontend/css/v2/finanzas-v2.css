@@ -1,7 +1,7 @@
 /* finanzas-v2.css — módulo Finanzas, Etapa 1: la bóveda (finanzas-v2.js).
  * Usa los tokens v2 (--sx-*) y el acento del módulo (--mod-finanzas). */
 
-.fin2 { --fin: var(--mod-finanzas); --fin-suave: var(--mod-finanzas-suave); }
+.fin2, .fin2-panel { --fin: var(--mod-finanzas); --fin-suave: var(--mod-finanzas-suave); }
 
 /* --- Candado ------------------------------------------------------------- */
 .fin2-candado {
@@ -168,7 +168,7 @@
 .fin2-barra-mes .fin2-input--sm { width: auto; }
 .fin2-avance { width: 120px; height: 8px; border-radius: 999px; background: var(--sx-borde); overflow: hidden; }
 .fin2-avance span { display: block; height: 100%; background: linear-gradient(90deg, var(--sx-ok, #15803d), var(--fin)); transition: width .6s; }
-.fin2-tiras { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.fin2-tiras { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
 .fin2-tira { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--sx-superficie); border: 1px solid var(--sx-borde); border-left: 4px solid var(--sx-borde-fuerte, var(--sx-borde)); }
 .fin2-tira span { font-size: .75rem; color: var(--sx-texto-3); }
 .fin2-tira b { font-variant-numeric: tabular-nums; font-size: 1.0625rem; }
@@ -226,7 +226,7 @@
 .fin2-inf-cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding-bottom: 4px; border-bottom: 2px solid var(--fin); }
 .fin2-inf-cab h2 { margin: 2px 0 6px; font: 700 1.375rem/1.25 var(--fuente); letter-spacing: -.01em; }
 .fin2-inf-cab .fin2-hero__k { color: var(--fin); }
-.fin2-kpis5 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important; }
+.fin2-kpis5 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important; }
 .fin2-svg { display: block; overflow: visible; }
 .fin2-svg text { font: 11px var(--fuente); fill: var(--sx-texto-3); }
 .fin2-svg .fin2-svg-val { fill: var(--sx-texto); font-weight: 600; font-size: 11.5px; }
@@ -320,9 +320,14 @@
 .fin2-opciones { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: .75rem; color: var(--sx-texto-3); margin-top: 4px; }
 .fin2-chip { border: 1px solid var(--sx-borde); background: var(--fin-suave); color: var(--sx-texto); border-radius: 999px; padding: 2px 8px; font: inherit; font-size: .75rem; cursor: pointer; }
 .fin2-chip:hover, .fin2-chip:focus-visible { border-color: var(--fin); outline: none; }
-.fin2-parte { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.fin2-parte .js-finm-pmonto { width: 120px; }
-.fin2-parte__det { display: contents; }
+.fin2-parte { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 8px; border: 1px solid var(--sx-borde); border-radius: 10px; background: var(--sx-superficie); }
+.fin2-parte .js-finm-pmonto { width: 100%; }
+.fin2-parte .js-finm-pquitar { grid-column: 3; grid-row: 1; }
+.fin2-parte__det { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+.fin2-parte__det:empty, .fin2-parte__det > .fin2-ayuda:only-child { grid-row: 2; }
+.js-finm-partes { display: flex; flex-direction: column; gap: 8px; }
+/* El panel de clasificar, más ancho que el estándar: entra el formulario y la división sin apretarse. */
+.fin2-panel .sx2-drawer__panel { width: min(600px, 100vw); }
 .fin2-nombres td { vertical-align: middle; }
 .fin2-nombres .fin2-input { min-width: 0; width: 100%; }
 
@@ -387,7 +392,8 @@
 .fin2-lista { border: 1px solid var(--sx-borde); border-radius: 14px; background: var(--sx-superficie); overflow: hidden; }
 .fin2-lista__cab, .fin2-mov {
   display: grid; align-items: center; gap: 10px; padding: 8px 12px;
-  grid-template-columns: 22px 44px minmax(0, 1.4fr) minmax(92px, auto) minmax(0, 1fr) auto;
+  /* Anchos fijos para monto y acciones: así el encabezado calza con todas las filas. */
+  grid-template-columns: 22px 44px minmax(0, 1.4fr) 116px minmax(0, 1fr) 76px;
 }
 .fin2-lista__cab { font-size: .6875rem; text-transform: uppercase; letter-spacing: .04em; color: var(--sx-texto-3); background: var(--sx-superficie-2); border-bottom: 1px solid var(--sx-borde); border-left: 3px solid transparent; }
 .fin2-mov { border-bottom: 1px solid var(--sx-borde-suave, var(--sx-borde)); border-left: 3px solid transparent; cursor: pointer; transition: background .15s; }
@@ -407,8 +413,9 @@
 .fin2-mov__txt .fin2-pista { margin-top: 0; min-width: 0; }
 .fin2-mov__monto { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; font-size: .875rem; white-space: nowrap; }
 .fin2-mov__acc { display: flex; gap: 4px; justify-content: flex-end; }
+.fin2-lista__cab > span:nth-child(4) { text-align: right; }
 .fin2-que { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.fin2-que__txt { font-size: .8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fin2-que__txt { font-size: .8125rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .fin2-que__eti { display: inline-flex; align-items: center; gap: 4px; font-size: .6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
 .fin2-que__eti--ok, .fin2-que__eti--alta { color: var(--sx-ok); }
 .fin2-que__eti--media { color: var(--sx-alerta); }
@@ -422,6 +429,7 @@
   .fin2-mov__fecha { display: none; }
   .fin2-mov__txt { grid-area: txt; } .fin2-mov__monto { grid-area: monto; } .fin2-que { grid-area: que; } .fin2-mov__acc { grid-area: acc; }
   .fin2-busca { margin-left: 0; flex-basis: 100%; }
+  .fin2-ayuda--teclas { display: none; }
 }
 /* Panel lateral para clasificar */
 .fin2-panel .sx2-drawer__pie { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
@@ -469,3 +477,10 @@
 @keyframes fin2-insiste { 0%, 100% { transform: none; } 30% { transform: translateX(-4px); } 60% { transform: translateX(4px); } }
 @media (prefers-reduced-motion: reduce) { .fin2-avisos--insiste { animation: none; } }
 .fin2-mov--aviso { background: color-mix(in srgb, var(--sx-alerta) 8%, transparent); border-left-color: var(--sx-alerta); }
+
+/* Tablero: en las 5 tarjetas la comparación va DEBAJO del número (al lado se apretaba y se cortaba). */
+.fin2-kpis5 .sx2-kpi__cuerpo { flex-direction: column; align-items: flex-start; justify-content: flex-end; }
+.fin2-kpis5 .sx2-kpi__tendencia { white-space: normal; max-width: 100%; line-height: 1.3; }
+
+/* Cierre: el paso manual (casilla + texto) ocupa toda la fila; no la columna de 22 px del ícono. */
+.fin2-pasos-mes li:has(> .fin2-retiro-man) { display: block; }
