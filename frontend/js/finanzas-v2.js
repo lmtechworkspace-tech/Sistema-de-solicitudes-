@@ -20,12 +20,18 @@
   var LLAVE_EQUIPO = 'sigso_fin_equipo';
   var QR_SRC = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
   var QR_SRI = 'sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k';
-  var raiz_ = null, vista_ = 'inicio', turno_ = 0, reloj_ = null, ultimoUso_ = 0, inactividadMin_ = 15;
+  var raiz_ = null, vista_ = 'tablero', turno_ = 0, reloj_ = null, ultimoUso_ = 0, inactividadMin_ = 15;
   var NOMBRES_ACCION = {
     ENTRAR: ['Abrió la bóveda', 'ok'], SALIR: ['Cerró la bóveda', 'neutro'], VER_BITACORA: ['Revisó la bitácora', 'info'],
     CODIGO_INCORRECTO: ['Código incorrecto', 'alerta'], AUTENTICADOR_PREPARADO: ['Generó la clave del autenticador', 'info'],
     AUTENTICADOR_ACTIVADO: ['Activó su autenticador', 'ok'], AUTENTICADOR_CLAVE_INCORRECTA: ['Contraseña incorrecta al registrar', 'alerta'],
-    AUTENTICADOR_REINICIADO: ['Autenticador reiniciado en el servidor', 'alerta']
+    AUTENTICADOR_REINICIADO: ['Autenticador reiniciado en el servidor', 'alerta'],
+    VER_TABLERO: ['Vio el tablero', 'info'], DESCARGAR_INFORME: ['Descargó el informe en PDF', 'alerta'],
+    VER_MOVIMIENTOS: ['Vio los movimientos', 'info'], CUENTA_NUEVA: ['Agregó una cuenta bancaria', 'info'],
+    IMPORTAR_CARTOLA: ['Subió una cartola', 'ok'], CLASIFICAR: ['Clasificó movimientos', 'ok'], APRENDER_PLANILLA: ['Aprendió de la planilla SIGECO', 'ok'],
+    VER_COBRANZA: ['Vio la cobranza', 'info'], VER_FICHA_CLIENTE: ['Vio la ficha de un cliente', 'info'],
+    IMPORTAR_VENTAS_SII: ['Subió ventas del SII', 'ok'], IMPORTAR_FACTURAS_PLANILLA: ['Trajo facturas de la planilla', 'ok'],
+    FACTURA_ANULADA: ['Anuló una factura', 'alerta'], FACTURA_INCOBRABLE: ['Marcó una factura incobrable', 'alerta'], FACTURA_VIGENTE: ['Reactivó una factura', 'info']
   };
 
   function txt(v) { return U.esc(String(v == null ? '' : v)); }
@@ -177,6 +183,7 @@
     ultimoUso_ = Date.now();
     iniciarReloj();
     if (vista_ === 'bitacora') return verBitacora();
+    if (vista_ === 'tablero' && window.SigsoFinanzasTablero) return SigsoFinanzasTablero.ver(ctxBancos());
     if (vista_ === 'cobranza' && window.SigsoFinanzasCobranza) return SigsoFinanzasCobranza.ver(ctxBancos());
     if ((vista_ === 'bancos' || vista_ === 'movimientos') && window.SigsoFinanzasBancos) {
       return vista_ === 'bancos' ? SigsoFinanzasBancos.verBancos(ctxBancos()) : SigsoFinanzasBancos.verMovimientos(ctxBancos());
@@ -190,7 +197,8 @@
     });
   }
   var TITULOS_ = {
-    Resumen: ['Bóveda de Finanzas', ''], 'Bitácora': ['Bitácora de accesos', 'Todo lo que se hace en la bóveda, en orden y encadenado.'],
+    Resumen: ['Seguridad de la bóveda', 'Quién tiene acceso, las capas de protección y los últimos ingresos.'],
+    Tablero: ['Tablero de Finanzas', 'El mes en 30 segundos: resultado, caja, cobranza y plata de clientes.'], 'Bitácora': ['Bitácora de accesos', 'Todo lo que se hace en la bóveda, en orden y encadenado.'],
     Bancos: ['Bancos', 'Sube la cartola del banco y el sistema la clasifica.'], Movimientos: ['Movimientos', 'Revisa lo que el sistema propone; lo que corriges, lo aprende.'],
     Cobranza: ['Cobranza', 'Lo que falta cobrar y desde hace cuánto; los pagos del banco se cruzan solos con las facturas.']
   };
@@ -200,14 +208,15 @@
     return {
       api: api, pagina: pagina, cab: cabAbierta, raiz: function () { return raiz_; },
       turno: function () { return t; }, vigente: function (n) { return n === turno_; },
-      ir: function (v) { vista_ = v; abrir(); }
+      ir: function (v) { vista_ = v; abrir(); },
+      credenciales: function () { return { boveda_token: token(), equipo: equipo() }; }
     };
   }
-  function cabAbierta(seccion) {
+  function cabAbierta(seccion, extra) {
     var tt = TITULOS_[seccion] || TITULOS_.Resumen;
-    return cab(tt[0], tt[1],
+    return cab(tt[0], tt[1], (extra ? '<span class="fin2-cab-extra">' + extra + '</span>' : '') +
       '<span class="fin2-abierta" title="Se cierra sola sin uso">' + U.ico('reloj', 14) + '<span id="fin-reloj">' + inactividadMin_ + ':00</span></span>' +
-      U.segmento([{ id: 'inicio', texto: 'Resumen', icono: 'panel' }, { id: 'bancos', texto: 'Bancos', icono: 'dinero' }, { id: 'movimientos', texto: 'Movimientos', icono: 'tabla' }, { id: 'cobranza', texto: 'Cobranza', icono: 'recibo' }, { id: 'bitacora', texto: 'Bitácora', icono: 'lista' }], vista_, 'js-fin-vista') +
+      U.segmento([{ id: 'tablero', texto: 'Tablero', icono: 'grafico' }, { id: 'bancos', texto: 'Bancos', icono: 'dinero' }, { id: 'movimientos', texto: 'Movimientos', icono: 'tabla' }, { id: 'cobranza', texto: 'Cobranza', icono: 'recibo' }, { id: 'inicio', texto: 'Seguridad', icono: 'escudo' }, { id: 'bitacora', texto: 'Bitácora', icono: 'lista' }], vista_, 'js-fin-vista') +
       U.boton({ texto: 'Cerrar bóveda', icono: 'candado', clase: 'js-fin-salir' }));
   }
   function capa(ok, titulo, texto) {
@@ -247,7 +256,7 @@
           '<li class="fin2-etapa--hecha"><b>E1 · La bóveda</b><span>Candado, autenticador y bitácora</span></li>' +
           '<li class="fin2-etapa--hecha"><b>E2 · Bancos y cartolas</b><span>Subir la cartola, cuadrar y clasificar</span></li>' +
           '<li class="fin2-etapa--hecha"><b>E3 · Clientes y cobranza</b><span>Facturas del SII, abonos y cartera real</span></li>' +
-          '<li><b>E4 · Tablero de gerencia</b><span>Gráficos e informe mensual</span></li>' +
+          '<li class="fin2-etapa--hecha"><b>E4 · Tablero de gerencia</b><span>Gráficos e informe mensual</span></li>' +
           '<li><b>E5 · Presupuesto</b><span>Proyectado vs. real</span></li>' +
           '<li><b>E6 · Retiro de la planilla</b><span>Un mes en paralelo y se archiva</span></li>' +
         '</ol>' }) +
@@ -319,7 +328,7 @@
           if (!r || !r.ok) { error((r && r.message) || 'No se pudo abrir.'); limpiarCasillas('fin-cod'); var caja = document.querySelector('.fin2-digitos'); if (caja) { caja.classList.remove('fin2-sacude'); void caja.offsetWidth; caja.classList.add('fin2-sacude'); } return; }
           guardarToken(r.data.boveda_token);
           inactividadMin_ = r.data.inactividad_min || inactividadMin_;
-          vista_ = 'inicio';
+          vista_ = 'tablero';
           var c = document.querySelector('.fin2-candado__caja');
           if (c) { c.classList.add('fin2-abre'); setTimeout(abrir, 420); } else abrir();
         });

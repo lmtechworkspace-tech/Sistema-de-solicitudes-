@@ -569,10 +569,11 @@
       }
       var css = cssParaPdf_(raiz, textos);
       temp.forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
-      return PY.api('generarPdfReporte', {
+      // opts.accion/opts.extra: Finanzas imprime por su propia acción (bóveda + marca de agua).
+      return PY.api(opts.accion || 'generarPdfReporte', Object.assign({
         html: htmlParaPdf_(raiz, opts.cabecera), css: css, titulo: opts.titulo || 'Reporte',
         nombre_archivo: opts.nombreArchivo || opts.titulo, horizontal: !!opts.horizontal
-      });
+      }, opts.extra || {}));
     }).then(function (r) {
       if (b) { b.disabled = false; b.removeAttribute('aria-busy'); }
       if (r && r.ok && r.data && r.data.pdf_base64) { PY.descargarBase64(r.data.pdf_base64, r.data.filename, 'application/pdf'); return true; }
