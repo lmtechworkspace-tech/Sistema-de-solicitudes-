@@ -417,3 +417,26 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
 .bj2-enlaces__drive > span { flex: 1; min-width: 200px; }
 .bj2-grupo__cab .bj2-grupo__res { margin-left: auto; white-space: normal; }
 .bj2-det-mixto { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; background: var(--sx-superficie-2); border: 1px solid var(--sx-borde-suave); font: 600 .75rem/1.3 var(--fuente); color: var(--sx-texto-2); }
+
+/* 2026-10-07: el camino del ítem (Recibido → Con fecha → En curso → Resuelto → Confirmado). */
+.bj2-camino { list-style: none; margin: 2px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.bj2-camino__p { display: flex; flex-direction: column; gap: 3px; min-width: 0; font: 600 .75rem/1.25 var(--fuente); color: var(--sx-texto-3); }
+.bj2-camino__p::before { content: ''; height: 6px; border-radius: 3px; background: var(--sx-borde); }
+.bj2-camino__p small { font: 400 .6875rem/1.25 var(--fuente); color: var(--sx-texto-3); }
+.bj2-camino__p--hecho { color: var(--sx-texto-2); }
+.bj2-camino__p--hecho::before { background: var(--sx-ok); }
+.bj2-camino__p--actual { color: var(--sx-texto); font-weight: 700; }
+.bj2-camino__p--actual::before { background: var(--sx-primario); }
+.bj2-camino__p--pausa { color: var(--sx-alerta); }
+.bj2-camino__p--pausa::before { background: var(--sx-alerta); }
+.bj2-camino__p--falta { color: var(--sx-alerta); }
+.bj2-camino__p--falta::before { background: repeating-linear-gradient(90deg, var(--sx-alerta) 0 6px, transparent 6px 10px); }
+.bj2-camino__p--falta small { color: var(--sx-alerta); }
+.bj2-camino-fin { display: flex; align-items: center; gap: 6px; margin: 0; font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.bj2-todos { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: var(--sx-radio); background: var(--sx-primario-suave); border: 1px solid color-mix(in srgb, var(--sx-primario) 30%, transparent); font: var(--sx-t-chico); color: var(--sx-texto); }
+.bj2-todos > span { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 200px; }
+.bj2-todos > span > svg { color: var(--sx-primario); }
+.bj2-todos form { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.bj2-completa { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--sx-alerta-suave, var(--sx-superficie-2)); color: var(--sx-texto); font: var(--sx-t-chico); }
+.bj2-completa > svg { flex: none; margin-top: 2px; color: var(--sx-alerta); }
+@media (max-width: 600px) { .bj2-camino { grid-template-columns: repeat(5, minmax(56px, 1fr)); overflow-x: auto; } }

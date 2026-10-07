@@ -303,6 +303,42 @@
     '</div>';
   }
 
+  // 2026-10-07 (decisiones del dueño tras los comentarios de Leo): el CAMINO de cada ítem.
+  // Recibido → Con fecha → En curso → Resuelto → Confirmado. Cada ítem va a su ritmo y con su
+  // fecha; el botón principal del detalle siempre es el paso que sigue.
+  var PASOS_CAMINO = ['Recibido', 'Con fecha', 'En curso', 'Resuelto', 'Confirmado'];
+  function caminoDe(it) {
+    var e = it.estado;
+    var hecho = [e !== 'S01', !!it.fecha_comprometida, ['S05', 'S06', 'S07', 'S08', 'S09'].indexOf(e) !== -1, e === 'S08' || e === 'S09', e === 'S09'];
+    var primero = hecho.indexOf(false);
+    return PASOS_CAMINO.map(function (nombre, k) {
+      var est = hecho[k] ? 'hecho' : (k === primero ? 'actual' : 'pendiente');
+      // Un paso que quedó atrás sin hacerse (p. ej. sin fecha pero ya en curso) se marca como falta.
+      if (!hecho[k] && hecho.slice(k + 1).some(Boolean)) est = 'falta';
+      if (k === 2 && e === 'S06') est = 'pausa';
+      var nota = '';
+      if (k === 1 && it.fecha_comprometida) nota = 'para el ' + PY.fecha(it.fecha_comprometida, true);
+      if (k === 1 && est === 'falta') nota = 'sin fecha';
+      if (k === 2 && e === 'S06') nota = 'esperando respuesta';
+      if (k === 4 && e === 'S08') nota = 'espera a quien pidió';
+      return { nombre: nombre, est: est, nota: nota };
+    });
+  }
+  function caminoHtml(it) {
+    if (['S10', 'S11'].indexOf(it.estado) !== -1) return '<p class="bj2-camino-fin">' + U.ico('equis', 13) + (it.estado === 'S10' ? 'Rechazado' : 'Cancelado') + ': salió del camino.</p>';
+    return '<ol class="bj2-camino" aria-label="Camino del ítem">' + caminoDe(it).map(function (p) {
+      return '<li class="bj2-camino__p bj2-camino__p--' + p.est + '"' + (p.est === 'actual' ? ' aria-current="step"' : '') + '><span>' + U.esc(p.nombre) + '</span>' + (p.nota ? '<small>' + U.esc(p.nota) + '</small>' : '') + '</li>';
+    }).join('') + '</ol>';
+  }
+  // La fecha que se propone al recibir: el plazo del ítem en días hábiles (jornada de 9 h), mínimo 1.
+  function fechaSugerida(it) {
+    var dias = Math.max(1, Math.ceil((Number(it && it.sla_objetivo_horas) || 27) / 9));
+    var d = new Date();
+    while (dias > 0) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) dias--; }
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+  function hoyIso() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+
   // «3 ítems: 1 nueva · 1 esperando respuesta · 1 resuelta (espera validación)».
   var VIS_TXT = { NUEVA: ['nueva', 'nuevas'], EN_CURSO: ['en curso', 'en curso'], ESPERANDO: ['esperando respuesta', 'esperando respuesta'], RESUELTA: ['resuelta (espera validación)', 'resueltas (esperan validación)'], CERRADA: ['cerrada', 'cerradas'] };
   // En qué va cada parte, desde una lista de ítems (el detalle también se abre desde Mi trabajo e Inicio, sin la cola cargada).
@@ -915,8 +951,15 @@
     if (accion === 'recibir') {
       var nuevos = lista.filter(function (i) { return i.estado === 'S01'; });
       if (!nuevos.length) { PY.aviso('Ninguno de los seleccionados está en "' + estadoTxt('S01') + '".', 'error'); return; }
-      U.confirmar({ titulo: '¿Recibir ' + nuevos.length + (nuevos.length === 1 ? ' ítem?' : ' ítems?'), texto: 'Pasan a "' + estadoTxt('S02') + '": el solicitante ve que el equipo ya lo tiene.' + (nuevos.length < lista.length ? ' Los que no están en "' + estadoTxt('S01') + '" se omiten.' : ''), boton: 'Recibir' })
-        .then(function (si) { if (si) ejecutarLote(nuevos, function (i) { return api('actualizarEstado', { subsolicitud_id: i.subsolicitud_id, estado_nuevo: 'S02', comentario: '' }); }, 'Recibidos'); });
+      formDrawer({ titulo: 'Recibir ' + nuevos.length + (nuevos.length === 1 ? ' ítem' : ' ítems') + ' y dar fecha', boton: 'Recibir y avisar',
+        campos: PY.campo('¿Para cuándo estarán?', '<input class="sx2-input" type="date" name="fecha" min="' + hoyIso() + '" value="' + fechaSugerida(nuevos[0]) + '">',
+          'La misma fecha para todos (después puedes cambiar la de cada uno). A cada solicitante le llega un aviso.' + (nuevos.length < lista.length ? ' Los que ya no están nuevos se omiten.' : '')),
+        validar: function (x) { return x.fecha ? '' : 'Elige la fecha.'; },
+        aplicar: function (x) {
+          var porSol = {};
+          nuevos.forEach(function (i) { (porSol[i.solicitud_id] = porSol[i.solicitud_id] || []).push({ subsolicitud_id: i.subsolicitud_id, fecha_comprometida: x.fecha }); });
+          ejecutarLote(Object.keys(porSol).map(function (k) { return { solicitud_id: k }; }), function (g) { return api('recibirItemsSolicitud', { solicitud_id: g.solicitud_id, items: porSol[g.solicitud_id] }); }, 'Solicitudes recibidas');
+        } });
       return;
     }
     if (accion === 'asignar') {
@@ -964,10 +1007,11 @@
     comentario: { icono: 'correo', tono: 'info' }, interno: { icono: 'candado', tono: 'neutro' }
   };
 
-  function abrirDetalle(solicitudId, subFoco) {
+  function abrirDetalle(solicitudId, subFoco, accInicial) {
     var d = U.drawer({ titulo: solicitudId, subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">Cargando…</span>', cuerpo: U.esqueleto('tabla', 6), pie: ' ' });
     d.el.classList.add('bj2-drawer');
     var pestana = 'seguimiento', abiertoAcc = {}, detalle = null;
+    if (subFoco && accInicial) abiertoAcc[subFoco] = accInicial;
 
     function cargarDetalle() {
       return api('getSolicitudDetalle', { solicitud_id: solicitudId }).then(function (r) {
@@ -1091,7 +1135,18 @@
 
     function itemsHtml(subs) {
       var trans = detalle.transiciones_por_subsolicitud || {};
-      return '<div class="sx2-apilado" style="gap:12px">' + subs.map(function (it) {
+      var nuevos = subs.filter(function (it) { return it.estado === 'S01'; });
+      var todos = !soloLectura() && nuevos.length > 1
+        ? '<div class="bj2-todos">' + (abiertoAcc.__todos
+            ? '<form class="sx2-form js-bj2-form-todos" novalidate><strong>Recibir ' + nuevos.length + ' ítems y dar fecha</strong>' +
+                nuevos.map(function (it) { return PY.campo(it.numero_item + '. ' + it.titulo, '<input class="sx2-input" type="date" name="f_' + U.esc(it.subsolicitud_id) + '" min="' + hoyIso() + '" value="' + fechaSugerida(it) + '">'); }).join('') +
+                '<p class="sx2-tenue" style="margin:0;font-size:.8125rem">A ' + U.esc((detalle.solicitud || {}).solicitante_nombre || 'quien pidió') + ' le llega un solo aviso con la fecha de cada ítem.</p>' +
+                '<p class="sx2-campo__error js-bj2-item-error" hidden></p>' +
+                '<div class="sx2-flex" style="justify-content:flex-end;gap:6px">' + U.boton({ texto: 'Cancelar', sm: true, clase: 'js-bj2-todos' }) + U.boton({ texto: 'Recibir y avisar', icono: 'check', sm: true, variante: 'primario', tipo: 'submit' }) + '</div></form>'
+            : '<span>' + U.ico('bandeja', 15) + '<b>' + nuevos.length + ' ítems por recibir</b> en esta solicitud.</span>' + U.boton({ texto: 'Recibir los ' + nuevos.length + ' y dar fecha', icono: 'check', sm: true, variante: 'primario', clase: 'js-bj2-todos' })) +
+          '</div>'
+        : '';
+      return '<div class="sx2-apilado" style="gap:12px">' + todos + subs.map(function (it) {
         var id = it.subsolicitud_id, acc = abiertoAcc[id] || '';
         var persona = it.desarrollador_asignado ? PY.persona(it.desarrollador_asignado) : null;
         var foco = subFoco === id;
@@ -1108,6 +1163,7 @@
           enlacesHtml(it) +
           (it.contexto || it.resultado_esperado ? '<details class="bj2-mas"><summary>Contexto y resultado esperado</summary>' +
             (it.contexto ? '<p><b>Contexto:</b> ' + U.esc(it.contexto) + '</p>' : '') + (it.resultado_esperado ? '<p><b>Resultado esperado:</b> ' + U.esc(it.resultado_esperado) + '</p>' : '') + '</details>' : '') +
+          caminoHtml(it) +
           (soloLectura() ? '' : pasos(it, acc) + (acc ? formItem(it, acc, trans[id] || []) : '')) +
         '</article>';
       }).join('') + '</div>';
@@ -1126,12 +1182,16 @@
       if (ult && suyos.indexOf(String(ult.usuario || '').toLowerCase()) !== -1 && ['NUEVA', 'EN_CURSO', 'ESPERANDO'].indexOf(v) !== -1) {
         b.push(U.boton({ texto: 'Responder', icono: 'comentario', sm: true, variante: 'primario', clase: 'js-bj2-responder' }));
       }
-      if (v === 'NUEVA') {
-        b.push(it.depto && sinResponsable ? U.boton({ texto: 'Tomar', icono: 'check', sm: true, variante: 'primario', clase: 'js-bj2-tomar-det', datos: { id: id } }) : paso('Empezar', 'derecha', 'S05', true));
-        nota = 'Nadie lo ha empezado todavía.';
+      var sinFecha = !it.fecha_comprometida;
+      if (it.estado === 'S01') {
+        b.push(form('Recibir y dar fecha', 'check', 'recibir', true), form('Marcar resuelta', 'check', 'resolver'));
+        nota = sinResponsable ? 'Nadie lo ha recibido: al recibirlo queda a tu nombre.' : 'Paso 1: recíbelo y di para cuándo estará.';
+      } else if (['S02', 'S03', 'S04'].indexOf(it.estado) !== -1) {
+        if (sinFecha) { b.push(form('Dar fecha', 'calendario', 'fecha', true), paso('Empezar', 'derecha', 'S05')); nota = 'Falta decir para cuándo estará.'; }
+        else { b.push(paso('Empezar', 'derecha', 'S05', true), form('Marcar resuelta', 'check', 'resolver')); }
       } else if (v === 'EN_CURSO') {
         b.push(form('Marcar resuelta', 'check', 'resolver', true), form('Pedir información', 'comentario', 'preguntar'));
-        if (it.estado !== 'S05') b.push(paso('Empezar', 'derecha', 'S05'));
+        if (sinFecha) { b.push(form('Dar fecha', 'calendario', 'fecha')); nota = 'Está en curso sin fecha comprometida.'; }
       } else if (v === 'ESPERANDO') {
         b.push(paso('Retomar', 'derecha', 'S05', true));
         nota = 'Esperando que el solicitante responda: cuando escriba, vuelve solo a En curso.';
@@ -1159,8 +1219,16 @@
 
     function formItem(it, acc, trans) {
       var id = it.subsolicitud_id, campos = '', boton = 'Aplicar';
-      if (acc === 'resolver') {
-        campos = PY.campo('¿Qué se hizo? (opcional)', '<textarea class="sx2-input" name="comentario" maxlength="1000" placeholder="Lo ve el solicitante en el correo y en la conversación"></textarea>', 'Le pedimos que confirme; si no responde, se cierra solo a los 5 días hábiles.');
+      if (acc === 'recibir') {
+        campos = PY.campo('¿Para cuándo estará?', '<input class="sx2-input" type="date" name="fecha" min="' + hoyIso() + '" value="' + fechaSugerida(it) + '">',
+          'A ' + ((detalle.solicitud || {}).solicitante_nombre || 'quien pidió') + ' le llega un aviso: que lo recibiste y para cuándo estará. Si nadie lo tenía, queda a tu nombre.');
+        boton = 'Recibir y avisar';
+      } else if (acc === 'resolver') {
+        var falta = [];
+        if (it.estado === 'S01') falta.push('recibido');
+        if (!it.fecha_comprometida) falta.push('con fecha comprometida hoy');
+        campos = (falta.length ? '<p class="bj2-completa">' + U.ico('info', 14) + '<span>Este ítem no estaba ' + falta.join(' ni ') + '. Al resolverlo queda registrado como <b>' + falta.join(' y ') + '</b> (resuelto el mismo día), para que el camino quede completo.</span></p>' : '') +
+          PY.campo('¿Qué se hizo? (opcional)', '<textarea class="sx2-input" name="comentario" maxlength="1000" placeholder="Lo ve el solicitante en el correo y en la conversación"></textarea>', 'Le pedimos que confirme; si no responde, se cierra solo a los 5 días hábiles.');
         boton = 'Marcar resuelta';
       } else if (acc === 'preguntar') {
         campos = PY.campo('¿Qué necesitas saber?', '<textarea class="sx2-input" name="comentario" maxlength="1000" placeholder="Le llega escrita por correo"></textarea>', 'El ítem queda en "Esperando respuesta" y vuelve solo a "En curso" cuando conteste.');
@@ -1223,6 +1291,9 @@
         if (!op) return mal('No hay cambios de estado disponibles.');
         if (op.getAttribute('data-obl') === '1' && !x.comentario) return mal('Este cambio exige un comentario con el motivo.');
         accion = 'actualizarEstado'; datos.estado_nuevo = x.estado_nuevo; datos.comentario = x.comentario;
+      } else if (acc === 'recibir') {
+        if (!x.fecha) return mal('Elige para cuándo estará.');
+        accion = 'recibirItemsSolicitud'; datos = { solicitud_id: solicitudId, items: [{ subsolicitud_id: id, fecha_comprometida: x.fecha }] };
       } else if (acc === 'fecha') {
         if (!x.fecha_comprometida) return mal('Elige la fecha.');
         if (it.fecha_comprometida && (x.motivo || '').length < 20) return mal('El motivo del cambio debe tener al menos 20 caracteres.');
@@ -1246,7 +1317,29 @@
         btn.disabled = false;
         if (!r || !r.ok) return mal((r && r.message) || 'No se pudo aplicar.');
         abiertoAcc[id] = '';
-        PY.aviso('Listo.', 'exito');
+        var completo = r.data && r.data.completado && r.data.completado.length;
+        PY.aviso(acc === 'recibir' ? 'Recibido: le avisamos a quien pidió para cuándo estará.' : (completo ? 'Resuelta. El camino quedó completo: recibido y con fecha hoy.' : 'Listo.'), 'exito');
+        cargarDetalle();
+        avisarCambio();
+      });
+    }
+    // «Recibir los N y dar fecha»: un envío, un aviso a quien pidió.
+    function enviarTodos(form) {
+      var err = form.querySelector('.js-bj2-item-error');
+      var items = [], falta = false;
+      (detalle.subsolicitudes || []).filter(function (it) { return it.estado === 'S01'; }).forEach(function (it) {
+        var v = (form.querySelector('[name="f_' + it.subsolicitud_id + '"]') || {}).value || '';
+        if (!v) falta = true;
+        items.push({ subsolicitud_id: it.subsolicitud_id, fecha_comprometida: v });
+      });
+      if (falta) { err.textContent = 'Indica la fecha de cada ítem.'; err.hidden = false; return; }
+      var btn = form.querySelector('[type=submit]');
+      btn.disabled = true;
+      api('recibirItemsSolicitud', { solicitud_id: solicitudId, items: items }).then(function (r) {
+        btn.disabled = false;
+        if (!r || !r.ok) { err.textContent = (r && r.message) || 'No se pudo recibir.'; err.hidden = false; return; }
+        abiertoAcc.__todos = false;
+        PY.aviso(items.length + ' ítems recibidos: le avisamos a quien pidió con la fecha de cada uno.', 'exito');
         cargarDetalle();
         avisarCambio();
       });
@@ -1347,6 +1440,7 @@
       }
     });
     d.el.addEventListener('click', function (ev) {
+      if (ev.target.closest('.js-bj2-todos')) { abiertoAcc.__todos = !abiertoAcc.__todos; pintarDetalle(); return; }
       var b = ev.target.closest('.js-bj2-pedir-archivo');
       if (!b) return;
       var form = d.el.querySelector('.js-bj2-comentar[data-destino="solicitante"]');
@@ -1360,6 +1454,7 @@
       ev.preventDefault();
       var form = ev.target;
       if (form.classList.contains('js-bj2-form-item')) { enviarItem(form); return; }
+      if (form.classList.contains('js-bj2-form-todos')) { enviarTodos(form); return; }
       if (form.classList.contains('js-bj2-comentar')) {
         var texto = form.texto.value.trim();
         if (!texto) return;
@@ -1419,12 +1514,9 @@
     if (t.closest('.bj2-check')) return; // el checkbox se maneja en 'change'
     if ((b = t.closest('.js-bj2-recibir'))) {
       ev.stopPropagation();
-      b.disabled = true;
-      api('actualizarEstado', { subsolicitud_id: b.getAttribute('data-id'), estado_nuevo: 'S02', comentario: '' }).then(function (r) {
-        if (!r || !r.ok) { b.disabled = false; PY.aviso((r && r.message) || 'No se pudo recibir.', 'error'); return; }
-        PY.aviso('Recibido: el solicitante ve que el equipo ya lo tiene.', 'exito');
-        avisarCambio();
-      });
+      // El camino: recibir va junto con la fecha (decisión del dueño, 2026-10-07).
+      var it0 = item(b.getAttribute('data-id'));
+      if (it0) abrirDetalle(it0.solicitud_id, it0.subsolicitud_id, 'recibir');
       return;
     }
     if ((b = t.closest('[data-bj2-item]'))) abrirDetalle(b.getAttribute('data-sol'), b.getAttribute('data-bj2-item'));

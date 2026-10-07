@@ -176,12 +176,33 @@ function actualizarEstado(db, data, contexto, opciones) {
   } else if (estadoActual === ESTADOS.S08) {
     cambiosSubsolicitud.fecha_terminada = '';
   }
+  // 2026-10-07 (decisión del dueño, D2 del camino del ítem): resolver sin haber
+  // recibido ni dado fecha no deja huecos -- se completa lo que faltó («recibido
+  // y resuelto el mismo día»): fecha comprometida hoy y, si nadie lo tenía, a
+  // nombre de quien lo resolvió. Caso real: «Registro de llamadas» (Leo).
+  const completado = [];
+  if (data.estado_nuevo === ESTADOS.S08 && !opts.sistemaAutomatico) {
+    if (estadoActual === ESTADOS.S01) completado.push('recepcion');
+    if (!subsolicitud.fecha_comprometida) {
+      cambiosSubsolicitud.fecha_comprometida = timestamp.slice(0, 10);
+      cambiosSubsolicitud.comprometida_por = contexto.email || '';
+      completado.push('fecha');
+    }
+    const solPadre = buscarSolicitudPorId_(db, subsolicitud.solicitud_id) || {};
+    if (!responsableDeItem_(subsolicitud, solPadre) && contexto.email) {
+      cambiosSubsolicitud.desarrollador_asignado = normalizarEmail_(contexto.email);
+      completado.push('responsable');
+    }
+  }
+  const notaCompletado = completado.length
+    ? 'Se completó al resolver (mismo día): ' + completado.map((c) => ({ recepcion: 'recibido', fecha: 'fecha comprometida hoy', responsable: 'a cargo de quien lo resolvió' })[c]).join(', ') + '.'
+    : '';
   actualizarFilaPorId_(db, 'SUBSOLICITUDES', 'subsolicitud_id', data.subsolicitud_id, cambiosSubsolicitud);
 
   agregarFila_(db, 'HISTORIAL_ESTADOS', {
     historial_id: crypto.randomUUID(), solicitud_id: subsolicitud.solicitud_id,
     subsolicitud_id: data.subsolicitud_id, estado_anterior: estadoActual, estado_nuevo: data.estado_nuevo,
-    usuario: contexto.email, comentario: comentario, timestamp: timestamp
+    usuario: contexto.email, comentario: notaCompletado ? (comentario ? comentario + '\n' : '') + notaCompletado : comentario, timestamp: timestamp
   });
 
   const estadosActualizados = hermanas.map((s) => (s.subsolicitud_id === data.subsolicitud_id ? data.estado_nuevo : s.estado));
@@ -205,14 +226,74 @@ function actualizarEstado(db, data, contexto, opciones) {
       usuario: contexto.email, texto: String(comentario).trim(), es_interno: false, timestamp: timestamp
     });
   }
-  Notificaciones.notificarCambioEstado(db, subsolicitud.solicitud_id, data.subsolicitud_id, estadoActual, data.estado_nuevo, {
-    comentario: alSolicitante ? comentario : '', automatico: !!opts.sistemaAutomatico
-  });
+  // sinAviso: lo usa «Recibir y dar fecha», que manda UN aviso con todo.
+  if (!opts.sinAviso) {
+    Notificaciones.notificarCambioEstado(db, subsolicitud.solicitud_id, data.subsolicitud_id, estadoActual, data.estado_nuevo, {
+      comentario: alSolicitante ? comentario : '', automatico: !!opts.sistemaAutomatico
+    });
+  }
 
   return {
     subsolicitud_id: data.subsolicitud_id, solicitud_id: subsolicitud.solicitud_id,
-    estado_anterior: estadoActual, estado_nuevo: data.estado_nuevo, estado_derivado_padre: estadoDerivado
+    estado_anterior: estadoActual, estado_nuevo: data.estado_nuevo, estado_derivado_padre: estadoDerivado,
+    completado: completado
   };
+}
+
+/**
+ * 2026-10-07 (decisiones del dueño D3 y D4 del camino del ítem): «Recibir y
+ * dar fecha» en un solo paso, para uno o varios ítems de una misma solicitud.
+ * data: { solicitud_id, items: [{ subsolicitud_id, fecha_comprometida }] }.
+ * Cada ítem nuevo queda Recibido (S02) y a nombre de quien lo recibe si nadie
+ * lo tenía; la fecha se fija si el ítem no tenía (una ya comprometida no se
+ * mueve aquí: eso pide motivo). A quien pidió le llega UN aviso con todo.
+ */
+async function recibirItems(db, data, contexto) {
+  if (!contexto || contexto.rol === 'GERENCIA') return errorForbidden('El rol Gerencia es de solo lectura.');
+  const solicitud = buscarSolicitudPorId_(db, data && data.solicitud_id);
+  if (!solicitud) return errorValidacion('solicitud_id', 'No existe una solicitud con ese número.');
+  const pedidos = Array.isArray(data.items) ? data.items : [];
+  if (!pedidos.length) return errorValidacion('items', 'Indica qué ítems recibes.');
+  const hermanas = obtenerSubsolicitudesDeSolicitud_(db, solicitud.solicitud_id);
+  const planes = [];
+  for (const p of pedidos) {
+    const sub = hermanas.find((s) => s.subsolicitud_id === (p && p.subsolicitud_id));
+    if (!sub) return errorValidacion('items', 'Ese ítem no es de la solicitud ' + solicitud.solicitud_id + '.');
+    if (ESTADOS_CERRADOS.indexOf(sub.estado) !== -1 || sub.estado === ESTADOS.S08) return errorValidacion('items', 'El ítem «' + (sub.titulo || sub.subsolicitud_id) + '» ya no está abierto.');
+    const fecha = String((p && p.fecha_comprometida) || '').trim();
+    if (!sub.fecha_comprometida && (!fecha || isNaN(new Date(fecha).getTime()))) return errorValidacion('fecha_comprometida', 'Indica para cuándo estará «' + (sub.titulo || sub.subsolicitud_id) + '».');
+    // Un pedido a un departamento sin responsable: lo recibe alguien de su equipo.
+    const sinResponsable = !responsableDeItem_(sub, solicitud);
+    if (sub.depto && sinResponsable && contexto.rol !== 'ADM' && !Servicios.puedeTrabajar_(Servicios.rolesEnDeptos_(db, contexto)[sub.depto])) {
+      return errorForbidden('No estás en el equipo de ' + (sub.depto_nombre || sub.depto) + '.');
+    }
+    if (!sinResponsable) {
+      const veto = vetoFueraDeAlcance_(db, contexto, sub, 'recibir ítems');
+      if (veto) return veto;
+    }
+    planes.push({ sub, fecha, sinResponsable });
+  }
+
+  const yo = normalizarEmail_(contexto.email);
+  const timestamp = new Date().toISOString();
+  const recibidos = [];
+  for (const pl of planes) {
+    const sub = pl.sub;
+    if (pl.sinResponsable && yo) {
+      aplicarDerivacion_(db, { solicitud, solicitudId: sub.solicitud_id, subsolicitudId: sub.subsolicitud_id, items: [sub], anterior: '' },
+        yo, 'Lo recibió.', contexto, timestamp);
+    }
+    if (sub.estado === ESTADOS.S01) {
+      const r = actualizarEstado(db, { subsolicitud_id: sub.subsolicitud_id, estado_nuevo: ESTADOS.S02, comentario: '' }, contexto, { sinAviso: true });
+      if (r && (r._validationError || r._forbidden)) return r;
+    }
+    if (!sub.fecha_comprometida && pl.fecha) {
+      actualizarFilaPorId_(db, 'SUBSOLICITUDES', 'subsolicitud_id', sub.subsolicitud_id, { fecha_comprometida: pl.fecha, comprometida_por: yo });
+    }
+    recibidos.push({ subsolicitud_id: sub.subsolicitud_id, titulo: sub.titulo, numero_item: sub.numero_item, fecha_comprometida: sub.fecha_comprometida || pl.fecha });
+  }
+  try { await Notificaciones.avisarRecepcion(db, solicitud, recibidos, contexto.email); } catch (err) { console.error('aviso de recepción:', err); }
+  return { solicitud_id: solicitud.solicitud_id, recibidos: recibidos.length, items: recibidos };
 }
 
 function asignarResponsables_(db, data, contexto) {
@@ -638,7 +719,7 @@ function getDetalle(db, solicitudId, contexto) {
 
 module.exports = {
   actualizarEstado, actualizarPrioridad, comprometerFecha, derivarSolicitud,
-  editarContenidoSubsolicitud, getDetalle, tomarItem,
+  editarContenidoSubsolicitud, getDetalle, tomarItem, recibirItems,
   recalcularEstadoDerivado_, calcularEstadoDerivado_,
   buscarSolicitudPorId_, buscarSubsolicitud_, fechaHoraCelda_
 };

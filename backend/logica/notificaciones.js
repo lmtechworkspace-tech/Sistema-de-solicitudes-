@@ -484,6 +484,11 @@ function fechaCorta_(iso) {
   if (isNaN(d.getTime())) return '';
   return new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
 }
+// Una fecha sin hora (2026-10-15) se lee tal cual: como instante UTC caería el día anterior en Chile.
+function fechaDia_(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || '').trim());
+  return m ? m[3] + '-' + m[2] + '-' + m[1] : fechaCorta_(v);
+}
 function feriados_(db) {
   try { return leerFilas_(db, 'CONFIG_FERIADOS', COLUMNAS.CONFIG_FERIADOS).map((f) => f.fecha); } catch (err) { return []; }
 }
@@ -656,6 +661,27 @@ function avisarCierreProximo(db, solicitud, items, fechaCierreIso) {
     items.map((i) => '- ' + (i.titulo || i.subsolicitud_id)).join('\n') + '\n\n' +
     'Si no nos respondes, se cerrará automáticamente el ' + fecha + '. Confirma o cuéntanos qué falta aquí:\n' + enlaceSolicitante_(db, solicitud) + pieCorreo_();
   return encolarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: solicitud.solicitante_email, evento: 'AVISO_CIERRE:' + solicitud.solicitud_id + ':' + claveDia_(new Date(), 'America/Santiago'), asunto, cuerpo });
+}
+
+/**
+ * 2026-10-07 (camino del ítem): «Recibir y dar fecha». UN aviso a quien pidió
+ * con quién lo recibió y para cuándo estará cada ítem (en vez de un correo por
+ * ítem y otro por la fecha). items: [{ titulo, fecha_comprometida }].
+ */
+async function avisarRecepcion(db, solicitud, items, quienEmail) {
+  if (!solicitud.solicitante_email || !items.length) return { enviado: false, motivo: 'sin_destinatario' };
+  let quien = 'El equipo';
+  const q = String(quienEmail || '').trim().toLowerCase();
+  if (q) { try { quien = (DirectorioPersonal.directorioPersonalActivo_(db).find((p) => String(p.email).toLowerCase() === q) || {}).nombre || quien; } catch (err) { /* queda «El equipo» */ } }
+  const lineas = items.map((i) => '- ' + (i.titulo || i.subsolicitud_id) + (i.fecha_comprometida ? ': estará para el ' + fechaDia_(i.fecha_comprometida) : ''));
+  if (tieneCuentaActiva_(db, solicitud.solicitante_email)) {
+    campanaEstado_(db, solicitud.solicitante_email, solicitud.solicitud_id, 'recibida por ' + quien, items.length === 1 ? (items[0].titulo || '') : items.length + ' ítems con fecha');
+  }
+  const asunto = 'SIGSO — ' + quien + ' recibió tu solicitud ' + solicitud.solicitud_id;
+  const cuerpo = 'Hola' + (solicitud.solicitante_nombre ? ' ' + solicitud.solicitante_nombre : '') + ':\n\n' +
+    quien + ' recibió tu solicitud ' + solicitud.solicitud_id + ' y está a cargo.\n\n' + lineas.join('\n') + '\n\n' +
+    'Te avisaremos cuando esté resuelto para que lo confirmes. Puedes ver cómo va y escribirle al equipo aquí:\n' + enlaceSolicitante_(db, solicitud) + pieCorreo_();
+  return encolarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: solicitud.solicitante_email, evento: 'HITO:RECIBIDA:' + solicitud.solicitud_id + ':' + items.map((i) => i.subsolicitud_id).join(','), asunto, cuerpo });
 }
 
 async function avisarCompromisoFecha(db, solicitud, subsolicitud, fechaComprometida) {
@@ -1141,7 +1167,7 @@ async function enviarReporteGerenciaAhora(db, data, contexto) {
 
 module.exports = {
   enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada, avisarPedidoDepartamento, avisarMensajeAlEquipo,
-  notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion, enviarCodigoAcceso,
+  notificarCambioEstado, avisarCompromisoFecha, avisarRecepcion, notificarDerivacion, enviarCodigoAcceso,
   // Solicitudes, etapa 1 (2026-10-05): mensajes del equipo y aviso previo al cierre automático.
   avisarMensajeEquipo, avisarCierreProximo, hitoSolicitante_, etiquetaEstado_,
   enviarCorreoRecuperacion,
