@@ -95,6 +95,7 @@
   /* Finanzas (2026-10-06): la bóveda de las finanzas del grupo. */
   --mod-finanzas: #1C5CAB;    --mod-finanzas-suave: color-mix(in srgb, var(--mod-finanzas) 14%, transparent);
   /* Hompy (2026-10-06): el naranja del chaleco de la mascota (el azul de su ropa va en hompy-v2.css). */
+  --mod-credenciales: #0F766E; --mod-credenciales-suave: color-mix(in srgb, var(--mod-credenciales) 14%, transparent);
   --mod-hompy: #E8590C;       --mod-hompy-suave: color-mix(in srgb, var(--mod-hompy) 14%, transparent);
 
   /* --- Tipografia ------------------------------------------------------- */
@@ -216,6 +217,7 @@
     --mod-proyectos: #B794F6;
     --mod-calidad: #2DD4BF;
     --mod-finanzas: #6DA7EC;
+    --mod-credenciales: #2DD4BF;
     --mod-hompy: #FF8A3D;
     --mod-control: #A3D65C;
     --mod-contab: #A3D65C; --mod-rrhh: #FDBA74; --mod-prev: #FACC15; --mod-mkt: #E879F9; --mod-fact: #38BDF8; --mod-admarea: #CBD5E1;
@@ -280,6 +282,7 @@
   --mod-proyectos: #B794F6;
   --mod-calidad: #2DD4BF;
     --mod-finanzas: #6DA7EC;
+    --mod-credenciales: #2DD4BF;
     --mod-hompy: #FF8A3D;
     --mod-control: #A3D65C;
     --mod-contab: #A3D65C; --mod-rrhh: #FDBA74; --mod-prev: #FACC15; --mod-mkt: #E879F9; --mod-fact: #38BDF8; --mod-admarea: #CBD5E1;

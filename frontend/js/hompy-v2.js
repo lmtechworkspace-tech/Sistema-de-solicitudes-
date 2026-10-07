@@ -16,7 +16,7 @@
 
   var U = UIv2;
   var IMG = 'assets/hompy/hompy.webp';
-  var VISTAS = { inicio: 1, calendario: 1, salidas: 1, tipos: 1, salida: 1, estudio: 1, idea: 1, marcas: 1, marca: 1, reportes: 1 };
+  var VISTAS = { inicio: 1, calendario: 1, salidas: 1, tipos: 1, salida: 1, estudio: 1, idea: 1, marcas: 1, marca: 1, reportes: 1, redes: 1 };
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   var DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   var DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -232,6 +232,7 @@
     else if (vista_ === 'marcas') M().lista();
     else if (vista_ === 'marca') M().ficha(arg_);
     else if (vista_ === 'reportes') M().mensual();
+    else if (vista_ === 'redes') pintarRedes();
     if (!sinRuta) window.scrollTo({ top: 0, behavior: sinMov() ? 'auto' : 'smooth' });
   }
   function pagina(html) {
@@ -248,6 +249,7 @@
     { id: 'calendario', nombre: 'Calendario', icono: 'calendario', items: [{ id: 'calendario', nombre: 'Calendario' }] },
     { id: 'estudio', nombre: 'Estudio TikTok', icono: 'camara', items: [{ id: 'estudio', nombre: 'Estudio TikTok' }] },
     { id: 'marcas', nombre: 'Marcas colaboradoras', icono: 'megafono', items: [{ id: 'marcas', nombre: 'Marcas colaboradoras' }] },
+    { id: 'redes', nombre: 'Redes sociales', icono: 'llave', items: [{ id: 'redes', nombre: 'Redes sociales' }] },
     { id: 'salidas', nombre: 'Salidas a terreno', icono: 'ubicacion', items: [{ id: 'salidas', nombre: 'Salidas a terreno' }] },
     { id: 'tipos', nombre: 'Tipos de evento', icono: 'ajustes', items: [{ id: 'tipos', nombre: 'Tipos de evento' }] },
     { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true, descripcion: 'El mes de Hompy, con PDF', items: [{ id: 'reportes', nombre: 'Reporte mensual' }] }
@@ -262,6 +264,15 @@
       'Hompy</span>' +
       '<h1>' + txt(titulo) + '</h1>' + (sub ? '<p>' + txt(sub) + '</p>' : '') + '</div>' +
       '<div class="sx2-cabecera__acciones">' + (acciones || '') + '</div></header>';
+  }
+  // Redes sociales (2026-10-07): las cuentas y claves viven en la bóveda de
+  // credenciales de la empresa (credenciales-v2.js); aquí se ve su categoría «redes».
+  function pintarRedes() {
+    pagina(cabecera('Redes sociales', 'Las cuentas de Hompy y HomePymes: usuario, quiénes tienen la clave y si tienen verificación en dos pasos. La clave se ve con el código del teléfono.') +
+      '<div class="js-hp2-redes"></div>');
+    var el = raiz_.querySelector('.js-hp2-redes');
+    if (window.SigsoCredenciales) SigsoCredenciales.montar(el, { categoria: 'redes' });
+    else el.innerHTML = U.card({ cuerpo: U.vacio({ icono: 'candado', titulo: 'La bóveda no está disponible', texto: 'Recarga la página.' }) });
   }
   function chipTipo(t, sm) {
     return '<span class="hp2-tipo hp2-color-' + txt(t.color) + (sm ? ' hp2-tipo--sm' : '') + '">' + U.ico(t.icono, sm ? 12 : 14) + txt(t.nombre) + '</span>';

@@ -70,6 +70,9 @@
     // grupo. No se asigna en la cuenta: solo aparece si la sesión trae
     // cuenta.finanzas (lista fija del servidor) y cada acción lo re-verifica.
     finanzas: { icono: 'candado', nombre: 'Finanzas', descripcion: 'Bóveda: caja, cobranza y resultados del grupo' },
+    // Credenciales (2026-10-07, credenciales-v2.js): claves de la empresa por
+    // categoría. Lo pinta cuenta.credenciales; cada acción lo re-verifica.
+    credenciales: { icono: 'llave', nombre: 'Credenciales', descripcion: 'Claves de la empresa y quién tiene acceso' },
     // Hompy (2026-10-06, hompy-v2.js): la mascota. Se asigna en la cuenta
     // (módulo `hompy`) y el servidor lo exige en cada acción. Su ícono es la
     // cara de Hompy (iconos.js la dibuja como imagen).
@@ -128,6 +131,7 @@
     proyectos: { acento: 'var(--mod-proyectos)', suave: 'var(--mod-proyectos-suave)' },
     calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' },
     finanzas: { acento: 'var(--mod-finanzas)', suave: 'var(--mod-finanzas-suave)' },
+    credenciales: { acento: 'var(--mod-credenciales)', suave: 'var(--mod-credenciales-suave)' },
     hompy: { acento: 'var(--mod-hompy)', suave: 'var(--mod-hompy-suave)' }
   };
   // Barra lateral, segunda versión (2026-10-05): cada área con su color, para reconocerla de lejos.
@@ -1301,13 +1305,14 @@
     // Sin esta guarda, renderNavAhora_ moria con una excepcion y el sidebar
     // quedaba VACIO: la persona no veia ni Inicio para reintentar.
     var cuenta = (sesion && sesion.cuenta) || {};
-    var propios = (cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m] && !esDepartamento_(m) && m !== 'finanzas'; })
+    var propios = (cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m] && !esDepartamento_(m) && m !== 'finanzas' && m !== 'credenciales'; })
       .concat((cuenta.departamentos || []).filter(esDepartamento_));
     // Quien es jefatura de un área tiene "Mi equipo" dentro de ella: el módulo
     // suelto "Mi departamento" queda para las jefaturas sin área (2026-10-03).
     if ((cuenta.jefatura_de || []).length) propios = propios.filter(function (m) { return m !== 'jefatura'; });
     // Finanzas: solo la lista fija de la bóveda (la sesión trae cuenta.finanzas).
     if (cuenta.finanzas === true) propios.push('finanzas');
+    if (cuenta.credenciales === true) propios.push('credenciales');
     // Solicitudes, etapa 2: quien está en la lista de un departamento recibe
     // sus pedidos en la Bandeja (la cola del área), tenga o no el módulo.
     if ((cuenta.colas_solicitudes || []).length && propios.indexOf('bandeja') === -1) propios.push('bandeja');
@@ -1712,6 +1717,7 @@
     }
     // Finanzas: sin auto-refresco a propósito (mantendría la bóveda abierta).
     if (id === 'finanzas' && window.SigsoFinanzas) window.SigsoFinanzas.cargar();
+    if (id === 'credenciales' && window.SigsoCredenciales) window.SigsoCredenciales.cargar();
     if (id === 'hompy' && window.SigsoHompy) window.SigsoHompy.cargar();
     if (id === 'pausas' && moduloImpl_('pausas')) {
       moduloImpl_('pausas').cargar();

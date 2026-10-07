@@ -56,7 +56,7 @@ function limpiarAntiguos_(backupDir, retencionDias) {
   const limite = Date.now() - retencionDias * 24 * 3600 * 1000;
   let borrados = 0;
   fs.readdirSync(backupDir).forEach((nombre) => {
-    if (!/^(sigso|finanzas)-\d{4}-\d{2}-\d{2}\.db$/.test(nombre)) return;
+    if (!/^(sigso|finanzas|credenciales)-\d{4}-\d{2}-\d{2}\.db$/.test(nombre)) return;
     const ruta = path.join(backupDir, nombre);
     if (fs.statSync(ruta).mtimeMs < limite) { fs.unlinkSync(ruta); borrados++; }
   });
@@ -86,6 +86,12 @@ async function ejecutar_(opciones) {
   if (fs.existsSync(finPath)) {
     const finLocal = respaldarLocal_(finPath, opciones.backupDir, fecha, 'finanzas');
     resultado.finanzas = { archivoLocal: finLocal, tamano: fs.statSync(finLocal).size, r2: await subirAR2_(finLocal, fecha, 'finanzas') };
+  }
+  // Credenciales (2026-10-07): mismo trato que finanzas.db.
+  const credPath = opciones.credencialesDbPath || path.join(path.dirname(opciones.dbPath), 'credenciales.db');
+  if (fs.existsSync(credPath)) {
+    const credLocal = respaldarLocal_(credPath, opciones.backupDir, fecha, 'credenciales');
+    resultado.credenciales = { archivoLocal: credLocal, tamano: fs.statSync(credLocal).size, r2: await subirAR2_(credLocal, fecha, 'credenciales') };
   }
   return resultado;
 }

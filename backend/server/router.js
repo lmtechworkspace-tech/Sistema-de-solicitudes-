@@ -98,6 +98,7 @@ const FinanzasCobranza = require('../logica/finanzasCobranza');
 const FinanzasTablero = require('../logica/finanzasTablero');
 const FinanzasPresupuesto = require('../logica/finanzasPresupuesto');
 const FinanzasCierre = require('../logica/finanzasCierre');
+const Credenciales = require('../logica/credenciales');
 const Hompy = require('../logica/hompy');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
@@ -705,6 +706,21 @@ const ACCIONES = {
   // Etapa 6: cierre de mes, paralelo con la planilla SIGECO y retiro.
   finanzasCierre: (db, data, contexto) => FinanzasCierre.estado(db, data, contexto),
   finanzasCerrarMes: (db, data, contexto) => FinanzasCierre.cerrar(db, data, contexto),
+  // Credenciales (2026-10-07): bóveda de claves de la empresa por categoría
+  // (Hompy ve las redes sociales). Ver credenciales.js.
+  credEstado: (db, data, contexto) => Credenciales.estado(db, data, contexto),
+  credDatos: (db, data, contexto) => Credenciales.datos(db, data, contexto),
+  credPrepararAutenticador: (db, data, contexto) => Credenciales.prepararAutenticador(db, data, contexto),
+  credActivarAutenticador: (db, data, contexto) => Credenciales.activarAutenticador(db, data, contexto),
+  credEntrar: (db, data, contexto) => Credenciales.entrar(db, data, contexto),
+  credSalir: (db, data, contexto) => Credenciales.salir(db, data, contexto),
+  credVerClave: (db, data, contexto) => Credenciales.verClave(db, data, contexto),
+  credGuardarCuenta: (db, data, contexto) => Credenciales.guardarCuenta(db, data, contexto),
+  credRetirarCuenta: (db, data, contexto) => Credenciales.retirarCuenta(db, data, contexto),
+  credGuardarCategoria: (db, data, contexto) => Credenciales.guardarCategoria(db, data, contexto),
+  credDarAcceso: (db, data, contexto) => Credenciales.darAcceso(db, data, contexto),
+  credQuitarAcceso: (db, data, contexto) => Credenciales.quitarAcceso(db, data, contexto),
+  credBitacora: (db, data, contexto) => Credenciales.bitacora(db, data, contexto),
   finanzasReabrirMes: (db, data, contexto) => FinanzasCierre.reabrir(db, data, contexto),
   finanzasParalelo: (db, data, contexto) => FinanzasCierre.paralelo(db, data, contexto),
   finanzasPasoRetiro: (db, data, contexto) => FinanzasCierre.marcarPasoRetiro(db, data, contexto),

@@ -78,6 +78,8 @@ function perfilPublico(cuenta, db) {
   // para el resto ni aparece. Solo pinta el menú: cada acción de Finanzas lo
   // vuelve a verificar en el servidor.
   if (db && finanzasDe_(db, cuenta)) perfil.finanzas = true;
+  // Credenciales (2026-10-07): igual que Finanzas -- super admin o con acceso a alguna categoría.
+  if (db && credencialesDe_(db, cuenta)) perfil.credenciales = true;
   return perfil;
 }
 function contextoDe_(cuenta) {
@@ -91,6 +93,7 @@ function contextoDe_(cuenta) {
 function departamentosDe_(db, cuenta) { return require('./controlInterno').modulosDeDepartamento_(db, contextoDe_(cuenta)); }
 function colasDe_(db, cuenta) { try { return require('./serviciosSolicitud').colasDe_(db, contextoDe_(cuenta)); } catch (e) { return []; } }
 function finanzasDe_(db, cuenta) { try { return require('./finanzasBoveda').tieneAcceso(db, { cuenta_id: cuenta.cuenta_id, email: parsearListaPortal(cuenta.emails)[0] || '' }); } catch (e) { return false; } }
+function credencialesDe_(db, cuenta) { try { return require('./credenciales').tieneAcceso(db, { cuenta_id: cuenta.cuenta_id, super_admin: cuenta.super_admin === true || cuenta.super_admin === 'TRUE' || cuenta.super_admin === 1 }); } catch (e) { return false; } }
 function jefaturaDe_(db, cuenta) { return require('./controlInterno').jefaturaDeDepartamentos_(db, contextoDe_(cuenta)); }
 
 function login(db, data, ip) {
