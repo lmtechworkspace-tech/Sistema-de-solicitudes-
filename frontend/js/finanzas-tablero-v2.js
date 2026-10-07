@@ -64,8 +64,15 @@
   function graficoFlujo(host, serie, elegido) {
     var W = 640, H = 240, L = 46, B = 24, T = 16;
     var s = lienzo(host, W, H);
-    var mx = redondo(Math.max.apply(null, serie.map(function (m) { return Math.max(m.ingresos, m.egresos); }).concat([1])) * 1.08);
+    var mx = redondo(Math.max.apply(null, serie.map(function (m) { return Math.max(m.ingresos, m.egresos, m.ppto_ingresos || 0); }).concat([1])) * 1.08);
     var y = function (v) { return T + (H - T - B) * (1 - v / mx); }, bw = (W - L) / serie.length;
+    // Etapa 5: ingresos presupuestados como línea punteada (misma escala).
+    var conPpto = serie.filter(function (m) { return m.ppto_ingresos; });
+    if (conPpto.length) {
+      var pts = serie.map(function (m, i) { return m.ppto_ingresos ? (L + i * bw + bw / 2) + ',' + y(m.ppto_ingresos) : null; }).filter(Boolean);
+      if (pts.length > 1) el('path', { d: 'M' + pts.join('L'), style: 'fill:none;stroke:var(--sx-texto);stroke-width:1.5;stroke-dasharray:4 4;opacity:.65' }, s);
+      serie.forEach(function (m, i) { if (m.ppto_ingresos) el('circle', { cx: L + i * bw + bw / 2, cy: y(m.ppto_ingresos), r: 3, style: 'fill:var(--sx-superficie);stroke:var(--sx-texto);stroke-width:1.5' }, s); });
+    }
     for (var g = 0; g <= 4; g++) {
       var v = mx * g / 4;
       el('line', { x1: L, x2: W, y1: y(v), y2: y(v), class: g ? 'fin2-grid-l' : 'fin2-base' }, s);
@@ -79,8 +86,9 @@
       if (on) texto(s, { x: x0 + bw / 2, y: Math.max(12, y(Math.max(m.ingresos, m.egresos)) - 8), 'text-anchor': 'middle', class: 'fin2-svg-val' }, millones(m.resultado));
       var hit = el('rect', { x: x0, y: T, width: bw, height: H - T - B, class: 'fin2-hit' }, s);
       hit.addEventListener('mousemove', function (ev) {
-        mostrarTip(ev, mesLargo(m.periodo), [['Ingresos de la empresa', plata(m.ingresos), 'var(--fin2-ing)'], ['Gastos de la empresa', plata(m.egresos), 'var(--fin2-egr)'], ['Resultado', plata(m.resultado), 'transparent'],
-          ['Fondos de clientes recibidos', plata(m.fondos_recibidos), 'transparent']].concat(m.pendientes ? [['Sin revisar', m.pendientes + ' movimientos', 'var(--sx-alerta)']] : []));
+        mostrarTip(ev, mesLargo(m.periodo), [['Ingresos de la empresa', plata(m.ingresos), 'var(--fin2-ing)'], ['Gastos de la empresa', plata(m.egresos), 'var(--fin2-egr)'], ['Resultado', plata(m.resultado), 'transparent']]
+          .concat(m.ppto_ingresos ? [['Ingresos presupuestados', plata(m.ppto_ingresos), 'transparent'], ['Gastos presupuestados', plata(m.ppto_egresos), 'transparent']] : []).concat([
+          ['Fondos de clientes recibidos', plata(m.fondos_recibidos), 'transparent']]).concat(m.pendientes ? [['Sin revisar', m.pendientes + ' movimientos', 'var(--sx-alerta)']] : []));
       });
       hit.addEventListener('mouseleave', ocultarTip);
       hit.addEventListener('click', function () { est_.periodo = m.periodo; ver(x_); });
@@ -202,7 +210,12 @@
       return '<li><span class="fin2-ob__dia">' + txt(corta(o.fecha)) + '</span><span>' + txt(o.nombre) + '</span><b>' + (o.estimado ? '≈ ' + plata(o.estimado) : '—') + '</b></li>';
     }).join('');
     var alcanza = d.caja >= d.total_obligaciones;
-    var kpiCaja = d.total_obligaciones ? { texto: alcanza ? 'alcanza para las obligaciones' : 'no alcanza para las obligaciones', tono: alcanza ? 'ok' : 'critico' } : { texto: 'sin datos para estimar obligaciones', tono: 'neutro' };
+    var kpiCaja = d.meses_caja !== null && d.meses_caja !== undefined
+      ? { texto: 'cubre ' + String(d.meses_caja).replace('.', ',') + ' meses de gastos' + (d.calidad.completo ? '' : ' (provisorio)'), tono: d.meses_caja < 2 ? 'critico' : (d.meses_caja < 4 || !d.calidad.completo) ? 'alerta' : 'ok' }
+      : d.total_obligaciones ? { texto: alcanza ? 'alcanza para las obligaciones' : 'no alcanza para las obligaciones', tono: alcanza ? 'ok' : 'critico' } : { texto: 'sin datos para estimar obligaciones', tono: 'neutro' };
+    var deudas = (d.entre_empresas || []).map(function (x) {
+      return '<li><span><b>' + txt(x.debe) + '</b> le debe a <b>' + txt(x.a) + '</b></span><b>' + plata(x.monto) + '</b></li>';
+    }).join('');
     var kpiCustodia = d.custodia < 0 ? { texto: 'se pagó más de lo que mandaron', tono: 'alerta' } : { texto: 'no se puede gastar', tono: 'neutro' };
     x_.pagina(x_.cab('Tablero', controles(d)) +
       '<div class="fin2-informe" id="fin2-informe">' +
@@ -218,7 +231,8 @@
         U.card({ titulo: 'Lectura del mes', icono: 'bombilla', sub: 'lo que conviene mirar primero', cuerpo: '<div class="fin2-lectura">' + lectura + '</div>' }) +
         '<div class="fin2-grid fin2-grid--2">' +
           U.card({ titulo: 'Ingresos y gastos de la empresa', icono: 'grafico', sub: 'sin la plata de clientes · clic en un mes para verlo', cuerpo: '<div id="fint-flujo"></div>' +
-            '<div class="fin2-ley"><span style="--k:var(--fin2-ing)">Ingresos</span><span style="--k:var(--fin2-egr)">Gastos</span></div>' }) +
+            '<div class="fin2-ley"><span style="--k:var(--fin2-ing)">Ingresos</span><span style="--k:var(--fin2-egr)">Gastos</span>' +
+            (d.presupuesto_cargado ? '<span class="fin2-ley--linea">Ingresos presupuestados</span>' : '') + '</div>' }) +
           U.card({ titulo: 'Del ingreso al resultado', icono: 'capas', sub: 'de cada ' + PESO + '100 que entraron quedaron ' + PESO + (m.ingresos ? Math.round(m.resultado / m.ingresos * 100) : 0), cuerpo: '<div id="fint-cascada"></div>' }) +
         '</div>' +
         '<div class="fin2-grid">' +
@@ -244,6 +258,7 @@
             (d.fondos_negativos.length ? '<p class="fin2-ayuda"><b class="fin2-neg">En negativo según lo registrado:</b> ' + d.fondos_negativos.map(function (f) { return txt(f.cliente) + ' ' + plata(f.saldo); }).join(' · ') + '</p>' : '<p class="fin2-ayuda">Ningún cliente en negativo.</p>') }) +
         '</div>' +
         (d.por_empresa.length > 1 ? U.card({ titulo: 'Caja por cuenta', icono: 'maletin', cuerpo: cajaCuentas(d) }) : '') +
+        (deudas ? U.card({ titulo: 'Entre empresas', icono: 'derivar', sub: 'préstamos y gastos compartidos pagados por otra', cuerpo: '<ul class="fin2-mini">' + deudas + '</ul>' }) : '') +
         '<p class="fin2-ayuda fin2-pie-inf">Cifras de la bóveda de Finanzas. Resultado = ingresos menos gastos de la empresa; la plata de clientes, los traspasos entre cuentas propias y los préstamos entre empresas van aparte.' + (d.calidad.completo ? '' : ' Mes con movimientos sin revisar: las cifras pueden cambiar.') + '</p>' +
       '</div>');
     graficoFlujo(document.getElementById('fint-flujo'), d.serie, d.periodo);

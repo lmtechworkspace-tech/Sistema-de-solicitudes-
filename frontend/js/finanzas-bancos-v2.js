@@ -262,13 +262,22 @@
     if (t.cuentas.length) h += '<select class="fin2-input fin2-input--sm js-finm-cuenta">' + opciones(t.cuentas, c.cuenta, t.cliente ? 'Concepto' : 'Cuenta') + '</select>';
     if (t.cliente || t.id === 'INGRESO') h += '<input class="fin2-input fin2-input--sm js-finm-cliente" list="finm-clientes" value="' + txt(c.cliente || '') + '" placeholder="' + (t.cliente ? 'Cliente' : 'Cliente (opcional)') + '">';
     if (t.empresa) h += '<select class="fin2-input fin2-input--sm js-finm-empresa">' + opciones(cat_.empresas, c.empresa, 'Empresa') + '</select>';
+    // Etapa 5: un gasto se puede repartir en partes iguales entre empresas del grupo.
+    if (t.id === 'EGRESO' && cat_.repartos) {
+      var actual = (c.reparto || []).slice().sort().join('|');
+      var elegido = (cat_.repartos.filter(function (r) { return r.empresas.slice().sort().join('|') === actual; })[0] || {}).id || '';
+      h += '<select class="fin2-input fin2-input--sm js-finm-reparto" title="Gasto compartido entre empresas">' +
+        '<option value="">No se reparte</option>' + cat_.repartos.map(function (r) { return '<option value="' + txt(r.id) + '"' + (r.id === elegido ? ' selected' : '') + '>' + txt(r.nombre) + '</option>'; }).join('') + '</select>';
+    }
     return h || '<span class="fin2-ayuda">—</span>';
   }
   function leerFila(tr) {
     var q = function (s) { var e = tr.querySelector(s); return e ? e.value.trim() : ''; };
     var nombre = q('.js-finm-cliente');
     var cli = nombre ? cat_.clientes.filter(function (c) { return c.nombre === nombre; })[0] : null;
-    return { id: tr.dataset.id, tipo: q('.js-finm-tipo'), cuenta: q('.js-finm-cuenta'), cliente_id: cli ? cli.id : '', empresa: q('.js-finm-empresa'), nota: q('.js-finm-nota'), _clienteEscrito: nombre && !cli };
+    var rep = q('.js-finm-reparto');
+    var preset = rep && cat_.repartos ? cat_.repartos.filter(function (r) { return r.id === rep; })[0] : null;
+    return { id: tr.dataset.id, tipo: q('.js-finm-tipo'), cuenta: q('.js-finm-cuenta'), cliente_id: cli ? cli.id : '', empresa: q('.js-finm-empresa'), reparto: preset ? preset.empresas : [], nota: q('.js-finm-nota'), _clienteEscrito: nombre && !cli };
   }
   function guardar(items) {
     var malos = items.filter(function (i) { return i._clienteEscrito; });

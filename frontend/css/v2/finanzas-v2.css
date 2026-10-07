@@ -284,3 +284,25 @@
 @media (prefers-reduced-motion: reduce) { .fin2-crece, .fin2-hbar__pista i, .fin2-antig i { animation: none; } }
 @media print { .fin2-crece, .fin2-hbar__pista i { animation: none !important; } }
 .fin2-kpis5 .sx2-kpi__valor { white-space: nowrap; }
+
+/* --- Etapa 5: presupuesto (finanzas-presupuesto-v2.js) --------------------- */
+.fin2-ley--linea::before { background: none !important; border-top: 2px dashed var(--sx-texto); height: 0 !important; width: 16px !important; border-radius: 0 !important; }
+.fin2-cinta--info { background: var(--fin-suave); }
+.fin2-ppto { min-width: 920px; }
+.fin2-ppto th.fin2-cen { text-align: center; }
+.fin2-ppto .fin2-sep, .fin2-ppto th.fin2-sep { border-left: 2px solid var(--sx-borde); }
+.fin2-sec td { background: var(--sx-fondo, var(--sx-borde)); font-weight: 700; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--sx-texto-2); }
+.fin2-tot td { font-weight: 700; border-top: 1px solid var(--sx-borde-fuerte, var(--sx-borde)); }
+.fin2-res td { background: var(--fin-suave); font-size: .9375rem; }
+.fin2-desv.sx2-tono-ok { color: var(--sx-ok); } .fin2-desv.sx2-tono-critico { color: var(--sx-critico); } .fin2-desv.sx2-tono-neutro { color: var(--sx-texto-3); }
+.fin2-ejec-c { min-width: 140px; white-space: nowrap; }
+.fin2-ejec { position: relative; display: inline-block; vertical-align: middle; width: 90px; height: 8px; border-radius: 4px; background: var(--sx-borde); margin-right: 6px; }
+.fin2-ejec i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--sx-texto-3); transform-origin: left; animation: creceh .8s cubic-bezier(.2,.8,.2,1) both; }
+.fin2-ejec i.sx2-tono-ok { background: var(--sx-ok); } .fin2-ejec i.sx2-tono-critico { background: var(--sx-critico); }
+.fin2-ejec b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--sx-texto); opacity: .5; }
+.fin2-ppto-edit { min-width: 1320px; }
+.fin2-ppto-edit td { padding: 5px 4px; }
+.fin2-ppto-cta { white-space: nowrap; padding-left: 14px !important; font-size: .8125rem; position: sticky; left: 0; background: var(--sx-superficie); z-index: 1; }
+.fin2-celda { width: 86px !important; text-align: right; font-variant-numeric: tabular-nums; }
+.fin2-celda:focus { border-color: var(--fin); box-shadow: 0 0 0 3px var(--fin-suave); outline: 0; }
+.fin2-movs .js-finm-reparto { margin-top: 4px; font-size: .75rem; }

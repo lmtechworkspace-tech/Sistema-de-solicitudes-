@@ -31,7 +31,8 @@
     IMPORTAR_CARTOLA: ['Subió una cartola', 'ok'], CLASIFICAR: ['Clasificó movimientos', 'ok'], APRENDER_PLANILLA: ['Aprendió de la planilla SIGECO', 'ok'],
     VER_COBRANZA: ['Vio la cobranza', 'info'], VER_FICHA_CLIENTE: ['Vio la ficha de un cliente', 'info'],
     IMPORTAR_VENTAS_SII: ['Subió ventas del SII', 'ok'], IMPORTAR_FACTURAS_PLANILLA: ['Trajo facturas de la planilla', 'ok'],
-    FACTURA_ANULADA: ['Anuló una factura', 'alerta'], FACTURA_INCOBRABLE: ['Marcó una factura incobrable', 'alerta'], FACTURA_VIGENTE: ['Reactivó una factura', 'info']
+    FACTURA_ANULADA: ['Anuló una factura', 'alerta'], FACTURA_INCOBRABLE: ['Marcó una factura incobrable', 'alerta'], FACTURA_VIGENTE: ['Reactivó una factura', 'info'],
+    VER_PRESUPUESTO: ['Vio el presupuesto', 'info'], GUARDAR_PRESUPUESTO: ['Guardó el presupuesto', 'ok']
   };
 
   function txt(v) { return U.esc(String(v == null ? '' : v)); }
@@ -185,6 +186,7 @@
     if (vista_ === 'bitacora') return verBitacora();
     if (vista_ === 'tablero' && window.SigsoFinanzasTablero) return SigsoFinanzasTablero.ver(ctxBancos());
     if (vista_ === 'cobranza' && window.SigsoFinanzasCobranza) return SigsoFinanzasCobranza.ver(ctxBancos());
+    if (vista_ === 'presupuesto' && window.SigsoFinanzasPresupuesto) return SigsoFinanzasPresupuesto.ver(ctxBancos());
     if ((vista_ === 'bancos' || vista_ === 'movimientos') && window.SigsoFinanzasBancos) {
       return vista_ === 'bancos' ? SigsoFinanzasBancos.verBancos(ctxBancos()) : SigsoFinanzasBancos.verMovimientos(ctxBancos());
     }
@@ -200,6 +202,7 @@
     Resumen: ['Seguridad de la bóveda', 'Quién tiene acceso, las capas de protección y los últimos ingresos.'],
     Tablero: ['Tablero de Finanzas', 'El mes en 30 segundos: resultado, caja, cobranza y plata de clientes.'], 'Bitácora': ['Bitácora de accesos', 'Todo lo que se hace en la bóveda, en orden y encadenado.'],
     Bancos: ['Bancos', 'Sube la cartola del banco y el sistema la clasifica.'], Movimientos: ['Movimientos', 'Revisa lo que el sistema propone; lo que corriges, lo aprende.'],
+    Presupuesto: ['Presupuesto', 'Lo presupuestado contra lo real, por cuenta, del mes y del año.'],
     Cobranza: ['Cobranza', 'Lo que falta cobrar y desde hace cuánto; los pagos del banco se cruzan solos con las facturas.']
   };
   // Lo que necesita finanzas-bancos-v2.js para pintarse dentro de la bóveda.
@@ -216,7 +219,7 @@
     var tt = TITULOS_[seccion] || TITULOS_.Resumen;
     return cab(tt[0], tt[1], (extra ? '<span class="fin2-cab-extra">' + extra + '</span>' : '') +
       '<span class="fin2-abierta" title="Se cierra sola sin uso">' + U.ico('reloj', 14) + '<span id="fin-reloj">' + inactividadMin_ + ':00</span></span>' +
-      U.segmento([{ id: 'tablero', texto: 'Tablero', icono: 'grafico' }, { id: 'bancos', texto: 'Bancos', icono: 'dinero' }, { id: 'movimientos', texto: 'Movimientos', icono: 'tabla' }, { id: 'cobranza', texto: 'Cobranza', icono: 'recibo' }, { id: 'inicio', texto: 'Seguridad', icono: 'escudo' }, { id: 'bitacora', texto: 'Bitácora', icono: 'lista' }], vista_, 'js-fin-vista') +
+      U.segmento([{ id: 'tablero', texto: 'Tablero', icono: 'grafico' }, { id: 'bancos', texto: 'Bancos', icono: 'dinero' }, { id: 'movimientos', texto: 'Movimientos', icono: 'tabla' }, { id: 'cobranza', texto: 'Cobranza', icono: 'recibo' }, { id: 'presupuesto', texto: 'Presupuesto', icono: 'diana' }, { id: 'inicio', texto: 'Seguridad', icono: 'escudo' }, { id: 'bitacora', texto: 'Bitácora', icono: 'lista' }], vista_, 'js-fin-vista') +
       U.boton({ texto: 'Cerrar bóveda', icono: 'candado', clase: 'js-fin-salir' }));
   }
   function capa(ok, titulo, texto) {
@@ -257,7 +260,7 @@
           '<li class="fin2-etapa--hecha"><b>E2 · Bancos y cartolas</b><span>Subir la cartola, cuadrar y clasificar</span></li>' +
           '<li class="fin2-etapa--hecha"><b>E3 · Clientes y cobranza</b><span>Facturas del SII, abonos y cartera real</span></li>' +
           '<li class="fin2-etapa--hecha"><b>E4 · Tablero de gerencia</b><span>Gráficos e informe mensual</span></li>' +
-          '<li><b>E5 · Presupuesto</b><span>Proyectado vs. real</span></li>' +
+          '<li class="fin2-etapa--hecha"><b>E5 · Presupuesto</b><span>Proyectado vs. real, gastos compartidos y meses de caja</span></li>' +
           '<li><b>E6 · Retiro de la planilla</b><span>Un mes en paralelo y se archiva</span></li>' +
         '</ol>' }) +
       '</div>');

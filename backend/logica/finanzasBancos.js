@@ -337,6 +337,11 @@ function publicaCuenta_(r) {
 const catalogo = B.conBoveda('', function (db) {
   return {
     empresas: EMPRESAS,
+    // Repartos de gastos compartidos (SIGECO: CONFIG.EMPRESAS_PRORRATEO; Virtual Base paga y no se carga).
+    repartos: [
+      { id: 'sigeco', nombre: 'Partes iguales: GDE, HomePymes, HomePrevise y RLD', empresas: ['GDE', 'HomePymes', 'HomePrevise', 'RLD'] },
+      { id: 'todas', nombre: 'Partes iguales entre las 6 empresas', empresas: EMPRESAS.slice() }
+    ],
     tipos: Object.keys(TIPOS).map((k) => ({ id: k, nombre: TIPOS[k].nombre, sentido: TIPOS[k].sentido, cliente: !!TIPOS[k].cliente, empresa: !!TIPOS[k].empresa, cuentas: cuentasDe_(k) })),
     clientes: clientes_(db).map((c) => ({ id: c.id, nombre: c.nombre, rut: c.rut })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
   };
@@ -484,6 +489,11 @@ const clasificar = B.conBoveda('', function (db, data, contexto, x) {
       if (!TIPOS[c.tipo] || !TIPOS[c.tipo].cliente) { if (c.tipo !== 'INGRESO') { c.cliente_id = ''; c.cliente = ''; } }
       if (!TIPOS[c.tipo] || !TIPOS[c.tipo].empresa) c.empresa = '';
       if (!cuentasDe_(c.tipo).length) c.cuenta = '';
+      // Etapa 5: un gasto de la empresa puede repartirse en partes iguales entre
+      // varias empresas del grupo (arriendo, internet, aseo: el GASTOS
+      // COMPARTIDOS de SIGECO). Solo EGRESO y con 2 o más empresas.
+      const reparto = Array.isArray(it.reparto) ? [...new Set(it.reparto.map(texto_))].filter((e) => EMPRESAS.indexOf(e) !== -1) : [];
+      if (c.tipo === 'EGRESO' && reparto.length >= 2) c.reparto = reparto;
       const err = validarClasif_(c, datos);
       if (err) { errores.push({ id: it.id, mensaje: err }); return; }
       datos.clasif = c;
@@ -492,7 +502,7 @@ const clasificar = B.conBoveda('', function (db, data, contexto, x) {
       hechos++;
       if (it.recordar !== false && !esGenerica_(datos.glosa)) {
         const h = huellaGlosa_(datos.glosa);
-        const regla = { glosa: datos.glosa, clasif: { tipo: c.tipo, cuenta: c.cuenta, cliente_id: c.cliente_id, cliente: c.cliente, empresa: c.empresa, ambigua: ambigua_(datos.glosa, listaClientes) } };
+        const regla = { glosa: datos.glosa, clasif: { tipo: c.tipo, cuenta: c.cuenta, cliente_id: c.cliente_id, cliente: c.cliente, empresa: c.empresa, reparto: c.reparto, ambigua: ambigua_(datos.glosa, listaClientes) } };
         d.prepare("INSERT INTO FIN_REGLAS (id, huella, datos, origen, usos, actualizada_en) VALUES (?,?,?,'persona',1,?) " +
           "ON CONFLICT(huella) DO UPDATE SET datos = excluded.datos, origen = 'persona', usos = usos + 1, actualizada_en = excluded.actualizada_en")
           .run(crypto.randomUUID(), h, cif_(regla), ahora);
@@ -528,7 +538,7 @@ const confirmarSugeridas = B.conBoveda('', function (db, data, contexto, x) {
   const items = [];
   filas.forEach((r) => {
     const d = des_(r.datos); const s = d.sugerencia || {};
-    if (s.certeza === 'alta' && completa_(s, d.abono > 0 ? 'abono' : 'cargo')) items.push({ id: r.id, tipo: s.tipo, cuenta: s.cuenta, cliente_id: s.cliente_id, empresa: s.empresa, recordar: false });
+    if (s.certeza === 'alta' && completa_(s, d.abono > 0 ? 'abono' : 'cargo')) items.push({ id: r.id, tipo: s.tipo, cuenta: s.cuenta, cliente_id: s.cliente_id, empresa: s.empresa, reparto: s.reparto, recordar: false });
   });
   if (!items.length) return { hechos: 0, reglas: 0, errores: [] };
   return clasificar(db, Object.assign({}, data, { items }), contexto);
