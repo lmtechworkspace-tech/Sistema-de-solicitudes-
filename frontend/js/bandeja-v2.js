@@ -181,10 +181,10 @@
 
   // --- Filtro y orden --------------------------------------------------------------------
   var KPIS = [
-    { id: 'abiertos', etiqueta: 'Abiertos', icono: 'bandeja', tono: 'primario', unidad: 'ítems en curso', f: abierto },
+    { id: 'abiertos', etiqueta: 'Abiertos', icono: 'bandeja', tono: 'primario', unidad: 'en curso', f: abierto },
     { id: 'por_revisar', etiqueta: 'Nuevos', icono: 'ojo', tono: 'info', unidad: 'nadie los tomó ni empezó', f: function (i) { return abierto(i) && i.estado === 'S01'; } },
     { id: 'fuera_de_plazo', etiqueta: 'Fuera de plazo', icono: 'alerta', tono: 'critico', unidad: 'pasaron su SLA', f: function (i) { return abierto(i) && i.situacion_sla === 'FUERA_DE_PLAZO'; } },
-    { id: 'sin_fecha', etiqueta: 'Sin fecha comprometida', icono: 'calendario', tono: 'alerta', unidad: 'nadie se comprometió', f: function (i) { return abierto(i) && !i.fecha_comprometida; } },
+    { id: 'sin_fecha', etiqueta: 'Sin fecha', icono: 'calendario', tono: 'alerta', unidad: 'nadie se comprometió', f: function (i) { return abierto(i) && !i.fecha_comprometida; } },
     { id: 'sin_asignar', etiqueta: 'Sin asignar', icono: 'persona', tono: 'hito', unidad: 'sin responsable', f: function (i) { return abierto(i) && !i.asignado; } },
     { id: 'por_validar', etiqueta: 'Por validar', icono: 'check', tono: 'ok', unidad: 'terminados, esperan al solicitante', f: function (i) { return i.estado === 'S08'; } },
     { id: 'todos', etiqueta: 'Todos', f: function () { return true; } }
@@ -244,10 +244,14 @@
   }
 
   function kpis() {
-    var r = datos_.resumen || {};
+    // 2026-10-07 (dueño): cuentan SOLICITUDES, como la tabla; debajo, cuántos ítems son si no es lo mismo.
     return '<div class="sx2-fila-kpis sx2-fila-kpis--6">' + KPIS.filter(function (k) { return k.id !== 'todos'; }).map(function (k, i) {
-      var v = r[k.id] || 0;
-      return U.kpi({ i: i, icono: k.icono, tono: v || k.id === 'abiertos' ? k.tono : 'neutro', etiqueta: k.etiqueta, valor: v, unidad: k.unidad, filtro: k.id, activo: f.kpi === k.id });
+      var its = datos_.items.filter(k.f), sols = {};
+      its.forEach(function (x) { sols[x.solicitud_id] = true; });
+      var v = Object.keys(sols).length;
+      var unidad = its.length !== v ? its.length + ' ítems · ' + k.unidad.replace(/ítems /, '') : k.unidad;
+      return U.kpi({ i: i, icono: k.icono, tono: v || k.id === 'abiertos' ? k.tono : 'neutro', etiqueta: k.etiqueta, valor: v, unidad: unidad, filtro: k.id, activo: f.kpi === k.id,
+        titulo: v + (v === 1 ? ' solicitud' : ' solicitudes') + (its.length !== v ? ' (' + its.length + ' ítems)' : '') + ': ' + k.unidad });
     }).join('') + '</div>';
   }
 
@@ -268,11 +272,13 @@
   // Etapa 1 (2026-10-05): en la Cola los indicadores son una banda de una
   // línea (antes 6 tarjetas de ~110 px empujaban la primera fila a 600 px).
   function banda() {
-    var r = datos_.resumen || {};
+    // 2026-10-07 (dueño): cuenta SOLICITUDES, como la tabla; si son más ítems, lo dice al lado.
     return '<div class="bj2-banda sx2-entra" role="group" aria-label="Filtrar la cola">' + KPIS.filter(function (k) { return k.id !== 'todos'; }).map(function (k) {
-      var v = r[k.id] || 0;
-      return '<button type="button" class="bj2-banda__op sx2-tono-' + (v || k.id === 'abiertos' ? k.tono : 'neutro') + (f.kpi === k.id ? ' is-activo' : '') + '" data-filtro="' + k.id + '" aria-pressed="' + (f.kpi === k.id) + '" title="' + U.esc(k.unidad) + '">' +
-        '<span class="bj2-banda__n">' + v + '</span><span class="bj2-banda__et">' + U.esc(k.etiqueta) + '</span></button>';
+      var its = datos_.items.filter(k.f), sols = {};
+      its.forEach(function (x) { sols[x.solicitud_id] = true; });
+      var v = Object.keys(sols).length;
+      return '<button type="button" class="bj2-banda__op sx2-tono-' + (v || k.id === 'abiertos' ? k.tono : 'neutro') + (f.kpi === k.id ? ' is-activo' : '') + '" data-filtro="' + k.id + '" aria-pressed="' + (f.kpi === k.id) + '" title="' + U.esc(v + (v === 1 ? ' solicitud' : ' solicitudes') + (its.length !== v ? ' (' + its.length + ' ítems)' : '') + ': ' + k.unidad) + '">' +
+        '<span class="bj2-banda__n">' + v + '</span><span class="bj2-banda__et">' + U.esc(k.etiqueta) + '</span>' + (its.length !== v ? '<small class="bj2-banda__its">' + its.length + ' ítems</small>' : '') + '</button>';
     }).join('') + '</div>';
   }
 
@@ -284,6 +290,15 @@
     var masViejo = Math.max.apply(null, viejos.map(function (i) { return Math.floor((Date.now() - new Date(i.fecha_creacion)) / 86400000); }));
     return '<button type="button" class="bj2-rezago-chip js-bj2-rezago" title="' + viejos.length + ' ítems llevan más de 2 semanas sin que nadie los tome; el más antiguo tiene ' + masViejo + ' días. Revísalos de a varios: recíbelos, asígnalos o ciérralos con su motivo.">' +
       U.ico('reloj', 14) + '<b>' + viejos.length + ' sin tomar +2 sem.</b><span>Ponerse al día</span></button>';
+  }
+
+  // 2026-10-07 (dueño): lo que ya recibí y sigue sin fecha (quien pidió no sabe cuándo estará).
+  function bannerSinFecha() {
+    if (datos_.solo_lectura || f.kpi === 'sin_fecha') return '';
+    var n = datos_.items.filter(function (i) { return abierto(i) && i.estado !== 'S01' && !i.fecha_comprometida && i.asignado === datos_.mi_email; }).length;
+    if (!n) return '';
+    return '<button type="button" class="bj2-rezago-chip bj2-sinfecha-chip js-bj2-ver-sinfecha" title="Ya los recibiste, pero quien pidió no sabe para cuándo estarán. Ábrelos y dales fecha.">' +
+      U.ico('calendario', 14) + '<b>' + n + (n === 1 ? ' ítem tuyo sin fecha' : ' ítems tuyos sin fecha') + '</b><span>Darles fecha</span></button>';
   }
 
   function barraFiltros() {
@@ -407,6 +422,7 @@
         texto: f.kpi === 'abiertos' && !f.texto ? 'No hay ítems en curso.' : 'Prueba quitando algún filtro.' }) + '</div></section>';
     }
     var visibles = items.slice(0, mostrar_);
+    ordenSol_ = agrupar(items).map(function (g) { return g.id; });
     var cuerpo;
     // En pantallas angostas la tabla no cabe: se usa la lista.
     var dens = f.densidad === 'tabla' && window.innerWidth < 900 ? 'lista' : f.densidad;
@@ -432,7 +448,7 @@
       '<div class="bj2-lista__cab">' +
         (datos_.solo_lectura || dens === 'estado' ? '' : '<label class="bj2-check" title="Seleccionar todo lo visible"><input type="checkbox" class="js-bj2-sel-todo"' + (todosMarcados ? ' checked' : '') + ' aria-label="Seleccionar todo lo visible"></label>') +
         '<strong>' + (dens === 'estado' ? 'Por estado' : (f.agrupar ? nSol + (nSol === 1 ? ' solicitud' : ' solicitudes') + ' · ' : '') + items.length + (items.length === 1 ? ' ítem' : ' ítems')) + '</strong><span class="sx2-tenue">' + U.esc(dens === 'estado' ? 'lo que está en curso (lo resuelto espera al solicitante)' : kpiDe(f.kpi).etiqueta.toLowerCase()) + '</span>' +
-        '<span class="bj2-lista__cab-acc">' + bannerRezago() + (dens === 'estado' ? '' : U.chip({ texto: 'Con cerrados', activo: f.kpi === 'todos', clase: 'js-bj2-todos', titulo: 'Incluir los cerrados, rechazados y cancelados' })) +
+        '<span class="bj2-lista__cab-acc">' + bannerSinFecha() + bannerRezago() + (dens === 'estado' ? '' : U.chip({ texto: 'Con cerrados', activo: f.kpi === 'todos', clase: 'js-bj2-todos', titulo: 'Incluir los cerrados, rechazados y cancelados' })) +
           U.segmento([{ id: 'tabla', texto: 'Tabla', icono: 'tabla' }, { id: 'lista', texto: 'Lista', icono: 'lista' }, { id: 'estado', texto: 'Por estado', icono: 'kanban' }], f.densidad, 'js-bj2-densidad') + '</span>' +
       '</div>' + cuerpo +
       (dens !== 'estado' && items.length > visibles.length ? '<div style="text-align:center;padding:12px">' + U.boton({ texto: 'Mostrar más (' + (items.length - visibles.length) + ')', icono: 'abajo', sm: true, variante: 'fantasma', clase: 'js-bj2-mas' }) + '</div>' : '') +
@@ -444,6 +460,7 @@
   // (el color dice en qué paso va cada uno) y el paso que sigue. Al desplegarla, sus ítems con su
   // camino. Una solicitud de un solo ítem es una sola fila que se comporta como el ítem.
   var expandidas_ = {};
+  var ordenSol_ = [];  // las solicitudes en el orden en que se ven en la Bandeja (para «Siguiente»)
   function tramoDe(it) {
     if (it.estado === 'S06') return 'pausa';
     if (['S10', 'S11'].indexOf(it.estado) !== -1) return 'fuera';
@@ -626,6 +643,12 @@
   }
 
   // Etapa 4: por estado visible. Sin arrastrar: cada cambio se hace con su botón en el detalle.
+  // Los ítems de una columna, juntos por solicitud (en el orden del primero de cada una).
+  function gruposCol(lista) {
+    var por = {}, orden = [];
+    lista.forEach(function (i) { if (!por[i.solicitud_id]) { por[i.solicitud_id] = []; orden.push(i.solicitud_id); } por[i.solicitud_id].push(i); });
+    return orden.map(function (k) { return por[k].sort(function (a, b) { return a.numero_item - b.numero_item; }); });
+  }
   function tablero() {
     var q = f.texto.toLowerCase();
     var base = datos_.items.filter(function (i) {
@@ -647,10 +670,23 @@
         return (sa - sb) || (new Date(a.fecha_creacion) - new Date(b.fecha_creacion));
       });
       return '<section class="bj2-col sx2-tono-' + c[2] + '"><header class="bj2-col__cab"><strong>' + c[1] + '</strong><span class="bj2-col__n">' + lista.length + '</span></header>' +
-        '<ul class="bj2-col__lista">' + lista.slice(0, MAX).map(function (i) {
+        '<ul class="bj2-col__lista">' + gruposCol(lista.slice(0, MAX)).map(function (g) {
+          var i = g[0];
           var persona = i.asignado ? PY.persona(i.asignado, i.asignado_nombre) : null;
+          // 2026-10-07 (dueño): los ítems de una misma solicitud en la misma columna van en UNA tarjeta.
+          if (g.length > 1) {
+            return '<li class="bj2-tarj bj2-tarj--grupo js-bj2-abrir-sol" data-sol="' + U.esc(i.solicitud_id) + '" tabindex="0" title="Abrir la solicitud completa">' +
+              '<span class="bj2-tarj__cab">' + semaforoPeor(g) + '<span class="bj2-id">' + U.esc(i.solicitud_id) + '</span><span class="bj2-tarj__cuenta">' + g.length + ' de ' + i.cantidad_items + ' ítems</span><span class="sx2-tenue bj2-tarj__edad">' + antiguedad(i) + '</span></span>' +
+              '<span class="bj2-tarj__its">' + g.map(function (x) {
+                return '<button type="button" class="bj2-tarj__it js-bj2-rep-abrir" data-sol="' + U.esc(x.solicitud_id) + '" data-sub="' + U.esc(x.subsolicitud_id) + '"><span class="bj2-tarj__n">' + x.numero_item + '</span><span class="bj2-tarj__it-tit">' + U.esc(x.titulo || '(sin título)') + '</span></button>';
+              }).join('') + '</span>' +
+              '<span class="sx2-tenue bj2-tarj__meta">' + U.esc(i.solicitante_nombre || '') + (i.servicio_nombre ? ' · ' + U.esc(i.servicio_nombre) : '') + '</span>' +
+              '<span class="bj2-tarj__pie">' + (persona ? U.avatar(persona, 'xs') + '<span class="sx2-cortar">' + U.esc(persona.nombre) + '</span>' : '<span class="bj2-sin">' + U.ico('persona', 12) + 'Sin asignar</span>') +
+                (g.some(function (x) { return x.respuesta_pendiente; }) ? U.badge('Te escribió', 'info', true) : '') + '</span>' +
+            '</li>';
+          }
           return '<li class="bj2-tarj" data-bj2-item="' + U.esc(i.subsolicitud_id) + '" data-sol="' + U.esc(i.solicitud_id) + '" tabindex="0">' +
-            '<span class="bj2-tarj__cab">' + semaforo(i) + '<span class="bj2-id">' + U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? ' · ítem ' + i.numero_item + ' de ' + i.cantidad_items : '') + '</span><span class="sx2-tenue bj2-tarj__edad">' + antiguedad(i) + '</span></span>' +
+            '<span class="bj2-tarj__cab">' + semaforo(i) + '<span class="bj2-id">' + U.esc(i.solicitud_id) + '</span>' + (i.cantidad_items > 1 ? '<span class="bj2-tarj__cuenta">Ítem ' + i.numero_item + ' de ' + i.cantidad_items + '</span>' : '') + '<span class="sx2-tenue bj2-tarj__edad">' + antiguedad(i) + '</span></span>' +
             '<strong class="bj2-tarj__tit">' + U.esc(i.titulo || '(sin título)') + '</strong>' +
             '<span class="sx2-tenue bj2-tarj__meta">' + U.esc(i.solicitante_nombre || '') + (i.servicio_nombre ? ' · ' + U.esc(i.servicio_nombre) : '') + '</span>' +
             '<span class="bj2-tarj__pie">' + (persona ? U.avatar(persona, 'xs') + '<span class="sx2-cortar">' + U.esc(persona.nombre) + '</span>' : '<span class="bj2-sin">' + U.ico('persona', 12) + 'Sin asignar</span>') +
@@ -1192,12 +1228,32 @@
         return '<button type="button" class="sx2-tabs__op js-bj2-tab" role="tab" data-tab="' + t[0] + '" aria-selected="' + (t[0] === pestana ? 'true' : 'false') + '">' + t[1] + '</button>';
       }).join('') + '</div>';
       var cuerpo = pestana === 'ficha' ? ficha(s) : (pestana === 'actividad' ? actividad() : (pestana === 'archivos' ? archivos() :
-        itemsHtml(subs) + '<section class="bj2-det-conv" id="bj2-conv"><h3 class="sx2-seccion-drawer__titulo">' + U.ico('comentario', 15) + ' Conversación con ' + U.esc(s.solicitante_nombre || 'quien pidió') + '</h3>' + conversacionHtml(s) + '</section>'));
-      d.cuerpo(tabsHtml + cuerpo);
+        itemsHtml(subs) + '<section class="bj2-det-conv" id="bj2-conv"><h3 class="sx2-seccion-drawer__titulo">' + U.ico('comentario', 15) + (subs.length > 1 ? ' Conversación general con ' : ' Conversación con ') + U.esc(s.solicitante_nombre || 'quien pidió') + '</h3>' +
+          (subs.length > 1 ? '<p class="bj2-conv__ayuda">Lo de toda la solicitud. Para algo de un ítem, escribe dentro de ese ítem: así la respuesta queda junto a él.</p>' : '') +
+          conversacionHtml(s, subs.length > 1 ? msjsDe('') : conversacion_(), {}) + '</section>'));
+      d.cuerpo(avisoCorreo(s) + tabsHtml + cuerpo);
       var pie = d.el.querySelector('.sx2-drawer__pie');
-      pie.innerHTML = U.boton({ texto: 'Orden de trabajo', icono: 'documento', clase: 'js-bj2-ot' }) +
-        (window.SigsoProyectosV2 && !s.proyecto_id && !soloLectura() ? U.boton({ texto: 'Convertir en proyecto', icono: 'capas', clase: 'js-bj2-proyecto' }) : '') +
-        '<span style="flex:1"></span>' + U.boton({ texto: 'Cerrar', clase: 'js-sx2-drawer-cerrar' });
+      // 2026-10-07 (dueño): el pie trabaja la cola. Orden de trabajo y Convertir en proyecto (poco usados)
+      // van en «Más»; «Siguiente» pasa a la próxima solicitud de la Bandeja sin cerrar el panel.
+      var enCola = document.getElementById('bandeja-v2') ? ordenSol_.indexOf(solicitudId) : -1;
+      pie.innerHTML = '<details class="bj2-menu bj2-menu--arriba"><summary class="sx2-boton sx2-boton--secundario">' + U.ico('menu', 15) + 'Más</summary><div class="bj2-menu__lista" role="menu">' +
+          '<button type="button" role="menuitem" class="bj2-menu__op js-bj2-ot">' + U.ico('documento', 14) + 'Orden de trabajo (PDF)</button>' +
+          (window.SigsoProyectosV2 && !s.proyecto_id && !soloLectura() ? '<button type="button" role="menuitem" class="bj2-menu__op js-bj2-proyecto">' + U.ico('capas', 14) + 'Convertir en proyecto</button>' : '') +
+        '</div></details>' +
+        '<span style="flex:1"></span>' +
+        (enCola === -1 || ordenSol_.length < 2 ? U.boton({ texto: 'Cerrar', clase: 'js-sx2-drawer-cerrar' })
+          : '<span class="bj2-pie__pos">' + (enCola + 1) + ' de ' + ordenSol_.length + '</span>' +
+            U.boton({ texto: 'Anterior', icono: 'izquierda', clase: 'js-bj2-ir', datos: { sol: ordenSol_[enCola - 1] || '' }, deshabilitado: enCola === 0 }) +
+            (enCola < ordenSol_.length - 1 ? U.boton({ texto: 'Siguiente', icono: 'derecha', variante: 'primario', clase: 'js-bj2-ir', datos: { sol: ordenSol_[enCola + 1] } }) : U.boton({ texto: 'Terminar', icono: 'check', variante: 'primario', clase: 'js-sx2-drawer-cerrar' })));
+    }
+
+    // 2026-10-07: con el correo caído, quien pidió solo ve los avisos si entra a SIGSO.
+    function avisoCorreo(s) {
+      if (!datos_ || !datos_.correo_caido || soloLectura()) return '';
+      var nombre = s.solicitante_nombre || 'quien pidió';
+      var texto = 'Hola ' + String(nombre).split(' ')[0] + ', te respondí en SIGSO sobre la solicitud ' + s.solicitud_id + '. Revísala en Mis solicitudes: ' + location.origin + location.pathname + '#/mis_solicitudes';
+      return '<p class="bj2-correo-caido">' + U.ico('alerta', 15) + '<span><b>El correo de SIGSO no está saliendo.</b> ' + U.esc(nombre) + ' solo ve tus mensajes y cambios si entra a SIGSO. Avísale por otro medio.</span>' +
+        '<a class="sx2-boton sx2-boton--secundario sx2-boton--sm" href="https://wa.me/?text=' + encodeURIComponent(texto) + '" target="_blank" rel="noopener">' + U.ico('comentario', 14) + 'Avisar por WhatsApp</a></p>';
     }
 
     // Etapa 3: la conversación con el solicitante (lo que NO es nota interna),
@@ -1206,12 +1262,34 @@
       return (detalle.comentarios || []).filter(function (c) { return !(c.es_interno === true || c.es_interno === 'TRUE'); })
         .slice().sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
     }
-    function conversacionHtml(s) {
+    // 2026-10-07 (dueño): con varios ítems, cada ítem tiene su conversación dentro de su tarjeta
+    // (el mensaje se guarda con su ítem) y abajo queda solo lo general de la solicitud.
+    function msjsDe(subId) {
+      var ids = {};
+      (detalle.subsolicitudes || []).forEach(function (x) { ids[x.subsolicitud_id] = true; });
+      return conversacion_().filter(function (c) { return subId ? c.subsolicitud_id === subId : !ids[c.subsolicitud_id]; });
+    }
+    function delSolicitante_(c) {
+      var s = detalle.solicitud || {};
+      return [String(s.solicitante_email || '').toLowerCase(), String(s.correo_cliente || '').toLowerCase()].filter(Boolean).indexOf(String(c.usuario || '').toLowerCase()) !== -1;
+    }
+    function conversacionHtml(s, ms, o) {
+      o = o || {};
       var suyos = [String(s.solicitante_email || '').toLowerCase(), String(s.correo_cliente || '').toLowerCase()].filter(Boolean);
       var nItem = {};
       (detalle.subsolicitudes || []).forEach(function (x) { nItem[x.subsolicitud_id] = x.numero_item; });
-      var multi = (detalle.subsolicitudes || []).length > 1;
-      var ms = conversacion_();
+      var multi = (detalle.subsolicitudes || []).length > 1 && !o.sub;
+      var quien = U.esc(s.solicitante_nombre || 'quien pidió');
+      if (o.sub) {
+        return '<div class="bj2-conv bj2-conv--item">' + (ms.length ? '<ul class="bj2-conv__lista">' + ms.map(function (c) {
+            var del = suyos.indexOf(String(c.usuario || '').toLowerCase()) !== -1, p = PY.persona(c.usuario, del ? s.solicitante_nombre : '');
+            return '<li class="bj2-msj' + (del ? ' bj2-msj--solicitante' : '') + '"><span class="bj2-msj__quien">' + U.esc(p.nombre) + ' · <span class="sx2-tenue">' + U.esc(PY.haceTiempo(c.timestamp)) + '</span></span><p class="bj2-msj__texto">' + U.esc(c.texto) + '</p></li>';
+          }).join('') + '</ul>' : '') +
+          (soloLectura() ? '' : '<form class="js-bj2-comentar bj2-conv__form bj2-conv__form--item" data-destino="solicitante" data-sub="' + U.esc(o.sub) + '" novalidate>' +
+            '<textarea class="sx2-input" name="texto" rows="2" maxlength="4000" placeholder="Escribe a ' + quien + ' sobre este ítem…"></textarea>' +
+            U.boton({ texto: 'Enviar', icono: 'derecha', sm: true, variante: 'primario', tipo: 'submit' }) + '</form>') +
+        '</div>';
+      }
       return '<div class="bj2-conv">' + (ms.length ? '<ul class="bj2-conv__lista">' + ms.map(function (c) {
           var delSolicitante = suyos.indexOf(String(c.usuario || '').toLowerCase()) !== -1;
           var p = PY.persona(c.usuario, delSolicitante ? s.solicitante_nombre : '');
@@ -1220,7 +1298,7 @@
               ' · <span class="sx2-tenue">' + U.esc(PY.haceTiempo(c.timestamp)) + '</span></span>' +
             '<p class="bj2-msj__texto">' + U.esc(c.texto) + '</p></li>';
         }).join('') + '</ul>'
-        : U.vacio({ icono: 'comentario', titulo: 'Sin mensajes', texto: 'Lo que escribas aquí le llega por correo a ' + U.esc(s.solicitante_nombre || 'quien pidió') + ', y su respuesta aparece en esta conversación.' })) +
+        : (multi ? '<p class="bj2-conv__vacio">Sin mensajes generales.</p>' : U.vacio({ icono: 'comentario', titulo: 'Sin mensajes', texto: 'Lo que escribas aquí le llega por correo a ' + U.esc(s.solicitante_nombre || 'quien pidió') + ', y su respuesta aparece en esta conversación.' }))) +
         (soloLectura() ? '' : '<form class="sx2-py-sala-form js-bj2-comentar bj2-conv__form" data-destino="solicitante" novalidate>' +
           '<textarea class="sx2-input" name="texto" maxlength="4000" placeholder="Escribe a ' + U.esc(s.solicitante_nombre || 'quien pidió') + '…"></textarea>' +
           '<div class="sx2-entre"><small class="bj2-destino__ayuda">Le llega por correo y lo ve en Mis solicitudes. Para algo solo del equipo, usa una nota interna en Actividad.</small>' +
@@ -1299,6 +1377,16 @@
             : '<span>' + U.ico('bandeja', 15) + '<b>' + nuevos.length + ' ítems por recibir</b> en esta solicitud.</span>' + U.boton({ texto: 'Recibir los ' + nuevos.length + ' y dar fecha', icono: 'check', sm: true, variante: 'primario', clase: 'js-bj2-todos' })) +
           '</div>'
         : '';
+      var sinFecha = subs.filter(function (it) { return abierto(it) && it.estado !== 'S01' && !it.fecha_comprometida; });
+      if (!todos && !soloLectura() && sinFecha.length > 1) {
+        todos = '<div class="bj2-todos bj2-todos--fecha">' + (abiertoAcc.__fechas
+            ? '<form class="sx2-form js-bj2-form-fechas" novalidate><strong>Dar fecha a ' + sinFecha.length + ' ítems</strong>' +
+                sinFecha.map(function (it) { return PY.campo(it.numero_item + '. ' + it.titulo, '<input class="sx2-input" type="date" name="f_' + U.esc(it.subsolicitud_id) + '" min="' + hoyIso() + '" value="' + fechaSugerida(it) + '">'); }).join('') +
+                '<p class="sx2-campo__error js-bj2-item-error" hidden></p>' +
+                '<div class="sx2-flex" style="justify-content:flex-end;gap:6px">' + U.boton({ texto: 'Cancelar', sm: true, clase: 'js-bj2-fechas' }) + U.boton({ texto: 'Guardar fechas', icono: 'check', sm: true, variante: 'primario', tipo: 'submit' }) + '</div></form>'
+            : '<span>' + U.ico('calendario', 15) + '<b>' + sinFecha.length + ' ítems sin fecha</b>: quien pidió no sabe para cuándo estarán.</span>' + U.boton({ texto: 'Dar fecha a los ' + sinFecha.length, icono: 'calendario', sm: true, variante: 'primario', clase: 'js-bj2-fechas' })) +
+          '</div>';
+      }
       var hacer = subs.filter(abierto), listos = subs.filter(function (x) { return !abierto(x); });
       if (!expandido) {
         expandido = {};
@@ -1327,8 +1415,10 @@
         var sig = it.estado === 'S06' ? 'Esperando respuesta' : (fa ? (FALTA_TXT[fa.nombre] || 'Falta: ' + fa.nombre.toLowerCase()) : (ac && abierto(it) ? SIG[ac.nombre] : np.t));
         sig = sig.charAt(0).toUpperCase() + sig.slice(1) + (it.fecha_comprometida && !hecho ? ' · ' + PY.fecha(it.fecha_comprometida, true).slice(0, 5) : '');
         var sub = [multi ? 'Ítem ' + it.numero_item + ' de ' + subs.length : '', it.tipo_nombre, it.modulo_nombre].filter(Boolean).join(' · ');
+        var msj = multi ? msjsDe(id) : [], ultMsj = msj[msj.length - 1], leEscribio = ultMsj && delSolicitante_(ultMsj) && !hecho;
         var cab = '<span class="bj2-it__n" aria-hidden="true">' + (hecho ? U.ico('check', 15) : it.numero_item) + '</span>' +
-          '<span class="bj2-it__tit"><strong>' + U.esc(it.titulo || '(sin título)') + '</strong>' + (sub ? '<small>' + U.esc(sub) + '</small>' : '') + '</span>' +
+          '<span class="bj2-it__tit"><strong>' + U.esc(it.titulo || '(sin título)') + '</strong>' + (sub || msj.length ? '<small>' + U.esc(sub) +
+            (msj.length ? '<span class="bj2-it__nmsj' + (leEscribio ? ' bj2-it__nmsj--nuevo' : '') + '">' + U.ico('comentario', 11) + (leEscribio ? 'Te escribió' : msj.length + (msj.length === 1 ? ' mensaje' : ' mensajes')) + '</span>' : '') + '</small>' : '') + '</span>' +
           '<span class="bj2-it__lado">' + badgeEstado(it) + '<small class="bj2-it__sig' + (np.falta ? ' bj2-it__sig--falta' : '') + '">' + U.esc(sig) + '</small></span>' +
           (multi ? '<span class="bj2-it__flecha" aria-hidden="true">' + U.ico('abajo', 16) + '</span>' : '');
         return '<article class="bj2-it' + (hecho ? ' bj2-it--hecho' : '') + (ab ? ' bj2-it--abierto' : '') + (subFoco === id && multi ? ' bj2-it--foco' : '') + '" data-bj2-det="' + U.esc(id) + '">' +
@@ -1344,6 +1434,8 @@
             enlacesHtml(it) +
             (it.contexto || it.resultado_esperado ? '<details class="bj2-mas"><summary>Contexto y resultado esperado</summary>' +
               (it.contexto ? '<p><b>Contexto:</b> ' + U.esc(it.contexto) + '</p>' : '') + (it.resultado_esperado ? '<p><b>Resultado esperado:</b> ' + U.esc(it.resultado_esperado) + '</p>' : '') + '</details>' : '') +
+            (multi ? '<div class="bj2-it__conv" id="bj2-conv-' + U.esc(id) + '"><span class="bj2-it__et">' + U.ico('comentario', 12) + ' Conversación de este ítem' + (msj.length ? ' · ' + msj.length : '') + '</span>' +
+              conversacionHtml(detalle.solicitud || {}, msj, { sub: id }) + '</div>' : '') +
             '<div class="bj2-it__accion">' +
               '<span class="bj2-it__et">' + (hecho ? 'Camino recorrido' : 'Camino y siguiente paso') + '</span>' +
               caminoHtml(it) +
@@ -1371,10 +1463,11 @@
       var form = function (texto, icono, a, primario) { return U.boton({ texto: texto, icono: icono, sm: true, variante: primario ? 'primario' : 'secundario', clase: 'js-bj2-acc' + (acc === a ? ' is-activo' : ''), datos: { id: id, acc: a } }); };
       var sinResponsable = !it.desarrollador_asignado;
       // Si quien pidió escribió último, lo primero es responderle.
-      var ms = conversacion_(), ult = ms[ms.length - 1], s0 = detalle.solicitud || {};
-      var suyos = [String(s0.solicitante_email || '').toLowerCase(), String(s0.correo_cliente || '').toLowerCase()].filter(Boolean);
-      if (ult && suyos.indexOf(String(ult.usuario || '').toLowerCase()) !== -1 && ['NUEVA', 'EN_CURSO', 'ESPERANDO'].indexOf(v) !== -1) {
-        b.push(U.boton({ texto: 'Responder', icono: 'comentario', sm: true, variante: 'primario', clase: 'js-bj2-responder' }));
+      // Con varios ítems, solo en el ítem al que escribió (lo general se responde abajo).
+      var multiIt = (detalle.subsolicitudes || []).length > 1;
+      var ms = multiIt ? msjsDe(id) : conversacion_(), ult = ms[ms.length - 1];
+      if (ult && delSolicitante_(ult) && ['NUEVA', 'EN_CURSO', 'ESPERANDO'].indexOf(v) !== -1) {
+        b.push(U.boton({ texto: 'Responder', icono: 'comentario', sm: true, variante: 'primario', clase: 'js-bj2-responder', datos: { id: multiIt ? id : '' } }));
       }
       var sinFecha = !it.fecha_comprometida;
       if (it.estado === 'S01') {
@@ -1539,6 +1632,28 @@
       });
     }
 
+    // «Dar fecha a los N»: una fecha por ítem, de a uno (comprometerFecha avisa a quien pidió).
+    function enviarFechas(form) {
+      var err = form.querySelector('.js-bj2-item-error');
+      var pares = [].slice.call(form.querySelectorAll('input[type=date]')).map(function (inp) { return { id: inp.name.slice(2), fecha: inp.value }; });
+      if (pares.some(function (p) { return !p.fecha; })) { err.textContent = 'Indica la fecha de cada ítem.'; err.hidden = false; return; }
+      var btn = form.querySelector('[type=submit]');
+      btn.disabled = true;
+      var fallas = [];
+      pares.reduce(function (p, x) {
+        return p.then(function () {
+          return api('comprometerFecha', { subsolicitud_id: x.id, fecha_comprometida: x.fecha, motivo: '' }).then(function (r) { if (!r || !r.ok) fallas.push((r && r.message) || 'No se pudo.'); });
+        });
+      }, Promise.resolve()).then(function () {
+        btn.disabled = false;
+        if (fallas.length === pares.length) { err.textContent = fallas[0]; err.hidden = false; return; }
+        abiertoAcc.__fechas = false;
+        PY.aviso(fallas.length ? (pares.length - fallas.length) + ' de ' + pares.length + ' fechas guardadas. ' + fallas[0] : 'Fechas guardadas: quien pidió ya sabe para cuándo estará cada ítem.', fallas.length ? 'alerta' : 'exito');
+        cargarDetalle();
+        avisarCambio();
+      });
+    }
+
     function actividad() {
       var ev = [];
       (detalle.historial_estados || []).forEach(function (h) { ev.push({ ts: h.timestamp, tipo: 'estado', usuario: h.usuario, txt: (h.estado_anterior ? estadoTxt(h.estado_anterior) + ' → ' : 'Ingresó en ') + estadoTxt(h.estado_nuevo), nota: h.comentario, sub: h.subsolicitud_id }); });
@@ -1586,6 +1701,8 @@
 
     d.el.addEventListener('click', function (ev) {
       var t = ev.target, b;
+      var menuPie = t.closest('.bj2-menu--arriba');
+      if (menuPie && t.closest('.bj2-menu__op')) menuPie.open = false;
       if ((b = t.closest('.js-bj2-tab'))) { pestana = b.getAttribute('data-tab'); pintarDetalle(); return; }
       // Plegar o desplegar un ítem sin volver a pintar el panel (no salta el scroll).
       if ((b = t.closest('.js-bj2-it'))) {
@@ -1596,8 +1713,8 @@
         art.querySelector('.bj2-it__cuerpo').hidden = !abre;
         return;
       }
-      if (t.closest('.js-bj2-responder')) {
-        var conv = d.el.querySelector('#bj2-conv');
+      if ((b = t.closest('.js-bj2-responder'))) {
+        var conv = (b.getAttribute('data-id') && d.el.querySelector('#bj2-conv-' + b.getAttribute('data-id'))) || d.el.querySelector('#bj2-conv');
         if (conv) { conv.scrollIntoView({ block: 'start', behavior: 'smooth' }); var ta = conv.querySelector('textarea'); if (ta) setTimeout(function () { ta.focus(); }, 250); }
         return;
       }
@@ -1623,6 +1740,13 @@
         });
         return;
       }
+      if ((b = t.closest('.js-bj2-ir'))) {
+        var sig = b.getAttribute('data-sol');
+        if (!sig) return;
+        d.cerrar(true);
+        abrirDetalle(sig);
+        return;
+      }
       if ((b = t.closest('.js-bj2-ot'))) {
         b.disabled = true;
         api('descargarOrdenTrabajo', { solicitud_id: solicitudId }).then(function (r) {
@@ -1644,12 +1768,13 @@
     });
     d.el.addEventListener('click', function (ev) {
       if (ev.target.closest('.js-bj2-todos')) { abiertoAcc.__todos = !abiertoAcc.__todos; pintarDetalle(); return; }
+      if (ev.target.closest('.js-bj2-fechas')) { abiertoAcc.__fechas = !abiertoAcc.__fechas; pintarDetalle(); return; }
       var b = ev.target.closest('.js-bj2-pedir-archivo');
       if (!b) return;
-      var form = d.el.querySelector('.js-bj2-comentar[data-destino="solicitante"]');
-      if (!form) return;
       var multi = (detalle.subsolicitudes || []).length > 1;
-      form.texto.value = 'Hola, no tengo acceso al enlace de Drive' + (multi ? ' del ítem ' + b.getAttribute('data-n') : '') + '. ¿Puedes subir el archivo en SIGSO? En Mis solicitudes abre esta solicitud y usa «Adjuntar archivos», junto a la conversación. O compártelo como «Cualquier persona con el enlace». Gracias.';
+      var form = (multi && b.closest('.bj2-it') && b.closest('.bj2-it').querySelector('.js-bj2-comentar')) || d.el.querySelector('.js-bj2-comentar[data-destino="solicitante"]');
+      if (!form) return;
+      form.texto.value = 'Hola, no tengo acceso al enlace de Drive' + (multi && !form.getAttribute('data-sub') ? ' del ítem ' + b.getAttribute('data-n') : '') + '. ¿Puedes subir el archivo en SIGSO? En Mis solicitudes abre esta solicitud y usa «Adjuntar archivos», junto a la conversación. O compártelo como «Cualquier persona con el enlace». Gracias.';
       form.scrollIntoView({ block: 'center', behavior: 'smooth' });
       form.texto.focus();
     });
@@ -1658,12 +1783,13 @@
       var form = ev.target;
       if (form.classList.contains('js-bj2-form-item')) { enviarItem(form); return; }
       if (form.classList.contains('js-bj2-form-todos')) { enviarTodos(form); return; }
+      if (form.classList.contains('js-bj2-form-fechas')) { enviarFechas(form); return; }
       if (form.classList.contains('js-bj2-comentar')) {
         var texto = form.texto.value.trim();
         if (!texto) return;
         var btn = form.querySelector('[type=submit]'); btn.disabled = true;
         var alSolicitante = form.getAttribute('data-destino') === 'solicitante' || !!form.querySelector('[name=destino][value=solicitante]:checked');
-        api('agregarComentario', { solicitud_id: solicitudId, texto: texto, es_interno: !alSolicitante }).then(function (r) {
+        api('agregarComentario', { solicitud_id: solicitudId, subsolicitud_id: form.getAttribute('data-sub') || '', texto: texto, es_interno: !alSolicitante }).then(function (r) {
           btn.disabled = false;
           if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo guardar.', 'error'); return; }
           PY.aviso(alSolicitante ? 'Mensaje enviado al solicitante.' : 'Nota interna guardada.', 'exito');
@@ -1707,6 +1833,7 @@
     if (t.closest('.js-bj2-todos')) { f.kpi = f.kpi === 'todos' ? 'abiertos' : 'todos'; pintar(true); return; }
     if (t.closest('.js-bj2-ver-validar')) { f.kpi = 'por_validar'; f.densidad = 'tabla'; try { localStorage.setItem('sigso_bj2_densidad', 'tabla'); } catch (e) { /* sin storage */ } mostrar_ = POR_PAGINA; pintar(true); return; }
     if (t.closest('.js-bj2-rezago')) { f.kpi = 'por_revisar'; f.orden = 'antiguedad'; f.texto = ''; mostrar_ = POR_PAGINA; pintar(true); var l = raiz.querySelector('.bj2-lista'); if (l) l.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+    if (t.closest('.js-bj2-ver-sinfecha')) { f.kpi = 'sin_fecha'; mostrar_ = POR_PAGINA; pintar(true); return; }
     if (t.closest('.js-bj2-mas')) { mostrar_ += POR_PAGINA; pintar(true); return; }
     if ((b = t.closest('.js-bj2-excel'))) { exportarExcel(b); return; }
     if ((b = t.closest('.js-bj2-pauta'))) { imprimirPauta(f.verBandeja, b); return; }

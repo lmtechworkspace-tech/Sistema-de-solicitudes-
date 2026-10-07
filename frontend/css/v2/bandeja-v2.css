@@ -579,3 +579,46 @@ button.bj2-it__cab:focus-visible { outline: 2px solid var(--sx-primario); outlin
   .bj2-it__cab { flex-wrap: wrap; }
   .bj2-it__lado { max-width: none; flex-direction: row; align-items: center; order: 3; width: 100%; padding-left: 42px; justify-content: space-between; }
 }
+
+/* 2026-10-07: la conversación de cada ítem, dentro de su tarjeta. */
+.bj2-it__conv { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--sx-radio); background: color-mix(in srgb, var(--sx-info) 5%, var(--sx-superficie)); border: 1px solid color-mix(in srgb, var(--sx-info) 18%, transparent); }
+.bj2-it__conv .bj2-it__et { display: inline-flex; align-items: center; gap: 5px; margin: 0; }
+.bj2-conv--item { gap: 8px; }
+.bj2-conv--item .bj2-msj { max-width: 92%; }
+.bj2-conv__form--item { display: flex; align-items: flex-end; gap: 8px; margin: 0; }
+.bj2-conv__form--item textarea { flex: 1; min-height: 40px; height: 40px; resize: vertical; background: var(--sx-superficie); transition: height var(--sx-dur-rapida, .15s); }
+.bj2-conv__form--item textarea:focus { height: 76px; }
+.bj2-conv__ayuda { margin: -4px 0 4px; font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.bj2-conv__vacio { margin: 0; font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.bj2-it__nmsj { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; color: var(--sx-info); font-weight: 600; }
+.bj2-it__nmsj--nuevo { padding: 1px 7px; border-radius: 999px; background: var(--sx-info-suave); }
+
+/* Aviso: el correo no sale. */
+.bj2-correo-caido { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--sx-radio); background: var(--sx-alerta-suave); border: 1px solid color-mix(in srgb, var(--sx-alerta) 35%, transparent); font: var(--sx-t-chico); color: var(--sx-texto); }
+.bj2-correo-caido > svg { flex: none; color: var(--sx-alerta); }
+.bj2-correo-caido > span { flex: 1; min-width: 220px; }
+.bj2-correo-caido > a { text-decoration: none; }
+
+/* Pie del panel: «Más» hacia arriba, posición en la cola. */
+.bj2-menu--arriba .bj2-menu__lista { top: auto; bottom: calc(100% + 6px); }
+.bj2-pie__pos { align-self: center; margin-right: 4px; font: 600 .75rem/1 var(--fuente); color: var(--sx-texto-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Sin fecha: aviso en la Bandeja y «Dar fecha a los N» en el panel. */
+.bj2-sinfecha-chip svg { color: var(--sx-alerta); }
+.bj2-todos--fecha { background: var(--sx-alerta-suave); border-color: color-mix(in srgb, var(--sx-alerta) 30%, transparent); }
+.bj2-todos--fecha > span > svg { color: var(--sx-alerta); }
+
+/* Por estado: una tarjeta por solicitud dentro de cada columna. */
+.bj2-tarj__cuenta { padding: 1px 7px; border-radius: 999px; background: var(--sx-primario-suave); color: var(--sx-primario); font: 600 .6875rem/1.4 var(--fuente); white-space: nowrap; }
+.bj2-tarj--grupo { border-left: 3px solid var(--sx-primario); }
+.bj2-tarj__its { display: flex; flex-direction: column; gap: 2px; margin: 2px 0; }
+.bj2-tarj__it { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 6px; border: 0; border-radius: 6px; background: var(--sx-superficie-2); color: var(--sx-texto); text-align: left; font: 500 .8125rem/1.3 var(--fuente); cursor: pointer; }
+.bj2-tarj__it:hover { background: var(--sx-primario-suave); }
+.bj2-tarj__it:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: -2px; }
+.bj2-tarj__n { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--sx-primario); color: var(--sx-superficie); font: 700 .6875rem/1 var(--fuente); }
+.bj2-tarj__it-tit { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bj2-banda__its { margin-left: auto; padding-left: 6px; font: 500 .6875rem/1.2 var(--fuente); color: var(--sx-texto-3); white-space: nowrap; }
+.bj2-banda__op .bj2-banda__et { flex-shrink: 0; }
+.bj2-banda__its { min-width: 0; overflow: hidden; }
+.bj2-banda__op { container-type: inline-size; }
+@container (max-width: 175px) { .bj2-banda__its { display: none; } }

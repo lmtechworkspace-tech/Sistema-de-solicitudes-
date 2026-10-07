@@ -461,6 +461,19 @@ function escribioSolicitante_(solicitud, comentarios, historial) {
   });
   return ultimoSuyo > 0 && ultimoSuyo > ultimoEquipo;
 }
+// 2026-10-07: los correos no salían desde el 18-sep y nadie del equipo lo sabía. Si en 7 días hubo
+// fallas y ningún envío, la Bandeja lo avisa (quien pidió solo se entera por la campana).
+function correoCaido_(db) {
+  const hace7 = Date.now() - 7 * 86400000;
+  let fallidos = 0, enviados = 0;
+  leerFilas_(db, 'LOG_NOTIFICACIONES', COLUMNAS.LOG_NOTIFICACIONES).forEach((n) => {
+    if (n.canal !== 'EMAIL' || new Date(n.timestamp).getTime() < hace7) return;
+    if (n.resultado === 'ENVIADO') enviados++;
+    else if (n.resultado === 'FALLIDO' || n.resultado === 'PENDIENTE_REINTENTO') fallidos++;
+  });
+  return fallidos > 0 && enviados === 0;
+}
+
 function getCola(db, filtros, contexto) {
   filtros = filtros || {};
   const rol = contexto ? contexto.rol : '';
@@ -571,6 +584,7 @@ function getCola(db, filtros, contexto) {
     responsables: responsables,
     colas: colas,
     mi_email: email,
+    correo_caido: correoCaido_(db),
     depto_actual: deptoVista,
     rol_depto: deptoVista ? rolesDepto[deptoVista] : ''
   };
