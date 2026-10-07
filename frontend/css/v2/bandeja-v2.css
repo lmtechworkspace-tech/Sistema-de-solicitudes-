@@ -490,5 +490,5 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
 .bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(6) { width: 12%; }
 .bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(7) { width: 124px; }
 .bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(8) { width: 58px; }
-.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(9) { width: 120px; }
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(9) { width: 132px; }
 .bj2-tabla--sol td { overflow: hidden; }
