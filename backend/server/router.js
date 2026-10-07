@@ -696,6 +696,7 @@ const ACCIONES = {
   hompyEliminarColaboracion: (db, data, contexto) => Hompy.eliminarColaboracion(db, data, contexto),
   hompyReporteMensual: (db, data, contexto) => Hompy.reporteMensual(db, data, contexto),
   hompyPdfMensual: (db, data, contexto) => Hompy.pdfMensual(db, data, contexto),
+  hompyMarcarReembolso: (db, data, contexto) => Hompy.marcarReembolso(db, data, contexto),
   obtenerPreferencias: (db, data, contexto) => Preferencias.obtener(db, data, contexto),
   guardarFijados: (db, data, contexto) => Preferencias.guardarFijados(db, data, contexto),
   // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y

@@ -300,7 +300,7 @@
       (k.colaboraciones ? '. Hubo <b>' + k.colaboraciones + '</b> ' + (k.colaboraciones === 1 ? 'colaboración vigente' : 'colaboraciones vigentes') + ' con marcas' : '') + '.</p></div>';
     var otros = '<div class="hp2m-otros">' + [
       ['Evaluación promedio', k.calificacion == null ? '—' : String(k.calificacion).replace('.', ',') + ' / 5', 'estrella'], ['Minutos en el traje', num(k.minutos_traje), 'casco'],
-      ['Interacción promedio', k.interaccion == null ? '—' : String(k.interaccion).replace('.', ',') + ' %', 'comentario'], ['Gastos de salidas', pesos(k.gastos), 'dinero'],
+      ['Interacción promedio', k.interaccion == null ? '—' : String(k.interaccion).replace('.', ',') + ' %', 'comentario'], ['Costo por persona', r.dinero && r.dinero.costo_por_persona != null ? pesos(r.dinero.costo_por_persona) : '—', 'dinero'],
       ['Canceladas', num(k.canceladas), 'equis'], ['Ideas nuevas', num(k.ideas_nuevas), 'bombilla']
     ].map(function (o) { return '<div><span>' + U.ico(o[2], 14) + txt(o[0]) + '</span><b>' + txt(o[1]) + '</b></div>'; }).join('') + '</div>';
     var total = r.por_tipo.reduce(function (a, x) { return a + x.n; }, 0);
@@ -329,9 +329,28 @@
       '<div class="sx2-grid hp2-dos"><div class="sx2-col-7">' + U.card({ titulo: 'Más datos del mes', icono: 'grafico', cuerpo: otros, i: 7 }) + '</div>' +
         '<div class="sx2-col-5">' + U.card({ titulo: 'Actividades por tipo', icono: 'calendario', cuerpo: tipos, i: 8 }) + '</div></div>' +
       U.card({ titulo: 'Salidas a terreno', icono: 'ubicacion', sub: String(r.salidas.length), cuerpo: salidas, i: 9 }) +
+      U.card({ titulo: 'Dinero del mes', icono: 'dinero', cuerpo: dineroHtml(r), i: 10, clase: 'hp2m-dinero' }) +
       '<div class="sx2-grid hp2-dos"><div class="sx2-col-7">' + U.card({ titulo: 'Videos publicados', icono: 'camara', sub: String(r.videos.length), cuerpo: videos, i: 10 }) + '</div>' +
         '<div class="sx2-col-5">' + U.card({ titulo: 'Marcas y colaboraciones', icono: 'megafono', cuerpo: cols, i: 11 }) + '</div></div>' +
       U.card({ titulo: 'Estudio TikTok hoy', icono: 'bombilla', cuerpo: estudio, i: 12 }));
+  }
+  function dineroHtml(r) {
+    var dn = r.dinero; if (!dn) return '';
+    var dif = dn.gastado.actual - dn.gastado.anterior, mesAnt = r.anterior.split(' de ')[0];
+    var cifras = '<div class="hp2-dinero-res hp2-dinero-res--5">' +
+      '<div><span>Gastado</span><b>' + pesos(dn.gastado.actual) + '</b><small>' + (dn.gastado.anterior || dn.gastado.actual ? (dif === 0 ? 'igual que ' + mesAnt : (dif > 0 ? '+' : '−') + pesos(Math.abs(dif)) + ' vs. ' + mesAnt) : 'sin gastos') + '</small></div>' +
+      '<div><span>Presupuestado</span><b>' + (dn.presupuestado ? pesos(dn.presupuestado) : '—') + '</b><small>en las actividades del mes</small></div>' +
+      '<div><span>Costo por persona</span><b>' + (dn.costo_por_persona != null ? pesos(dn.costo_por_persona) : '—') + '</b><small>gasto ÷ público</small></div>' +
+      '<div><span>Aportes recibidos</span><b>' + (dn.aportes ? pesos(dn.aportes) : '—') + '</b><small>de marcas</small></div>' +
+      '<div class="' + (dn.reembolsos.total ? 'hp2-dinero-res--mal' : '') + '"><span>Por devolver</span><b>' + (dn.reembolsos.total ? pesos(dn.reembolsos.total) : '—') + '</b><small>a quienes pagaron</small></div></div>';
+    var max = Math.max.apply(null, dn.por_categoria.map(function (c) { return c.monto; }).concat([1]));
+    var cats = dn.por_categoria.length ? '<ul class="hp2m-barras">' + dn.por_categoria.map(function (c) { return '<li><span>' + txt(c.nombre) + '</span><i style="--w:' + Math.round(c.monto / max * 100) + '%"></i><b>' + pesos(c.monto) + '</b></li>'; }).join('') + '</ul>' : '<p class="sx2-tenue">Sin gastos en los reportes cerrados del mes.</p>';
+    var lista = function (l) { return l.length ? '<ul class="hp2m-leyenda">' + l.map(function (x) { return '<li' + (x.color ? ' class="hp2-color-' + txt(x.color) + '"' : '') + '><i></i>' + txt(x.nombre) + ' <b>' + pesos(x.monto) + '</b></li>'; }).join('') + '</ul>' : '<p class="sx2-tenue">—</p>'; };
+    var sobre = dn.sobre_presupuesto.length ? '<p class="hp2-nota hp2-nota--alerta">' + U.ico('alerta', 14) + '<span><b>Sobre el presupuesto:</b> ' + dn.sobre_presupuesto.map(function (x) { return '<button type="button" class="sx2-enlace js-hp2m-rep" data-id="' + txt(x.evento_id) + '">' + txt(x.titulo) + '</button> (' + pesos(x.gastado) + ' de ' + pesos(x.presupuesto) + ')'; }).join(', ') + '</span></p>' : '';
+    var reemb = dn.reembolsos.lista.length ? '<h3 class="hp2m-sub">Reembolsos por devolver</h3><div class="hp2-tabla-cont"><table class="hp2-tabla"><thead><tr><th>Quién pagó</th><th>Gasto</th><th>Actividad</th><th class="hp2-num">Monto</th><th></th></tr></thead><tbody>' +
+      dn.reembolsos.lista.map(function (x) { return '<tr><td>' + txt(x.persona || '—') + '</td><td>' + txt(x.detalle) + '</td><td><button type="button" class="hp2-enlace-ev js-hp2m-rep" data-id="' + txt(x.evento_id) + '">' + txt(x.titulo) + '</button><div class="hp2-fila__meta">' + txt(H().fechaCorta(x.fecha)) + '</div></td><td class="hp2-num">' + pesos(x.monto) + '</td>' +
+        '<td class="hp2-acc">' + U.boton({ texto: 'Marcar devuelto', sm: true, clase: 'js-hp2m-devuelto', datos: { id: x.evento_id, i: x.indice } }) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '';
+    return cifras + sobre + '<div class="hp2m-dinero__grilla"><div><h3 class="hp2m-sub">En qué se gastó</h3>' + cats + '</div><div><h3 class="hp2m-sub">Por tipo de evento</h3>' + lista(dn.por_tipo) + '</div><div><h3 class="hp2m-sub">Por marca</h3>' + lista(dn.por_marca) + '</div></div>' + reemb;
   }
   function pdf(b) {
     var t = b.innerHTML; b.disabled = true; b.innerHTML = 'Generando…';
@@ -384,6 +403,13 @@
     else if (cl.contains('js-hp2m-rep')) H().ir('salida', id);
     else if (cl.contains('js-hp2m-mes')) mensual(moverPeriodo(periodo_, Number(b.getAttribute('data-d'))));
     else if (cl.contains('js-hp2m-pdf')) pdf(b);
+    else if (cl.contains('js-hp2m-devuelto')) {
+      b.disabled = true;
+      H().api('hompyMarcarReembolso', { evento_id: id, indice: Number(b.getAttribute('data-i')), devuelto: true }).then(function (r) {
+        if (!r || !r.ok) { b.disabled = false; H().aviso((r && r.message) || 'No se pudo marcar.', 'error'); return; }
+        H().ponerSalida(r.data.salida); H().aviso('Marcado como devuelto.', 'exito'); mensual(periodo_);
+      });
+    }
   });
   document.addEventListener('input', function (ev) {
     if (!ev.target.classList || !ev.target.classList.contains('js-hp2m-buscar')) return;

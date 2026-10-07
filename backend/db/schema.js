@@ -874,7 +874,7 @@ const COLUMNAS = {
   ],
   HOMPY_EVENTOS: [
     'evento_id', 'tipo_id', 'titulo', 'fecha', 'hora_inicio', 'hora_fin', 'lugar', 'direccion', 'comuna',
-    'participantes', 'descripcion', 'estado', 'motivo_cancelacion', 'idea_id', 'marca_id',
+    'participantes', 'descripcion', 'estado', 'motivo_cancelacion', 'idea_id', 'marca_id', 'presupuesto', 'presupuesto_nota',
     'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
   ],
   HOMPY_SALIDAS: [

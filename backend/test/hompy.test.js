@@ -310,3 +310,75 @@ test('Reporte mensual: cifras del mes, comparación con el anterior, pendientes,
   assert.match(html, /\$100\.000/);
   assert.match(html, /Necesita limpieza/);
 });
+
+test('Dinero: presupuesto, lista de gastos, reembolsos (aun cerrado), aporte y los gastos antiguos', () => {
+  const db = crear();
+  const tipos = H.datos(db, {}, BARBARA).tipos;
+  const bci = H.guardarMarca(db, { nombre: 'BCI' }, BARBARA).marca;
+  const ev = H.guardarEvento(db, { tipo_id: tipos[0].tipo_id, titulo: 'Feria', fecha: mover(hoy(), -1), presupuesto: '30.000', presupuesto_nota: 'Uber y colación', marca_id: bci.marca_id }, BARBARA).evento;
+  assert.equal(ev.presupuesto, 30000);
+  assert.equal(ev.presupuesto_nota, 'Uber y colación');
+  const base = { hora_inicio: '10:00', hora_fin: '12:00', traje: 'Lisseth', publico: 50, estado_traje: 'BUENO', calificacion: 4 };
+  const gastos = [
+    { categoria: 'TRANSPORTE', detalle: 'Uber ida y vuelta', monto: '18.500', pago: 'PERSONA', persona: '', documento: '', enlace: 'nada' },
+    { categoria: 'INVENTADA', detalle: 'Bebidas', monto: 6000, pago: 'EMPRESA', persona: 'X', devuelto: true },
+    { categoria: 'MATERIAL', detalle: 'vacío', monto: 0 }
+  ];
+  // Un gasto que pagó una persona necesita su nombre para cerrar.
+  const sin = H.guardarSalida(db, { evento_id: ev.evento_id, cerrar: true, datos: Object.assign({}, base, { gastos }) }, BARBARA);
+  assert.ok(invalido(sin));
+  assert.deepEqual(sin.fields.map((f) => f.campo), ['gasto_0']);
+  gastos[0].persona = 'Lisseth';
+  const r = H.guardarSalida(db, { evento_id: ev.evento_id, cerrar: true, datos: Object.assign({}, base, { gastos, aporte: '50.000', aporte_detalle: 'Transferencia de BCI' }) }, BARBARA);
+  const d = r.salida.datos;
+  assert.equal(d.gastos.length, 2, 'la línea en $0 no se guarda');
+  assert.equal(d.gastos[0].monto, 18500);
+  assert.equal(d.gastos[0].enlace, '', 'solo enlaces http(s)');
+  assert.equal(d.gastos[1].categoria, 'OTRO');
+  assert.equal(d.gastos[1].persona, '', 'la empresa no lleva persona');
+  assert.equal(d.gastos[1].devuelto, false, 'lo que pagó la empresa no se «devuelve»');
+  assert.equal(d.aporte, 50000);
+  assert.equal(H.totalGastos_(d), 24500);
+  // Reembolso marcado con el reporte cerrado.
+  assert.ok(invalido(H.marcarReembolso(db, { evento_id: ev.evento_id, indice: 1, devuelto: true }, BARBARA)), 'la empresa no lleva reembolso');
+  assert.ok(invalido(H.marcarReembolso(db, { evento_id: ev.evento_id, indice: 9, devuelto: true }, BARBARA)));
+  assert.ok(rechazado(H.marcarReembolso(db, { evento_id: ev.evento_id, indice: 0, devuelto: true }, OTRA)));
+  const m = H.marcarReembolso(db, { evento_id: ev.evento_id, indice: 0, devuelto: true }, BARBARA).salida;
+  assert.equal(m.estado, 'CERRADO', 'sigue cerrado');
+  assert.equal(m.datos.gastos[0].devuelto, true);
+  assert.equal(m.datos.gastos[0].devuelto_por, BARBARA.email);
+  assert.equal(m.datos.gastos[0].fecha_devolucion, hoy());
+  // Un reporte antiguo con los 4 montos fijos se lee como líneas.
+  assert.deepEqual(H.gastosDe_({ gasto_transporte: 5000, gasto_colacion: 3500, gasto_otros: 0 }).map((g) => [g.categoria, g.monto, g.pago]), [['TRANSPORTE', 5000, 'EMPRESA'], ['COLACION', 3500, 'EMPRESA']]);
+});
+
+test('Dinero en el reporte mensual: gastado, presupuesto, en qué se fue, sobre presupuesto, reembolsos y aportes', () => {
+  const db = crear();
+  const tipos = H.datos(db, {}, BARBARA).tipos;
+  const bci = H.guardarMarca(db, { nombre: 'BCI' }, BARBARA).marca;
+  const mes = hoy().slice(0, 7), dia = (n) => mes + '-' + String(n).padStart(2, '0');
+  const cerrar = (ev, extra) => H.guardarSalida(db, { evento_id: ev.evento_id, cerrar: true, datos: Object.assign({ hora_inicio: '10:00', hora_fin: '11:00', traje: 'L', publico: 100, estado_traje: 'BUENO', calificacion: 5 }, extra) }, BARBARA);
+  const a = H.guardarEvento(db, { tipo_id: tipos[0].tipo_id, titulo: 'Feria BCI', fecha: dia(1), presupuesto: 20000, marca_id: bci.marca_id }, BARBARA).evento;
+  cerrar(a, { gastos: [{ categoria: 'TRANSPORTE', monto: 15000, pago: 'PERSONA', persona: 'Lisseth', detalle: 'Uber' }, { categoria: 'MATERIAL', monto: 10000 }], aporte: 40000, aporte_detalle: 'BCI' });
+  const b = H.guardarEvento(db, { tipo_id: tipos[1].tipo_id, titulo: 'Charla', fecha: dia(1), presupuesto: 5000 }, BARBARA).evento;
+  cerrar(b, { gastos: [{ categoria: 'COLACION', monto: 3000 }] });
+  H.guardarEvento(db, { tipo_id: tipos[1].tipo_id, titulo: 'Futura con presupuesto', fecha: dia(1), presupuesto: 7000 }, BARBARA);
+  const dn = H.reporteMensual(db, { periodo: mes }, BARBARA).dinero;
+  assert.equal(dn.gastado.actual, 28000);
+  assert.equal(dn.gastado.anterior, 0);
+  assert.equal(dn.presupuestado, 32000, 'todo lo presupuestado del mes');
+  assert.equal(dn.presupuesto_cerradas, 25000);
+  assert.equal(dn.costo_por_persona, 140, '28.000 ÷ 200 personas');
+  assert.deepEqual(dn.por_categoria.map((c) => [c.nombre, c.monto]), [['Transporte', 15000], ['Material y regalos', 10000], ['Colación', 3000]]);
+  assert.deepEqual(dn.por_marca, [{ nombre: 'BCI', monto: 25000 }]);
+  assert.deepEqual(dn.sobre_presupuesto.map((x) => [x.titulo, x.gastado, x.presupuesto]), [['Feria BCI', 25000, 20000]]);
+  assert.equal(dn.reembolsos.total, 15000);
+  assert.equal(dn.reembolsos.lista[0].persona, 'Lisseth');
+  assert.equal(dn.aportes, 40000);
+  assert.equal(dn.neto, 12000);
+  const U = { esc: (t) => String(t == null ? '' : t), ico: () => '' };
+  const html = H.cuerpoPdfMensual_(H.reporteMensual(db, { periodo: mes }, BARBARA), U);
+  assert.match(html, /Dinero del mes/);
+  assert.match(html, /Reembolsos por devolver/);
+  assert.match(html, /Sobre el presupuesto: Feria BCI/);
+});

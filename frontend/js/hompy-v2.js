@@ -65,6 +65,69 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
   }
 
+
+  // --- Dinero de la actividad -----------------------------------------------------------------
+  var CAT_GASTO = [['TRANSPORTE', 'Transporte'], ['ESTACIONAMIENTO', 'Estacionamiento'], ['COLACION', 'Colación'], ['MATERIAL', 'Material y regalos'], ['IMPRESION', 'Impresión'], ['ARRIENDO', 'Arriendo'], ['TERCEROS', 'Pago a terceros'], ['OTRO', 'Otro']];
+  function nombreCat(c) { var x = CAT_GASTO.find(function (k) { return k[0] === c; }); return x ? x[1] : 'Otro'; }
+  function pesos(n) { return '$' + Math.round(Number(n) || 0).toLocaleString('es-CL'); }
+  function totalGastos(d) { return ((d && d.gastos) || []).reduce(function (a, g) { return a + (Number(g.monto) || 0); }, 0); }
+  function porDevolver() {
+    var l = [];
+    (D.salidas || []).forEach(function (s) { ((s.datos && s.datos.gastos) || []).forEach(function (g) { if (g.pago === 'PERSONA' && !g.devuelto) l.push(g); }); });
+    return l;
+  }
+  function gastoFila(g) {
+    g = g || { categoria: 'TRANSPORTE', pago: 'EMPRESA' };
+    var persona = g.pago === 'PERSONA';
+    return '<div class="hp2-gasto" data-devuelto="' + (g.devuelto ? '1' : '') + '" data-devuelto-por="' + txt(g.devuelto_por || '') + '" data-fecha-dev="' + txt(g.fecha_devolucion || '') + '">' +
+      '<div class="hp2-gasto__fila">' +
+        '<select class="sx2-select js-hp2-g" data-k="categoria" aria-label="Categoría">' + CAT_GASTO.map(function (c) { return '<option value="' + c[0] + '"' + (g.categoria === c[0] ? ' selected' : '') + '>' + c[1] + '</option>'; }).join('') + '</select>' +
+        '<input class="sx2-input js-hp2-g" data-k="detalle" maxlength="120" value="' + txt(g.detalle || '') + '" placeholder="Detalle (ej.: Uber ida y vuelta)" aria-label="Detalle">' +
+        '<input class="sx2-input js-hp2-g hp2-gasto__monto" data-k="monto" type="number" min="0" inputmode="numeric" value="' + (g.monto == null ? '' : txt(g.monto)) + '" placeholder="$ monto" aria-label="Monto">' +
+        '<button type="button" class="hp2-gasto__borrar js-hp2-gasto-borrar" title="Quitar este gasto" aria-label="Quitar este gasto">' + U.ico('basura', 15) + '</button>' +
+      '</div>' +
+      '<div class="hp2-gasto__fila hp2-gasto__fila--2">' +
+        '<select class="sx2-select js-hp2-g" data-k="pago" aria-label="Quién pagó"><option value="EMPRESA"' + (persona ? '' : ' selected') + '>Pagó la empresa</option><option value="PERSONA"' + (persona ? ' selected' : '') + '>Pagó una persona</option></select>' +
+        '<input class="sx2-input js-hp2-g hp2-gasto__persona" data-k="persona" list="hp2-personas" maxlength="60" value="' + txt(g.persona || '') + '" placeholder="¿Quién pagó?" aria-label="Quién pagó"' + (persona ? '' : ' hidden') + '>' +
+        '<input class="sx2-input js-hp2-g" data-k="documento" maxlength="40" value="' + txt(g.documento || '') + '" placeholder="N° de boleta o factura" aria-label="Número de boleta o factura">' +
+        '<input class="sx2-input js-hp2-g" data-k="enlace" type="url" maxlength="500" value="' + txt(g.enlace || '') + '" placeholder="Enlace a la foto (Drive)" aria-label="Enlace al respaldo">' +
+      '</div>' +
+      (g.devuelto ? '<span class="hp2-gasto__dev">' + U.ico('check', 12) + 'Devuelto' + (g.fecha_devolucion ? ' el ' + txt(fechaCorta(g.fecha_devolucion)) : '') + '</span>' : '') +
+    '</div>';
+  }
+  function leerGastos(form) {
+    return Array.prototype.map.call(form.querySelectorAll('.hp2-gasto'), function (f) {
+      var o = {};
+      f.querySelectorAll('.js-hp2-g').forEach(function (el) { o[el.getAttribute('data-k')] = String(el.value || '').trim(); });
+      o.monto = o.monto === '' ? null : Number(o.monto);
+      if (o.pago !== 'PERSONA') o.persona = '';
+      o.devuelto = f.getAttribute('data-devuelto') === '1' && o.pago === 'PERSONA';
+      o.devuelto_por = o.devuelto ? f.getAttribute('data-devuelto-por') : '';
+      o.fecha_devolucion = o.devuelto ? f.getAttribute('data-fecha-dev') : '';
+      return o;
+    });
+  }
+  /** Tabla de gastos de un reporte (lectura), con «Marcar devuelto» en lo que pagó una persona. */
+  function tablaGastos(e, d) {
+    var gastos = d.gastos || [], total = totalGastos(d), p = Number(e.presupuesto) || 0;
+    var filas = gastos.map(function (g, i) {
+      var pago = g.pago === 'PERSONA'
+        ? txt(g.persona || 'Una persona') + ' ' + U.badge(g.devuelto ? 'Devuelto' : 'Por devolver', g.devuelto ? 'ok' : 'alerta') +
+          ' ' + U.boton({ texto: g.devuelto ? 'Deshacer' : 'Marcar devuelto', sm: true, variante: g.devuelto ? 'fantasma' : 'secundario', clase: 'js-hp2-reembolso', datos: { id: e.evento_id, i: i, v: g.devuelto ? '0' : '1' } })
+        : '<span class="sx2-tenue">La empresa</span>';
+      var resp = (g.documento ? txt(g.documento) : '') + (g.enlace ? (g.documento ? ' · ' : '') + '<a href="' + txt(g.enlace) + '" target="_blank" rel="noopener">ver respaldo</a>' : '') || '<span class="sx2-tenue">—</span>';
+      return '<tr><td>' + txt(nombreCat(g.categoria)) + '</td><td>' + (g.detalle ? txt(g.detalle) : '<span class="sx2-tenue">—</span>') + '</td><td>' + pago + '</td><td>' + resp + '</td><td class="hp2-num">' + pesos(g.monto) + '</td></tr>';
+    }).join('');
+    var dif = total - p;
+    return (gastos.length ? '<div class="hp2-tabla-cont"><table class="hp2-tabla"><thead><tr><th>Categoría</th><th>Detalle</th><th>Quién pagó</th><th>Respaldo</th><th class="hp2-num">Monto</th></tr></thead><tbody>' + filas + '</tbody></table></div>' : '<p class="sx2-tenue">Sin gastos registrados.</p>') +
+      '<div class="hp2-dinero-res">' +
+        '<div><span>Total gastado</span><b>' + pesos(total) + '</b></div>' +
+        '<div><span>Presupuesto</span><b>' + (p ? pesos(p) : '—') + '</b>' + (e.presupuesto_nota ? '<small>' + txt(e.presupuesto_nota) + '</small>' : '') + '</div>' +
+        '<div class="' + (p && dif > 0 ? 'hp2-dinero-res--mal' : '') + '"><span>Diferencia</span><b>' + (p ? (dif > 0 ? '+' : dif < 0 ? '−' : '') + pesos(Math.abs(dif)) : '—') + '</b>' + (p && dif > 0 ? '<small>sobre lo previsto</small>' : '') + '</div>' +
+        '<div><span>Aporte recibido</span><b>' + (d.aporte ? pesos(d.aporte) : '—') + '</b>' + (d.aporte_detalle ? '<small>' + txt(d.aporte_detalle) + '</small>' : '') + '</div>' +
+      '</div>';
+  }
+
   // --- datos derivados ----------------------------------------------------------------------
   function tipo(id) { return (D.tipos || []).find(function (t) { return t.tipo_id === id; }) || { tipo_id: id, nombre: 'Sin tipo', color: 'gris', icono: 'calendario', activo: false }; }
   function tiposActivos() { return D.tipos.filter(function (t) { return t.activo; }); }
@@ -215,6 +278,8 @@
     var manana = prox.filter(function (e) { return e.fecha === sumarDias(D.hoy, 1); });
     var semana = prox.filter(function (e) { return diasEntre(D.hoy, e.fecha) < 7; });
     if (hoyEv.length) f.push('¡Hoy salimos! ' + hoyEv[0].titulo + (hoyEv[0].hora_inicio ? ' a las ' + hoyEv[0].hora_inicio : '') + '. ¡Casco puesto!');
+    var dev = porDevolver();
+    if (dev.length) f.push('Hay ' + pesos(dev.reduce(function (a, g) { return a + (Number(g.monto) || 0); }, 0)) + ' por devolver a quienes pagaron gastos míos. Se marca en el reporte de cada salida.');
     if (pend.length) f.push(pend.length === 1 ? 'Tengo una salida sin reporte: «' + pend[0].titulo + '». ¿La anotamos?' : 'Tengo ' + pend.length + ' salidas sin reporte. ¿Las anotamos?');
     if (manana.length) f.push('Mañana tenemos «' + manana[0].titulo + '». ¿Está listo el traje?');
     if (semana.length > 1) f.push('Esta semana tenemos ' + semana.length + ' actividades. ¡Qué agenda!');
@@ -438,6 +503,8 @@
     var datosEv = '<dl class="hp2-datos">' +
       '<div><dt>' + U.ico('calendario', 14) + 'Fecha</dt><dd>' + txt(fechaLarga(e.fecha)) + ' <span class="sx2-tenue">· ' + txt(cuando(e.fecha)) + '</span></dd></div>' +
       '<div><dt>' + U.ico('reloj', 14) + 'Horario</dt><dd>' + txt(horario(e)) + '</dd></div>' +
+      (e.presupuesto || (s && totalGastos(s.datos)) ? '<div><dt>' + U.ico('dinero', 14) + 'Dinero</dt><dd>' + (e.presupuesto ? 'Presupuesto ' + pesos(e.presupuesto) + (e.presupuesto_nota ? ' <span class="sx2-tenue">· ' + txt(e.presupuesto_nota) + '</span>' : '') : '') +
+        (s && totalGastos(s.datos) ? (e.presupuesto ? '<br>' : '') + 'Gastado ' + pesos(totalGastos(s.datos)) : '') + '</dd></div>' : '') +
       '<div><dt>' + U.ico('ubicacion', 14) + 'Lugar</dt><dd>' + (e.lugar || e.direccion ? txt([e.lugar, e.direccion, e.comuna].filter(Boolean).join(' · ')) : '<span class="sx2-tenue">Sin lugar</span>') + '</dd></div>' +
       (e.marca_id && M() && M().marca(e.marca_id) ? '<div><dt>' + U.ico('megafono', 14) + 'Marca</dt><dd>' + M().chip(e.marca_id) + '</dd></div>' : '') +
       '<div><dt>' + U.ico('equipo', 14) + 'Van</dt><dd>' + (e.participantes.length ? '<span class="hp2-personas">' + e.participantes.map(function (p) { return '<span class="hp2-persona">' + U.avatar({ nombre: p }, 'xs') + txt(p) + '</span>'; }).join('') + '</span>' : '<span class="sx2-tenue">Sin definir</span>') + '</dd></div>' +
@@ -587,6 +654,10 @@
         U.campo('Dirección', '<input class="sx2-input" name="direccion" maxlength="160" value="' + txt(e.direccion || '') + '">') +
         U.campo('Comuna', '<input class="sx2-input" name="comuna" maxlength="60" value="' + txt(e.comuna || '') + '">') +
       '</div>' +
+      '<div class="hp2-form-fila">' +
+        U.campo('Presupuesto ($, opcional)', '<input class="sx2-input" type="number" min="0" inputmode="numeric" name="presupuesto" value="' + (e.presupuesto == null ? '' : txt(e.presupuesto)) + '" placeholder="Si la actividad tiene costo">', 'Después se compara con lo gastado.') +
+        U.campo('¿En qué se gastará?', '<input class="sx2-input" name="presupuesto_nota" maxlength="200" value="' + txt(e.presupuesto_nota || '') + '" placeholder="Ej.: Uber, colación y regalos">') +
+      '</div>' +
       U.campo('¿Quiénes van?', chipsInput('participantes', e.participantes, 'Escribe un nombre y presiona Enter'), 'Incluye a quien usará el traje, el apoyo y quien maneja.') +
       U.campo('Detalle (opcional)', '<textarea class="sx2-input hp2-area" name="descripcion" rows="3" maxlength="1500" placeholder="Qué se hará, con quién se coordinó, qué llevar…">' + txt(e.descripcion || '') + '</textarea>');
     U.formulario({
@@ -621,7 +692,7 @@
         '<td>' + bloqueFecha(e.fecha) + '</td>' +
         '<td><button type="button" class="hp2-enlace-ev js-hp2-evento" data-id="' + txt(e.evento_id) + '"><b>' + txt(e.titulo) + '</b></button><div class="hp2-fila__meta">' + chipTipo(t, true) + (e.lugar ? '<span>' + U.ico('ubicacion', 12) + txt(e.lugar) + '</span>' : '') + '</div></td>' +
         (filtroSalidas_ === 'cerradas'
-          ? '<td class="hp2-num">' + (dd.publico != null ? Number(dd.publico).toLocaleString('es-CL') : '—') + '</td><td>' + estrellasTxt(dd.calificacion) + '</td><td>' + txt(dd.traje || '—') + '</td>' +
+          ? '<td class="hp2-num">' + (dd.publico != null ? Number(dd.publico).toLocaleString('es-CL') : '—') + '</td><td>' + estrellasTxt(dd.calificacion) + '</td><td>' + txt(dd.traje || '—') + '</td><td class="hp2-num">' + (totalGastos(dd) ? pesos(totalGastos(dd)) : '—') + '</td>' +
             '<td class="hp2-acc">' + U.boton({ texto: 'Ver', icono: 'ojo', sm: true, clase: 'js-hp2-reporte', datos: { id: e.evento_id } }) + U.boton({ soloIcono: true, icono: 'descargar', titulo: 'Descargar PDF', sm: true, variante: 'fantasma', clase: 'js-hp2-pdf', datos: { id: e.evento_id } }) + '</td>'
           : '<td>' + U.badge(est.t, est.tono) + '</td><td class="sx2-tenue">' + txt(cuando(e.fecha)) + '</td>' +
             '<td class="hp2-acc">' + U.boton({ texto: est.clave === 'borrador' ? 'Seguir' : 'Llenar reporte', icono: 'editar', sm: true, variante: 'primario', clase: 'js-hp2-reporte hp2-boton-hompy', datos: { id: e.evento_id } }) +
@@ -629,7 +700,7 @@
       '</tr>';
     }).join('');
     var cab = filtroSalidas_ === 'cerradas'
-      ? '<tr><th>Fecha</th><th>Actividad</th><th class="hp2-num">Público</th><th>Evaluación</th><th>Traje</th><th></th></tr>'
+      ? '<tr><th>Fecha</th><th>Actividad</th><th class="hp2-num">Público</th><th>Evaluación</th><th>Traje</th><th class="hp2-num">Gastado</th><th></th></tr>'
       : '<tr><th>Fecha</th><th>Actividad</th><th>Estado</th><th>Cuándo</th><th></th></tr>';
     var cuerpo = lista.length
       ? '<div class="hp2-tabla-cont"><table class="hp2-tabla"><thead>' + cab + '</thead><tbody>' + filas + '</tbody></table></div>'
@@ -705,10 +776,17 @@
       '<div class="hp2-form-fila">' + texto('bien', 'Lo que salió bien', d.bien, 'Lo que conviene repetir') + texto('mejorar', 'Qué mejorar', d.mejorar, 'Lo que cambiarían la próxima vez') + '</div>' +
       texto('incidentes', 'Incidentes', d.incidentes, 'Golpes, mareos, problemas con el público o el lugar… (vacío si no hubo)', 2));
 
-    var s6 = '<details class="hp2-sec hp2-sec--plegable sx2-card sx2-entra" style="--i:6"' + (d.gasto_transporte || d.gasto_estacionamiento || d.gasto_colacion || d.gasto_otros ? ' open' : '') + '>' +
-      '<summary class="hp2-sec__cab"><span class="hp2-sec__n">' + U.ico('dinero', 18) + '</span><div><h2>Gastos <span class="hp2-opcional">opcional</span></h2><p>Transporte, estacionamiento, colación.</p></div><span class="hp2-sec__total js-hp2-total"></span>' + U.ico('abajo', 16) + '</summary>' +
-      '<div class="hp2-form-fila hp2-form-fila--4">' + num('gasto_transporte', 'Transporte ($)', d.gasto_transporte) + num('gasto_estacionamiento', 'Estacionamiento ($)', d.gasto_estacionamiento) +
-        num('gasto_colacion', 'Colación ($)', d.gasto_colacion) + num('gasto_otros', 'Otros ($)', d.gasto_otros) + '</div></details>';
+    var gastosIni = d.gastos || [];
+    var s6 = '<details class="hp2-sec hp2-sec--plegable sx2-card sx2-entra" style="--i:6"' + (gastosIni.length || e.presupuesto || d.aporte ? ' open' : '') + '>' +
+      '<summary class="hp2-sec__cab"><span class="hp2-sec__n">' + U.ico('dinero', 18) + '</span><div><h2>Dinero de la actividad <span class="hp2-opcional">opcional</span></h2><p>Cada gasto, quién lo pagó y su respaldo; y el aporte de la marca.</p></div><span class="hp2-sec__total js-hp2-total"></span>' + U.ico('abajo', 16) + '</summary>' +
+      (e.presupuesto ? '<p class="hp2-nota">' + U.ico('dinero', 14) + 'Presupuesto de la actividad: <b>' + pesos(e.presupuesto) + '</b>' + (e.presupuesto_nota ? ' · ' + txt(e.presupuesto_nota) : '') + '</p>' : '') +
+      '<div class="hp2-gastos js-hp2-gastos">' + gastosIni.map(gastoFila).join('') + '</div>' +
+      U.boton({ texto: 'Agregar gasto', icono: 'nueva', sm: true, clase: 'js-hp2-gasto-nuevo hp2-gasto-nuevo' }) +
+      '<div class="hp2-dinero-res js-hp2-dinero-res"></div>' +
+      '<div class="hp2-form-fila">' + num('aporte', 'Aporte recibido ($)', d.aporte) +
+        U.campo('Detalle del aporte', '<input class="sx2-input" name="aporte_detalle" maxlength="160" value="' + txt(d.aporte_detalle || '') + '" placeholder="Ej.: transferencia de la marca por la activación">') + '</div>' +
+      '<p class="hp2-nota hp2-nota--neutro">' + U.ico('info', 14) + 'Si alguien pagó de su bolsillo, elige «Pagó una persona»: queda «por devolver» hasta marcarlo como devuelto (también con el reporte cerrado).</p>' +
+    '</details>';
 
     var s7 = seccion(7, 'comentario', 'Comentarios', '', texto('comentarios', 'Algo más que quieran dejar registrado', d.comentarios, '', 3));
 
@@ -742,6 +820,15 @@
       form.querySelector('.js-hp2-sucio').textContent = 'Cambios sin guardar';
       actualizarResumenSalida(form);
     }
+    form.addEventListener('click', function (ev) {
+      if (ev.target.closest('.js-hp2-gasto-nuevo')) { form.querySelector('.js-hp2-gastos').insertAdjacentHTML('beforeend', gastoFila()); var f = form.querySelector('.hp2-gasto:last-child [data-k=detalle]'); if (f) f.focus(); marcarSucio(); }
+      else if (ev.target.closest('.js-hp2-gasto-borrar')) { ev.target.closest('.hp2-gasto').remove(); marcarSucio(); }
+    });
+    form.addEventListener('change', function (ev) {
+      if (ev.target.getAttribute('data-k') !== 'pago') return;
+      var p = ev.target.closest('.hp2-gasto').querySelector('.hp2-gasto__persona');
+      p.hidden = ev.target.value !== 'PERSONA'; if (!p.hidden) p.focus();
+    });
     form.addEventListener('submit', function (ev) { ev.preventDefault(); });
     form.querySelector('.js-hp2-guardar').addEventListener('click', function (ev) { guardarSalida(form, e, false, ev.currentTarget); });
     form.querySelector('.js-hp2-cerrar').addEventListener('click', function (ev) { guardarSalida(form, e, true, ev.currentTarget); });
@@ -762,7 +849,8 @@
     });
     d.apoyo = (d.apoyo || '').split('\n').filter(Boolean);
     d.material_completo = d.material_completo === 'si' ? true : d.material_completo === 'no' ? false : undefined;
-    ['minutos_traje', 'pausas', 'publico', 'fotos', 'videos', 'calificacion', 'gasto_transporte', 'gasto_estacionamiento', 'gasto_colacion', 'gasto_otros'].forEach(function (k) {
+    d.gastos = leerGastos(form);
+    ['minutos_traje', 'pausas', 'publico', 'fotos', 'videos', 'calificacion', 'aporte'].forEach(function (k) {
       d[k] = d[k] === '' || d[k] == null ? null : Number(d[k]);
     });
     return d;
@@ -802,9 +890,14 @@
     if (calor) calor.hidden = !(d.minutos_traje > 40 && !d.pausas);
     var et = form.querySelector('.js-hp2-estrellas-txt');
     if (et) et.textContent = ['', 'Mal', 'Regular', 'Bien', 'Muy bien', '¡Excelente!'][d.calificacion || 0] || '';
-    var total = ['gasto_transporte', 'gasto_estacionamiento', 'gasto_colacion', 'gasto_otros'].reduce(function (a, k) { return a + (Number(d[k]) || 0); }, 0);
+    var total = totalGastos(d);
     var tt = form.querySelector('.js-hp2-total');
-    if (tt) tt.textContent = total ? '$' + total.toLocaleString('es-CL') : '';
+    if (tt) tt.textContent = total ? pesos(total) : '';
+    var ev = evento(arg_), res = form.querySelector('.js-hp2-dinero-res');
+    if (res && ev) {
+      var p = Number(ev.presupuesto) || 0, dif = total - p;
+      res.innerHTML = (total || p) ? '<div><span>Total gastado</span><b>' + pesos(total) + '</b></div>' + (p ? '<div><span>Presupuesto</span><b>' + pesos(p) + '</b></div><div class="' + (dif > 0 ? 'hp2-dinero-res--mal' : '') + '"><span>Diferencia</span><b>' + (dif > 0 ? '+' : dif < 0 ? '−' : '') + pesos(Math.abs(dif)) + '</b>' + (dif > 0 ? '<small>sobre lo previsto</small>' : '') + '</div>' : '') : '';
+    }
   }
   function guardarSalida(form, e, cerrar, boton) {
     var err = form.querySelector('.js-hp2-error');
@@ -818,6 +911,8 @@
       if (!r || !r.ok) {
         err.textContent = (r && r.message) || 'No se pudo guardar.'; err.hidden = false;
         (r && r.fields || []).forEach(function (f) {
+          var mg = /^gasto_(\d+)$/.exec(f.campo);
+          if (mg) { var fila = form.querySelectorAll('.hp2-gasto')[Number(mg[1])]; if (fila) { fila.closest('details').open = true; fila.classList.add('hp2-campo--falta'); } return; }
           var el = form.querySelector('[name="' + f.campo + '"]');
           var c = el && (el.closest('.sx2-campo') || el.closest('fieldset'));
           if (c) c.classList.add('hp2-campo--falta');
@@ -843,7 +938,7 @@
     var v = function (x) { return x === null || x === undefined || x === '' ? nada : txt(x); };
     var dato = function (et, val) { return '<div><dt>' + txt(et) + '</dt><dd>' + val + '</dd></div>'; };
     var m = minutos(d.hora_fin) - minutos(d.hora_inicio);
-    var gastos = ['gasto_transporte', 'gasto_estacionamiento', 'gasto_colacion', 'gasto_otros'].reduce(function (a, k) { return a + (Number(d[k]) || 0); }, 0);
+    var gastos = totalGastos(d);
     var tr = TRAJE[d.estado_traje];
     var parrafo = function (et, x) { return x ? '<div class="hp2-desc"><h3>' + txt(et) + '</h3><p>' + txt(x) + '</p></div>' : ''; };
 
@@ -871,8 +966,8 @@
         dato('TikTok', d.tiktok ? 'Se grabó material' : 'No') + dato('Fotos', d.enlace_fotos ? '<a href="' + txt(d.enlace_fotos) + '" target="_blank" rel="noopener">Abrir carpeta</a>' : nada) + '</dl>' + parrafo('Sobre el material', d.nota_material) }) + '</div>' +
       '<div class="sx2-col-12">' + U.card({ titulo: 'Cómo nos fue', icono: 'estrella', i: 5, cuerpo:
         '<div class="hp2-form-fila">' + (parrafo('Lo que salió bien', d.bien) || '') + (parrafo('Qué mejorar', d.mejorar) || '') + '</div>' + parrafo('Incidentes', d.incidentes) + parrafo('Comentarios', d.comentarios) +
-        (gastos ? '<p class="hp2-nota">' + U.ico('dinero', 14) + 'Gastos de la salida: <b>$' + gastos.toLocaleString('es-CL') + '</b></p>' : '') +
         (!d.bien && !d.mejorar && !d.incidentes && !d.comentarios ? '<p class="sx2-tenue">Sin comentarios registrados.</p>' : '') }) + '</div>' +
+      (gastos || e.presupuesto || d.aporte ? '<div class="sx2-col-12">' + U.card({ titulo: 'Dinero de la actividad', icono: 'dinero', i: 6, cuerpo: tablaGastos(e, d) }) + '</div>' : '') +
     '</div>';
 
     var firma = '<p class="hp2-firma sx2-tenue">' + U.ico('check', 14) + 'Cerrado por ' + txt(nombreDe(s.cerrado_por)) + ' · ' + txt(horaDe(s.fecha_cierre)) + '</p>';
@@ -966,6 +1061,15 @@
     var id = b.getAttribute('data-id');
     if (b.classList.contains('js-hp2-ir')) irAItem(b.getAttribute('data-ir'));
     else if (b.classList.contains('js-hp2-reintentar')) traer(vista_, arg_);
+    else if (b.classList.contains('js-hp2-reembolso')) {
+      b.disabled = true;
+      api('hompyMarcarReembolso', { evento_id: id, indice: Number(b.getAttribute('data-i')), devuelto: b.getAttribute('data-v') === '1' }).then(function (r) {
+        if (!r || !r.ok) { b.disabled = false; aviso((r && r.message) || 'No se pudo marcar.', 'error'); return; }
+        D.salidas = D.salidas.filter(function (x) { return x.evento_id !== id; }).concat([r.data.salida]);
+        aviso(b.getAttribute('data-v') === '1' ? 'Marcado como devuelto.' : 'Vuelve a quedar por devolver.', 'exito');
+        if (vista_ === 'salida') pintarSalidaLectura(evento(id), r.data.salida);
+      });
+    }
     else if (b.classList.contains('js-hp2-nuevo')) formularioEvento(null, b.getAttribute('data-fecha') || (vista_ === 'calendario' && diaSel_ >= D.hoy ? diaSel_ : ''));
     else if (b.classList.contains('js-hp2-evento')) abrirEvento(id);
     else if (b.classList.contains('js-hp2-reporte')) ir('salida', id);
@@ -1005,7 +1109,8 @@
       pagina: pagina, cabecera: cabecera, ir: ir, irAItem: irAItem, traer: function (v, a) { return traer(v, a, true); },
       chipsInput: chipsInput, enlazarChips: enlazarChips, chispas: chispas, celebrar: celebrar, abrirEvento: abrirEvento,
       fechaLarga: fechaLarga, fechaCorta: fechaCorta, cuando: cuando, nombreDe: nombreDe, horaDe: horaDe, tipo: tipo, IMG: IMG,
-      descargarBase64: descargarBase64
+      descargarBase64: descargarBase64, pesos: pesos,
+      ponerSalida: function (s) { D.salidas = D.salidas.filter(function (x) { return x.evento_id !== s.evento_id; }).concat([s]); }
     }
   };
   registrarArbol();

@@ -139,7 +139,8 @@ function eventoPublico_(e) {
     evento_id: e.evento_id, tipo_id: e.tipo_id, titulo: e.titulo, fecha: fecha_(e.fecha), hora_inicio: e.hora_inicio || '', hora_fin: e.hora_fin || '',
     lugar: e.lugar || '', direccion: e.direccion || '', comuna: e.comuna || '', participantes: json_(e.participantes, []),
     descripcion: e.descripcion || '', estado: ESTADOS_EVENTO.indexOf(e.estado) !== -1 ? e.estado : 'PLANIFICADO',
-    motivo_cancelacion: e.motivo_cancelacion || '', idea_id: e.idea_id || '', marca_id: e.marca_id || '', creado_por: e.creado_por || '', fecha_creacion: e.fecha_creacion || ''
+    motivo_cancelacion: e.motivo_cancelacion || '', idea_id: e.idea_id || '', marca_id: e.marca_id || '',
+    presupuesto: entero_(e.presupuesto), presupuesto_nota: e.presupuesto_nota || '', creado_por: e.creado_por || '', fecha_creacion: e.fecha_creacion || ''
   };
 }
 function eventos_(db) { return leer_(db, 'HOMPY_EVENTOS').filter((e) => esVerdadero_(e.activo)).map(eventoPublico_); }
@@ -162,6 +163,7 @@ function guardarEvento(db, data, contexto) {
   if (marcaId === null) return errorValidacion('marca_id', 'Esa marca ya no existe.');
   const fila = {
     tipo_id: tipo.tipo_id, titulo, fecha, hora_inicio: horaInicio, hora_fin: horaFin, marca_id: marcaId,
+    presupuesto: entero_(data.presupuesto, 1e10) == null ? '' : entero_(data.presupuesto, 1e10), presupuesto_nota: linea_(data.presupuesto_nota, 200),
     lugar: linea_(data.lugar, 120), direccion: linea_(data.direccion, 160), comuna: linea_(data.comuna, 60),
     participantes: JSON.stringify(lista_(data.participantes, 15, 60)), descripcion: texto_(data.descripcion, 1500),
     actualizado_por: contexto.email, fecha_actualizacion: ahora_()
@@ -214,9 +216,16 @@ function salidaDe_(db, eventoId) {
 }
 function salidaPublica_(s) {
   return {
-    salida_id: s.salida_id, evento_id: s.evento_id, estado: s.estado === 'CERRADO' ? 'CERRADO' : 'BORRADOR', datos: json_(s.datos, {}),
+    salida_id: s.salida_id, evento_id: s.evento_id, estado: s.estado === 'CERRADO' ? 'CERRADO' : 'BORRADOR', datos: datosLeidos_(json_(s.datos, {})),
     cerrado_por: s.cerrado_por || '', fecha_cierre: s.fecha_cierre || '', actualizado_por: s.actualizado_por || '', fecha_actualizacion: s.fecha_actualizacion || ''
   };
+}
+
+/** Los datos guardados, con los gastos siempre como lista (los antiguos se convierten). */
+function datosLeidos_(d) {
+  const o = Object.assign({}, d, { gastos: gastosDe_(d) });
+  GASTOS_ANTIGUOS.forEach(([k]) => { delete o[k]; });
+  return o;
 }
 
 /** Solo los campos conocidos, cada uno con su tipo. Lo demás se descarta. */
@@ -235,8 +244,7 @@ function limpiarDatosSalida_(d) {
     material_completo: d.material_completo === undefined ? null : esVerdadero_(d.material_completo), nota_material: texto_(d.nota_material, 400),
     fotos: entero_(d.fotos, 10000), videos: entero_(d.videos, 10000), tiktok: esVerdadero_(d.tiktok), enlace_fotos: url_(d.enlace_fotos),
     calificacion: calif && calif >= 1 ? calif : null, bien: texto_(d.bien, 1500), mejorar: texto_(d.mejorar, 1500), incidentes: texto_(d.incidentes, 1500),
-    gasto_transporte: entero_(d.gasto_transporte), gasto_estacionamiento: entero_(d.gasto_estacionamiento),
-    gasto_colacion: entero_(d.gasto_colacion), gasto_otros: entero_(d.gasto_otros),
+    gastos: gastosDe_(d).slice(0, 40), aporte: entero_(d.aporte, 1e10), aporte_detalle: linea_(d.aporte_detalle, 160),
     comentarios: texto_(d.comentarios, 2500)
   };
 }
@@ -251,6 +259,7 @@ function faltantesParaCerrar_(d) {
   if (d.publico == null) f.publico = 'Anota el público estimado (aunque sea aproximado).';
   if (!d.estado_traje) f.estado_traje = 'Indica cómo quedó el traje.';
   if (!d.calificacion) f.calificacion = 'Califica la salida de 1 a 5.';
+  (d.gastos || []).forEach((g, i) => { if (g.pago === 'PERSONA' && !g.persona) f['gasto_' + i] = 'Indica quién pagó el gasto «' + (g.detalle || NOMBRE_CATEGORIA[g.categoria]) + '» (para devolvérselo).'; });
   return f;
 }
 
@@ -293,6 +302,51 @@ function reabrirSalida(db, data, contexto) {
   if (!s) return errorValidacion('evento_id', 'Esa actividad no tiene reporte de salida.');
   if (s.estado !== 'CERRADO') return { salida: s };
   actualizarFilaPorId_(db, 'HOMPY_SALIDAS', 'salida_id', s.salida_id, { estado: 'BORRADOR', cerrado_por: '', fecha_cierre: '', actualizado_por: contexto.email, fecha_actualizacion: ahora_() });
+  return { salida: salidaDe_(db, data.evento_id) };
+}
+
+
+// --- Dinero de cada actividad (2026-10-06, pedido del equipo) -----------------------------------
+// Presupuesto opcional al agendar; en el reporte de salida, la lista de gastos (categoría, detalle,
+// monto, quién pagó, respaldo) con el control de reembolsos, y el aporte en dinero de la marca.
+const CATEGORIAS_GASTO = ['TRANSPORTE', 'ESTACIONAMIENTO', 'COLACION', 'MATERIAL', 'IMPRESION', 'ARRIENDO', 'TERCEROS', 'OTRO'];
+const NOMBRE_CATEGORIA = { TRANSPORTE: 'Transporte', ESTACIONAMIENTO: 'Estacionamiento', COLACION: 'Colación', MATERIAL: 'Material y regalos', IMPRESION: 'Impresión', ARRIENDO: 'Arriendo', TERCEROS: 'Pago a terceros', OTRO: 'Otro' };
+const GASTOS_ANTIGUOS = [['gasto_transporte', 'TRANSPORTE'], ['gasto_estacionamiento', 'ESTACIONAMIENTO'], ['gasto_colacion', 'COLACION'], ['gasto_otros', 'OTRO']];
+
+function limpiarGasto_(g) {
+  g = g || {};
+  const pago = g.pago === 'PERSONA' ? 'PERSONA' : 'EMPRESA';
+  return {
+    categoria: CATEGORIAS_GASTO.indexOf(g.categoria) !== -1 ? g.categoria : 'OTRO', detalle: linea_(g.detalle, 120), monto: entero_(g.monto, 1e10),
+    pago, persona: pago === 'PERSONA' ? linea_(g.persona, 60) : '', documento: linea_(g.documento, 40), enlace: url_(g.enlace),
+    devuelto: pago === 'PERSONA' && esVerdadero_(g.devuelto), devuelto_por: pago === 'PERSONA' && esVerdadero_(g.devuelto) ? linea_(g.devuelto_por, 120) : '',
+    fecha_devolucion: pago === 'PERSONA' && esVerdadero_(g.devuelto) ? fecha_(g.fecha_devolucion) : ''
+  };
+}
+/** Los gastos de un reporte; los reportes antiguos (4 montos fijos) se leen como líneas. */
+function gastosDe_(d) {
+  d = d || {};
+  if (Array.isArray(d.gastos)) return d.gastos.map(limpiarGasto_).filter((g) => g.monto > 0);
+  return GASTOS_ANTIGUOS.filter(([k]) => Number(d[k]) > 0).map(([k, c]) => limpiarGasto_({ categoria: c, monto: d[k] }));
+}
+function totalGastos_(d) { return gastosDe_(d).reduce((a, g) => a + (g.monto || 0), 0); }
+
+/** Marca (o desmarca) como devuelto el gasto que pagó una persona. Vale también con el reporte cerrado. */
+function marcarReembolso(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  data = data || {};
+  const f = leer_(db, 'HOMPY_SALIDAS').find((s) => s.evento_id === data.evento_id && esVerdadero_(s.activo));
+  if (!f) return errorValidacion('evento_id', 'Esa actividad no tiene reporte de salida.');
+  const datos = json_(f.datos, {});
+  const gastos = gastosDe_(datos);
+  const i = Number(data.indice);
+  if (!(i >= 0 && i < gastos.length)) return errorValidacion('indice', 'Ese gasto ya no existe.');
+  if (gastos[i].pago !== 'PERSONA') return errorValidacion('indice', 'Ese gasto lo pagó la empresa: no lleva reembolso.');
+  const devuelto = esVerdadero_(data.devuelto);
+  gastos[i] = Object.assign({}, gastos[i], { devuelto, devuelto_por: devuelto ? contexto.email : '', fecha_devolucion: devuelto ? (fecha_(data.fecha) || hoy_()) : '' });
+  const nuevos = Object.assign({}, datos, { gastos });
+  GASTOS_ANTIGUOS.forEach(([k]) => { delete nuevos[k]; });
+  actualizarFilaPorId_(db, 'HOMPY_SALIDAS', 'salida_id', f.salida_id, { datos: JSON.stringify(nuevos), actualizado_por: contexto.email, fecha_actualizacion: ahora_() });
   return { salida: salidaDe_(db, data.evento_id) };
 }
 
@@ -511,7 +565,8 @@ function datos(db, data, contexto) {
     hoy: hoy_(), tipos: tipos_(db), eventos: eventos_(db), salidas, ideas: ideas_(db), marcas: marcas_(db), colaboraciones: colabs_(db), personas: personas_(db), nombres: nombres_(db),
     catalogos: { colores: COLORES, iconos: ICONOS, estados_traje: ESTADOS_TRAJE, material: MATERIAL, max_tipos: MAX_TIPOS,
       etapas: ETAPAS, nombres_etapa: NOMBRE_ETAPA, objetivos: OBJETIVOS, formatos: FORMATOS, duraciones: DURACIONES, planos: PLANOS, checklist: CHECKLIST, metricas: METRICAS,
-      estados_marca: ESTADOS_MARCA, tipos_colab: TIPOS_COLAB, estados_colab: ESTADOS_COLAB }
+      estados_marca: ESTADOS_MARCA, tipos_colab: TIPOS_COLAB, estados_colab: ESTADOS_COLAB,
+      categorias_gasto: CATEGORIAS_GASTO.map((c) => [c, NOMBRE_CATEGORIA[c]]) }
   };
 }
 
@@ -545,7 +600,7 @@ function cuerpoPdf_(evento, tipo, salida, nombres, U) {
   const bloque = (titulo, ico, html) => '<section class="hp2-pdf-bloque"><h2>' + U.ico(ico, 16) + esc(titulo) + '</h2>' + html + '</section>';
   const parrafo = (et, t) => (t ? '<div class="hp2-pdf-texto"><h3>' + esc(et) + '</h3><p>' + esc(t) + '</p></div>' : '');
   const estrellas = (n) => '<span class="hp2-pdf-estrellas" aria-label="' + (n || 0) + ' de 5">' + [1, 2, 3, 4, 5].map((i) => '<i class="' + (i <= (n || 0) ? 'on' : '') + '">★</i>').join('') + '</span>';
-  const gastos = ['gasto_transporte', 'gasto_estacionamiento', 'gasto_colacion', 'gasto_otros'].reduce((s, k) => s + (Number(d[k]) || 0), 0);
+  const lineas = gastosDe_(d), gastos = totalGastos_(d), presupuesto = Number(evento.presupuesto) || 0;
   const cara = caraHompy_();
 
   const portada = '<div class="hp2-pdf-portada hp2-color-' + esc(tipo.color) + '">' +
@@ -588,10 +643,14 @@ function cuerpoPdf_(evento, tipo, salida, nombres, U) {
     parrafo('Lo que salió bien', d.bien) + parrafo('Qué mejorar', d.mejorar) + parrafo('Incidentes', d.incidentes) + parrafo('Comentarios', d.comentarios) +
     (!d.bien && !d.mejorar && !d.incidentes && !d.comentarios ? '<p class="hp2-pdf-nada">Sin comentarios registrados.</p>' : ''));
 
-  const gastosHtml = gastos > 0 ? bloque('Gastos', 'dinero', '<dl class="hp2-pdf-datos">' +
-    dato('Transporte', v(d.gasto_transporte ? pesos_(d.gasto_transporte) : '')) + dato('Estacionamiento', v(d.gasto_estacionamiento ? pesos_(d.gasto_estacionamiento) : '')) +
-    dato('Colación', v(d.gasto_colacion ? pesos_(d.gasto_colacion) : '')) + dato('Otros', v(d.gasto_otros ? pesos_(d.gasto_otros) : '')) +
-    dato('Total', '<b>' + esc(pesos_(gastos)) + '</b>') + '</dl>') : '';
+  const gastosHtml = (gastos > 0 || presupuesto > 0 || d.aporte) ? bloque('Dinero de la actividad', 'dinero',
+    (lineas.length ? '<table class="hp2-pdf-tabla"><thead><tr><th>Categoría</th><th>Detalle</th><th>Pagó</th><th>Respaldo</th><th style="text-align:right">Monto</th></tr></thead><tbody>' +
+      lineas.map((g) => '<tr><td>' + esc(NOMBRE_CATEGORIA[g.categoria]) + '</td><td>' + v(g.detalle) + '</td><td>' + (g.pago === 'PERSONA' ? esc(g.persona || 'Una persona') + '<br><small>' + (g.devuelto ? 'Devuelto' + (g.fecha_devolucion ? ' el ' + esc(g.fecha_devolucion.split('-').reverse().join('-')) : '') : 'Por devolver') + '</small>' : 'La empresa') + '</td>' +
+        '<td>' + (g.documento ? esc(g.documento) : '') + (g.enlace ? (g.documento ? '<br>' : '') + '<a href="' + esc(g.enlace) + '">ver respaldo</a>' : '') + (!g.documento && !g.enlace ? nada : '') + '</td><td style="text-align:right">' + esc(pesos_(g.monto)) + '</td></tr>').join('') +
+      '</tbody></table>' : '<p class="hp2-pdf-nada">Sin gastos registrados.</p>') +
+    '<dl class="hp2-pdf-datos hp2-pdf-datos--4">' + dato('Total gastado', '<b>' + esc(pesos_(gastos)) + '</b>') + dato('Presupuesto', v(presupuesto ? pesos_(presupuesto) : '')) +
+      dato('Diferencia', presupuesto ? esc((gastos > presupuesto ? '+' : gastos < presupuesto ? '−' : '') + pesos_(Math.abs(gastos - presupuesto))) + (gastos > presupuesto ? ' sobre lo previsto' : '') : nada) +
+      dato('Aporte de la marca', v(d.aporte ? pesos_(d.aporte) + (d.aporte_detalle ? ' · ' + d.aporte_detalle : '') : '')) + '</dl>') : '';
 
   const firma = '<p class="hp2-pdf-firma">' + (salida.estado === 'CERRADO'
     ? 'Reporte cerrado por ' + esc(nombres[String(salida.cerrado_por).toLowerCase()] || salida.cerrado_por) + ' el ' + esc(new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', dateStyle: 'long', timeStyle: 'short' }).format(new Date(salida.fecha_cierre)))
@@ -759,7 +818,9 @@ function resumenMes_(db, periodo) {
   }
   const act = cifras(periodo), ant = cifras(periodoAnterior_(periodo));
   const califs = act.cerradas.map((x) => x.s.datos.calificacion).filter(Boolean);
-  const gastos = act.cerradas.reduce((a, x) => a + ['gasto_transporte', 'gasto_estacionamiento', 'gasto_colacion', 'gasto_otros'].reduce((b, k) => b + (Number(x.s.datos[k]) || 0), 0), 0);
+  const gastos = act.cerradas.reduce((a, x) => a + totalGastos_(x.s.datos), 0);
+  const gastosAnt = ant.cerradas.reduce((a, x) => a + totalGastos_(x.s.datos), 0);
+  const dinero = dineroDelMes_(act, gastos, gastosAnt, eventos, salidas, nombreTipo, nombreMarca, tipos);
   const minTraje = act.cerradas.reduce((a, x) => a + (Number(x.s.datos.minutos_traje) || 0), 0);
   const pendientes = act.activos.filter((e) => e.fecha <= hoy && !(salidaDe(e.evento_id) && salidaDe(e.evento_id).estado === 'CERRADO'));
   // El estado del traje: el del último reporte cerrado (de cualquier mes hasta el fin de este).
@@ -794,9 +855,40 @@ function resumenMes_(db, periodo) {
       idea_id: i.idea_id, titulo: i.titulo, fecha: i.publicacion.fecha, url: i.publicacion.url, marca: nombreMarca(i.marca_id),
       vistas24: i.publicacion.h24.vistas, vistas7: i.publicacion.d7.vistas, interaccion: interaccion_(i.publicacion.h24)
     })),
+    dinero,
     colaboraciones: colabsMes.map((c) => ({ colab_id: c.colab_id, titulo: c.titulo, marca: nombreMarca(c.marca_id), tipo: c.tipo, estado: c.estado, valor: c.valor })),
     estudio: ETAPAS.map((et) => ({ etapa: et, nombre: NOMBRE_ETAPA[et], n: ideas.filter((i) => i.etapa === et).length })),
     traje: ultTraje ? { estado: ultTraje.s.datos.estado_traje, texto: TRAJE_TXT[ultTraje.s.datos.estado_traje], fecha: ultTraje.e.fecha, nota: ultTraje.s.datos.nota_traje || '' } : null
+  };
+}
+
+/** El dinero del mes: lo gastado (reportes cerrados), lo presupuestado, en qué se fue, los reembolsos por devolver y los aportes. */
+function dineroDelMes_(act, gastado, gastadoAnt, eventos, salidas, nombreTipo, nombreMarca, tipos) {
+  const porCat = {}, porTipo = {}, porMarca = {};
+  let presupCerradas = 0, aportes = 0;
+  const sobre = [], listaAportes = [];
+  act.cerradas.forEach((x) => {
+    const total = totalGastos_(x.s.datos), p = Number(x.e.presupuesto) || 0;
+    gastosDe_(x.s.datos).forEach((g) => { porCat[g.categoria] = (porCat[g.categoria] || 0) + g.monto; });
+    if (total) { porTipo[x.e.tipo_id] = (porTipo[x.e.tipo_id] || 0) + total; }
+    if (total && x.e.marca_id) porMarca[x.e.marca_id] = (porMarca[x.e.marca_id] || 0) + total;
+    if (p) { presupCerradas += p; if (total > p) sobre.push({ evento_id: x.e.evento_id, titulo: x.e.titulo, fecha: x.e.fecha, presupuesto: p, gastado: total }); }
+    if (x.s.datos.aporte) { aportes += x.s.datos.aporte; listaAportes.push({ evento_id: x.e.evento_id, titulo: x.e.titulo, marca: nombreMarca(x.e.marca_id), monto: x.s.datos.aporte, detalle: x.s.datos.aporte_detalle || '' }); }
+  });
+  const presupuestado = act.activos.reduce((a, e) => a + (Number(e.presupuesto) || 0), 0);
+  const publico = act.publico;
+  // Los reembolsos por devolver no tienen mes: se muestran todos los pendientes hasta hoy.
+  const pendientes = [];
+  salidas.forEach((s) => { const e = eventos.find((x) => x.evento_id === s.evento_id); if (!e) return; gastosDe_(s.datos).forEach((g, i) => { if (g.pago === 'PERSONA' && !g.devuelto) pendientes.push({ evento_id: e.evento_id, titulo: e.titulo, fecha: e.fecha, persona: g.persona, detalle: g.detalle || NOMBRE_CATEGORIA[g.categoria], monto: g.monto, indice: i }); }); });
+  pendientes.sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+  return {
+    gastado: { actual: gastado, anterior: gastadoAnt }, presupuestado, presupuesto_cerradas: presupCerradas, aportes, neto: aportes - gastado,
+    costo_por_persona: publico > 0 && gastado > 0 ? Math.round(gastado / publico) : null,
+    por_categoria: CATEGORIAS_GASTO.filter((c) => porCat[c]).map((c) => ({ categoria: c, nombre: NOMBRE_CATEGORIA[c], monto: porCat[c] })).sort((a, b) => b.monto - a.monto),
+    por_tipo: tipos.filter((t) => porTipo[t.tipo_id]).map((t) => ({ nombre: t.nombre, color: t.color, monto: porTipo[t.tipo_id] })).sort((a, b) => b.monto - a.monto),
+    por_marca: Object.keys(porMarca).map((id) => ({ nombre: nombreMarca(id), monto: porMarca[id] })).sort((a, b) => b.monto - a.monto),
+    sobre_presupuesto: sobre, aportes_lista: listaAportes,
+    reembolsos: { total: pendientes.reduce((a, p) => a + p.monto, 0), lista: pendientes }
   };
 }
 
@@ -834,7 +926,7 @@ function cuerpoPdfMensual_(r, U) {
     '<div><dt>Evaluación promedio</dt><dd>' + (k.calificacion == null ? '—' : esc(String(k.calificacion).replace('.', ',')) + ' de 5') + '</dd></div>' +
     '<div><dt>Minutos en el traje</dt><dd>' + num(k.minutos_traje) + '</dd></div>' +
     '<div><dt>Interacción promedio</dt><dd>' + (k.interaccion == null ? '—' : esc(String(k.interaccion).replace('.', ',')) + ' %') + '</dd></div>' +
-    '<div><dt>Gastos de salidas</dt><dd>' + esc(pesos_(k.gastos)) + '</dd></div>' +
+    '<div><dt>Gastos de salidas</dt><dd>' + esc(pesos_(k.gastos)) + (r.dinero && r.dinero.reembolsos.total ? '<br><small>' + esc(pesos_(r.dinero.reembolsos.total)) + ' por devolver</small>' : '') + '</dd></div>' +
     '<div><dt>Canceladas</dt><dd>' + num(k.canceladas) + '</dd></div>' +
     '<div><dt>Ideas nuevas</dt><dd>' + num(k.ideas_nuevas) + '</dd></div>' +
     '<div><dt>Colaboraciones</dt><dd>' + num(k.colaboraciones) + '</dd></div>' +
@@ -849,8 +941,20 @@ function cuerpoPdfMensual_(r, U) {
   const colabs = bloque('Marcas y colaboraciones', 'megafono', tabla(['Marca', 'Colaboración', 'Tipo', 'Estado', 'Valor estimado'],
     r.colaboraciones.map((c) => [esc(c.marca), esc(c.titulo), esc(NOMBRE_TIPO_COLAB[c.tipo] || c.tipo), esc(NOMBRE_ESTADO_COLAB[c.estado] || c.estado), c.valor ? esc(pesos_(c.valor)) : '—']),
     'Sin colaboraciones vigentes este mes.'));
+  const dn = r.dinero;
+  const dineroHtml = bloque('Dinero del mes', 'dinero',
+    '<dl class="hp2-pdf-datos hp2-pdf-datos--4">' +
+      '<div><dt>Gastado</dt><dd><b>' + esc(pesos_(dn.gastado.actual)) + '</b><br><small>' + esc((dn.gastado.anterior ? pesos_(dn.gastado.anterior) : '$0') + ' en ' + r.anterior) + '</small></dd></div>' +
+      '<div><dt>Presupuestado</dt><dd>' + esc(dn.presupuestado ? pesos_(dn.presupuestado) : '—') + '</dd></div>' +
+      '<div><dt>Costo por persona alcanzada</dt><dd>' + esc(dn.costo_por_persona != null ? pesos_(dn.costo_por_persona) : '—') + '</dd></div>' +
+      '<div><dt>Aportes de marcas</dt><dd>' + esc(dn.aportes ? pesos_(dn.aportes) : '—') + '</dd></div></dl>' +
+    (dn.por_categoria.length ? '<h3 class="hp2-pdf-sub">En qué se gastó</h3>' + tabla(['Categoría', 'Monto'], dn.por_categoria.map((c) => [esc(c.nombre), esc(pesos_(c.monto))]), '') : '<p class="hp2-pdf-nada">Sin gastos en los reportes cerrados del mes.</p>') +
+    (dn.por_tipo.length ? '<h3 class="hp2-pdf-sub">Por tipo de evento</h3>' + tabla(['Tipo', 'Monto'], dn.por_tipo.map((c) => [esc(c.nombre), esc(pesos_(c.monto))]), '') : '') +
+    (dn.por_marca.length ? '<h3 class="hp2-pdf-sub">Por marca</h3>' + tabla(['Marca', 'Monto'], dn.por_marca.map((c) => [esc(c.nombre), esc(pesos_(c.monto))]), '') : '') +
+    (dn.sobre_presupuesto.length ? '<p class="hp2-pdf-alerta">Sobre el presupuesto: ' + dn.sobre_presupuesto.map((x) => esc(x.titulo) + ' (' + esc(pesos_(x.gastado)) + ' de ' + esc(pesos_(x.presupuesto)) + ')').join(', ') + '.</p>' : '') +
+    (dn.reembolsos.lista.length ? '<h3 class="hp2-pdf-sub">Reembolsos por devolver (' + esc(pesos_(dn.reembolsos.total)) + ')</h3>' + tabla(['Persona', 'Gasto', 'Actividad', 'Monto'], dn.reembolsos.lista.map((x) => [esc(x.persona || '—'), esc(x.detalle), esc(x.titulo + ' (' + x.fecha.slice(8, 10) + '/' + x.fecha.slice(5, 7) + ')'), esc(pesos_(x.monto))]), '') : ''));
   const estudio = bloque('Estudio TikTok hoy', 'bombilla', '<p class="hp2-pdf-embudo">' + r.estudio.map((e) => esc(e.nombre) + ': <b>' + e.n + '</b>').join(' · ') + '</p>');
-  return '<div class="hp2-pdf">' + portada + cifras + bloque('Más datos del mes', 'grafico', otros) + salidas + videos + colabs + estudio + '</div>';
+  return '<div class="hp2-pdf">' + portada + cifras + bloque('Más datos del mes', 'grafico', otros) + salidas + dineroHtml + videos + colabs + estudio + '</div>';
 }
 
 async function pdfMensual(db, data, contexto) {
@@ -868,7 +972,7 @@ async function pdfMensual(db, data, contexto) {
 module.exports = {
   datos, guardarTipo, guardarEvento, cambiarEstadoEvento, eliminarEvento, guardarSalida, reabrirSalida, pdfSalida,
   guardarIdea, moverIdea, votarIdea, eliminarIdea, agendarGrabacion,
-  guardarMarca, eliminarMarca, guardarColaboracion, eliminarColaboracion, reporteMensual, pdfMensual,
+  guardarMarca, eliminarMarca, guardarColaboracion, eliminarColaboracion, reporteMensual, pdfMensual, marcarReembolso,
   // para las pruebas
-  puede_, resumenMes_, cuerpoPdfMensual_, limpiarDatosSalida_, faltaParaAvanzar_, limpiarDialogo_, limpiarGuion_, faltantesParaCerrar_, cuerpoPdf_, TIPOS_PROPUESTA, MODULO
+  puede_, gastosDe_, totalGastos_, resumenMes_, cuerpoPdfMensual_, limpiarDatosSalida_, faltaParaAvanzar_, limpiarDialogo_, limpiarGuion_, faltantesParaCerrar_, cuerpoPdf_, TIPOS_PROPUESTA, MODULO
 };

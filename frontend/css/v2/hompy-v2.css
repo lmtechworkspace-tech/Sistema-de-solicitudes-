@@ -940,3 +940,39 @@ img.hp2e-av { background: #fff; box-shadow: 0 0 0 2px var(--hp-naranja); }
 .hp2-pdf-tabla tr { break-inside: avoid; }
 .hp2-pdf-alerta { margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; font-size: 9pt; background: #fef3c7; color: #78350f; }
 .hp2-pdf-embudo { margin: 0; }
+
+/* ==== Dinero de cada actividad (gastos, reembolsos, aporte) ================================ */
+.hp2-gastos { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 10px; }
+.hp2-gasto { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 14px; border: 1px solid var(--sx-borde); background: color-mix(in srgb, var(--hp-naranja) 3%, var(--sx-superficie)); animation: hp2-pildora .3s var(--hp-curva) both; }
+.hp2-gasto__fila { display: grid; grid-template-columns: 170px minmax(0, 1fr) 130px 34px; gap: 6px; align-items: center; }
+.hp2-gasto__fila--2 { grid-template-columns: 210px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); }
+.hp2-gasto__fila--2:has(.hp2-gasto__persona[hidden]) { grid-template-columns: 210px minmax(0, 1fr) minmax(0, 1fr); }
+.hp2-gasto .sx2-input, .hp2-gasto .sx2-select { height: 36px; font-size: .875rem; }
+.hp2-gasto__monto { text-align: right; font-variant-numeric: tabular-nums; }
+.hp2-gasto__borrar { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 10px; background: none; color: var(--sx-texto-3); cursor: pointer; }
+.hp2-gasto__borrar:hover { background: color-mix(in srgb, var(--sx-critico, #b91c1c) 12%, transparent); color: var(--sx-critico, #b91c1c); }
+.hp2-gasto__dev { position: absolute; top: -9px; right: 46px; display: inline-flex; gap: 4px; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: .6875rem; font-weight: 700; color: var(--sx-ok, #15803d); background: var(--sx-superficie); border: 1px solid color-mix(in srgb, var(--sx-ok, #15803d) 35%, transparent); }
+.hp2-gasto.hp2-campo--falta { border-color: var(--sx-critico, #b91c1c); }
+.hp2-gasto-nuevo { border-style: dashed; margin-bottom: 12px; }
+.hp2-dinero-res { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 10px 0 14px; }
+.hp2-dinero-res:empty { display: none; }
+.hp2-dinero-res--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.hp2-dinero-res > div { display: flex; flex-direction: column; padding: 10px 12px; border-radius: 12px; background: var(--sx-superficie-2, var(--sx-fondo)); }
+.hp2-dinero-res span { font-size: .75rem; color: var(--sx-texto-3); }
+.hp2-dinero-res b { font-size: 1.125rem; color: var(--sx-texto); font-variant-numeric: tabular-nums; }
+.hp2-dinero-res small { font-size: .75rem; color: var(--sx-texto-3); }
+.hp2-dinero-res--mal { background: color-mix(in srgb, var(--sx-alerta, #d97706) 12%, transparent) !important; }
+.hp2-dinero-res--mal b { color: color-mix(in srgb, var(--sx-alerta, #d97706) 75%, var(--sx-texto)); }
+.hp2m-sub { margin: 14px 0 8px; font-size: .8125rem; font-weight: 700; color: var(--sx-texto-2); text-transform: uppercase; letter-spacing: .04em; }
+.hp2m-dinero__grilla { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 18px; }
+.hp2m-barras { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.hp2m-barras li { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: .8125rem; color: var(--sx-texto-2); }
+.hp2m-barras i { display: block; height: 10px; width: var(--w); min-width: 4px; border-radius: 999px; background: linear-gradient(90deg, var(--hp-naranja), color-mix(in srgb, var(--hp-naranja) 60%, #ffd166)); transform-origin: left; animation: hp2-franja-crece .7s cubic-bezier(.2, .8, .2, 1) both; }
+.hp2m-barras b { color: var(--sx-texto); font-variant-numeric: tabular-nums; }
+.hp2-pdf-sub { margin: 10px 0 4px; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+@media (max-width: 900px) {
+  .hp2-gasto__fila, .hp2-gasto__fila--2, .hp2-gasto__fila--2:has(.hp2-gasto__persona[hidden]) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .hp2-gasto__fila .hp2-gasto__borrar { justify-self: end; }
+  .hp2-dinero-res, .hp2-dinero-res--5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hp2m-dinero__grilla { grid-template-columns: minmax(0, 1fr); }
+}
