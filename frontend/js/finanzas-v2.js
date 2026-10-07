@@ -177,6 +177,7 @@
     ultimoUso_ = Date.now();
     iniciarReloj();
     if (vista_ === 'bitacora') return verBitacora();
+    if (vista_ === 'cobranza' && window.SigsoFinanzasCobranza) return SigsoFinanzasCobranza.ver(ctxBancos());
     if ((vista_ === 'bancos' || vista_ === 'movimientos') && window.SigsoFinanzasBancos) {
       return vista_ === 'bancos' ? SigsoFinanzasBancos.verBancos(ctxBancos()) : SigsoFinanzasBancos.verMovimientos(ctxBancos());
     }
@@ -190,7 +191,8 @@
   }
   var TITULOS_ = {
     Resumen: ['Bóveda de Finanzas', ''], 'Bitácora': ['Bitácora de accesos', 'Todo lo que se hace en la bóveda, en orden y encadenado.'],
-    Bancos: ['Bancos', 'Sube la cartola del banco y el sistema la clasifica.'], Movimientos: ['Movimientos', 'Revisa lo que el sistema propone; lo que corriges, lo aprende.']
+    Bancos: ['Bancos', 'Sube la cartola del banco y el sistema la clasifica.'], Movimientos: ['Movimientos', 'Revisa lo que el sistema propone; lo que corriges, lo aprende.'],
+    Cobranza: ['Cobranza', 'Lo que falta cobrar y desde hace cuánto; los pagos del banco se cruzan solos con las facturas.']
   };
   // Lo que necesita finanzas-bancos-v2.js para pintarse dentro de la bóveda.
   function ctxBancos() {
@@ -205,7 +207,7 @@
     var tt = TITULOS_[seccion] || TITULOS_.Resumen;
     return cab(tt[0], tt[1],
       '<span class="fin2-abierta" title="Se cierra sola sin uso">' + U.ico('reloj', 14) + '<span id="fin-reloj">' + inactividadMin_ + ':00</span></span>' +
-      U.segmento([{ id: 'inicio', texto: 'Resumen', icono: 'panel' }, { id: 'bancos', texto: 'Bancos', icono: 'dinero' }, { id: 'movimientos', texto: 'Movimientos', icono: 'tabla' }, { id: 'bitacora', texto: 'Bitácora', icono: 'lista' }], vista_, 'js-fin-vista') +
+      U.segmento([{ id: 'inicio', texto: 'Resumen', icono: 'panel' }, { id: 'bancos', texto: 'Bancos', icono: 'dinero' }, { id: 'movimientos', texto: 'Movimientos', icono: 'tabla' }, { id: 'cobranza', texto: 'Cobranza', icono: 'recibo' }, { id: 'bitacora', texto: 'Bitácora', icono: 'lista' }], vista_, 'js-fin-vista') +
       U.boton({ texto: 'Cerrar bóveda', icono: 'candado', clase: 'js-fin-salir' }));
   }
   function capa(ok, titulo, texto) {
@@ -244,7 +246,7 @@
         U.card({ titulo: 'Lo que viene', icono: 'capas', i: 3, cuerpo: '<ol class="fin2-etapas">' +
           '<li class="fin2-etapa--hecha"><b>E1 · La bóveda</b><span>Candado, autenticador y bitácora</span></li>' +
           '<li class="fin2-etapa--hecha"><b>E2 · Bancos y cartolas</b><span>Subir la cartola, cuadrar y clasificar</span></li>' +
-          '<li><b>E3 · Clientes y cobranza</b><span>Facturas del SII, abonos y cartera real</span></li>' +
+          '<li class="fin2-etapa--hecha"><b>E3 · Clientes y cobranza</b><span>Facturas del SII, abonos y cartera real</span></li>' +
           '<li><b>E4 · Tablero de gerencia</b><span>Gráficos e informe mensual</span></li>' +
           '<li><b>E5 · Presupuesto</b><span>Proyectado vs. real</span></li>' +
           '<li><b>E6 · Retiro de la planilla</b><span>Un mes en paralelo y se archiva</span></li>' +
@@ -351,6 +353,7 @@
         verBitacora();
       } else if (b.closest('.js-fin-vista') && b.dataset.id) {
         vista_ = b.dataset.id;
+        if (vista_ === 'cobranza' && window.SigsoFinanzasCobranza) SigsoFinanzasCobranza.reiniciar();
         if (vista_ === 'bitacora') verBitacora(); else abrir();
       }
     });

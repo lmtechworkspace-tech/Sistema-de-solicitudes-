@@ -282,9 +282,18 @@ function sugerir_(m, ctx) {
         certeza: 'media', motivo: 'El nombre calza con un cliente' + (previo ? '; se usa lo de la última vez' : '; falta decir si es honorario o fondo')
       });
     }
-    if (cand.length > 1) return Object.assign(base, { certeza: 'baja', motivo: cand.length + ' clientes empiezan con «' + nombre + '»' });
+    if (cand.length > 1) base.motivo = cand.length + ' clientes empiezan con «' + nombre + '»';
+  }
+  // 4) Ingreso sin nombre (o ambiguo) que calza exacto con UNA factura abierta.
+  if (sentido === 'abono' && ctx.facturasPorMonto) {
+    const f = ctx.facturasPorMonto.get(m.abono);
+    if (f && f.length === 1) {
+      return Object.assign(base, { tipo: 'INGRESO', cuenta: 'Servicio Mensual', cliente_id: f[0].cliente_id, cliente: f[0].cliente,
+        certeza: 'media', motivo: 'Calza exacto con lo que falta de la factura N° ' + f[0].folio + ' de ' + f[0].cliente });
+    }
   }
   if (/^PAGO CUENTAS/.test(g)) return Object.assign(base, { tipo: 'FONDO_PAGADO', certeza: 'baja', motivo: 'El banco no dice qué se pagó (Previred, TGR…) ni de quién' });
+  if (base.motivo) return base; // nombre corto que calza con varios clientes
   if (/^DEPOSITO EN EFECTIVO/.test(g)) return Object.assign(base, { motivo: 'Depósito en efectivo: el banco no dice de quién' });
   return Object.assign(base, { motivo: 'El banco no dice quién es' });
 }
@@ -307,7 +316,9 @@ function contextoSugerencias_(db, empresa) {
     const c = des_(r.datos).clasif;
     if (c && c.cliente_id) tipoPorCliente.set(c.cliente_id, { tipo: c.tipo, cuenta: c.cuenta });
   });
-  return { reglas, tipoPorCliente, clientes: clientes_(db), empresa };
+  let facturasPorMonto = null;
+  try { facturasPorMonto = require('./finanzasCobranza').facturasPorMonto_(db); } catch (e) { facturasPorMonto = null; }
+  return { reglas, tipoPorCliente, clientes: clientes_(db), empresa, facturasPorMonto };
 }
 
 // ---------------------------------------------------------------- cuentas
@@ -613,5 +624,7 @@ const resumenBancos = B.conBoveda('', function () {
 module.exports = {
   catalogo, revisarCartola, importarCartola, movimientos, clasificar, confirmarSugeridas, aprenderPlanilla, resumenBancos,
   // pruebas
-  leerCartola, sugerir_, esGenerica_, monto_, EMPRESAS, TIPOS
+  leerCartola, sugerir_, esGenerica_, monto_, EMPRESAS, TIPOS,
+  // compartido con finanzasCobranza.js
+  interno: { db_, des_: (t) => des_(t), cif_: (o) => cif_(o), hmac_: (t) => hmac_(t), normalizar_, clientes_, fechaIso_, soloEscritura_, cuentasMapa_ }
 };

@@ -94,6 +94,7 @@ const ArchivosSolicitud = require('../logica/archivosSolicitud');
 const Preferencias = require('../logica/preferencias');
 const FinanzasBoveda = require('../logica/finanzasBoveda');
 const FinanzasBancos = require('../logica/finanzasBancos');
+const FinanzasCobranza = require('../logica/finanzasCobranza');
 const Hompy = require('../logica/hompy');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
@@ -685,6 +686,13 @@ const ACCIONES = {
   finanzasConfirmarSugeridas: (db, data, contexto) => FinanzasBancos.confirmarSugeridas(db, data, contexto),
   finanzasAprenderPlanilla: (db, data, contexto) => FinanzasBancos.aprenderPlanilla(db, data, contexto),
   finanzasResumenBancos: (db, data, contexto) => FinanzasBancos.resumenBancos(db, data, contexto),
+  // Etapa 3: facturas y cobranza (finanzasCobranza.js).
+  finanzasRevisarVentas: (db, data, contexto) => FinanzasCobranza.revisarVentas(db, data, contexto),
+  finanzasImportarVentas: (db, data, contexto) => FinanzasCobranza.importarVentas(db, data, contexto),
+  finanzasImportarFacturasPlanilla: (db, data, contexto) => FinanzasCobranza.importarFacturasPlanilla(db, data, contexto),
+  finanzasCobranza: (db, data, contexto) => FinanzasCobranza.cobranza(db, data, contexto),
+  finanzasFichaCliente: (db, data, contexto) => FinanzasCobranza.fichaCliente(db, data, contexto),
+  finanzasEstadoFactura: (db, data, contexto) => FinanzasCobranza.cambiarEstadoFactura(db, data, contexto),
   // Hompy, la mascota (2026-10-06): solo cuentas con el módulo `hompy`
   // (cada acción lo verifica -- ver hompy.js).
   hompyDatos: (db, data, contexto) => Hompy.datos(db, data, contexto),
