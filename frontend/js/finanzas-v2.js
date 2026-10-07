@@ -177,6 +177,9 @@
     ultimoUso_ = Date.now();
     iniciarReloj();
     if (vista_ === 'bitacora') return verBitacora();
+    if ((vista_ === 'bancos' || vista_ === 'movimientos') && window.SigsoFinanzasBancos) {
+      return vista_ === 'bancos' ? SigsoFinanzasBancos.verBancos(ctxBancos()) : SigsoFinanzasBancos.verMovimientos(ctxBancos());
+    }
     var t = ++turno_;
     pagina(cabAbierta('Resumen') + U.esqueleto('kpis', 4));
     api('finanzasResumen').then(function (r) {
@@ -185,11 +188,24 @@
       pintarResumen(r.data);
     });
   }
+  var TITULOS_ = {
+    Resumen: ['Bóveda de Finanzas', ''], 'Bitácora': ['Bitácora de accesos', 'Todo lo que se hace en la bóveda, en orden y encadenado.'],
+    Bancos: ['Bancos', 'Sube la cartola del banco y el sistema la clasifica.'], Movimientos: ['Movimientos', 'Revisa lo que el sistema propone; lo que corriges, lo aprende.']
+  };
+  // Lo que necesita finanzas-bancos-v2.js para pintarse dentro de la bóveda.
+  function ctxBancos() {
+    var t = ++turno_;
+    return {
+      api: api, pagina: pagina, cab: cabAbierta, raiz: function () { return raiz_; },
+      turno: function () { return t; }, vigente: function (n) { return n === turno_; },
+      ir: function (v) { vista_ = v; abrir(); }
+    };
+  }
   function cabAbierta(seccion) {
-    return cab(seccion === 'Bitácora' ? 'Bitácora de accesos' : 'Bóveda de Finanzas',
-      seccion === 'Bitácora' ? 'Todo lo que se hace en la bóveda, en orden y encadenado.' : '',
+    var tt = TITULOS_[seccion] || TITULOS_.Resumen;
+    return cab(tt[0], tt[1],
       '<span class="fin2-abierta" title="Se cierra sola sin uso">' + U.ico('reloj', 14) + '<span id="fin-reloj">' + inactividadMin_ + ':00</span></span>' +
-      U.segmento([{ id: 'inicio', texto: 'Resumen', icono: 'panel' }, { id: 'bitacora', texto: 'Bitácora', icono: 'lista' }], vista_, 'js-fin-vista') +
+      U.segmento([{ id: 'inicio', texto: 'Resumen', icono: 'panel' }, { id: 'bancos', texto: 'Bancos', icono: 'dinero' }, { id: 'movimientos', texto: 'Movimientos', icono: 'tabla' }, { id: 'bitacora', texto: 'Bitácora', icono: 'lista' }], vista_, 'js-fin-vista') +
       U.boton({ texto: 'Cerrar bóveda', icono: 'candado', clase: 'js-fin-salir' }));
   }
   function capa(ok, titulo, texto) {
@@ -204,8 +220,8 @@
     pagina(cabAbierta('Resumen') +
       '<div class="fin2-hero sx2-entra">' +
         '<div><p class="fin2-hero__k">Hola, ' + txt(String(d.nombre || '').split(' ')[0]) + '</p>' +
-        '<h2>La bóveda está lista y cerrada para el resto de SIGSO.</h2>' +
-        '<p>Esta es la Etapa 1: el candado. En la siguiente etapa se cargan las cartolas de los bancos y aparecen aquí la caja, la cobranza y el resultado de cada empresa.</p></div>' +
+        '<h2>La bóveda está cerrada para el resto de SIGSO.</h2>' +
+        '<p>Ya se pueden subir las cartolas del banco en <b>Bancos</b> y revisarlas en <b>Movimientos</b>. Más adelante aparecerán aquí la caja, la cobranza y el resultado de cada empresa.</p></div>' +
         '<span class="fin2-hero__ico" aria-hidden="true">' + U.ico('escudo', 44) + '</span>' +
       '</div>' +
       '<div class="sx2-fila-kpis">' +
@@ -227,7 +243,7 @@
           (ingresos ? '<ul class="fin2-ing">' + ingresos + '</ul>' : U.vacio({ icono: 'reloj', texto: 'Aún no hay ingresos.' })) }) +
         U.card({ titulo: 'Lo que viene', icono: 'capas', i: 3, cuerpo: '<ol class="fin2-etapas">' +
           '<li class="fin2-etapa--hecha"><b>E1 · La bóveda</b><span>Candado, autenticador y bitácora</span></li>' +
-          '<li><b>E2 · Bancos y cartolas</b><span>Subir la cartola y clasificar sola</span></li>' +
+          '<li class="fin2-etapa--hecha"><b>E2 · Bancos y cartolas</b><span>Subir la cartola, cuadrar y clasificar</span></li>' +
           '<li><b>E3 · Clientes y cobranza</b><span>Facturas del SII, abonos y cartera real</span></li>' +
           '<li><b>E4 · Tablero de gerencia</b><span>Gráficos e informe mensual</span></li>' +
           '<li><b>E5 · Presupuesto</b><span>Proyectado vs. real</span></li>' +

@@ -93,6 +93,7 @@ const ReporteExcel = require('../logica/reporteExcel');
 const ArchivosSolicitud = require('../logica/archivosSolicitud');
 const Preferencias = require('../logica/preferencias');
 const FinanzasBoveda = require('../logica/finanzasBoveda');
+const FinanzasBancos = require('../logica/finanzasBancos');
 const Hompy = require('../logica/hompy');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
@@ -675,6 +676,15 @@ const ACCIONES = {
   finanzasSalir: (db, data, contexto) => FinanzasBoveda.salir(db, data, contexto),
   finanzasResumen: (db, data, contexto) => FinanzasBoveda.resumen(db, data, contexto),
   finanzasBitacora: (db, data, contexto) => FinanzasBoveda.bitacora(db, data, contexto),
+  // Etapa 2: bancos y cartolas (finanzasBancos.js), todas dentro de la bóveda.
+  finanzasCatalogo: (db, data, contexto) => FinanzasBancos.catalogo(db, data, contexto),
+  finanzasRevisarCartola: (db, data, contexto) => FinanzasBancos.revisarCartola(db, data, contexto),
+  finanzasImportarCartola: (db, data, contexto) => FinanzasBancos.importarCartola(db, data, contexto),
+  finanzasMovimientos: (db, data, contexto) => FinanzasBancos.movimientos(db, data, contexto),
+  finanzasClasificar: (db, data, contexto) => FinanzasBancos.clasificar(db, data, contexto),
+  finanzasConfirmarSugeridas: (db, data, contexto) => FinanzasBancos.confirmarSugeridas(db, data, contexto),
+  finanzasAprenderPlanilla: (db, data, contexto) => FinanzasBancos.aprenderPlanilla(db, data, contexto),
+  finanzasResumenBancos: (db, data, contexto) => FinanzasBancos.resumenBancos(db, data, contexto),
   // Hompy, la mascota (2026-10-06): solo cuentas con el módulo `hompy`
   // (cada acción lo verifica -- ver hompy.js).
   hompyDatos: (db, data, contexto) => Hompy.datos(db, data, contexto),
