@@ -490,6 +490,7 @@
     if (c.cerrado) t.push(c.cerrado + (c.cerrado === 1 ? ' cerrado' : ' cerrados'));
     return { texto: t.join(' · '), c: c };
   }
+  function listos(items) { return items.filter(function (i) { return !abierto(i); }).length; }
   function barraAvance(items) {
     return '<span class="bj2-avance" role="img" aria-label="' + U.esc(pasosTxt(items).texto) + '">' + items.map(function (it) {
       return '<i class="bj2-avance__t bj2-avance__t--' + tramoDe(it) + '" title="Ítem ' + it.numero_item + ': ' + U.esc(it.titulo || '') + '"></i>';
@@ -535,10 +536,10 @@
             '<td class="bj2-tc-n"><span class="bj2-sol-n">' + U.esc(g.id) + '</span><small class="bj2-sol-cuenta">' + todos.length + ' ítems</small></td>' +
             '<td title="' + U.esc(titulos.join(' · ')) + '"><span class="bj2-tc-cortar"><span class="bj2-prio-mini sx2-tono-' + tonoPrioridad(i0.prioridad) + '">' + U.esc(i0.prioridad || '—') + '</span><strong>' + U.esc(todos[0].titulo || '') + '</strong><small class="sx2-tenue">' + (todos.length > 1 ? ' y ' + (todos.length - 1) + ' más' : '') + '</small>' +
               (g.items.some(function (x) { return x.respuesta_pendiente; }) ? U.badge('Te escribió', 'info', true) : '') + '</span></td>' +
-            '<td title="' + U.esc((i0.solicitante_nombre || '') + (donde ? ' · ' + donde : '')) + '"><span class="bj2-tc-cortar"><b class="bj2-pide">' + U.esc(i0.solicitante_nombre || i0.solicitante_email || '') + '</b>' + (donde ? '<small class="sx2-tenue">· ' + U.esc(donde) + '</small>' : '') + '</span></td>' +
+            '<td title="' + U.esc((i0.solicitante_nombre || '') + (donde ? ' · ' + donde : '')) + '"><span class="bj2-pide2"><b class="bj2-pide">' + U.esc(i0.solicitante_nombre || i0.solicitante_email || '') + '</b>' + (donde ? '<small>' + U.esc(donde) + '</small>' : '') + '</span></td>' +
             '<td>' + (lista.length === 1 ? '<span class="bj2-tc-quien">' + U.avatar(lista[0], 'xs') + '<span class="bj2-tc-cortar">' + U.esc(lista[0].nombre) + '</span></span>'
               : (lista.length ? '<span class="bj2-tc-quien">' + U.avatares(lista, 3) + '<span class="bj2-tc-cortar">' + lista.length + ' personas</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>')) + '</td>' +
-            '<td class="bj2-tc-av" title="' + U.esc(resumen) + '">' + barraAvance(todos) + '<small class="bj2-avance__txt">' + U.esc(resumen) + '</small></td>' +
+            '<td class="bj2-tc-av" title="' + U.esc(resumen) + '">' + barraAvance(todos) + '<small class="bj2-avance__txt">' + listos(todos) + ' de ' + todos.length + ' listos</small></td>' +
             '<td class="bj2-tc-num">' + antiguedad(todos.slice().sort(function (a, b) { return new Date(a.fecha_creacion) - new Date(b.fecha_creacion); })[0]) + '</td>' +
             '<td class="bj2-tc-acc">' + siguienteSolicitud(g, todos) + '</td></tr>' +
           (abierta ? todos.map(function (it, k) {
@@ -558,7 +559,7 @@
       '<td class="bj2-tc-n"><span class="bj2-sol-n">' + U.esc(i.solicitud_id) + '</span></td>' +
       '<td class="bj2-tc-titulo"><span class="bj2-tc-cortar"><span class="bj2-prio-mini sx2-tono-' + tonoPrioridad(i.prioridad) + '" title="Prioridad ' + U.esc(i.prioridad || '') + '">' + U.esc(i.prioridad || '—') + '</span><strong>' + U.esc(i.titulo || '(sin título)') + '</strong>' +
         (i.respuesta_pendiente ? U.badge('Te escribió', 'info', true) : '') + (i.empresa_cliente ? '<small class="sx2-tenue"> · ' + U.esc(i.empresa_cliente) + '</small>' : '') + '</span></td>' +
-      '<td title="' + U.esc((i.solicitante_nombre || i.solicitante_email || '') + (donde ? ' · ' + donde : '')) + '"><span class="bj2-tc-cortar"><b class="bj2-pide">' + U.esc(i.solicitante_nombre || i.solicitante_email || '') + '</b>' + (donde ? '<small class="sx2-tenue">· ' + U.esc(donde) + '</small>' : '') + '</span></td>' +
+      '<td title="' + U.esc((i.solicitante_nombre || i.solicitante_email || '') + (donde ? ' · ' + donde : '')) + '"><span class="bj2-pide2"><b class="bj2-pide">' + U.esc(i.solicitante_nombre || i.solicitante_email || '') + '</b>' + (donde ? '<small>' + U.esc(donde) + '</small>' : '') + '</span></td>' +
       '<td>' + (persona ? '<span class="bj2-tc-quien">' + U.avatar(persona, 'xs') + '<span class="bj2-tc-cortar">' + U.esc(persona.nombre) + '</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>') + '</td>' +
       '<td class="bj2-tc-av">' + barraAvance(todos) + '<small class="bj2-avance__txt' + (notaPaso(i).falta ? ' bj2-avance__txt--falta' : '') + '">' + U.esc(notaPaso(i).t) + '</small></td>' +
       '<td class="bj2-tc-num">' + antiguedad(i) + '</td>' +

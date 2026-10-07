@@ -628,3 +628,6 @@ button.bj2-it__cab:focus-visible { outline: 2px solid var(--sx-primario); outlin
 .bj2-it--tuyo .bj2-it__n { background: var(--sx-alerta); }
 .bj2-its__grupo--tuyo .bj2-its__n { background: var(--sx-alerta-suave); color: var(--sx-alerta); }
 .bj2-it__conv .ms2-mensajes { margin: 0; }
+.bj2-pide2 { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.bj2-pide2 > b, .bj2-pide2 > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bj2-pide2 > small { font: 500 .6875rem/1.25 var(--fuente); color: var(--sx-texto-3); }
