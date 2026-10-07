@@ -45,7 +45,9 @@
   // agrupando mal la información»): una solicitud con varios ítems se veía como filas repetidas con el
   // mismo número. Ahora se agrupa por solicitud por defecto (se puede desagrupar con el chip).
   f.agrupar = true;
-  try { f.agrupar = localStorage.getItem('sigso_bj2_agrupar_2') !== '0'; } catch (e) { /* sin storage */ }
+  // 2026-10-07 (decisión D1 del dueño): la Bandeja SIEMPRE abre por solicitud. Apagarlo vale solo
+  // mientras la pantalla está abierta (antes se guardaba, y quien lo apagó una vez seguía viendo ítems sueltos).
+  try { localStorage.removeItem('sigso_bj2_agrupar_2'); localStorage.removeItem('sigso_bj2_agrupar'); } catch (e) { /* sin storage */ }
   // Etapa 2: '' = mi bandeja (o toda, ADM); 'CONTABILIDAD'… = cola de ese departamento.
   f.cola = '';
   // Etapa 4: cómo se ve la cola (tabla densa por defecto) y el reporte.
@@ -1644,7 +1646,7 @@
     if ((b = t.closest('.sx2-kpi[data-filtro], .bj2-banda__op[data-filtro]'))) { f.kpi = b.getAttribute('data-filtro'); f.vista = 'cola'; mostrar_ = POR_PAGINA; pintar(true); return; }
     if (t.closest('.js-bj2-todos')) { f.kpi = f.kpi === 'todos' ? 'abiertos' : 'todos'; pintar(true); return; }
     if (t.closest('.js-bj2-ver-validar')) { f.kpi = 'por_validar'; f.densidad = 'tabla'; try { localStorage.setItem('sigso_bj2_densidad', 'tabla'); } catch (e) { /* sin storage */ } mostrar_ = POR_PAGINA; pintar(true); return; }
-    if (t.closest('.js-bj2-agrupar')) { f.agrupar = !f.agrupar; try { localStorage.setItem('sigso_bj2_agrupar_2', f.agrupar ? '1' : '0'); } catch (e) { /* sin storage */ } pintar(true); return; }
+    if (t.closest('.js-bj2-agrupar')) { f.agrupar = !f.agrupar; pintar(true); return; }
     if (t.closest('.js-bj2-rezago')) { f.kpi = 'por_revisar'; f.orden = 'antiguedad'; f.texto = ''; mostrar_ = POR_PAGINA; pintar(true); var l = raiz.querySelector('.bj2-lista'); if (l) l.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
     if (t.closest('.js-bj2-mas')) { mostrar_ += POR_PAGINA; pintar(true); return; }
     if ((b = t.closest('.js-bj2-excel'))) { exportarExcel(b); return; }

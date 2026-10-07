@@ -369,7 +369,7 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
 .bj2-tabla:not(.bj2-tabla--rep) td { max-width: none; overflow: hidden; text-overflow: ellipsis; }
 .bj2-tabla:not(.bj2-tabla--rep) th:nth-child(1) { width: 34px; }
 .bj2-tabla:not(.bj2-tabla--rep) th:nth-child(2) { width: 24px; }
-.bj2-tabla:not(.bj2-tabla--rep) th:nth-child(3) { width: 126px; }
+.bj2-tabla:not(.bj2-tabla--rep) th:nth-child(3) { width: 156px; }
 .bj2-tabla:not(.bj2-tabla--rep) th:nth-child(5) { width: 24%; }
 .bj2-tabla:not(.bj2-tabla--rep) th:nth-child(6) { width: 14%; }
 .bj2-tabla:not(.bj2-tabla--rep) th:nth-child(7) { width: 98px; }
