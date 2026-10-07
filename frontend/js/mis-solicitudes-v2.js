@@ -270,18 +270,19 @@
 
     function pintarDetalle() {
       var subs = det.subsolicitudes || [];
-      d.el.querySelector('.sx2-drawer__titulo').textContent = (subs[0] ? subs[0].titulo : solicitudId);
+      var multi = subs.length > 1;
+      d.el.querySelector('.sx2-drawer__titulo').textContent = multi ? 'Tu solicitud · ' + subs.length + ' ítems' : (subs[0] ? subs[0].titulo : solicitudId);
       var cab = d.el.querySelector('.sx2-drawer__fila-titulo .sx2-apilado');
       cab.querySelectorAll('.sx2-tenue, .bj2-det-sub').forEach(function (e) { e.remove(); });
       cab.insertAdjacentHTML('beforeend', '<span class="bj2-det-sub sx2-flex"><span class="bj2-id">' + U.esc(det.solicitud_id) + '</span>' +
-        U.badge(estadoTxt(det.estado_derivado), tonoEstado(det.estado_derivado)) +
+        (multi ? '<span class="bj2-det-mixto">' + barraMs(subs) + '<span>' + U.esc(resumenMs(subs)) + '</span></span>' : U.badge(estadoTxt(det.estado_derivado), tonoEstado(det.estado_derivado))) +
         '<span class="sx2-tenue" style="font-size:.8125rem">Ingresada el ' + U.esc(fechaCorta(det.fecha_creacion)) + '</span></span>');
       var nArch = subs.reduce(function (n, s) { return n + (s.archivos || []).length; }, 0);
       var nMsj = (det.mensajes || []).length;
       var tabs = [['items', 'Ítems (' + subs.length + ')'], ['mensajes', 'Conversación' + (nMsj ? ' (' + nMsj + ')' : '')], ['historial', 'Historial'], ['archivos', 'Archivos (' + nArch + ')']];
       var pendientes = subs.filter(function (s) { return s.estado === 'S08' || s.pregunta_pendiente; }).length;
       var terminados = subs.filter(function (s) { return s.estado === 'S08'; }).length;
-      var cuerpo = hitos(det.estado_derivado) +
+      var cuerpo = (multi ? '' : hitos(det.estado_derivado)) +
         (pendientes ? '<div class="ms2-aviso sx2-tono-alerta"><span class="ms2-aviso__texto">' + U.ico('rayo', 15) + (pendientes === 1 ? 'Un ítem espera' : pendientes + ' ítems esperan') + ' tu acción: está marcado abajo.</span>' +
           (terminados >= 2 ? U.boton({ texto: 'Confirmar los ' + terminados + ' resueltos', icono: 'check', sm: true, variante: 'primario', clase: 'js-ms2-confirmar-todos' }) : '') + '</div>' : '') +
         (typeof det.posicion_cola === 'number' ? '<p class="sx2-tenue" style="margin:0;font-size:.8125rem">' + (det.posicion_cola > 0
@@ -298,19 +299,72 @@
     }
 
     function dato(et, v) { return v ? '<dt>' + U.esc(et) + '</dt><dd>' + U.esc(v) + '</dd>' : ''; }
+    // 2026-10-07 (dueño): con varios ítems, el mismo orden que ve el equipo: lo que espera tu respuesta
+    // arriba, lo que está en curso y lo cerrado al final (atenuado). Cada ítem se pliega y tiene su
+    // conversación; abierto queda lo que necesita tu acción (o el ítem que tocaste).
+    var exp = null;
+    function necesitaMe(s) { return s.estado === 'S08' || !!s.pregunta_pendiente; }
     function items(subs) {
+      if (subs.length < 2) return itemsSimples(subs);
+      if (!exp) {
+        exp = {};
+        subs.forEach(function (x) { if (necesitaMe(x) || x.subsolicitud_id === subFoco) exp[x.subsolicitud_id] = true; });
+        if (!Object.keys(exp).length) { var p = subs.filter(function (x) { return CERRADOS.indexOf(x.estado) === -1; })[0]; if (p) exp[p.subsolicitud_id] = true; }
+      }
+      Object.keys(abierto).forEach(function (k) { if (abierto[k]) exp[k] = true; });
+      var tuyos = subs.filter(necesitaMe), curso = subs.filter(function (x) { return !necesitaMe(x) && CERRADOS.indexOf(x.estado) === -1; }), cerr = subs.filter(function (x) { return CERRADOS.indexOf(x.estado) !== -1; });
+      function grupo(t, n, ayuda, clase) { return '<div class="bj2-its__grupo ' + clase + '"><h4>' + U.esc(t) + ' <span class="bj2-its__n">' + n + '</span></h4><p>' + U.esc(ayuda) + '</p></div>'; }
+      return '<div class="bj2-its">' +
+        (tuyos.length ? grupo('Esperan tu respuesta', tuyos.length, 'Confirma lo resuelto o responde lo que te preguntaron.', 'bj2-its__grupo--tuyo') + tuyos.map(tarjetaMs).join('') : '') +
+        (curso.length ? grupo('En curso', curso.length, 'El equipo los está trabajando; cada uno va a su ritmo y con su fecha.', 'bj2-its__grupo--hacer') + curso.map(tarjetaMs).join('') : '') +
+        (cerr.length ? grupo('Cerrados', cerr.length, 'Ya terminaron.', 'bj2-its__grupo--hecho') + cerr.map(tarjetaMs).join('') : '') +
+      '</div>';
+    }
+    function tarjetaMs(s) {
+      var id = s.subsolicitud_id, ab = !!exp[id], cerrado = CERRADOS.indexOf(s.estado) !== -1;
+      var lado = s.estado === 'S08' ? 'Confirma si quedó bien' : (s.pregunta_pendiente ? 'Te hicieron una pregunta' : (cerrado ? '' : (s.fecha_comprometida ? (atrasado(s) ? 'Atrasado: era el ' : 'Para el ') + PY.fecha(s.fecha_comprometida, true).slice(0, 5) : 'Sin fecha aún')));
+      var msj = (det.mensajes || []).filter(function (m) { return m.subsolicitud_id === id; });
+      var sub = ['Ítem ' + s.numero_item + ' de ' + (det.subsolicitudes || []).length, s.responsable_nombre ? 'te atiende ' + s.responsable_nombre : ''].filter(Boolean).join(' · ');
+      return '<article class="bj2-it' + (cerrado ? ' bj2-it--hecho' : '') + (necesitaMe(s) ? ' bj2-it--tuyo' : '') + (ab ? ' bj2-it--abierto' : '') + '" data-ms2-det="' + U.esc(id) + '">' +
+        '<button type="button" class="bj2-it__cab js-ms2-it" data-id="' + U.esc(id) + '" aria-expanded="' + ab + '">' +
+          '<span class="bj2-it__n" aria-hidden="true">' + (cerrado ? U.ico('check', 15) : s.numero_item) + '</span>' +
+          '<span class="bj2-it__tit"><strong>' + U.esc(s.titulo || '(sin título)') + '</strong><small>' + U.esc(sub) +
+            (msj.length ? '<span class="bj2-it__nmsj">' + U.ico('comentario', 11) + msj.length + (msj.length === 1 ? ' mensaje' : ' mensajes') + '</span>' : '') + '</small></span>' +
+          '<span class="bj2-it__lado">' + U.badge(estadoTxt(s.estado), tonoEstado(s.estado)) + (lado ? '<small class="bj2-it__sig' + (necesitaMe(s) || atrasado(s) ? ' bj2-it__sig--falta' : '') + '">' + U.esc(lado) + '</small>' : '') + '</span>' +
+          '<span class="bj2-it__flecha" aria-hidden="true">' + U.ico('abajo', 16) + '</span>' +
+        '</button>' +
+        '<div class="bj2-it__cuerpo"' + (ab ? '' : ' hidden') + '>' + interiorItem(s, true) +
+          '<div class="bj2-it__conv"><span class="bj2-it__et">' + U.ico('comentario', 12) + ' Conversación de este ítem' + (msj.length ? ' · ' + msj.length : '') + '</span>' +
+            (msj.length ? '<ul class="ms2-mensajes">' + msj.map(function (m) {
+              var mio = m.autor === 'tu';
+              return '<li class="ms2-msj' + (mio ? ' ms2-msj--mio' : '') + '"><span class="ms2-msj__quien">' + U.esc(mio ? 'Tú' : (m.nombre || 'El equipo')) + ' · <span class="sx2-tenue">' + U.esc(PY.haceTiempo(m.timestamp)) + '</span></span><p class="ms2-msj__texto">' + U.esc(m.texto) + '</p></li>';
+            }).join('') + '</ul>' : '') +
+            (cerrado ? '' : '<form class="js-ms2-form bj2-conv__form--item" data-id="' + U.esc(id) + '" data-acc="mensaje" novalidate>' +
+              '<textarea class="sx2-input" name="texto" rows="2" maxlength="4000" placeholder="Escribe al equipo sobre este ítem…"></textarea>' + error() +
+              U.boton({ texto: 'Enviar', icono: 'derecha', sm: true, variante: 'primario', tipo: 'submit' }) + '</form>') +
+          '</div>' +
+        '</div></article>';
+    }
+    function itemsSimples(subs) {
       return '<div class="sx2-apilado" style="gap:12px">' + subs.map(function (s) {
-        var id = s.subsolicitud_id, acc = abierto[id] || '';
+        var id = s.subsolicitud_id;
         var cump = s.cumplimiento;
         var foco = subFoco === id || s.estado === 'S08' || !!s.pregunta_pendiente;
+        return '<article class="bj2-item' + (foco ? ' bj2-item--foco' : '') + '" data-ms2-det="' + U.esc(id) + '">' +
+          '<div class="sx2-entre" style="align-items:flex-start"><strong>' + U.esc(s.titulo) + '</strong>' +
+            '<span class="sx2-flex" style="gap:6px;flex:none">' + U.badge(s.prioridad || '—', tonoPrioridad(s.prioridad), true) + U.badge(estadoTxt(s.estado), tonoEstado(s.estado)) + '</span></div>' +
+          interiorItem(s, false) + '</article>';
+      }).join('') + '</div>';
+    }
+    function interiorItem(s, enTarjeta) {
+        var id = s.subsolicitud_id, acc = abierto[id] || '';
+        var cump = s.cumplimiento;
         var abiertoItem = CERRADOS.indexOf(s.estado) === -1;
         var opciones = [];
         if (EDITABLES.indexOf(s.estado) !== -1) opciones.push(['editar', 'Corregir', 'editar']);
         if (abiertoItem && s.estado !== 'S08') opciones.push(['directo', 'Ya se resolvió por fuera', 'check']);
-        return '<article class="bj2-item' + (foco ? ' bj2-item--foco' : '') + '" data-ms2-det="' + U.esc(id) + '">' +
-          '<div class="sx2-entre" style="align-items:flex-start"><strong>' + (subs.length > 1 ? s.numero_item + '. ' : '') + U.esc(s.titulo) + '</strong>' +
-            '<span class="sx2-flex" style="gap:6px;flex:none">' + U.badge(s.prioridad || '—', tonoPrioridad(s.prioridad), true) + U.badge(estadoTxt(s.estado), tonoEstado(s.estado)) + '</span></div>' +
-          '<span class="sx2-flex sx2-tenue" style="gap:10px;flex-wrap:wrap;font-size:.8125rem">' +
+        return '<span class="sx2-flex sx2-tenue" style="gap:10px;flex-wrap:wrap;font-size:.8125rem">' +
+            (enTarjeta ? U.badge(s.prioridad || '—', tonoPrioridad(s.prioridad), true) : '') +
             (s.responsable_nombre ? '<span class="ms2-atiende">' + U.ico('persona', 12) + ' Te atiende <b>' + U.esc(s.responsable_nombre) + '</b></span>' : '') +
             (s.depto_nombre ? '<span>' + U.ico('equipo', 12) + ' ' + U.esc(s.depto_nombre) + (s.servicio_nombre ? ' · ' + U.esc(s.servicio_nombre) : '') + '</span>' : '') +
             (s.tipo_nombre ? '<span>' + U.esc(s.tipo_nombre) + '</span>' : '') + (s.modulo_nombre ? '<span>' + U.esc(s.modulo_nombre) + '</span>' : '') +
@@ -327,9 +381,16 @@
             return U.chip({ texto: o[1], icono: o[2], activo: acc === o[0], clase: 'js-ms2-acc', datos: { id: id, acc: o[0] } });
           }).join('') + '</div>' : '') +
           (acc === 'editar' ? formEditar(s) : '') +
-          (acc === 'directo' ? formDirecto(s) : '') +
-        '</article>';
-      }).join('') + '</div>';
+          (acc === 'directo' ? formDirecto(s) : '');
+    }
+    // Un tramo por ítem, coloreado por en qué va (el mismo código de colores que ve el equipo).
+    function tramoMs(e) { return e === 'S01' ? 'c0' : (e === 'S06' ? 'pausa' : (e === 'S08' ? 'c4' : (e === 'S09' ? 'c5' : (e === 'S10' || e === 'S11' ? 'fuera' : (['S05', 'S07'].indexOf(e) !== -1 ? 'c3' : 'c2'))))); }
+    function barraMs(subs) {
+      return '<span class="bj2-avance" role="img" aria-label="' + U.esc(resumenMs(subs)) + '">' + subs.map(function (x) { return '<i class="bj2-avance__t bj2-avance__t--' + tramoMs(x.estado) + '" title="Ítem ' + x.numero_item + ': ' + U.esc(x.titulo || '') + '"></i>'; }).join('') + '</span>';
+    }
+    function resumenMs(subs) {
+      var tuyo = subs.filter(necesitaMe).length, cerr = subs.filter(function (x) { return CERRADOS.indexOf(x.estado) !== -1; }).length, curso = subs.length - tuyo - cerr;
+      return [tuyo ? tuyo + (tuyo === 1 ? ' espera tu respuesta' : ' esperan tu respuesta') : '', curso ? curso + ' en curso' : '', cerr ? cerr + (cerr === 1 ? ' cerrado' : ' cerrados') : ''].filter(Boolean).join(' · ');
     }
     function error() { return '<p class="sx2-campo__error js-ms2-error" hidden></p>'; }
     function bloqueResponder(s) {
@@ -566,6 +627,14 @@
       var t = ev.target, b;
       if ((b = t.closest('.js-ms2-tab'))) { pestana = b.getAttribute('data-tab'); pintarDetalle(); return; }
       if ((b = t.closest('.js-ms2-confirmar-todos'))) { confirmarTodos(b); return; }
+      if ((b = t.closest('.js-ms2-it'))) {
+        var art = b.closest('.bj2-it'), idIt = b.getAttribute('data-id'), abre = !exp[idIt];
+        exp[idIt] = abre;
+        art.classList.toggle('bj2-it--abierto', abre);
+        b.setAttribute('aria-expanded', abre);
+        art.querySelector('.bj2-it__cuerpo').hidden = !abre;
+        return;
+      }
       if ((b = t.closest('.js-ms2-acc'))) {
         var id = b.getAttribute('data-id'), a = b.getAttribute('data-acc');
         abierto[id] = abierto[id] === a ? '' : a;

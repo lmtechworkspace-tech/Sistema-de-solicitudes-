@@ -622,3 +622,9 @@ button.bj2-it__cab:focus-visible { outline: 2px solid var(--sx-primario); outlin
 .bj2-banda__its { min-width: 0; overflow: hidden; }
 .bj2-banda__op { container-type: inline-size; }
 @container (max-width: 175px) { .bj2-banda__its { display: none; } }
+
+/* Mis solicitudes: lo que espera la respuesta de quien pidió, destacado. */
+.bj2-it--tuyo { border-color: color-mix(in srgb, var(--sx-alerta) 45%, var(--sx-borde)); }
+.bj2-it--tuyo .bj2-it__n { background: var(--sx-alerta); }
+.bj2-its__grupo--tuyo .bj2-its__n { background: var(--sx-alerta-suave); color: var(--sx-alerta); }
+.bj2-it__conv .ms2-mensajes { margin: 0; }
