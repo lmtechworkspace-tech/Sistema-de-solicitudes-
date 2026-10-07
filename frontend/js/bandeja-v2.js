@@ -43,10 +43,10 @@
   var f = { kpi: 'abiertos', texto: '', empresa: '', prioridad: '', orden: 'urgencia', agrupar: false, verBandeja: '', vista: 'cola' };
   // 2026-10-07 (Leo, soporte de plataformas: «las primeras 2 son iguales… hay duplicidad o se está
   // agrupando mal la información»): una solicitud con varios ítems se veía como filas repetidas con el
-  // mismo número. Ahora se agrupa por solicitud por defecto (se puede desagrupar con el chip).
+  // mismo número. Ahora se agrupa por solicitud.
   f.agrupar = true;
-  // 2026-10-07 (decisión D1 del dueño): la Bandeja SIEMPRE abre por solicitud. Apagarlo vale solo
-  // mientras la pantalla está abierta (antes se guardaba, y quien lo apagó una vez seguía viendo ítems sueltos).
+  // 2026-10-07 (dueño): la Bandeja es SIEMPRE por solicitud; el chip para ver ítems sueltos se quitó
+  // (apagarlo devolvía la lista de ítems repetidos que enredaba). Se borra la preferencia vieja.
   try { localStorage.removeItem('sigso_bj2_agrupar_2'); localStorage.removeItem('sigso_bj2_agrupar'); } catch (e) { /* sin storage */ }
   // Etapa 2: '' = mi bandeja (o toda, ADM); 'CONTABILIDAD'… = cola de ese departamento.
   f.cola = '';
@@ -432,8 +432,7 @@
       '<div class="bj2-lista__cab">' +
         (datos_.solo_lectura || dens === 'estado' ? '' : '<label class="bj2-check" title="Seleccionar todo lo visible"><input type="checkbox" class="js-bj2-sel-todo"' + (todosMarcados ? ' checked' : '') + ' aria-label="Seleccionar todo lo visible"></label>') +
         '<strong>' + (dens === 'estado' ? 'Por estado' : (f.agrupar ? nSol + (nSol === 1 ? ' solicitud' : ' solicitudes') + ' · ' : '') + items.length + (items.length === 1 ? ' ítem' : ' ítems')) + '</strong><span class="sx2-tenue">' + U.esc(dens === 'estado' ? 'lo que está en curso (lo resuelto espera al solicitante)' : kpiDe(f.kpi).etiqueta.toLowerCase()) + '</span>' +
-        '<span class="bj2-lista__cab-acc">' + bannerRezago() + (dens === 'estado' ? '' : U.chip({ texto: 'Por solicitud', icono: 'capas', activo: f.agrupar, clase: 'js-bj2-agrupar', titulo: 'Una fila por solicitud, con sus ítems adentro (apágalo para ver cada ítem suelto)' }) +
-          U.chip({ texto: 'Con cerrados', activo: f.kpi === 'todos', clase: 'js-bj2-todos', titulo: 'Incluir los cerrados, rechazados y cancelados' })) +
+        '<span class="bj2-lista__cab-acc">' + bannerRezago() + (dens === 'estado' ? '' : U.chip({ texto: 'Con cerrados', activo: f.kpi === 'todos', clase: 'js-bj2-todos', titulo: 'Incluir los cerrados, rechazados y cancelados' })) +
           U.segmento([{ id: 'tabla', texto: 'Tabla', icono: 'tabla' }, { id: 'lista', texto: 'Lista', icono: 'lista' }, { id: 'estado', texto: 'Por estado', icono: 'kanban' }], f.densidad, 'js-bj2-densidad') + '</span>' +
       '</div>' + cuerpo +
       (dens !== 'estado' && items.length > visibles.length ? '<div style="text-align:center;padding:12px">' + U.boton({ texto: 'Mostrar más (' + (items.length - visibles.length) + ')', icono: 'abajo', sm: true, variante: 'fantasma', clase: 'js-bj2-mas' }) + '</div>' : '') +
@@ -1652,7 +1651,6 @@
     if ((b = t.closest('.sx2-kpi[data-filtro], .bj2-banda__op[data-filtro]'))) { f.kpi = b.getAttribute('data-filtro'); f.vista = 'cola'; mostrar_ = POR_PAGINA; pintar(true); return; }
     if (t.closest('.js-bj2-todos')) { f.kpi = f.kpi === 'todos' ? 'abiertos' : 'todos'; pintar(true); return; }
     if (t.closest('.js-bj2-ver-validar')) { f.kpi = 'por_validar'; f.densidad = 'tabla'; try { localStorage.setItem('sigso_bj2_densidad', 'tabla'); } catch (e) { /* sin storage */ } mostrar_ = POR_PAGINA; pintar(true); return; }
-    if (t.closest('.js-bj2-agrupar')) { f.agrupar = !f.agrupar; pintar(true); return; }
     if (t.closest('.js-bj2-rezago')) { f.kpi = 'por_revisar'; f.orden = 'antiguedad'; f.texto = ''; mostrar_ = POR_PAGINA; pintar(true); var l = raiz.querySelector('.bj2-lista'); if (l) l.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
     if (t.closest('.js-bj2-mas')) { mostrar_ += POR_PAGINA; pintar(true); return; }
     if ((b = t.closest('.js-bj2-excel'))) { exportarExcel(b); return; }
