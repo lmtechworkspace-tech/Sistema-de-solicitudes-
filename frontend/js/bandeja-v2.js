@@ -1182,8 +1182,7 @@
       var cab = d.el.querySelector('.sx2-drawer__cab > .sx2-drawer__fila-titulo .sx2-apilado');
       var sub = cab.querySelector('.bj2-det-sub') || cab.appendChild(Object.assign(document.createElement('span'), { className: 'bj2-det-sub sx2-flex' }));
       cab.querySelectorAll('.sx2-tenue').forEach(function (e) { if (!e.closest('.bj2-det-sub')) e.remove(); });
-      var mixto = subs.length > 1 && subs.some(function (x) { return x.estado !== subs[0].estado; });
-      sub.innerHTML = (mixto ? '<span class="bj2-det-mixto">' + U.esc(resumenItems(subs)) + '</span>' : U.badge(estadoVis(s.estado_derivado), tonoEstado(s.estado_derivado))) +
+      sub.innerHTML = (subs.length > 1 ? '<span class="bj2-det-mixto">' + barraAvance(subs) + '<span>' + U.esc(pasosTxt(subs).texto) + '</span></span>' : U.badge(estadoVis(s.estado_derivado), tonoEstado(s.estado_derivado))) +
         U.badge(s.prioridad_derivada || '—', tonoPrioridad(s.prioridad_derivada), true) +
         '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(s.empresa_nombre || s.empresa_id || '') + ' · ' + U.esc(s.solicitante_nombre || s.solicitante_email || '') + '</span>';
       var nConv = conversacion_().length;
@@ -1281,9 +1280,15 @@
       '</div>';
     }
 
+    // 2026-10-07 (dueño: «se ve mucha información junta… si cierra una, que se vea diferente»): los ítems
+    // del detalle en dos grupos, «Por hacer» y «Terminados», y cada uno plegado en una cabecera con lo
+    // esencial (número, título, estado y lo que sigue). Abierto queda uno a la vez por defecto: el que se
+    // tocó en la Bandeja o el primero por hacer. Lo terminado va atenuado, con un check, al final.
+    var expandido = null, enCurso_ = {};
     function itemsHtml(subs) {
       var trans = detalle.transiciones_por_subsolicitud || {};
       var nuevos = subs.filter(function (it) { return it.estado === 'S01'; });
+      var multi = subs.length > 1;
       var todos = !soloLectura() && nuevos.length > 1
         ? '<div class="bj2-todos">' + (abiertoAcc.__todos
             ? '<form class="sx2-form js-bj2-form-todos" novalidate><strong>Recibir ' + nuevos.length + ' ítems y dar fecha</strong>' +
@@ -1294,27 +1299,68 @@
             : '<span>' + U.ico('bandeja', 15) + '<b>' + nuevos.length + ' ítems por recibir</b> en esta solicitud.</span>' + U.boton({ texto: 'Recibir los ' + nuevos.length + ' y dar fecha', icono: 'check', sm: true, variante: 'primario', clase: 'js-bj2-todos' })) +
           '</div>'
         : '';
-      return '<div class="sx2-apilado" style="gap:12px">' + todos + subs.map(function (it) {
+      var hacer = subs.filter(abierto), listos = subs.filter(function (x) { return !abierto(x); });
+      if (!expandido) {
+        expandido = {};
+        var ini = subFoco && subs.some(function (x) { return x.subsolicitud_id === subFoco; }) ? subFoco : ((hacer[0] || subs[0] || {}).subsolicitud_id);
+        if (ini) expandido[ini] = true;
+      }
+      // Lo que se acaba de terminar se pliega y baja a «Terminados»; se abre el siguiente por hacer.
+      subs.forEach(function (x) {
+        if (enCurso_[x.subsolicitud_id] && !abierto(x)) {
+          expandido[x.subsolicitud_id] = false;
+          if (hacer[0] && !hacer.some(function (h) { return expandido[h.subsolicitud_id]; })) expandido[hacer[0].subsolicitud_id] = true;
+        }
+        enCurso_[x.subsolicitud_id] = abierto(x);
+      });
+      Object.keys(abiertoAcc).forEach(function (k) { if (abiertoAcc[k] && k !== '__todos') expandido[k] = true; });
+      var nombreSol = (detalle.solicitud || {}).solicitante_nombre || 'quien pidió';
+
+      function dd(et, v) { return '<div><dt>' + U.esc(et) + '</dt><dd>' + v + '</dd></div>'; }
+      function tarjeta(it) {
         var id = it.subsolicitud_id, acc = abiertoAcc[id] || '';
+        var ab = !multi || !!expandido[id], hecho = !abierto(it);
         var persona = it.desarrollador_asignado ? PY.persona(it.desarrollador_asignado) : null;
-        var foco = subFoco === id;
-        return '<article class="bj2-item' + (foco ? ' bj2-item--foco' : '') + '" data-bj2-det="' + U.esc(id) + '">' +
-          '<div class="sx2-entre" style="align-items:flex-start"><strong>' + it.numero_item + '. ' + U.esc(it.titulo) + '</strong>' +
-            '<span class="sx2-flex" style="gap:6px;flex:none;align-items:center">' + U.badge(it.prioridad || '—', tonoPrioridad(it.prioridad), true) + badgeEstado(it) + '</span></div>' +
-          '<span class="sx2-flex sx2-tenue" style="gap:10px;flex-wrap:wrap;font-size:.8125rem">' +
-            (it.tipo_nombre ? '<span>' + U.esc(it.tipo_nombre) + '</span>' : '') + (it.modulo_nombre ? '<span>' + U.esc(it.modulo_nombre) + '</span>' : '') +
-            '<span>' + (persona ? U.avatar(persona, 'xs') + ' ' + U.esc(persona.nombre) : 'Sin responsable propio') + '</span>' +
-            '<span>' + U.ico('calendario', 12) + ' ' + (it.fecha_comprometida ? 'Comprometida ' + U.esc(PY.fecha(it.fecha_comprometida, true)) : 'Sin fecha') + '</span>' +
-            slaBadge(it) +
-          '</span>' +
-          (it.descripcion ? '<p class="sx2-py-descripcion" style="margin:0">' + U.esc(it.descripcion) + '</p>' : '') +
-          enlacesHtml(it) +
-          (it.contexto || it.resultado_esperado ? '<details class="bj2-mas"><summary>Contexto y resultado esperado</summary>' +
-            (it.contexto ? '<p><b>Contexto:</b> ' + U.esc(it.contexto) + '</p>' : '') + (it.resultado_esperado ? '<p><b>Resultado esperado:</b> ' + U.esc(it.resultado_esperado) + '</p>' : '') + '</details>' : '') +
-          caminoHtml(it) +
-          (soloLectura() ? '' : pasos(it, acc) + (acc ? formItem(it, acc, trans[id] || []) : '')) +
+        // Bajo el estado, lo que sigue (no repetir el estado) y para cuándo.
+        var np = notaPaso(it), c = caminoDe(it), fa = c.filter(function (p) { return p.est === 'falta'; })[0], ac = c.filter(function (p) { return p.est === 'actual'; })[0];
+        var SIG = { 'Recibido': 'Sigue: recibir', 'Con fecha': 'Sigue: dar fecha', 'En curso': 'Sigue: empezar', 'Resuelto': 'Sigue: resolver', 'Confirmado': 'Espera confirmación' };
+        var sig = it.estado === 'S06' ? 'Esperando respuesta' : (fa ? (FALTA_TXT[fa.nombre] || 'Falta: ' + fa.nombre.toLowerCase()) : (ac && abierto(it) ? SIG[ac.nombre] : np.t));
+        sig = sig.charAt(0).toUpperCase() + sig.slice(1) + (it.fecha_comprometida && !hecho ? ' · ' + PY.fecha(it.fecha_comprometida, true).slice(0, 5) : '');
+        var sub = [multi ? 'Ítem ' + it.numero_item + ' de ' + subs.length : '', it.tipo_nombre, it.modulo_nombre].filter(Boolean).join(' · ');
+        var cab = '<span class="bj2-it__n" aria-hidden="true">' + (hecho ? U.ico('check', 15) : it.numero_item) + '</span>' +
+          '<span class="bj2-it__tit"><strong>' + U.esc(it.titulo || '(sin título)') + '</strong>' + (sub ? '<small>' + U.esc(sub) + '</small>' : '') + '</span>' +
+          '<span class="bj2-it__lado">' + badgeEstado(it) + '<small class="bj2-it__sig' + (np.falta ? ' bj2-it__sig--falta' : '') + '">' + U.esc(sig) + '</small></span>' +
+          (multi ? '<span class="bj2-it__flecha" aria-hidden="true">' + U.ico('abajo', 16) + '</span>' : '');
+        return '<article class="bj2-it' + (hecho ? ' bj2-it--hecho' : '') + (ab ? ' bj2-it--abierto' : '') + (subFoco === id && multi ? ' bj2-it--foco' : '') + '" data-bj2-det="' + U.esc(id) + '">' +
+          (multi ? '<button type="button" class="bj2-it__cab js-bj2-it" data-id="' + U.esc(id) + '" aria-expanded="' + ab + '">' + cab + '</button>' : '<div class="bj2-it__cab">' + cab + '</div>') +
+          '<div class="bj2-it__cuerpo"' + (ab ? '' : ' hidden') + '>' +
+            '<dl class="bj2-it__datos">' +
+              dd('Responsable', persona ? '<span class="bj2-it__quien">' + U.avatar(persona, 'xs') + U.esc(persona.nombre) + '</span>' : '<span class="bj2-it__falta">Sin responsable</span>') +
+              dd('Para cuándo', it.fecha_comprometida ? U.esc(PY.fecha(it.fecha_comprometida, true)) : '<span class="' + (hecho ? 'sx2-tenue' : 'bj2-it__falta') + '">Sin fecha</span>') +
+              dd('Prioridad', U.badge(it.prioridad || '—', tonoPrioridad(it.prioridad), true)) +
+              (slaBadge(it) ? dd('Plazo', slaBadge(it)) : '') +
+            '</dl>' +
+            (it.descripcion ? '<div class="bj2-it__bloque"><span class="bj2-it__et">Qué se pide</span><p>' + U.esc(it.descripcion) + '</p></div>' : '') +
+            enlacesHtml(it) +
+            (it.contexto || it.resultado_esperado ? '<details class="bj2-mas"><summary>Contexto y resultado esperado</summary>' +
+              (it.contexto ? '<p><b>Contexto:</b> ' + U.esc(it.contexto) + '</p>' : '') + (it.resultado_esperado ? '<p><b>Resultado esperado:</b> ' + U.esc(it.resultado_esperado) + '</p>' : '') + '</details>' : '') +
+            '<div class="bj2-it__accion">' +
+              '<span class="bj2-it__et">' + (hecho ? 'Camino recorrido' : 'Camino y siguiente paso') + '</span>' +
+              caminoHtml(it) +
+              (soloLectura() ? '' : pasos(it, acc) + (acc ? formItem(it, acc, trans[id] || []) : '')) +
+            '</div>' +
+          '</div>' +
         '</article>';
-      }).join('') + '</div>';
+      }
+      function grupo(titulo, n, ayuda, clase) {
+        return '<div class="bj2-its__grupo ' + clase + '"><h4>' + U.esc(titulo) + ' <span class="bj2-its__n">' + n + '</span></h4><p>' + U.esc(ayuda) + '</p></div>';
+      }
+      if (!multi) return '<div class="bj2-its">' + todos + subs.map(tarjeta).join('') + '</div>';
+      return '<div class="bj2-its">' + todos +
+        (hacer.length ? grupo('Por hacer', hacer.length, 'Toca un ítem para verlo y avanzar su camino. Cada uno se resuelve por separado.', 'bj2-its__grupo--hacer') + hacer.map(tarjeta).join('')
+          : '<p class="bj2-its__listo">' + U.ico('check', 15) + 'No queda nada por hacer en esta solicitud.</p>') +
+        (listos.length ? grupo('Terminados', listos.length, 'Ya no necesitan trabajo: esperan que ' + nombreSol + ' confirme o ya se cerraron.', 'bj2-its__grupo--hecho') + listos.map(tarjeta).join('') : '') +
+      '</div>';
     }
 
     // Etapa 3: el paso siguiente según el estado visible ("Nueva → En curso ⇄
@@ -1541,6 +1587,15 @@
     d.el.addEventListener('click', function (ev) {
       var t = ev.target, b;
       if ((b = t.closest('.js-bj2-tab'))) { pestana = b.getAttribute('data-tab'); pintarDetalle(); return; }
+      // Plegar o desplegar un ítem sin volver a pintar el panel (no salta el scroll).
+      if ((b = t.closest('.js-bj2-it'))) {
+        var art = b.closest('.bj2-it'), idIt = b.getAttribute('data-id'), abre = !expandido[idIt];
+        expandido[idIt] = abre;
+        art.classList.toggle('bj2-it--abierto', abre);
+        b.setAttribute('aria-expanded', abre);
+        art.querySelector('.bj2-it__cuerpo').hidden = !abre;
+        return;
+      }
       if (t.closest('.js-bj2-responder')) {
         var conv = d.el.querySelector('#bj2-conv');
         if (conv) { conv.scrollIntoView({ block: 'start', behavior: 'smooth' }); var ta = conv.querySelector('textarea'); if (ta) setTimeout(function () { ta.focus(); }, 250); }
@@ -1618,7 +1673,7 @@
     });
 
     cargarDetalle().then(function () {
-      var foco = subFoco && d.el.querySelector('.bj2-item--foco');
+      var foco = subFoco && d.el.querySelector('.bj2-it--foco');
       if (foco && (detalle.subsolicitudes || []).length > 1) foco.scrollIntoView({ block: 'nearest' });
     });
     return d;
