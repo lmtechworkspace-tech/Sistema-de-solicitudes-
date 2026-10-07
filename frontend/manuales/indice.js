@@ -32,4 +32,4 @@ SigsoManual.indice([
     resumen: 'Recibir los reportes de las áreas y armar el informe de gestión para la gerencia.' },
   { id: 'hompy', archivo: 'hompy', grupo: 'Áreas', titulo: 'Hompy, la mascota', icono: 'hompy', color: 'var(--mod-hompy)', modulos: ['hompy'],
     resumen: 'Calendario, reporte de salida a terreno con su dinero, Estudio TikTok, marcas colaboradoras y reporte del mes.' }
-], '2026-10-07e');
+], '2026-10-07f');
