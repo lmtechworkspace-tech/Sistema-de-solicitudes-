@@ -525,7 +525,9 @@
             '<td class="bj2-tc-av" title="' + U.esc(resumen) + '">' + barraAvance(todos) + '<small class="bj2-avance__txt">' + U.esc(resumen) + '</small></td>' +
             '<td class="bj2-tc-num">' + antiguedad(todos.slice().sort(function (a, b) { return new Date(a.fecha_creacion) - new Date(b.fecha_creacion); })[0]) + '</td>' +
             '<td class="bj2-tc-acc">' + siguienteSolicitud(g, todos) + '</td></tr>' +
-          (abierta ? todos.map(function (it) { return filaItemDeSolicitud(it, g.items.indexOf(it) !== -1); }).join('') : '');
+          (abierta ? todos.map(function (it, k) {
+            return filaItemDeSolicitud(it, g.items.indexOf(it) !== -1, { ultimo: k === todos.length - 1, mismo: lista.length === 1 ? todos[0].asignado || '' : null });
+          }).join('') + '<tr class="bj2-tr-fin" aria-hidden="true"><td colspan="9"></td></tr>' : '');
       }).join('') + '</tbody></table></div>';
   }
   // Una solicitud de un solo ítem: una fila que se comporta como el ítem (se selecciona y se abre en él).
@@ -547,20 +549,24 @@
       '<td class="bj2-tc-acc">' + siguienteSolicitud({ id: i.solicitud_id, items: [i] }, todos) + '</td></tr>';
   }
   // Un ítem dentro de una solicitud desplegada: «Ítem n de N», su camino y su botón.
-  function filaItemDeSolicitud(it, visible) {
+  // Al desplegar, los ítems cuelgan de la solicitud como un árbol (línea a la izquierda, más bajos y sin repetir
+  // lo que ya dice la fila de arriba: el responsable, si es el mismo para todos, y la antigüedad).
+  function filaItemDeSolicitud(it, visible, ctx) {
+    ctx = ctx || {};
     var marcado = !!sel_[it.subsolicitud_id];
     var persona = it.asignado ? PY.persona(it.asignado, it.asignado_nombre) : null;
     var paso = caminoDe(it).filter(function (p) { return p.est === 'actual' || p.est === 'falta'; })[0];
     var nota = it.estado === 'S06' ? 'esperando respuesta' : (it.estado === 'S08' ? 'resuelto: espera a quien pidió' : (paso ? (paso.est === 'falta' ? 'falta: ' : 'sigue: ') + paso.nombre.toLowerCase() : estadoVis(it.estado)));
-    return '<tr class="bj2-tr bj2-tr--hijo' + (visible ? '' : ' bj2-tr--otro') + (marcado ? ' bj2-fila--sel' : '') + '" data-bj2-item="' + U.esc(it.subsolicitud_id) + '" data-sol="' + U.esc(it.solicitud_id) + '" tabindex="0">' +
+    return '<tr class="bj2-tr bj2-tr--hijo' + (ctx.ultimo ? ' bj2-tr--ultimo' : '') + (visible ? '' : ' bj2-tr--otro') + (marcado ? ' bj2-fila--sel' : '') + '" data-bj2-item="' + U.esc(it.subsolicitud_id) + '" data-sol="' + U.esc(it.solicitud_id) + '" tabindex="0">' +
       '<td class="bj2-tc-check">' + (datos_.solo_lectura || !visible ? '' : '<label class="bj2-check" title="Seleccionar"><input type="checkbox" class="js-bj2-sel"' + (marcado ? ' checked' : '') + ' aria-label="Seleccionar ' + U.esc(it.titulo) + '"></label>') + '</td>' +
       '<td class="bj2-tc-sem">' + semaforo(it) + '</td>' +
-      '<td class="bj2-tc-n"><span class="bj2-nitem">Ítem ' + it.numero_item + ' de ' + it.cantidad_items + '</span></td>' +
+      '<td class="bj2-tc-n bj2-tc-rama"><span class="bj2-nitem">Ítem ' + it.numero_item + ' de ' + it.cantidad_items + '</span></td>' +
       '<td class="bj2-tc-titulo"><span class="bj2-tc-cortar"><span class="bj2-prio-mini sx2-tono-' + tonoPrioridad(it.prioridad) + '">' + U.esc(it.prioridad || '—') + '</span><strong>' + U.esc(it.titulo || '(sin título)') + '</strong></span></td>' +
       '<td><span class="bj2-tc-cortar sx2-tenue">' + (it.fecha_comprometida ? U.ico('calendario', 12) + ' para el ' + U.esc(fechaCorta(it.fecha_comprometida)) : '') + '</span></td>' +
-      '<td>' + (persona ? '<span class="bj2-tc-quien">' + U.avatar(persona, 'xs') + '<span class="bj2-tc-cortar">' + U.esc(persona.nombre) + '</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>') + '</td>' +
+      '<td>' + (persona && ctx.mismo === it.asignado ? '<span class="bj2-tc-quien bj2-tc-quien--mismo" title="' + U.esc(persona.nombre) + '">' + U.avatar(persona, 'xs') + '</span>'
+        : (persona ? '<span class="bj2-tc-quien">' + U.avatar(persona, 'xs') + '<span class="bj2-tc-cortar">' + U.esc(persona.nombre) + '</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>')) + '</td>' +
       '<td class="bj2-tc-av">' + caminoMini(it) + '<small class="bj2-avance__txt' + (notaPaso(it).falta ? ' bj2-avance__txt--falta' : '') + '">' + U.esc(notaPaso(it).t) + '</small></td>' +
-      '<td class="bj2-tc-num">' + antiguedad(it) + '</td>' +
+      '<td class="bj2-tc-num"></td>' +
       '<td class="bj2-tc-acc">' + (datos_.solo_lectura || it.estado !== 'S01' ? '' : U.boton({ texto: 'Recibir', sm: true, variante: 'primario', clase: 'js-bj2-recibir', datos: { id: it.subsolicitud_id }, titulo: 'Recibir y dar fecha' })) + '</td></tr>';
   }
   // El camino del ítem en cinco tramos finos (el mismo del detalle).

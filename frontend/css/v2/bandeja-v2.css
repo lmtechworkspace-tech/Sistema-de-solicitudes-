@@ -492,3 +492,30 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
 .bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(8) { width: 58px; }
 .bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th:nth-child(9) { width: 132px; }
 .bj2-tabla--sol td { overflow: hidden; }
+
+/* 2026-10-07 (dueño: «parece una lista»): la solicitud desplegada es un BLOQUE y sus ítems cuelgan de ella.
+   Cabecera teñida con barra de color a la izquierda; ítems más bajos, sobre fondo blanco, unidos por una
+   línea de árbol; un respiro después del último ítem antes de la solicitud siguiente. */
+.bj2-tabla--sol .bj2-tr-sol--abierta td { background: color-mix(in srgb, var(--sx-primario) 9%, var(--sx-superficie)); border-top: 1px solid color-mix(in srgb, var(--sx-primario) 35%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--sx-primario) 22%, transparent); }
+.bj2-tabla--sol .bj2-tr-sol--abierta td:first-child { box-shadow: inset 4px 0 0 var(--sx-primario); }
+.bj2-tabla--sol .bj2-tr-sol--abierta:hover td { background: color-mix(in srgb, var(--sx-primario) 13%, var(--sx-superficie)); }
+.bj2-tabla--sol .bj2-tr-sol--abierta .bj2-sol-n { color: var(--sx-primario); font-size: .8125rem; }
+.bj2-tabla--sol .bj2-tr-sol--abierta .bj2-expandir { background: var(--sx-primario); border-color: var(--sx-primario); color: var(--sx-superficie); }
+
+.bj2-tabla--sol .bj2-tr--hijo td { height: 38px; padding-top: 2px; padding-bottom: 2px; background: var(--sx-superficie); border-bottom: 1px dashed var(--sx-borde-suave); font-size: .8125rem; }
+.bj2-tabla--sol .bj2-tr--hijo:hover td { background: color-mix(in srgb, var(--sx-primario) 4%, var(--sx-superficie)); }
+.bj2-tabla--sol .bj2-tr--hijo td:first-child { box-shadow: inset 4px 0 0 color-mix(in srgb, var(--sx-primario) 40%, transparent); }
+.bj2-tabla--sol .bj2-tr--hijo.bj2-tr--ultimo td { border-bottom: 1px solid color-mix(in srgb, var(--sx-primario) 30%, transparent); }
+.bj2-tabla--sol .bj2-tr--hijo .bj2-tc-titulo strong { font-weight: 500; }
+.bj2-tabla--sol .bj2-tr--hijo.bj2-fila--sel td { background: var(--sx-primario-suave); }
+
+/* La rama: una línea vertical que baja desde la solicitud y un codo hacia cada ítem. */
+.bj2-tabla--sol .bj2-tr--hijo td.bj2-tc-rama { position: relative; padding-left: 42px; }
+.bj2-tabla--sol td.bj2-tc-rama::before { content: ''; position: absolute; left: 18px; top: 0; bottom: 0; border-left: 2px solid color-mix(in srgb, var(--sx-primario) 40%, transparent); }
+.bj2-tabla--sol .bj2-tr--ultimo td.bj2-tc-rama::before { bottom: 50%; }
+.bj2-tabla--sol td.bj2-tc-rama::after { content: ''; position: absolute; left: 18px; top: 50%; width: 14px; border-top: 2px solid color-mix(in srgb, var(--sx-primario) 40%, transparent); }
+.bj2-tabla--sol .bj2-nitem { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--sx-primario) 30%, transparent); background: var(--sx-primario-suave); color: var(--sx-primario); font: 600 .6875rem/1.3 var(--fuente); }
+.bj2-tc-quien--mismo { opacity: .55; }
+
+.bj2-tabla--sol .bj2-tr-fin td { height: 12px; padding: 0; background: transparent; border: 0; box-shadow: none; }
+.bj2-tabla--sol .bj2-tr-fin:hover { background: transparent; }
