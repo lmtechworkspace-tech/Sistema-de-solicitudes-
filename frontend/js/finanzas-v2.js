@@ -188,6 +188,7 @@
     ultimoUso_ = Date.now();
     iniciarReloj();
     if (vista_ === 'bitacora') return verBitacora();
+    if (vista_ === 'mes' && window.SigsoFinanzasMes) return SigsoFinanzasMes.ver(ctxBancos());
     if (vista_ === 'tablero' && window.SigsoFinanzasTablero) return SigsoFinanzasTablero.ver(ctxBancos());
     if (vista_ === 'cobranza' && window.SigsoFinanzasCobranza) return SigsoFinanzasCobranza.ver(ctxBancos());
     if (vista_ === 'presupuesto' && window.SigsoFinanzasPresupuesto) return SigsoFinanzasPresupuesto.ver(ctxBancos());
@@ -205,6 +206,7 @@
   }
   var TITULOS_ = {
     Resumen: ['Seguridad de la bóveda', 'Quién tiene acceso, las capas de protección y los últimos ingresos.'],
+    'El mes': ['El mes, paso a paso', 'Qué toca ahora y qué falta para dejar listo el mes, con sus fechas.'],
     Tablero: ['Tablero de Finanzas', 'El mes en 30 segundos: resultado, caja, cobranza y plata de clientes.'], 'Bitácora': ['Bitácora de accesos', 'Todo lo que se hace en la bóveda, en orden y encadenado.'],
     Bancos: ['Bancos', 'Sube la cartola del banco y el sistema la clasifica.'], Movimientos: ['Movimientos', 'Revisa lo que el sistema propone; lo que corriges, lo aprende.'],
     Cierre: ['Cierre y retiro de la planilla', 'Cerrar cada mes, comparar con la planilla SIGECO y archivarla cuando todo cuadre.'],
@@ -225,7 +227,7 @@
     var tt = TITULOS_[seccion] || TITULOS_.Resumen;
     return cab(tt[0], tt[1], (extra ? '<span class="fin2-cab-extra">' + extra + '</span>' : '') +
       '<span class="fin2-abierta" title="Se cierra sola sin uso">' + U.ico('reloj', 14) + '<span id="fin-reloj">' + inactividadMin_ + ':00</span></span>' +
-      U.segmento([{ id: 'tablero', texto: 'Tablero', icono: 'grafico' }, { id: 'bancos', texto: 'Bancos', icono: 'dinero' }, { id: 'movimientos', texto: 'Movimientos', icono: 'tabla' }, { id: 'cobranza', texto: 'Cobranza', icono: 'recibo' }, { id: 'presupuesto', texto: 'Presupuesto', icono: 'diana' }, { id: 'cierre', texto: 'Cierre', icono: 'candado' }, { id: 'inicio', texto: 'Seguridad', icono: 'escudo' }, { id: 'bitacora', texto: 'Bitácora', icono: 'lista' }], vista_, 'js-fin-vista') +
+      U.segmento([{ id: 'mes', texto: 'El mes', icono: 'tareas' }, { id: 'tablero', texto: 'Tablero', icono: 'grafico' }, { id: 'bancos', texto: 'Bancos', icono: 'dinero' }, { id: 'movimientos', texto: 'Movimientos', icono: 'tabla' }, { id: 'cobranza', texto: 'Cobranza', icono: 'recibo' }, { id: 'presupuesto', texto: 'Presupuesto', icono: 'diana' }, { id: 'cierre', texto: 'Cierre', icono: 'candado' }, { id: 'inicio', texto: 'Seguridad', icono: 'escudo' }, { id: 'bitacora', texto: 'Bitácora', icono: 'lista' }], vista_, 'js-fin-vista') +
       U.boton({ texto: 'Cerrar bóveda', icono: 'candado', clase: 'js-fin-salir' }));
   }
   function capa(ok, titulo, texto) {
@@ -337,7 +339,7 @@
           if (!r || !r.ok) { error((r && r.message) || 'No se pudo abrir.'); limpiarCasillas('fin-cod'); var caja = document.querySelector('.fin2-digitos'); if (caja) { caja.classList.remove('fin2-sacude'); void caja.offsetWidth; caja.classList.add('fin2-sacude'); } return; }
           guardarToken(r.data.boveda_token);
           inactividadMin_ = r.data.inactividad_min || inactividadMin_;
-          vista_ = 'tablero';
+          vista_ = r.data.solo_lectura ? 'tablero' : 'mes';
           var c = document.querySelector('.fin2-candado__caja');
           if (c) { c.classList.add('fin2-abre'); setTimeout(abrir, 420); } else abrir();
         });

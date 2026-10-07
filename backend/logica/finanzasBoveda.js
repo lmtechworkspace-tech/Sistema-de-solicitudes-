@@ -394,7 +394,8 @@ function ingresar_(db, data, contexto, activando) {
   avisarSiInusual_(db, cuenta, contexto, equipo);
   const token = abrirSesion_(cuenta.cuenta_id, equipo, ip);
   registrar_({ cuenta_id: cuenta.cuenta_id, nombre, accion: 'ENTRAR', ip, equipo });
-  return { boveda_token: token, inactividad_min: INACTIVIDAD_MS / 60000 };
+  // Etapa B: quien solo lee entra al Tablero; quien opera, a «El mes».
+  return { boveda_token: token, inactividad_min: INACTIVIDAD_MS / 60000, solo_lectura: String(process.env.SIGSO_FINANZAS_SOLO_LECTURA || '').split(',').map((x) => x.trim().toLowerCase()).indexOf(String(cuenta.cuenta_id).toLowerCase()) !== -1 };
 }
 function activarAutenticador(db, data, contexto) { return ingresar_(db, data, contexto, true); }
 function entrar(db, data, contexto) { return ingresar_(db, data, contexto, false); }

@@ -6,8 +6,9 @@
  *  - Bancos: las cuentas con su saldo, subir cartolas (Excel del BCI; se
  *    revisan antes de guardar), aprender de la planilla SIGECO y la cuenta
  *    corriente de fondos de cada cliente.
- *  - Movimientos: el mes en una grilla. Cada fila trae la sugerencia del
- *    sistema; se confirma de a una o en lote, y lo que se corrige se aprende.
+ *  - Movimientos: el mes en una lista a lo ancho (sin barra horizontal). Cada
+ *    fila trae la sugerencia; se acepta de a una, en lote, o se abre el panel
+ *    lateral para clasificarla (Etapa B). Lo que se corrige se aprende.
  */
 (function () {
   'use strict';
@@ -296,8 +297,21 @@
   }
 
   // =====================================================================================
-  // Movimientos
+  // Movimientos — Etapa B (2026-10-07): una lista a lo ancho, sin barra horizontal.
+  // Cada fila dice qué es (o qué propone el sistema); al tocarla se abre un panel
+  // lateral con todo lo que se sabe del movimiento para clasificarlo con calma.
   // =====================================================================================
+  var AYUDA_TIPO = {
+    INGRESO: 'Plata que la empresa ganó: honorarios, servicio mensual, renta.',
+    EGRESO: 'Lo que la empresa gasta para funcionar: sueldos, arriendo, banco…',
+    FONDO_RECIBIDO: 'Plata que un cliente manda para pagar SUS imposiciones, IVA, sueldos…',
+    FONDO_PAGADO: 'Pago a Previred, SII, Tesorería o sueldos hecho con la plata de un cliente.',
+    TRASPASO: 'Entre dos cuentas de la MISMA empresa.',
+    PRESTAMO: 'Con otra empresa del grupo (se lleva la cuenta de lo que se deben).'
+  };
+  var FILTROS = [['pendientes', 'Por revisar'], ['propuesta', 'Con propuesta'], ['sinpista', 'Sin pista'], ['confirmados', 'Confirmados'], ['todos', 'Todos']];
+  var panel_ = null;      // { api, id }
+
   function verMovimientos(x) {
     x_ = x; enlazar();
     var t = x.turno();
@@ -310,11 +324,31 @@
       pintarMovimientos();
     });
   }
+  function sentidoDe(m) { return m.abono > 0 ? 'abono' : 'cargo'; }
+  function completa(c, sentido) {
+    var t = tipo(c && c.tipo);
+    if (!t) return false;
+    if (t.sentido && t.sentido !== sentido) return false;
+    return (!t.cuentas.length || t.cuentas.indexOf(c.cuenta) !== -1) && (!t.cliente || c.cliente_id) && (!t.empresa || c.empresa);
+  }
+  function grupo(m) {
+    if (m.estado === 'CONFIRMADO') return 'confirmados';
+    return completa(m.sugerencia, sentidoDe(m)) ? 'propuesta' : 'sinpista';
+  }
+  function busca(m, q) {
+    if (!q) return true;
+    var s = [m.glosa, m.detalle && m.detalle.descripcion, m.planilla && m.planilla.alias, (m.clasif || m.sugerencia || {}).cliente, (m.clasif || m.sugerencia || {}).cuenta, String(m.abono || m.cargo)].join(' ').toLowerCase();
+    return q.toLowerCase().split(/\s+/).every(function (w) { return s.indexOf(w) !== -1 || s.replace(/\./g, '').indexOf(w.replace(/\./g, '')) !== -1; });
+  }
   function visibles() {
     var l = (mov_.datos && mov_.datos.movimientos) || [];
-    if (mov_.filtro === 'pendientes') return l.filter(function (m) { return m.estado !== 'CONFIRMADO'; });
-    if (mov_.filtro === 'confirmados') return l.filter(function (m) { return m.estado === 'CONFIRMADO'; });
-    return l;
+    var f = mov_.filtro, q = (mov_.busca || '').trim();
+    return l.filter(function (m) {
+      if (!busca(m, q)) return false;
+      if (f === 'pendientes') return m.estado !== 'CONFIRMADO';
+      if (f === 'todos') return true;
+      return grupo(m) === f;
+    });
   }
   function selectorMes() {
     var ps = (mov_.datos && mov_.datos.periodos) || [];
@@ -330,31 +364,38 @@
       return;
     }
     var s = d.resumen;
-    var pend = d.movimientos.filter(function (m) { return m.estado !== 'CONFIRMADO'; });
-    var seguras = pend.filter(function (m) { return m.sugerencia && m.sugerencia.certeza === 'alta'; }).length;
+    var cuenta = { pendientes: 0, propuesta: 0, sinpista: 0, confirmados: 0, todos: d.movimientos.length };
+    d.movimientos.forEach(function (m) { var g = grupo(m); cuenta[g]++; if (g !== 'confirmados') cuenta.pendientes++; });
+    var seguras = d.movimientos.filter(function (m) { return m.estado !== 'CONFIRMADO' && m.sugerencia && m.sugerencia.certeza === 'alta' && completa(m.sugerencia, sentidoDe(m)); }).length;
     var avance = s.total ? Math.round(s.confirmados / s.total * 100) : 0;
     x_.pagina(x_.cab('Movimientos') +
       '<div class="fin2-barra-mes sx2-entra">' + selectorMes() +
-        U.segmento([{ id: 'pendientes', texto: 'Por revisar · ' + s.pendientes }, { id: 'confirmados', texto: 'Confirmados · ' + s.confirmados }, { id: 'todos', texto: 'Todos' }], mov_.filtro, 'js-finm-filtro') +
         '<span class="fin2-avance" title="Confirmados del mes"><span style="width:' + avance + '%"></span></span><span class="fin2-ayuda">' + avance + ' % revisado</span>' +
+        '<label class="fin2-busca">' + U.ico('lupa', 14) + '<input class="js-finm-busca" type="search" placeholder="Buscar nombre, cliente o monto" value="' + txt(mov_.busca || '') + '" aria-label="Buscar"></label>' +
       '</div>' +
       '<div class="fin2-tiras">' +
         tira('Ingresos de la empresa', s.INGRESO, 'ok') + tira('Gastos de la empresa', s.EGRESO, 'critico') +
         tira('Fondos de clientes recibidos', s.FONDO_RECIBIDO, 'info') + tira('Pagado por cuenta de clientes', s.FONDO_PAGADO, 'info') +
         tira('Traspasos y préstamos', s.TRASPASO_ENTRA + s.TRASPASO_SALE + s.PRESTAMO_ENTRA + s.PRESTAMO_SALE, 'neutro') + tira('Por revisar', s.pendiente_monto, 'alerta') +
       '</div>' +
+      '<div class="fin2-filtros sx2-entra" role="group" aria-label="Qué mostrar">' + FILTROS.map(function (f) {
+        return U.chip({ texto: f[1], n: cuenta[f[0]], activo: mov_.filtro === f[0], clase: 'js-finm-filtro', datos: { id: f[0] } });
+      }).join('') + '</div>' +
       '<div class="fin2-lote sx2-entra">' +
-        U.boton({ texto: 'Confirmar las seguras (' + seguras + ')', icono: 'check', variante: 'primario', clase: 'js-finm-seguras', deshabilitado: !seguras }) +
-        U.boton({ texto: 'Marcar las que tienen propuesta completa', icono: 'lista', clase: 'js-finm-marcar' }) +
-        U.boton({ texto: 'Confirmar marcadas', icono: 'check', clase: 'js-finm-conf-sel', deshabilitado: true }) +
-        '<span class="fin2-ayuda js-finm-nsel"></span>' +
+        U.boton({ texto: 'Confirmar las seguras (' + seguras + ')', icono: 'check', variante: 'primario', sm: true, clase: 'js-finm-seguras', deshabilitado: !seguras }) +
+        U.boton({ texto: 'Marcar las con propuesta', icono: 'lista', sm: true, clase: 'js-finm-marcar' }) +
+        U.boton({ texto: 'Confirmar marcadas', icono: 'check', sm: true, clase: 'js-finm-conf-sel', deshabilitado: true }) +
+        '<span class="fin2-ayuda">Toca un movimiento para ver todo y clasificarlo. Teclas: ↑ ↓ para moverte, Enter para abrir.</span>' +
       '</div>' +
-      U.card({ sinRelleno: true, cuerpo: '<div class="fin2-tabla-envoltura"><table class="fin2-tabla fin2-movs"><thead><tr>' +
-        '<th class="fin2-chk"><input type="checkbox" class="js-finm-todos" aria-label="Marcar todos"></th><th>Fecha</th><th>Lo que dice el banco</th><th class="fin2-der">Monto</th><th>Qué es</th><th>Cuenta / cliente</th><th>Nota</th><th></th>' +
-        '</tr></thead><tbody>' + (visibles().map(fila).join('') || '<tr><td colspan="8">' + U.vacio({ icono: 'check', titulo: 'Nada en esta vista', texto: mov_.filtro === 'pendientes' ? 'El mes está completamente revisado.' : '' }) + '</td></tr>') +
-        '</tbody></table></div>' }) +
+      '<div class="fin2-lista sx2-entra js-finm-lista" role="list">' + listaHtml() + '</div>' +
       '<datalist id="finm-clientes">' + cat_.clientes.map(function (c) { return '<option value="' + txt(c.nombre) + '">' + txt(c.rut) + '</option>'; }).join('') + '</datalist>');
     actualizarSel();
+  }
+  function listaHtml() {
+    var l = visibles();
+    if (!l.length) return U.vacio({ icono: 'check', titulo: 'Nada en esta vista', texto: mov_.filtro === 'pendientes' && !mov_.busca ? 'El mes está completamente revisado.' : 'Prueba con otro filtro o búsqueda.' });
+    return '<div class="fin2-lista__cab" aria-hidden="true"><span><input type="checkbox" class="js-finm-todos" aria-label="Marcar todos"></span><span>Fecha</span><span>Movimiento</span><span class="fin2-der">Monto</span><span>Qué es</span><span></span></div>' +
+      l.map(fila).join('');
   }
   function tira(t, v, tono) { return '<div class="fin2-tira sx2-tono-' + tono + '"><span>' + txt(t) + '</span><b>' + plata(v) + '</b></div>'; }
 
@@ -365,134 +406,86 @@
     }).join('');
   }
   // Etapa A: lo que agrega el detalle del banco y el Excel BANCOS bajo la glosa.
-  function pistas(m) {
+  function pistas(m, compacto) {
     var h = '';
-    if (m.detalle && m.detalle.descripcion) h += '<span class="fin2-pista">' + U.ico('lupa', 12) + txt(m.detalle.descripcion) + '</span>';
-    if (m.planilla && (m.planilla.alias || m.planilla.obs)) h += '<span class="fin2-pista">' + U.ico('documento', 12) + 'Excel: ' + txt([m.planilla.alias, m.planilla.obs, m.planilla.plan].filter(Boolean).join(' · ')) + '</span>';
+    if (m.detalle && m.detalle.descripcion) h += '<span class="fin2-pista">' + U.ico('lupa', 12) + '<span>' + txt(m.detalle.descripcion) + '</span></span>';
+    if (m.planilla && (m.planilla.alias || m.planilla.obs)) h += '<span class="fin2-pista">' + U.ico('documento', 12) + '<span>Excel: ' + txt([m.planilla.alias, m.planilla.obs, m.planilla.plan].filter(Boolean).join(' · ')) + '</span></span>';
+    if (compacto) return h;
     var op = m.estado !== 'CONFIRMADO' && m.sugerencia && m.sugerencia.opciones;
     if (op && op.length) h += '<span class="fin2-opciones">Ha pagado por: ' + op.map(function (o) {
       return '<button type="button" class="fin2-chip js-finm-opc" data-cliente="' + txt(o.cliente) + '">' + txt(o.cliente) + (o.veces > 1 ? ' ×' + o.veces : '') + '</button>';
     }).join('') + '</span>';
     return h;
   }
+  function resumenClasif(c) {
+    if (!c) return '';
+    if (c.partes) return 'Dividido en ' + c.partes.length + ': ' + c.partes.map(function (p) { return plata(p.monto) + ' ' + ((tipo(p.tipo) || {}).nombre || p.tipo) + (p.cliente || p.cuenta ? ' (' + (p.cliente || p.cuenta) + ')' : ''); }).join(' + ');
+    var t = tipo(c.tipo);
+    if (!t) return '';
+    return [t.nombre, c.cuenta, c.cliente, c.empresa, c.reparto && c.reparto.length ? 'repartido entre ' + c.reparto.length : ''].filter(Boolean).join(' · ');
+  }
   function fila(m) {
-    var c = m.estado === 'CONFIRMADO' && m.clasif ? m.clasif : (m.sugerencia || {});
-    if (c.partes) return filaDividida(m, c);
-    var sentido = m.abono > 0 ? 'abono' : 'cargo';
-    var tipos = cat_.tipos.filter(function (t) { return !t.sentido || t.sentido === sentido; });
-    var cert = m.estado === 'CONFIRMADO' ? 'ok' : ({ alta: 'alta', media: 'media', baja: 'baja' }[(m.sugerencia || {}).certeza] || 'baja');
-    return '<tr class="fin2-mov fin2-mov--' + cert + '" data-id="' + txt(m.id) + '">' +
-      '<td class="fin2-chk"><input type="checkbox" class="js-finm-chk"' + (mov_.sel[m.id] ? ' checked' : '') + (m.estado === 'CONFIRMADO' ? ' disabled' : '') + ' aria-label="Marcar"></td>' +
-      '<td class="fin2-num">' + txt(fechaCorta(m.fecha)) + '</td>' +
-      '<td><span class="fin2-glosa">' + txt(m.glosa) + '</span><span class="fin2-motivo">' + (m.estado === 'CONFIRMADO' ? 'Confirmado por ' + txt(m.actualizado_por) : txt((m.sugerencia || {}).motivo || '')) + '</span>' + pistas(m) + '</td>' +
-      '<td class="fin2-num fin2-der ' + (m.abono ? 'fin2-pos' : '') + '">' + (m.abono ? '+' : '−') + plata(m.abono || m.cargo) + '</td>' +
-      '<td><select class="fin2-input fin2-input--sm js-finm-tipo">' + opciones(tipos, c.tipo, '¿Qué es?') + '</select></td>' +
-      '<td class="js-finm-det">' + detalle(c) + '</td>' +
-      '<td><input class="fin2-input fin2-input--sm js-finm-nota" value="' + txt(c.nota || '') + '" placeholder="Opcional" maxlength="300"></td>' +
-      '<td class="fin2-acc">' + U.boton({ soloIcono: true, icono: 'check', sm: true, variante: m.estado === 'CONFIRMADO' ? 'fantasma' : 'secundario', titulo: m.estado === 'CONFIRMADO' ? 'Guardar cambio' : 'Confirmar', clase: 'js-finm-ok' }) +
-        U.boton({ soloIcono: true, icono: 'derivar', sm: true, variante: 'fantasma', titulo: 'Dividir entre varios clientes o conceptos', clase: 'js-finm-dividir' }) + '</td>' +
-    '</tr>';
-  }
-  function filaDividida(m, c) {
-    return '<tr class="fin2-mov fin2-mov--ok" data-id="' + txt(m.id) + '" data-dividido="1">' +
-      '<td class="fin2-chk"><input type="checkbox" class="js-finm-chk" disabled aria-label="Marcar"></td>' +
-      '<td class="fin2-num">' + txt(fechaCorta(m.fecha)) + '</td>' +
-      '<td><span class="fin2-glosa">' + txt(m.glosa) + '</span><span class="fin2-motivo">Confirmado por ' + txt(m.actualizado_por) + '</span>' + pistas(m) + '</td>' +
-      '<td class="fin2-num fin2-der ' + (m.abono ? 'fin2-pos' : '') + '">' + (m.abono ? '+' : '−') + plata(m.abono || m.cargo) + '</td>' +
-      '<td>' + U.badge('Dividido en ' + c.partes.length, 'info') + '</td>' +
-      '<td colspan="2"><ul class="fin2-partes-lista">' + c.partes.map(function (p) {
-        var t = tipo(p.tipo);
-        return '<li><b>' + plata(p.monto) + '</b> ' + txt((t ? t.nombre : p.tipo) + (p.cliente ? ' · ' + p.cliente : '') + (p.cuenta ? ' · ' + p.cuenta : '') + (p.empresa ? ' · ' + p.empresa : '')) + '</li>';
-      }).join('') + '</ul></td>' +
-      '<td class="fin2-acc">' + U.boton({ soloIcono: true, icono: 'editar', sm: true, variante: 'fantasma', titulo: 'Cambiar la división', clase: 'js-finm-dividir' }) + '</td></tr>';
-  }
-
-  // --- Dividir: una transferencia que paga a varios clientes o mezcla conceptos --------
-  function movDe(id) { return ((mov_.datos && mov_.datos.movimientos) || []).filter(function (m) { return m.id === id; })[0]; }
-  function parte(p, sentido) {
-    var tipos = cat_.tipos.filter(function (t) { return !t.sentido || t.sentido === sentido; });
-    return '<div class="fin2-parte js-finm-parte">' +
-      '<input class="fin2-input fin2-input--sm fin2-der js-finm-pmonto" inputmode="numeric" placeholder="Monto" value="' + (p.monto ? Math.round(p.monto).toLocaleString('es-CL') : '') + '">' +
-      '<select class="fin2-input fin2-input--sm js-finm-ptipo">' + opciones(tipos, p.tipo || '', '¿Qué es?') + '</select>' +
-      '<span class="fin2-parte__det js-finm-pdet">' + detalle(p, true) + '</span>' +
-      U.boton({ soloIcono: true, icono: 'equis', sm: true, variante: 'fantasma', titulo: 'Quitar esta parte', clase: 'js-finm-pquitar' }) + '</div>';
-  }
-  function abrirDividir(tr) {
-    var sig = tr.nextElementSibling;
-    if (sig && sig.classList.contains('fin2-dividir')) { sig.remove(); return; }
-    var m = movDe(tr.dataset.id); if (!m) return;
-    var sentido = m.abono > 0 ? 'abono' : 'cargo';
-    var base = m.clasif && m.clasif.partes ? m.clasif.partes : null;
-    if (!base) { var f = leerFila(tr); base = [{ monto: 0, tipo: f.tipo, cuenta: f.cuenta, cliente: (tr.querySelector('.js-finm-cliente') || {}).value || '', empresa: f.empresa }, { monto: 0, tipo: f.tipo }]; }
-    var nueva = document.createElement('tr');
-    nueva.className = 'fin2-dividir'; nueva.dataset.id = m.id; nueva.dataset.total = String(m.abono || m.cargo); nueva.dataset.sentido = sentido;
-    nueva.innerHTML = '<td colspan="8"><div class="fin2-dividir__caja">' +
-      '<p class="fin2-ayuda"><b>Dividir ' + plata(m.abono || m.cargo) + '</b> — por ejemplo, una transferencia que paga a dos clientes, o que trae honorario y fondo para imposiciones. Las partes tienen que sumar exacto.</p>' +
-      '<div class="js-finm-partes">' + base.map(function (p) { return parte(p, sentido); }).join('') + '</div>' +
-      '<div class="fin2-acciones" style="align-items:center">' + U.boton({ texto: 'Agregar parte', icono: 'mas', sm: true, clase: 'js-finm-pmas' }) +
-        '<span class="fin2-ayuda js-finm-pfalta"></span>' +
-        U.boton({ texto: 'Cancelar', sm: true, clase: 'js-finm-pcancelar' }) +
-        U.boton({ texto: 'Guardar división', icono: 'check', sm: true, variante: 'primario', clase: 'js-finm-pok' }) + '</div></div></td>';
-    tr.parentNode.insertBefore(nueva, tr.nextSibling);
-    faltaDividir(nueva);
-  }
-  function montoDe(v) { return Number(String(v || '').replace(/[^0-9]/g, '')) || 0; }
-  function faltaDividir(caja) {
-    var total = Number(caja.dataset.total), suma = 0;
-    caja.querySelectorAll('.js-finm-pmonto').forEach(function (i) { suma += montoDe(i.value); });
-    var el = caja.querySelector('.js-finm-pfalta'), dif = total - suma;
-    el.innerHTML = dif === 0 ? '<span class="fin2-pos">✓ Suma exacta</span>' : dif > 0 ? 'Falta asignar <b>' + plata(dif) + '</b>' : '<span class="fin2-neg">Te pasaste por ' + plata(-dif) + '</span>';
-    caja.querySelector('.js-finm-pok').disabled = dif !== 0;
-  }
-  function guardarDividir(caja) {
-    var partes = [], malo = '';
-    caja.querySelectorAll('.js-finm-parte').forEach(function (d) {
-      var q = function (s) { var e = d.querySelector(s); return e ? e.value.trim() : ''; };
-      var nombre = q('.js-finm-cliente');
-      var cli = nombre ? cat_.clientes.filter(function (c) { return c.nombre === nombre; })[0] : null;
-      if (nombre && !cli) malo = 'El cliente «' + nombre + '» no está en la lista de SIGSO.';
-      if (!q('.js-finm-ptipo')) malo = malo || 'Cada parte necesita decir qué es.';
-      partes.push({ monto: montoDe(q('.js-finm-pmonto')), tipo: q('.js-finm-ptipo'), cuenta: q('.js-finm-cuenta'), cliente_id: cli ? cli.id : '', empresa: q('.js-finm-empresa') });
-    });
-    if (partes.length < 2) malo = malo || 'Para dividir se necesitan al menos dos partes.';
-    if (malo) { aviso(malo); return; }
-    var tr = caja.previousElementSibling;
-    var nota = tr && tr.querySelector('.js-finm-nota') ? tr.querySelector('.js-finm-nota').value.trim() : '';
-    guardar([{ id: caja.dataset.id, partes: partes, nota: nota }]);
+    var g = grupo(m);
+    var c = m.estado === 'CONFIRMADO' ? m.clasif : m.sugerencia;
+    var cert = m.estado === 'CONFIRMADO' ? 'ok' : ({ alta: 'alta', media: 'media' }[(m.sugerencia || {}).certeza] || 'baja');
+    var que = resumenClasif(c);
+    var estado = m.estado === 'CONFIRMADO' ? '<span class="fin2-que__eti fin2-que__eti--ok">' + U.ico('check', 12) + 'Confirmado</span>'
+      : g === 'propuesta' ? '<span class="fin2-que__eti fin2-que__eti--' + cert + '">' + (cert === 'alta' ? 'Segura' : 'Propuesta') + '</span>'
+      : '<span class="fin2-que__eti fin2-que__eti--baja">Falta decir qué es</span>';
+    return '<div class="fin2-mov fin2-mov--' + cert + (panel_ && panel_.id === m.id ? ' fin2-mov--abierto' : '') + '" role="listitem" tabindex="0" data-id="' + txt(m.id) + '">' +
+      '<span class="fin2-chk"><input type="checkbox" class="js-finm-chk"' + (mov_.sel[m.id] ? ' checked' : '') + (g !== 'propuesta' ? ' disabled' : '') + ' aria-label="Marcar"></span>' +
+      '<span class="fin2-mov__fecha">' + txt(fechaCorta(m.fecha)) + '</span>' +
+      '<span class="fin2-mov__txt"><b class="fin2-glosa">' + txt(m.glosa) + '</b>' + pistas(m, true) + '</span>' +
+      '<span class="fin2-mov__monto ' + (m.abono ? 'fin2-pos' : '') + '">' + (m.abono ? '+' : '−') + plata(m.abono || m.cargo) + '</span>' +
+      '<span class="fin2-que">' + estado + (que ? '<span class="fin2-que__txt">' + txt(que) + '</span>' : '') + '</span>' +
+      '<span class="fin2-mov__acc">' + (g === 'propuesta'
+        ? U.boton({ soloIcono: true, icono: 'check', sm: true, variante: 'secundario', titulo: 'Aceptar la propuesta', clase: 'js-finm-aceptar' }) : '') +
+        U.boton({ soloIcono: true, icono: 'derecha', sm: true, variante: 'fantasma', titulo: 'Abrir', clase: 'js-finm-abrir' }) + '</span>' +
+    '</div>';
   }
   function detalle(c, enParte) {
     var t = tipo(c.tipo);
     if (!t) return '<span class="fin2-ayuda">Primero elige qué es</span>';
     var h = '';
-    if (t.cuentas.length) h += '<select class="fin2-input fin2-input--sm js-finm-cuenta">' + opciones(t.cuentas, c.cuenta, t.cliente ? 'Concepto' : 'Cuenta') + '</select>';
-    if (t.cliente || t.id === 'INGRESO') h += '<input class="fin2-input fin2-input--sm js-finm-cliente" list="finm-clientes" value="' + txt(c.cliente || '') + '" placeholder="' + (t.cliente ? 'Cliente' : 'Cliente (opcional)') + '">';
-    if (t.empresa) h += '<select class="fin2-input fin2-input--sm js-finm-empresa">' + opciones(cat_.empresas, c.empresa, 'Empresa') + '</select>';
+    if (t.cuentas.length) h += campoP(t.cliente ? 'Concepto' : 'Cuenta', '<select class="fin2-input fin2-input--sm js-finm-cuenta">' + opciones(t.cuentas, c.cuenta, 'Elige…') + '</select>', enParte);
+    if (t.cliente || t.id === 'INGRESO') h += campoP(t.cliente ? 'Cliente' : 'Cliente (opcional)', '<input class="fin2-input fin2-input--sm js-finm-cliente" list="finm-clientes" value="' + txt(c.cliente || '') + '" placeholder="Escribe para buscar">', enParte);
+    if (t.empresa) h += campoP('Empresa', '<select class="fin2-input fin2-input--sm js-finm-empresa">' + opciones(cat_.empresas, c.empresa, 'Elige…') + '</select>', enParte);
     // Etapa 5: un gasto se puede repartir en partes iguales entre empresas del grupo.
     if (t.id === 'EGRESO' && cat_.repartos && !enParte) {
       var actual = (c.reparto || []).slice().sort().join('|');
       var elegido = (cat_.repartos.filter(function (r) { return r.empresas.slice().sort().join('|') === actual; })[0] || {}).id || '';
-      h += '<select class="fin2-input fin2-input--sm js-finm-reparto" title="Gasto compartido entre empresas">' +
-        '<option value="">No se reparte</option>' + cat_.repartos.map(function (r) { return '<option value="' + txt(r.id) + '"' + (r.id === elegido ? ' selected' : '') + '>' + txt(r.nombre) + '</option>'; }).join('') + '</select>';
+      h += campoP('¿Gasto compartido?', '<select class="fin2-input fin2-input--sm js-finm-reparto">' +
+        '<option value="">No se reparte</option>' + cat_.repartos.map(function (r) { return '<option value="' + txt(r.id) + '"' + (r.id === elegido ? ' selected' : '') + '>' + txt(r.nombre) + '</option>'; }).join('') + '</select>', false);
     }
-    return h || '<span class="fin2-ayuda">—</span>';
+    return h || '<span class="fin2-ayuda">No pide más datos.</span>';
   }
-  function leerFila(tr) {
-    var q = function (s) { var e = tr.querySelector(s); return e ? e.value.trim() : ''; };
+  function campoP(etiqueta, control, enParte) {
+    return enParte ? control : '<label class="fin2-campo"><span>' + txt(etiqueta) + '</span>' + control + '</label>';
+  }
+  function leerFila(el) {
+    var q = function (s) { var e = el.querySelector(s); return e ? e.value.trim() : ''; };
+    var t = el.querySelector('.js-finm-tipo:checked') || el.querySelector('select.js-finm-tipo');
     var nombre = q('.js-finm-cliente');
     var cli = nombre ? cat_.clientes.filter(function (c) { return c.nombre === nombre; })[0] : null;
     var rep = q('.js-finm-reparto');
     var preset = rep && cat_.repartos ? cat_.repartos.filter(function (r) { return r.id === rep; })[0] : null;
-    return { id: tr.dataset.id, tipo: q('.js-finm-tipo'), cuenta: q('.js-finm-cuenta'), cliente_id: cli ? cli.id : '', empresa: q('.js-finm-empresa'), reparto: preset ? preset.empresas : [], nota: q('.js-finm-nota'), _clienteEscrito: nombre && !cli };
+    return { id: el.dataset.id, tipo: t ? t.value : '', cuenta: q('.js-finm-cuenta'), cliente_id: cli ? cli.id : '', empresa: q('.js-finm-empresa'), reparto: preset ? preset.empresas : [], nota: q('.js-finm-nota'), _clienteEscrito: nombre && !cli };
+  }
+  function desdeSugerencia(m) {
+    var s = m.sugerencia || {};
+    return { id: m.id, tipo: s.tipo, cuenta: s.cuenta, cliente_id: s.cliente_id, empresa: s.empresa, reparto: s.reparto || [], nota: '' };
   }
   function guardar(items) {
     var malos = items.filter(function (i) { return i._clienteEscrito; });
-    if (malos.length) { aviso('Hay un cliente escrito que no está en la lista de SIGSO. Elígelo de la lista.'); return Promise.resolve(); }
+    if (malos.length) { aviso('Hay un cliente escrito que no está en la lista de SIGSO. Elígelo de la lista.'); return Promise.resolve(null); }
+    items = items.map(function (i) { var o = Object.assign({}, i); delete o._clienteEscrito; return o; });
     return x_.api('finanzasClasificar', { items: items }).then(function (r) {
-      if (!r || !r.ok) { if (r && !r.boveda_cerrada) aviso((r && r.message) || 'No se pudo guardar.'); return; }
+      if (!r || !r.ok) { if (r && !r.boveda_cerrada) aviso((r && r.message) || 'No se pudo guardar.'); return null; }
       var e = r.data.errores || [];
       e.forEach(function (er) { var tr = document.querySelector('.fin2-mov[data-id="' + er.id + '"]'); if (tr) { tr.classList.add('fin2-mov--error'); tr.title = er.mensaje; } });
       aviso(r.data.hechos + ' guardado(s)' + (r.data.reglas ? ' · el sistema aprendió ' + r.data.reglas + ' glosa(s)' : '') + (e.length ? ' · ' + e.length + ' con error: ' + e[0].mensaje : ''));
-      if (r.data.hechos) recargar();
+      if (r.data.hechos) return recargar().then(function () { return r.data; });
+      return r.data;
     });
   }
   function recargar() {
@@ -504,10 +497,177 @@
     var n = Object.keys(mov_.sel).filter(function (k) { return mov_.sel[k]; }).length;
     var b = document.querySelector('.js-finm-conf-sel'); if (b) { b.disabled = !n; b.lastChild.textContent = n ? 'Confirmar marcadas (' + n + ')' : 'Confirmar marcadas'; }
   }
+  function refrescarLista() {
+    var l = document.querySelector('.js-finm-lista'); if (l) l.innerHTML = listaHtml();
+    document.querySelectorAll('.js-finm-filtro').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.id === mov_.filtro ? 'true' : 'false'); });
+    actualizarSel();
+  }
+
+  // --- Panel lateral: todo lo del movimiento y el formulario -----------------------------
+  function movDe(id) { return ((mov_.datos && mov_.datos.movimientos) || []).filter(function (m) { return m.id === id; })[0]; }
+  function vecino(id, paso) {
+    var l = visibles(), i = l.map(function (m) { return m.id; }).indexOf(id);
+    return i === -1 ? null : l[i + paso] || null;
+  }
+  function abrirPanel(id) {
+    var m = movDe(id); if (!m) return;
+    var c = m.estado === 'CONFIRMADO' && m.clasif ? m.clasif : (m.sugerencia || {});
+    var sentido = sentidoDe(m);
+    var tipos = cat_.tipos.filter(function (t) { return !t.sentido || t.sentido === sentido; });
+    var l = visibles(), pos = l.map(function (x) { return x.id; }).indexOf(id);
+    var s = m.sugerencia || {};
+    var sug = m.estado === 'CONFIRMADO'
+      ? '<div class="fin2-p-caja fin2-p-caja--ok">' + U.ico('check', 16) + '<span>Confirmado por <b>' + txt(m.actualizado_por) + '</b>' + (resumenClasif(m.clasif) ? ': ' + txt(resumenClasif(m.clasif)) : '') + '. Puedes cambiarlo.</span></div>'
+      : s.motivo ? '<div class="fin2-p-caja fin2-p-caja--' + ({ alta: 'ok', media: 'info' }[s.certeza] || 'alerta') + '">' + U.ico(s.certeza === 'baja' || !s.certeza ? 'alerta' : 'bombilla', 16) +
+        '<span><b>' + (s.certeza === 'alta' ? 'El sistema está seguro' : s.certeza === 'media' ? 'Propuesta del sistema' : 'Ojo') + ':</b> ' + txt(s.motivo) + '</span></div>' : '';
+    var cuerpo = '<div class="fin2-p" data-id="' + txt(m.id) + '">' +
+      '<div class="fin2-p-monto ' + (m.abono ? 'fin2-pos' : '') + '">' + (m.abono ? '+' : '−') + plata(m.abono || m.cargo) + '<small>' + (m.abono ? 'entró' : 'salió') + ' el ' + txt(fechaCorta(m.fecha)) + ' · ' + txt((m.cuenta || {}).banco + ' ···' + (m.cuenta || {}).ultimos4) + '</small></div>' +
+      '<section class="fin2-p-sec"><h3>Lo que dice el banco</h3><p class="fin2-glosa">' + txt(m.glosa) + (m.doc ? ' <span class="fin2-ayuda">· doc. ' + txt(m.doc) + '</span>' : '') + '</p>' + pistas(m) + '</section>' +
+      sug +
+      '<section class="fin2-p-sec"><h3>¿Qué es?</h3><div class="fin2-tipos" role="radiogroup">' + tipos.map(function (t) {
+        return '<label class="fin2-tipo-op"><input type="radio" name="finm-tipo" class="js-finm-tipo" value="' + txt(t.id) + '"' + (t.id === c.tipo ? ' checked' : '') + '>' +
+          '<span><b>' + txt(t.nombre) + '</b><small>' + txt(AYUDA_TIPO[t.id] || '') + '</small></span></label>';
+      }).join('') + '</div></section>' +
+      '<section class="fin2-p-sec js-finm-det">' + (c.partes ? '' : detalle(c)) + '</section>' +
+      '<label class="fin2-campo"><span>Nota (opcional)</span><input class="fin2-input fin2-input--sm js-finm-nota" value="' + txt(c.nota || '') + '" maxlength="300" placeholder="Ej.: pagó la hija del cliente"></label>' +
+      '<div class="js-finm-zona-dividir">' + (c.partes ? cajaDividir(m, c.partes) : '<button type="button" class="fin2-enlace js-finm-dividir">' + U.ico('derivar', 14) + 'Esta transferencia es de varios clientes o conceptos: dividirla</button>') + '</div>' +
+    '</div>';
+    var pie = '<span class="fin2-ayuda">' + (pos === -1 ? '' : (pos + 1) + ' de ' + l.length) + '</span>' +
+      U.boton({ soloIcono: true, icono: 'arriba', sm: true, variante: 'fantasma', titulo: 'Anterior', clase: 'js-finm-p-ant', deshabilitado: pos <= 0 }) +
+      U.boton({ soloIcono: true, icono: 'abajo', sm: true, variante: 'fantasma', titulo: 'Siguiente', clase: 'js-finm-p-sig', deshabilitado: pos === -1 || pos >= l.length - 1 }) +
+      U.boton({ texto: 'Guardar', icono: 'check', clase: 'js-finm-p-ok' }) +
+      U.boton({ texto: 'Guardar y siguiente', icono: 'derecha', variante: 'primario', clase: 'js-finm-p-ok-sig' });
+    var previo = panel_;
+    panel_ = { id: id };
+    panel_.api = U.drawer({ titulo: m.abono ? 'Entrada de plata' : 'Salida de plata', subtitulo: '<span class="fin2-ayuda">' + txt(mesTexto(mov_.periodo)) + '</span>', cuerpo: cuerpo, pie: pie,
+      alCerrar: function () { if (panel_ && panel_.id === id && !panel_.cambiando) { panel_ = null; marcarAbierto(); } } });
+    void previo;
+    panel_.api.el.classList.add('fin2-panel');
+    enlazarPanel(panel_.api.el);
+    var cajaYa = panel_.api.el.querySelector('.fin2-dividir'); if (cajaYa) faltaDividir(cajaYa);
+    marcarAbierto();
+    var fila_ = document.querySelector('.fin2-mov[data-id="' + id + '"]'); if (fila_ && fila_.scrollIntoView) fila_.scrollIntoView({ block: 'nearest' });
+  }
+  function marcarAbierto() {
+    document.querySelectorAll('.fin2-mov--abierto').forEach(function (e) { e.classList.remove('fin2-mov--abierto'); });
+    if (panel_) { var f = document.querySelector('.fin2-mov[data-id="' + panel_.id + '"]'); if (f) f.classList.add('fin2-mov--abierto'); }
+  }
+  function cambiarPanel(id) { if (panel_) panel_.cambiando = true; abrirPanel(id); }
+  function guardarPanel(el, siguiente) {
+    var id = el.dataset.id;
+    var sig = vecino(id, 1);
+    var caja = el.querySelector('.fin2-dividir');
+    var p = caja ? guardarDividir(caja) : guardar([leerFila(el)]);
+    if (!p) return;
+    p.then(function (res) {
+      if (!res || !res.hechos) return;
+      if (!siguiente) { if (panel_) { panel_.cambiando = false; panel_.api.cerrar(); } return; }
+      // El siguiente de la lista (si el filtro sacó al actual, el que venía después).
+      var prox = sig && movDe(sig.id) ? sig.id : (visibles()[0] || {}).id;
+      if (prox && prox !== id) cambiarPanel(prox); else if (panel_) { panel_.api.cerrar(); aviso('Listo: no quedan más en esta vista.'); }
+    });
+  }
+
+  // --- Dividir: una transferencia que paga a varios clientes o mezcla conceptos --------
+  function parte(p, sentido) {
+    var tipos = cat_.tipos.filter(function (t) { return !t.sentido || t.sentido === sentido; });
+    return '<div class="fin2-parte js-finm-parte">' +
+      '<input class="fin2-input fin2-input--sm fin2-der js-finm-pmonto" inputmode="numeric" placeholder="Monto" aria-label="Monto de la parte" value="' + (p.monto ? Math.round(p.monto).toLocaleString('es-CL') : '') + '">' +
+      '<select class="fin2-input fin2-input--sm js-finm-ptipo" aria-label="Qué es esta parte">' + opciones(tipos, p.tipo || '', '¿Qué es?') + '</select>' +
+      '<span class="fin2-parte__det js-finm-pdet">' + detalle(p, true) + '</span>' +
+      U.boton({ soloIcono: true, icono: 'equis', sm: true, variante: 'fantasma', titulo: 'Quitar esta parte', clase: 'js-finm-pquitar' }) + '</div>';
+  }
+  function cajaDividir(m, base) {
+    return '<div class="fin2-dividir" data-total="' + (m.abono || m.cargo) + '" data-sentido="' + sentidoDe(m) + '">' +
+      '<h3>Dividir ' + plata(m.abono || m.cargo) + '</h3>' +
+      '<p class="fin2-ayuda">Por ejemplo, una transferencia que paga a dos clientes, o que trae honorario y plata para imposiciones. Las partes tienen que sumar exacto.</p>' +
+      '<div class="js-finm-partes">' + base.map(function (p) { return parte(p, sentidoDe(m)); }).join('') + '</div>' +
+      '<div class="fin2-acciones" style="align-items:center;justify-content:space-between">' + U.boton({ texto: 'Agregar parte', icono: 'mas', sm: true, clase: 'js-finm-pmas' }) +
+        '<span class="fin2-ayuda js-finm-pfalta"></span>' + U.boton({ texto: 'No dividir', sm: true, variante: 'fantasma', clase: 'js-finm-pcancelar' }) + '</div></div>';
+  }
+  function abrirDividir(el) {
+    var m = movDe(el.dataset.id); if (!m) return;
+    var f = leerFila(el);
+    var base = [{ monto: 0, tipo: f.tipo, cuenta: f.cuenta, cliente: (el.querySelector('.js-finm-cliente') || {}).value || '', empresa: f.empresa }, { monto: 0, tipo: f.tipo }];
+    el.querySelector('.js-finm-zona-dividir').innerHTML = cajaDividir(m, base);
+    el.querySelector('.js-finm-det').hidden = true;
+    faltaDividir(el.querySelector('.fin2-dividir'));
+  }
+  function montoDe(v) { return Number(String(v || '').replace(/[^0-9]/g, '')) || 0; }
+  function faltaDividir(caja) {
+    var total = Number(caja.dataset.total), suma = 0;
+    caja.querySelectorAll('.js-finm-pmonto').forEach(function (i) { suma += montoDe(i.value); });
+    var el = caja.querySelector('.js-finm-pfalta'), dif = total - suma;
+    el.innerHTML = dif === 0 ? '<span class="fin2-pos">✓ Suma exacta</span>' : dif > 0 ? 'Falta asignar <b>' + plata(dif) + '</b>' : '<span class="fin2-neg">Te pasaste por ' + plata(-dif) + '</span>';
+    caja.dataset.cuadra = dif === 0 ? '1' : '';
+  }
+  function guardarDividir(caja) {
+    var el = caja.closest('.fin2-p');
+    if (!caja.dataset.cuadra) { aviso('Las partes tienen que sumar exacto el monto del movimiento.'); return null; }
+    var partes = [], malo = '';
+    caja.querySelectorAll('.js-finm-parte').forEach(function (d) {
+      var q = function (s) { var e = d.querySelector(s); return e ? e.value.trim() : ''; };
+      var nombre = q('.js-finm-cliente');
+      var cli = nombre ? cat_.clientes.filter(function (c) { return c.nombre === nombre; })[0] : null;
+      if (nombre && !cli) malo = 'El cliente «' + nombre + '» no está en la lista de SIGSO.';
+      if (!q('.js-finm-ptipo')) malo = malo || 'Cada parte necesita decir qué es.';
+      partes.push({ monto: montoDe(q('.js-finm-pmonto')), tipo: q('.js-finm-ptipo'), cuenta: q('.js-finm-cuenta'), cliente_id: cli ? cli.id : '', empresa: q('.js-finm-empresa') });
+    });
+    if (partes.length < 2) malo = malo || 'Para dividir se necesitan al menos dos partes.';
+    if (malo) { aviso(malo); return null; }
+    var nota = el.querySelector('.js-finm-nota') ? el.querySelector('.js-finm-nota').value.trim() : '';
+    return guardar([{ id: el.dataset.id, partes: partes, nota: nota }]);
+  }
 
   // =====================================================================================
-  // Eventos (una sola vez, sobre la raíz del módulo)
+  // Eventos (una sola vez, sobre la raíz del módulo; el panel tiene los suyos)
   // =====================================================================================
+  function enlazarPanel(el) {
+    el.addEventListener('change', function (ev) {
+      var e = ev.target;
+      if (e.classList.contains('js-finm-tipo')) {
+        var p = e.closest('.fin2-p'), det = p.querySelector('.js-finm-det');
+        det.innerHTML = detalle({ tipo: e.value, cuenta: (p.querySelector('.js-finm-cuenta') || {}).value, cliente: (p.querySelector('.js-finm-cliente') || {}).value || '', empresa: (p.querySelector('.js-finm-empresa') || {}).value });
+        var foco = det.querySelector('select, input'); if (foco) foco.focus();
+      } else if (e.classList.contains('js-finm-ptipo')) {
+        var dp = e.closest('.js-finm-parte');
+        dp.querySelector('.js-finm-pdet').innerHTML = detalle({ tipo: e.value, cliente: (dp.querySelector('.js-finm-cliente') || {}).value || '' }, true);
+      }
+    });
+    el.addEventListener('input', function (ev) {
+      if (ev.target.classList.contains('js-finm-pmonto')) faltaDividir(ev.target.closest('.fin2-dividir'));
+    });
+    el.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && ev.target.tagName !== 'BUTTON' && ev.target.tagName !== 'TEXTAREA' && ev.target.closest('.fin2-p')) {
+        ev.preventDefault(); guardarPanel(ev.target.closest('.fin2-p'), true);
+      }
+    });
+    el.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button');
+      if (!b) return;
+      var p = el.querySelector('.fin2-p');
+      if (b.classList.contains('js-finm-p-ok')) guardarPanel(p, false);
+      else if (b.classList.contains('js-finm-p-ok-sig')) guardarPanel(p, true);
+      else if (b.classList.contains('js-finm-p-sig')) { var s = vecino(p.dataset.id, 1); if (s) cambiarPanel(s.id); }
+      else if (b.classList.contains('js-finm-p-ant')) { var a = vecino(p.dataset.id, -1); if (a) cambiarPanel(a.id); }
+      else if (b.classList.contains('js-finm-opc')) {
+        var inp = p.querySelector('.js-finm-cliente');
+        if (inp) { inp.value = b.dataset.cliente; inp.focus(); } else aviso('Primero elige qué es el movimiento.');
+      }
+      else if (b.classList.contains('js-finm-dividir')) abrirDividir(p);
+      else if (b.classList.contains('js-finm-pmas')) {
+        var cj = b.closest('.fin2-dividir');
+        cj.querySelector('.js-finm-partes').insertAdjacentHTML('beforeend', parte({}, cj.dataset.sentido)); faltaDividir(cj);
+      }
+      else if (b.classList.contains('js-finm-pquitar')) { var cq = b.closest('.fin2-dividir'); b.closest('.js-finm-parte').remove(); faltaDividir(cq); }
+      else if (b.classList.contains('js-finm-pcancelar')) {
+        p.querySelector('.js-finm-zona-dividir').innerHTML = '<button type="button" class="fin2-enlace js-finm-dividir">' + U.ico('derivar', 14) + 'Esta transferencia es de varios clientes o conceptos: dividirla</button>';
+        var det = p.querySelector('.js-finm-det'); det.hidden = false;
+        var t = p.querySelector('.js-finm-tipo:checked'); det.innerHTML = detalle({ tipo: t ? t.value : '' });
+      }
+    });
+  }
+
   var enlazado_ = false;
   function enlazar() {
     var raiz = x_.raiz();
@@ -524,71 +684,62 @@
       else if (e.classList.contains('js-finb-planilla')) { if (e.files[0]) aprender(e.files[0]); e.value = ''; }
       else if (e.classList.contains('js-finb-empresa')) { revisiones_[Number(e.dataset.i)].empresa = e.value; }
       else if (e.classList.contains('js-finm-mes')) { mov_.periodo = e.value; verMovimientos(x_); }
-      else if (e.classList.contains('js-finm-tipo')) {
-        var tr = e.closest('tr'); var actual = leerFila(tr);
-        tr.querySelector('.js-finm-det').innerHTML = detalle({ tipo: e.value, cuenta: actual.cuenta, cliente: tr.querySelector('.js-finm-cliente') ? tr.querySelector('.js-finm-cliente').value : '', empresa: actual.empresa });
-      } else if (e.classList.contains('js-finm-ptipo')) {
-        var dp = e.closest('.js-finm-parte');
-        dp.querySelector('.js-finm-pdet').innerHTML = detalle({ tipo: e.value, cliente: (dp.querySelector('.js-finm-cliente') || {}).value || '' }, true);
-      } else if (e.classList.contains('js-finm-chk')) { mov_.sel[e.closest('tr').dataset.id] = e.checked; actualizarSel(); }
+      else if (e.classList.contains('js-finm-chk')) { mov_.sel[e.closest('.fin2-mov').dataset.id] = e.checked; actualizarSel(); }
       else if (e.classList.contains('js-finm-todos')) {
-        document.querySelectorAll('.js-finm-chk:not(:disabled)').forEach(function (c) { c.checked = e.checked; mov_.sel[c.closest('tr').dataset.id] = e.checked; });
+        document.querySelectorAll('.js-finm-chk:not(:disabled)').forEach(function (c) { c.checked = e.checked; mov_.sel[c.closest('.fin2-mov').dataset.id] = e.checked; });
         actualizarSel();
       }
     });
+    var buscaT = null;
     raiz.addEventListener('input', function (ev) {
-      if (ev.target.classList.contains('js-finm-pmonto')) faltaDividir(ev.target.closest('.fin2-dividir'));
+      if (ev.target.classList.contains('js-finm-busca')) {
+        clearTimeout(buscaT); var v = ev.target.value;
+        buscaT = setTimeout(function () { mov_.busca = v; refrescarLista(); }, 150);
+      }
     });
     raiz.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter' && ev.target.closest && ev.target.closest('.fin2-mov') && !ev.target.closest('[data-dividido]') && ev.target.tagName !== 'BUTTON') {
-        ev.preventDefault(); guardar([leerFila(ev.target.closest('.fin2-mov'))]);
+      var f = ev.target.classList && ev.target.classList.contains('fin2-mov') ? ev.target : null;
+      if (!f) return;
+      if (ev.key === 'Enter') { ev.preventDefault(); abrirPanel(f.dataset.id); }
+      else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        var otro = ev.key === 'ArrowDown' ? f.nextElementSibling : f.previousElementSibling;
+        if (otro && otro.classList.contains('fin2-mov')) otro.focus();
       }
     });
     raiz.addEventListener('click', function (ev) {
       var b = ev.target.closest('button');
-      if (!b) return;
+      if (!b) {
+        // Tocar una fila (fuera del casillero) abre el panel.
+        var fm = ev.target.closest('.fin2-mov');
+        if (fm && !ev.target.closest('.fin2-chk')) abrirPanel(fm.dataset.id);
+        return;
+      }
       if (b.classList.contains('js-finb-importar')) { b.disabled = true; importar(); }
+      else if (b.classList.contains('js-finb-descartar')) { revisiones_ = []; pintarRevisiones(); }
       else if (b.classList.contains('js-finb-excel-si')) { guardarExcel(b); }
       else if (b.classList.contains('js-finb-det-si')) { var dp_ = detallePendiente_; detallePendiente_ = null; if (dp_) subirDetalle(dp_, (document.querySelector('.js-finb-det-cuenta') || {}).value); }
       else if (b.classList.contains('js-finb-det-no')) { detallePendiente_ = null; document.getElementById('finb-nombres').innerHTML = ''; }
       else if (b.classList.contains('js-finb-excel-no')) { excel_ = null; pintarNombres(); }
-      else if (b.classList.contains('js-finb-descartar')) { revisiones_ = []; pintarRevisiones(); }
       else if (b.classList.contains('js-finb-ir-mov')) { mov_.filtro = 'pendientes'; x_.ir('movimientos'); }
       else if (b.classList.contains('js-finb-ir-bancos')) { x_.ir('bancos'); }
-      else if (b.classList.contains('js-finm-filtro') && b.dataset.id) { mov_.filtro = b.dataset.id; mov_.sel = {}; pintarMovimientos(); }
-      else if (b.classList.contains('js-finm-ok')) { guardar([leerFila(b.closest('tr'))]); }
-      else if (b.classList.contains('js-finm-dividir')) { abrirDividir(b.closest('tr')); }
-      else if (b.classList.contains('js-finm-opc')) {
-        var trc = b.closest('tr'), inp = trc.querySelector('.js-finm-cliente');
-        if (inp) { inp.value = b.dataset.cliente; inp.focus(); } else aviso('Primero elige qué es el movimiento.');
-      }
-      else if (b.classList.contains('js-finm-pmas')) {
-        var cj = b.closest('.fin2-dividir');
-        cj.querySelector('.js-finm-partes').insertAdjacentHTML('beforeend', parte({}, cj.dataset.sentido)); faltaDividir(cj);
-      }
-      else if (b.classList.contains('js-finm-pquitar')) { var cq = b.closest('.fin2-dividir'); b.closest('.js-finm-parte').remove(); faltaDividir(cq); }
-      else if (b.classList.contains('js-finm-pcancelar')) { b.closest('.fin2-dividir').remove(); }
-      else if (b.classList.contains('js-finm-pok')) { guardarDividir(b.closest('.fin2-dividir')); }
+      else if (b.classList.contains('js-finm-filtro') && b.dataset.id) { mov_.filtro = b.dataset.id; mov_.sel = {}; refrescarLista(); }
+      else if (b.classList.contains('js-finm-abrir')) { abrirPanel(b.closest('.fin2-mov').dataset.id); }
+      else if (b.classList.contains('js-finm-aceptar')) { var m0 = movDe(b.closest('.fin2-mov').dataset.id); if (m0) { b.disabled = true; guardar([desdeSugerencia(m0)]); } }
       else if (b.classList.contains('js-finm-seguras')) {
         b.disabled = true;
         x_.api('finanzasConfirmarSugeridas', { periodo: mov_.periodo }).then(function (r) {
           if (r && r.ok) { aviso(r.data.hechos + ' movimiento(s) confirmados.'); recargar(); }
         });
       } else if (b.classList.contains('js-finm-marcar')) {
-        document.querySelectorAll('.fin2-mov').forEach(function (tr) {
-          var f = leerFila(tr), t = tipo(f.tipo), chk = tr.querySelector('.js-finm-chk');
-          if (!chk || chk.disabled || !t) return;
-          var ok = (!t.cuentas.length || f.cuenta) && (!t.cliente || f.cliente_id) && (!t.empresa || f.empresa);
-          if (ok) { chk.checked = true; mov_.sel[tr.dataset.id] = true; }
-        });
+        document.querySelectorAll('.fin2-mov .js-finm-chk:not(:disabled)').forEach(function (chk) { chk.checked = true; mov_.sel[chk.closest('.fin2-mov').dataset.id] = true; });
         actualizarSel();
       } else if (b.classList.contains('js-finm-conf-sel')) {
-        var items = [];
-        document.querySelectorAll('.fin2-mov').forEach(function (tr) { if (mov_.sel[tr.dataset.id]) items.push(leerFila(tr)); });
+        var items = Object.keys(mov_.sel).filter(function (k) { return mov_.sel[k]; }).map(movDe).filter(Boolean).map(desdeSugerencia);
         if (items.length) { b.disabled = true; guardar(items); }
       }
     });
   }
 
-  window.SigsoFinanzasBancos = { verBancos: verBancos, verMovimientos: verMovimientos };
+  window.SigsoFinanzasBancos = { verBancos: verBancos, verMovimientos: verMovimientos, periodo: function (p) { if (p) mov_.periodo = p; mov_.filtro = 'pendientes'; } };
 })();
