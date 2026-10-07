@@ -328,3 +328,21 @@
 .fin2-retiro-man span { display: block; }
 .fin2-estado-retiro.sx2-tono-info { background: var(--fin-suave); }
 .fin2-estado-retiro.sx2-tono-alerta { background: color-mix(in srgb, var(--sx-alerta) 12%, transparent); }
+
+/* Etapa A: detalle del banco, Excel BANCOS, opciones de pagador y dividir ---------- */
+.fin2-subir--2 .fin2-subir__ico { color: var(--fin2-s3); }
+.fin2-pista { display: flex; align-items: center; gap: 4px; font-size: .75rem; color: var(--sx-texto-2); margin-top: 3px; line-height: 1.3; }
+.fin2-pista svg { flex: none; opacity: .7; }
+.fin2-opciones { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: .75rem; color: var(--sx-texto-3); margin-top: 4px; }
+.fin2-chip { border: 1px solid var(--sx-borde); background: var(--fin-suave); color: var(--sx-texto); border-radius: 999px; padding: 2px 8px; font: inherit; font-size: .75rem; cursor: pointer; }
+.fin2-chip:hover, .fin2-chip:focus-visible { border-color: var(--fin); outline: none; }
+.fin2-acc { white-space: nowrap; }
+.fin2-dividir > td { background: var(--fin-suave); }
+.fin2-dividir__caja { display: flex; flex-direction: column; gap: 8px; padding: 6px 4px; }
+.fin2-parte { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.fin2-parte .js-finm-pmonto { width: 120px; }
+.fin2-parte__det { display: contents; }
+.fin2-partes-lista { margin: 0; padding: 0; list-style: none; font-size: .8125rem; }
+.fin2-partes-lista li + li { margin-top: 2px; }
+.fin2-nombres td { vertical-align: middle; }
+.fin2-nombres .fin2-input { min-width: 0; width: 100%; }

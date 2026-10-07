@@ -48,7 +48,7 @@ const NOMBRES_EMPRESA = {
   HomePrevise: ['HOMEPREVISE', 'HOME PREVISE'],
   GDE: ['GDE '],
   RLD: ['RLD '],
-  'Virtual Base': ['VIRTUAL BASE']
+  'Virtual Base': ['VIRTUAL BASE', 'VIRTUAL BAAS']
 };
 const TIPOS = {
   INGRESO: { nombre: 'Ingreso de la empresa', sentido: 'abono' },
@@ -256,6 +256,12 @@ function sugerir_(m, ctx) {
   const sentido = m.abono > 0 ? 'abono' : 'cargo';
   const base = { tipo: '', cuenta: '', cliente_id: '', cliente: '', empresa: '', nota: '', certeza: 'baja', motivo: '' };
   const g = normalizar_(m.glosa);
+  // 0) Cobros del banco.
+  if (/^COMISION|^IMPUESTO|^INTERES|MANTENCION/.test(g) && sentido === 'cargo') return Object.assign(base, { tipo: 'EGRESO', cuenta: 'Comisión Banco', certeza: 'alta', motivo: 'Cobro del banco' });
+  // Etapa A: lo que anotaron en el Excel BANCOS, el pagador conocido y el detalle del banco
+  // (nombre completo, Previred/SII/Tesorería) mandan sobre la glosa cortada de la cartola.
+  const conPagador = require('./finanzasPagadores').sugerirConPagador_(m, ctx, base);
+  if (conPagador) return conPagador;
   // 1) Regla aprendida para esta glosa exacta.
   const regla = ctx.reglas.get(huellaGlosa_(m.glosa));
   if (regla && (!TIPOS[regla.tipo] || !TIPOS[regla.tipo].sentido || TIPOS[regla.tipo].sentido === sentido)) {
@@ -267,7 +273,6 @@ function sugerir_(m, ctx) {
     });
   }
   // 2) Reglas fijas.
-  if (/^COMISION|^IMPUESTO|^INTERES|MANTENCION/.test(g) && sentido === 'cargo') return Object.assign(base, { tipo: 'EGRESO', cuenta: 'Comisión Banco', certeza: 'alta', motivo: 'Cobro del banco' });
   const emp = empresaEnGlosa_(m.glosa);
   if (emp && emp === ctx.empresa) return Object.assign(base, { tipo: 'TRASPASO', certeza: 'alta', motivo: 'Viene de otra cuenta de ' + emp });
   if (emp) return Object.assign(base, { tipo: 'PRESTAMO', empresa: emp, certeza: 'media', motivo: 'Movimiento con ' + emp });
@@ -314,12 +319,13 @@ function contextoSugerencias_(db, empresa) {
   // Último tipo confirmado por cliente (para "lo de la última vez").
   const tipoPorCliente = new Map();
   d.prepare("SELECT datos FROM FIN_MOVIMIENTOS WHERE estado = 'CONFIRMADO' ORDER BY fecha, orden").all().forEach((r) => {
-    const c = des_(r.datos).clasif;
-    if (c && c.cliente_id) tipoPorCliente.set(c.cliente_id, { tipo: c.tipo, cuenta: c.cuenta });
+    const dd = des_(r.datos);
+    require('./finanzasPagadores').piezas_(dd).forEach((p) => { const c = p.clasif; if (c && c.cliente_id && c.tipo) tipoPorCliente.set(c.cliente_id, { tipo: c.tipo, cuenta: c.cuenta }); });
   });
   let facturasPorMonto = null;
   try { facturasPorMonto = require('./finanzasCobranza').facturasPorMonto_(db); } catch (e) { facturasPorMonto = null; }
-  return { reglas, tipoPorCliente, clientes: clientes_(db), empresa, facturasPorMonto };
+  const extra = require('./finanzasPagadores').contextoPagadores_();
+  return { reglas, tipoPorCliente, clientes: clientes_(db), empresa, facturasPorMonto, pagadores: extra.pagadores, recibidos: extra.recibidos };
 }
 
 // ---------------------------------------------------------------- cuentas
@@ -419,6 +425,8 @@ function movimientoPublico_(r, cuentas) {
   return {
     id: r.id, fecha: r.fecha, estado: r.estado, glosa: d.glosa, doc: d.doc, cargo: d.cargo, abono: d.abono, saldo: d.saldo,
     cuenta: { banco: cu.banco, ultimos4: cu.ultimos4, empresa: cu.empresa }, sugerencia: d.sugerencia, clasif: d.clasif,
+    // Etapa A: lo que dice el detalle del banco (quién pagó, Previred/SII…) y lo que anotaron en el Excel BANCOS.
+    detalle: d.detalle || null, planilla: d.planilla ? { alias: d.planilla.alias, obs: d.planilla.obs, plan: d.planilla.plan } : null,
     actualizado_por: r.actualizado_por, actualizado_en: r.actualizado_en
   };
 }
@@ -448,8 +456,11 @@ function resumir_(lista) {
     const c = m.clasif;
     if (!c || m.estado !== 'CONFIRMADO') { r.pendientes++; r.pendiente_monto += m.abono || m.cargo; return; }
     r.confirmados++;
-    if (c.tipo === 'TRASPASO' || c.tipo === 'PRESTAMO') r[c.tipo + (m.abono ? '_ENTRA' : '_SALE')] += m.abono || m.cargo;
-    else r[c.tipo] += m.abono || m.cargo;
+    require('./finanzasPagadores').piezas_(m).forEach((p) => {
+      const t = p.clasif.tipo, monto = p.abono || p.cargo;
+      if (t === 'TRASPASO' || t === 'PRESTAMO') r[t + (p.abono ? '_ENTRA' : '_SALE')] += monto;
+      else if (r[t] !== undefined) r[t] += monto;
+    });
   });
   return r;
 }
@@ -501,13 +512,41 @@ const clasificar = B.conBoveda('', function (db, data, contexto, x) {
       // COMPARTIDOS de SIGECO). Solo EGRESO y con 2 o más empresas.
       const reparto = Array.isArray(it.reparto) ? [...new Set(it.reparto.map(texto_))].filter((e) => EMPRESAS.indexOf(e) !== -1) : [];
       if (c.tipo === 'EGRESO' && reparto.length >= 2) c.reparto = reparto;
-      const err = validarClasif_(c, datos);
-      if (err) { errores.push({ id: it.id, mensaje: err }); return; }
-      datos.clasif = c;
+      // Etapa A: dividir una transferencia entre varios clientes o tipos (la suma debe dar el total).
+      if (Array.isArray(it.partes) && it.partes.length >= 2) {
+        const total = datos.abono || datos.cargo;
+        const partes = [];
+        for (const p of it.partes.slice(0, 10)) {
+          const q = { monto: Math.round(Number(String(p.monto).replace(/[^0-9]/g, '')) || 0), tipo: texto_(p.tipo), cuenta: texto_(p.cuenta), cliente_id: texto_(p.cliente_id), empresa: texto_(p.empresa) };
+          if (!(q.monto > 0)) { errores.push({ id: it.id, mensaje: 'Cada parte necesita un monto.' }); return; }
+          if (q.cliente_id && !clientes.has(q.cliente_id)) { errores.push({ id: it.id, mensaje: 'Un cliente de las partes no existe en SIGSO.' }); return; }
+          q.cliente = q.cliente_id ? clientes.get(q.cliente_id) : '';
+          if (!TIPOS[q.tipo] || (!TIPOS[q.tipo].cliente && q.tipo !== 'INGRESO')) { q.cliente_id = ''; q.cliente = ''; }
+          if (!TIPOS[q.tipo] || !TIPOS[q.tipo].empresa) q.empresa = '';
+          if (!cuentasDe_(q.tipo).length) q.cuenta = '';
+          const e2 = validarClasif_(q, datos);
+          if (e2) { errores.push({ id: it.id, mensaje: 'Parte de $' + q.monto.toLocaleString('es-CL') + ': ' + e2 }); return; }
+          partes.push(q);
+        }
+        const suma = partes.reduce((a, q) => a + q.monto, 0);
+        if (suma !== total) { errores.push({ id: it.id, mensaje: 'Las partes suman $' + suma.toLocaleString('es-CL') + ' y el movimiento es de $' + total.toLocaleString('es-CL') + '.' }); return; }
+        datos.clasif = { partes, nota: c.nota };
+      } else {
+        const err = validarClasif_(c, datos);
+        if (err) { errores.push({ id: it.id, mensaje: err }); return; }
+        datos.clasif = c;
+      }
+      // El pagador aprende de qué cliente(s) era (una vez por movimiento).
+      const pagador = datos.detalle && datos.detalle.pagador;
+      if (pagador && datos.abono > 0 && !datos.pagador_aprendido) {
+        const P = require('./finanzasPagadores');
+        P.piezas_(datos).forEach((p) => { if (p.clasif && p.clasif.cliente_id) P.registrarPagador_(pagador, p.clasif.cliente_id, p.clasif.cliente, 'persona'); });
+        datos.pagador_aprendido = true;
+      }
       d.prepare("UPDATE FIN_MOVIMIENTOS SET estado = 'CONFIRMADO', datos = ?, actualizado_en = ?, actualizado_por = ? WHERE id = ?")
         .run(cif_(datos), ahora, x.nombre, r.id);
       hechos++;
-      if (it.recordar !== false && !esGenerica_(datos.glosa)) {
+      if (it.recordar !== false && !esGenerica_(datos.glosa) && !datos.clasif.partes && !(datos.detalle && datos.detalle.pagador)) {
         const h = huellaGlosa_(datos.glosa);
         const regla = { glosa: datos.glosa, clasif: { tipo: c.tipo, cuenta: c.cuenta, cliente_id: c.cliente_id, cliente: c.cliente, empresa: c.empresa, reparto: c.reparto, ambigua: ambigua_(datos.glosa, listaClientes) } };
         d.prepare("INSERT INTO FIN_REGLAS (id, huella, datos, origen, usos, actualizada_en) VALUES (?,?,?,'persona',1,?) " +
@@ -528,13 +567,20 @@ function resugerirPendientes_(db) {
   const d = db_();
   const cuentas = cuentasMapa_();
   const porEmpresa = {};
-  d.prepare("SELECT id, cuenta_ref, datos FROM FIN_MOVIMIENTOS WHERE estado = 'PENDIENTE'").all().forEach((r) => {
-    const emp = (cuentas.get(r.cuenta_ref) || {}).empresa || 'HomePymes';
-    const ctx = porEmpresa[emp] || (porEmpresa[emp] = contextoSugerencias_(db, emp));
-    const datos = des_(r.datos);
-    datos.sugerencia = sugerir_(datos, ctx);
-    d.prepare('UPDATE FIN_MOVIMIENTOS SET datos = ? WHERE id = ?').run(cif_(datos), r.id);
-  });
+  // Primero los abonos: un pago a Previred/SII busca al cliente entre lo recibido,
+  // y eso tiene que incluir lo que se acaba de reconocer en esta misma pasada.
+  d.prepare("SELECT id, cuenta_ref, fecha, datos FROM FIN_MOVIMIENTOS WHERE estado = 'PENDIENTE'").all()
+    .map((r) => Object.assign(r, { d: des_(r.datos) }))
+    .sort((x, y) => (y.d.abono > 0) - (x.d.abono > 0))
+    .forEach((r) => {
+      const emp = (cuentas.get(r.cuenta_ref) || {}).empresa || 'HomePymes';
+      const ctx = porEmpresa[emp] || (porEmpresa[emp] = contextoSugerencias_(db, emp));
+      const datos = r.d;
+      datos.sugerencia = sugerir_(Object.assign({ fecha: r.fecha }, datos), ctx);
+      const s = datos.sugerencia;
+      if (datos.abono > 0 && s && s.cliente_id && s.certeza !== 'baja' && ctx.recibidos) ctx.recibidos.push({ fecha: r.fecha, monto: datos.abono, cliente_id: s.cliente_id, cliente: s.cliente });
+      d.prepare('UPDATE FIN_MOVIMIENTOS SET datos = ? WHERE id = ?').run(cif_(datos), r.id);
+    });
 }
 
 /** Confirma de una vez todo lo que tiene sugerencia de certeza alta y completa. */
@@ -624,11 +670,13 @@ const resumenBancos = B.conBoveda('', function () {
   });
   const fondos = new Map();
   d.prepare("SELECT datos FROM FIN_MOVIMIENTOS WHERE estado = 'CONFIRMADO'").all().forEach((r) => {
-    const m = des_(r.datos), c = m.clasif;
-    if (!c || (c.tipo !== 'FONDO_RECIBIDO' && c.tipo !== 'FONDO_PAGADO')) return;
-    const f = fondos.get(c.cliente_id) || { cliente_id: c.cliente_id, cliente: c.cliente, recibido: 0, pagado: 0 };
-    if (c.tipo === 'FONDO_RECIBIDO') f.recibido += m.abono; else f.pagado += m.cargo;
-    fondos.set(c.cliente_id, f);
+    require('./finanzasPagadores').piezas_(des_(r.datos)).forEach((m) => {
+      const c = m.clasif;
+      if (!c || (c.tipo !== 'FONDO_RECIBIDO' && c.tipo !== 'FONDO_PAGADO')) return;
+      const f = fondos.get(c.cliente_id) || { cliente_id: c.cliente_id, cliente: c.cliente, recibido: 0, pagado: 0 };
+      if (c.tipo === 'FONDO_RECIBIDO') f.recibido += m.abono; else f.pagado += m.cargo;
+      fondos.set(c.cliente_id, f);
+    });
   });
   const pendientes = d.prepare("SELECT COUNT(*) AS n FROM FIN_MOVIMIENTOS WHERE estado = 'PENDIENTE'").get().n;
   const reglas = d.prepare('SELECT COUNT(*) AS n FROM FIN_REGLAS').get().n;
@@ -641,7 +689,8 @@ const resumenBancos = B.conBoveda('', function () {
 module.exports = {
   catalogo, revisarCartola, importarCartola, movimientos, clasificar, confirmarSugeridas, aprenderPlanilla, resumenBancos,
   // pruebas
-  leerCartola, sugerir_, esGenerica_, monto_, EMPRESAS, TIPOS,
+  leerCartola, sugerir_, esGenerica_, monto_, EMPRESAS, TIPOS, resugerirPendientes_, completa_, CUENTAS_EGRESO: CUENTAS.EGRESO,
+  empresaEnTexto_: (t) => empresaEnGlosa_(t),
   // compartido con finanzasCobranza.js
   interno: { db_, des_: (t) => des_(t), cif_: (o) => cif_(o), hmac_: (t) => hmac_(t), normalizar_, clientes_, fechaIso_, soloEscritura_, cuentasMapa_ }
 };

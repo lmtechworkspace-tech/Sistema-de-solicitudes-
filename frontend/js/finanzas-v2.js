@@ -34,7 +34,9 @@
     FACTURA_ANULADA: ['Anuló una factura', 'alerta'], FACTURA_INCOBRABLE: ['Marcó una factura incobrable', 'alerta'], FACTURA_VIGENTE: ['Reactivó una factura', 'info'],
     VER_PRESUPUESTO: ['Vio el presupuesto', 'info'], GUARDAR_PRESUPUESTO: ['Guardó el presupuesto', 'ok'],
     VER_CIERRE: ['Vio el cierre', 'info'], CERRAR_MES: ['Cerró un mes', 'ok'], REABRIR_MES: ['Reabrió un mes', 'alerta'],
-    PARALELO_PLANILLA: ['Comparó con la planilla SIGECO', 'info'], RETIRO_PASO: ['Marcó un paso del retiro', 'info']
+    PARALELO_PLANILLA: ['Comparó con la planilla SIGECO', 'info'], RETIRO_PASO: ['Marcó un paso del retiro', 'info'],
+    IMPORTAR_DETALLE: ['Subió el detalle del banco', 'ok'], GUARDAR_NOMBRES: ['Enseñó nombres del Excel BANCOS', 'ok'],
+    APRENDER_EXCEL_BANCOS: ['Aprendió del Excel BANCOS', 'ok']
   };
 
   function txt(v) { return U.esc(String(v == null ? '' : v)); }

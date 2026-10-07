@@ -42,11 +42,15 @@ function vacio_() { return { ingresos: 0, egresos: 0, resultado: 0, fondos_recib
 function movimientos_() {
   const d = I.db_();
   const cuentas = I.cuentasMapa_();
-  return d.prepare('SELECT cuenta_ref, fecha, periodo, orden, estado, datos FROM FIN_MOVIMIENTOS ORDER BY fecha, orden').all().map((r) => {
+  const P = require('./finanzasPagadores');
+  const out = [];
+  d.prepare('SELECT cuenta_ref, fecha, periodo, orden, estado, datos FROM FIN_MOVIMIENTOS ORDER BY fecha, orden').all().forEach((r) => {
     const m = I.des_(r.datos);
     const cu = cuentas.get(r.cuenta_ref) || {};
-    return { cuenta_ref: r.cuenta_ref, empresa: cu.empresa || '', banco: cu.banco, ultimos4: cu.ultimos4, fecha: r.fecha, periodo: r.periodo, estado: r.estado, abono: m.abono, cargo: m.cargo, saldo: m.saldo, clasif: r.estado === 'CONFIRMADO' ? m.clasif : null };
+    // Etapa A: una transferencia dividida entre clientes cuenta como sus partes (el saldo es el del movimiento).
+    P.piezas_(m, r.estado === 'CONFIRMADO' ? m.clasif : null).forEach((p) => out.push({ cuenta_ref: r.cuenta_ref, empresa: cu.empresa || '', banco: cu.banco, ultimos4: cu.ultimos4, fecha: r.fecha, periodo: r.periodo, estado: r.estado, abono: p.abono, cargo: p.cargo, saldo: m.saldo, clasif: p.clasif || null }));
   });
+  return out;
 }
 
 /**

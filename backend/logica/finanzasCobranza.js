@@ -107,11 +107,14 @@ function cartera_(db, opciones) {
     n.facturas.push(f);
   });
   d.prepare("SELECT fecha, datos FROM FIN_MOVIMIENTOS WHERE estado = 'CONFIRMADO' ORDER BY fecha, orden").all().forEach((r) => {
-    const m = I.des_(r.datos), c = m.clasif;
-    if (!c || c.tipo !== 'INGRESO' || !c.cliente_id || !(m.abono > 0)) return;
-    const cli = porId.get(c.cliente_id);
-    const n = nodo(c.cliente_id, { cliente_id: c.cliente_id, cliente: cli ? cli.nombre : c.cliente, rut: cli ? cli.rut : '' });
-    n.pagos.push({ fecha: r.fecha, monto: m.abono, glosa: m.glosa, nota: c.nota || '' });
+    const md = I.des_(r.datos);
+    require('./finanzasPagadores').piezas_(md).forEach((m) => {
+      const c = m.clasif;
+      if (!c || c.tipo !== 'INGRESO' || !c.cliente_id || !(m.abono > 0)) return;
+      const cli = porId.get(c.cliente_id);
+      const n = nodo(c.cliente_id, { cliente_id: c.cliente_id, cliente: cli ? cli.nombre : c.cliente, rut: cli ? cli.rut : '' });
+      n.pagos.push({ fecha: r.fecha, monto: m.abono, glosa: (md.detalle && md.detalle.descripcion) || md.glosa, nota: c.nota || '' });
+    });
   });
   mapa.forEach((n) => {
     n.creditos = n.pagos.reduce((s, p) => s + p.monto, 0) + n.notas_credito;
