@@ -68,7 +68,7 @@
   function pintar() {
     if (!raiz_ || !d_) return;
     if (vista_ === 'permisos' && !d_.puede_otorgar) vista_ = 'clientes';
-    raiz_.innerHTML = '<div class="sx2 sx2-pagina pc2 pc2-modulo">' + cabecera() + (vista_ === 'permisos' ? vistaPermisos() : vistaClientes()) + '</div>';
+    raiz_.innerHTML = '<div class="sx2 sx2-pagina pc2 pcl-modulo">' + cabecera() + (vista_ === 'permisos' ? vistaPermisos() : vistaClientes()) + '</div>';
     if (U.animar) U.animar(raiz_);
   }
 
@@ -87,17 +87,17 @@
     var q = filtro_.toLowerCase();
     var lista = cs.filter(function (c) { return !q || (c.razon_social + ' ' + c.rut).toLowerCase().indexOf(q) !== -1; });
     return kpis + U.card({ titulo: 'Clientes', sub: cs.length + '', sinRelleno: true, cuerpo:
-      '<div class="pc2-barra"><label class="sx2-buscar">' + U.ico('lupa', 16) + '<input class="sx2-input js-pc-buscar" type="search" placeholder="Buscar por nombre o RUT" value="' + txt(filtro_) + '"></label></div>' +
-      '<ul class="pc2-lista">' + lista.map(function (c) {
+      '<div class="pcl-barra"><label class="sx2-buscar">' + U.ico('lupa', 16) + '<input class="sx2-input js-pc-buscar" type="search" placeholder="Buscar por nombre o RUT" value="' + txt(filtro_) + '"></label></div>' +
+      '<ul class="pcl-lista">' + lista.map(function (c) {
         var rrhh = (c.encargados || []).filter(function (e) { return e.area === 'RRHH'; })[0];
-        return '<li><button type="button" class="pc2-fila js-pc-cliente" data-id="' + txt(c.cliente_id) + '">' +
-          '<span class="pc2-fila__ico">' + U.ico('empresa', 18) + '</span>' +
-          '<span class="pc2-fila__txt"><b>' + txt(c.razon_social) + '</b><small>' + txt(c.rut) + (rrhh ? ' · RR. HH.: ' + txt(rrhh.nombre) : ' · sin encargada de RR. HH.') + '</small></span>' +
-          '<span class="pc2-fila__dato"><span><b>' + c.activos + '</b> ' + (c.activos === 1 ? 'activa' : 'activas') + (c.invitados ? ' · ' + c.invitados + (c.invitados === 1 ? ' invitada' : ' invitadas') : '') + '</span><small>' + c.trabajadores + (c.trabajadores === 1 ? ' trabajador' : ' trabajadores') + '</small></span>' +
-          '<span class="pc2-fila__dato">Último ingreso<small>' + txt(hace(c.ultimo_ingreso)) + '</small></span>' +
+        return '<li><button type="button" class="pcl-fila js-pc-cliente" data-id="' + txt(c.cliente_id) + '">' +
+          '<span class="pcl-fila__ico">' + U.ico('empresa', 18) + '</span>' +
+          '<span class="pcl-fila__txt"><b>' + txt(c.razon_social) + '</b><small>' + txt(c.rut) + (rrhh ? ' · RR. HH.: ' + txt(rrhh.nombre) : ' · sin encargada de RR. HH.') + '</small></span>' +
+          '<span class="pcl-fila__dato"><span><b>' + c.activos + '</b> ' + (c.activos === 1 ? 'activa' : 'activas') + (c.invitados ? ' · ' + c.invitados + (c.invitados === 1 ? ' invitada' : ' invitadas') : '') + '</span><small>' + c.trabajadores + (c.trabajadores === 1 ? ' trabajador' : ' trabajadores') + '</small></span>' +
+          '<span class="pcl-fila__dato">Último ingreso<small>' + txt(hace(c.ultimo_ingreso)) + '</small></span>' +
           U.badge(c.habilitado ? 'Habilitado' : 'Deshabilitado', c.habilitado ? 'ok' : 'neutro') +
           U.ico('derecha', 16) + '</button></li>';
-      }).join('') + (lista.length ? '' : '<li class="pc2-nada">Nada con «' + txt(filtro_) + '».</li>') + '</ul>' });
+      }).join('') + (lista.length ? '' : '<li class="pcl-nada">Nada con «' + txt(filtro_) + '».</li>') + '</ul>' });
   }
 
   function vistaPermisos() {
@@ -105,11 +105,11 @@
     var nombre = {}; (d_.personal || []).forEach(function (p) { nombre[p.email] = p.nombre; });
     return U.card({ titulo: 'Quién administra el portal', icono: 'escudoCheck', cuerpo:
       '<p class="sx2-tenue" style="margin:0 0 12px">Tú (super administrador) siempre. Aquí decides quién más puede habilitar clientes, invitar personas y ver el registro.</p>' +
-      '<ul class="pc2-lista">' + (ps.length ? ps.map(function (p) {
-        return '<li class="pc2-fila pc2-fila--fija"><span class="pc2-fila__ico">' + U.ico('persona', 18) + '</span><span class="pc2-fila__txt"><b>' + txt(nombre[p.usuario_email] || p.usuario_email) + '</b><small>' + txt(p.usuario_email) + ' · desde ' + txt(fecha(p.fecha)) + '</small></span>' +
+      '<ul class="pcl-lista">' + (ps.length ? ps.map(function (p) {
+        return '<li class="pcl-fila pcl-fila--fija"><span class="pcl-fila__ico">' + U.ico('persona', 18) + '</span><span class="pcl-fila__txt"><b>' + txt(nombre[p.usuario_email] || p.usuario_email) + '</b><small>' + txt(p.usuario_email) + ' · desde ' + txt(fecha(p.fecha)) + '</small></span>' +
           U.boton({ texto: 'Quitar', sm: true, variante: 'fantasma', clase: 'js-pc-quitar-permiso', datos: { email: p.usuario_email } }) + '</li>';
-      }).join('') : '<li class="pc2-nada">Por ahora solo tú.</li>') + '</ul>' +
-      '<form class="pc2-otorgar js-pc-otorgar" novalidate><select class="sx2-select" name="email" aria-label="Persona"><option value="">Elige a una persona…</option>' +
+      }).join('') : '<li class="pcl-nada">Por ahora solo tú.</li>') + '</ul>' +
+      '<form class="pcl-otorgar js-pc-otorgar" novalidate><select class="sx2-select" name="email" aria-label="Persona"><option value="">Elige a una persona…</option>' +
         (d_.personal || []).filter(function (p) { return !ps.some(function (x) { return x.usuario_email === p.email; }); }).map(function (p) { return '<option value="' + txt(p.email) + '">' + txt(p.nombre) + ' · ' + txt(p.email) + '</option>'; }).join('') +
       '</select>' + U.boton({ texto: 'Dar permiso', icono: 'check', variante: 'primario', tipo: 'submit' }) + '</form>' });
   }
@@ -133,14 +133,14 @@
     var yaTienen = {}; (d_.clientes || []).forEach(function (c) { yaTienen[c.cliente_id] = true; });
     return (conSelector ? U.campo('Cliente', '<input class="sx2-input" name="buscar_cliente" list="pc-dl-clientes" placeholder="Escribe el nombre o RUT" autocomplete="off">' +
         '<datalist id="pc-dl-clientes">' + (d_.catalogo_clientes || []).filter(function (c) { return !yaTienen[c.cliente_id]; }).map(function (c) { return '<option value="' + txt(c.razon_social + ' · ' + c.rut) + '"></option>'; }).join('') + '</datalist>', 'Sale de la ficha de clientes de SIGSO (' + (d_.catalogo_clientes || []).length + ').') : '') +
-      '<label class="pc2-check"><input type="checkbox" name="habilitado"' + (perfil.habilitado !== false ? ' checked' : '') + '> Portal habilitado (si lo apagas, nadie de esta empresa puede entrar)</label>' +
-      '<fieldset class="pc2-fs"><legend>Qué tiene contratado</legend>' + (d_.areas || []).map(function (a) {
-        return '<label class="pc2-check"><input type="checkbox" name="srv_' + a.clave + '"' + ((perfil.servicios || []).indexOf(a.clave) !== -1 ? ' checked' : '') + '> ' + txt(a.nombre) + '</label>';
+      '<label class="pcl-check"><input type="checkbox" name="habilitado"' + (perfil.habilitado !== false ? ' checked' : '') + '> Portal habilitado (si lo apagas, nadie de esta empresa puede entrar)</label>' +
+      '<fieldset class="pcl-fs"><legend>Qué tiene contratado</legend>' + (d_.areas || []).map(function (a) {
+        return '<label class="pcl-check"><input type="checkbox" name="srv_' + a.clave + '"' + ((perfil.servicios || []).indexOf(a.clave) !== -1 ? ' checked' : '') + '> ' + txt(a.nombre) + '</label>';
       }).join('') + '</fieldset>' +
-      '<fieldset class="pc2-fs"><legend>Quién lo atiende en cada área</legend>' + (d_.areas || []).map(function (a) {
+      '<fieldset class="pcl-fs"><legend>Quién lo atiende en cada área</legend>' + (d_.areas || []).map(function (a) {
         return U.campo(a.nombre, '<select class="sx2-select" name="enc_' + a.clave + '">' + opcionesEncargado(a.clave, sugerida(a.clave)) + '</select>');
       }).join('') + '<p class="sx2-campo__ayuda">Lo que pida el contratista le llega directo a esta persona. Si queda «a la cola del área», lo reparte la jefatura.</p></fieldset>' +
-      '<div class="pc2-dos">' + U.campo('Correo de la empresa', '<input class="sx2-input" name="correo" type="email" value="' + txt(perfil.correo || '') + '">') +
+      '<div class="pcl-dos">' + U.campo('Correo de la empresa', '<input class="sx2-input" name="correo" type="email" value="' + txt(perfil.correo || '') + '">') +
         U.campo('Teléfono', '<input class="sx2-input" name="telefono" value="' + txt(perfil.telefono || '') + '" placeholder="+56 9 ...">') + '</div>' +
       U.campo('Dirección', '<input class="sx2-input" name="direccion" value="' + txt(perfil.direccion || '') + '">') +
       U.campo('Representante legal', '<input class="sx2-input" name="representante" value="' + txt(perfil.representante || '') + '">') +
@@ -174,7 +174,7 @@
   function abrirCliente(id, tab, despues) {
     fichaId_ = id; fichaTab_ = tab || 'personas';
     drawer_ = U.drawer({ titulo: 'Cliente', subtitulo: '', cuerpo: U.esqueleto('tabla', 6), pie: ' ' });
-    drawer_.el.classList.add('sx2-drawer--ancho', 'pc2-drawer');
+    drawer_.el.classList.add('sx2-drawer--ancho', 'pcl-drawer');
     api('portalAdmCliente', { cliente_id: id }).then(function (r) {
       if (!r || !r.ok) { drawer_.cuerpo(U.vacio({ icono: 'alerta', titulo: 'No se pudo abrir', texto: (r && r.message) || '' })); return; }
       ficha_ = r.data; pintarFicha();
@@ -192,19 +192,19 @@
     var tabs = [['personas', 'Personas (' + f.contactos.length + ')'], ['datos', 'Datos y encargados'], ['obras', 'Obras (' + f.obras.filter(function (o) { return o.activa !== false && o.activa !== 'false'; }).length + ')'],
       ['trabajadores', 'Trabajadores (' + f.trabajadores.filter(function (t) { return t.estado !== 'FINIQUITADO'; }).length + ')'], ['registro', 'Registro']];
     var cuerpo = fichaTab_ === 'datos' ? fichaDatos() : fichaTab_ === 'obras' ? fichaObras() : fichaTab_ === 'trabajadores' ? fichaTrabajadores() : fichaTab_ === 'registro' ? fichaRegistro() : fichaPersonas();
-    drawer_.cuerpo('<p class="pc2-sub">' + txt(f.cliente.rut) + ' · ' + U.badge(f.perfil.habilitado ? 'Portal habilitado' : 'Portal deshabilitado', f.perfil.habilitado ? 'ok' : 'neutro') + '</p>' +
+    drawer_.cuerpo('<p class="pcl-sub">' + txt(f.cliente.rut) + ' · ' + U.badge(f.perfil.habilitado ? 'Portal habilitado' : 'Portal deshabilitado', f.perfil.habilitado ? 'ok' : 'neutro') + '</p>' +
       '<div class="sx2-tabs" role="tablist">' + tabs.map(function (t) { return '<button type="button" class="sx2-tabs__op js-pc-tab" role="tab" data-tab="' + t[0] + '" aria-selected="' + (t[0] === fichaTab_) + '">' + txt(t[1]) + '</button>'; }).join('') + '</div>' + cuerpo);
   }
   function fichaPersonas() {
     var f = ficha_;
-    return '<div class="pc2-acciones">' + U.boton({ texto: 'Invitar a una persona', icono: 'nueva', variante: 'primario', clase: 'js-pc-invitar' }) + '</div>' +
+    return '<div class="pcl-acciones">' + U.boton({ texto: 'Invitar a una persona', icono: 'nueva', variante: 'primario', clase: 'js-pc-invitar' }) + '</div>' +
       '<div class="js-pc-invitacion"></div>' +
-      (f.contactos.length ? '<ul class="pc2-lista">' + f.contactos.map(function (c) {
+      (f.contactos.length ? '<ul class="pcl-lista">' + f.contactos.map(function (c) {
         var e = ESTADO_CONTACTO[c.estado] || [c.estado, 'neutro'];
-        return '<li class="pc2-persona"><div class="pc2-persona__cab"><span class="pc2-fila__txt"><b>' + txt(c.nombre) + '</b><small>' + txt(c.rut) + (c.cargo ? ' · ' + txt(c.cargo) : '') + (c.telefono ? ' · ' + txt(c.telefono) : '') + '</small></span>' +
+        return '<li class="pcl-persona"><div class="pcl-persona__cab"><span class="pcl-fila__txt"><b>' + txt(c.nombre) + '</b><small>' + txt(c.rut) + (c.cargo ? ' · ' + txt(c.cargo) : '') + (c.telefono ? ' · ' + txt(c.telefono) : '') + '</small></span>' +
           U.badge(c.rol === 'ADMIN' ? 'Administra la cuenta' : 'Colaborador', 'neutro', true) + U.badge(e[0], e[1]) + '</div>' +
-          '<p class="pc2-sub">' + (c.estado === 'INVITADO' ? (c.invitacion_vigente ? 'Invitación vigente: aún no elige su clave.' : 'La invitación venció: mándale una nueva.') : 'Último ingreso: ' + txt(c.ultimo_ingreso ? fecha(c.ultimo_ingreso, true) : 'nunca')) + '</p>' +
-          '<div class="pc2-acciones">' +
+          '<p class="pcl-sub">' + (c.estado === 'INVITADO' ? (c.invitacion_vigente ? 'Invitación vigente: aún no elige su clave.' : 'La invitación venció: mándale una nueva.') : 'Último ingreso: ' + txt(c.ultimo_ingreso ? fecha(c.ultimo_ingreso, true) : 'nunca')) + '</p>' +
+          '<div class="pcl-acciones">' +
             U.boton({ texto: c.estado === 'ACTIVO' ? 'Nueva clave (reinvitar)' : 'Reenviar invitación', icono: 'correo', sm: true, clase: 'js-pc-reinvitar', datos: { id: c.contacto_id } }) +
             (c.estado === 'BLOQUEADO' ? U.boton({ texto: 'Desbloquear', icono: 'check', sm: true, clase: 'js-pc-op', datos: { id: c.contacto_id, op: 'desbloquear' } })
               : U.boton({ texto: 'Bloquear', icono: 'candado', sm: true, variante: 'fantasma', clase: 'js-pc-op', datos: { id: c.contacto_id, op: 'bloquear' } })) +
@@ -215,51 +215,51 @@
   }
   function fichaDatos() {
     return '<form class="sx2-form js-pc-form-datos" novalidate>' + camposCliente(ficha_.perfil, false) +
-      '<p class="sx2-campo__error js-pc-error" hidden></p><div class="pc2-acciones">' + U.boton({ texto: 'Guardar', icono: 'check', variante: 'primario', tipo: 'submit' }) + '</div></form>' +
-      '<p class="pc2-sub">En la ficha de clientes de SIGSO: ' + txt([ficha_.cliente.contacto_ficha, ficha_.cliente.correo_ficha, ficha_.cliente.telefono_ficha].filter(Boolean).join(' · ') || 'sin contacto') + '</p>';
+      '<p class="sx2-campo__error js-pc-error" hidden></p><div class="pcl-acciones">' + U.boton({ texto: 'Guardar', icono: 'check', variante: 'primario', tipo: 'submit' }) + '</div></form>' +
+      '<p class="pcl-sub">En la ficha de clientes de SIGSO: ' + txt([ficha_.cliente.contacto_ficha, ficha_.cliente.correo_ficha, ficha_.cliente.telefono_ficha].filter(Boolean).join(' · ') || 'sin contacto') + '</p>';
   }
   function fichaObras() {
     var obras = ficha_.obras || [];
-    return '<form class="pc2-linea js-pc-form-obra" novalidate>' + U.campo('Nueva obra', '<input class="sx2-input" name="nombre" placeholder="Ej: Los Robles">') +
+    return '<form class="pcl-linea js-pc-form-obra" novalidate>' + U.campo('Nueva obra', '<input class="sx2-input" name="nombre" placeholder="Ej: Los Robles">') +
       U.campo('Comuna', '<input class="sx2-input" name="comuna">') + U.boton({ texto: 'Agregar', icono: 'nueva', tipo: 'submit' }) + '</form>' +
-      (obras.length ? '<ul class="pc2-lista">' + obras.map(function (o) {
+      (obras.length ? '<ul class="pcl-lista">' + obras.map(function (o) {
         var activa = !(o.activa === false || o.activa === 'false');
-        return '<li class="pc2-fila pc2-fila--fija"><span class="pc2-fila__ico">' + U.ico('empresa', 18) + '</span><span class="pc2-fila__txt"><b>' + txt(o.nombre) + '</b><small>' + txt([o.comuna, o.direccion].filter(Boolean).join(' · ')) + '</small></span>' +
+        return '<li class="pcl-fila pcl-fila--fija"><span class="pcl-fila__ico">' + U.ico('empresa', 18) + '</span><span class="pcl-fila__txt"><b>' + txt(o.nombre) + '</b><small>' + txt([o.comuna, o.direccion].filter(Boolean).join(' · ')) + '</small></span>' +
           U.badge(activa ? 'Activa' : 'Cerrada', activa ? 'ok' : 'neutro') + U.boton({ texto: activa ? 'Cerrar' : 'Reabrir', sm: true, variante: 'fantasma', clase: 'js-pc-obra-activa', datos: { id: o.obra_id, nombre: o.nombre, activa: activa ? '0' : '1' } }) + '</li>';
-      }).join('') + '</ul>' : '<p class="pc2-sub">Sin obras. El contratista también puede agregarlas desde su portal.</p>');
+      }).join('') + '</ul>' : '<p class="pcl-sub">Sin obras. El contratista también puede agregarlas desde su portal.</p>');
   }
   function fichaTrabajadores() {
     var ts = ficha_.trabajadores || [], obras = {}; (ficha_.obras || []).forEach(function (o) { obras[o.obra_id] = o.nombre; });
-    return (ts.length ? '<div class="pc2-tabla-caja"><table class="pc2-tabla"><thead><tr><th>Nombre</th><th>RUT</th><th>Cargo</th><th>Obra</th><th>Desde</th><th>Estado</th></tr></thead><tbody>' + ts.map(function (t) {
+    return (ts.length ? '<div class="pcl-tabla-caja"><table class="pcl-tabla"><thead><tr><th>Nombre</th><th>RUT</th><th>Cargo</th><th>Obra</th><th>Desde</th><th>Estado</th></tr></thead><tbody>' + ts.map(function (t) {
         var e = ESTADO_TRAB[t.estado] || [t.estado, 'neutro'];
         return '<tr><td><b>' + txt(t.nombre) + '</b></td><td>' + txt(t.rut) + '</td><td>' + txt(t.cargo) + '</td><td>' + txt(obras[t.obra_id] || '') + '</td><td>' + txt(t.fecha_inicio) + '</td><td>' + U.badge(e[0], e[1]) + '</td></tr>';
       }).join('') + '</tbody></table></div>' : U.vacio({ icono: 'equipo', titulo: 'Sin trabajadores', texto: 'Se agregan solos cuando el contratista pide un contrato, o él los registra en «Trabajadores».' })) +
-      '<p class="pc2-sub">Son datos personales: solo los ven el contratista y el personal con permiso.</p>';
+      '<p class="pcl-sub">Son datos personales: solo los ven el contratista y el personal con permiso.</p>';
   }
   function fichaRegistro() {
     var rs = ficha_.registro || [];
     if (!rs.length) return U.vacio({ icono: 'lista', titulo: 'Sin movimientos', texto: 'Cada ingreso y cada acción queda aquí, con fecha y equipo. Nadie lo puede borrar.' });
-    return '<ul class="pc2-registro">' + rs.map(function (x) {
+    return '<ul class="pcl-registro">' + rs.map(function (x) {
       var a = ACCIONES[x.accion] || [x.accion, 'neutro'];
       var quien = x.actor === 'contacto' ? (x.contacto_nombre || 'Contratista') : x.actor;
-      return '<li><span class="pc2-registro__cuando">' + txt(fecha(x.timestamp, true)) + '</span>' + U.badge(a[0], a[1]) +
-        '<span class="pc2-registro__txt"><b>' + txt(quien) + '</b>' + (x.detalle ? ' · ' + txt(x.detalle) : '') + (x.dispositivo ? ' · ' + txt(x.dispositivo) : '') + (x.ip ? ' · <span class="sx2-tenue">' + txt(x.ip) + '</span>' : '') + '</span></li>';
-    }).join('') + '</ul><p class="pc2-sub">Se muestran los últimos 200 movimientos.</p>';
+      return '<li><span class="pcl-registro__cuando">' + txt(fecha(x.timestamp, true)) + '</span>' + U.badge(a[0], a[1]) +
+        '<span class="pcl-registro__txt"><b>' + txt(quien) + '</b>' + (x.detalle ? ' · ' + txt(x.detalle) : '') + (x.dispositivo ? ' · ' + txt(x.dispositivo) : '') + (x.ip ? ' · <span class="sx2-tenue">' + txt(x.ip) + '</span>' : '') + '</span></li>';
+    }).join('') + '</ul><p class="pcl-sub">Se muestran los últimos 200 movimientos.</p>';
   }
 
   // --- Invitar -----------------------------------------------------------------------------------
   function mostrarInvitacion(data) {
     var caja = drawer_ && drawer_.el.querySelector('.js-pc-invitacion');
     if (!caja) return;
-    caja.innerHTML = '<div class="pc2-invitacion"><h3>' + U.ico('check', 18) + ' Invitación lista para ' + txt(data.contacto.nombre) + '</h3>' +
+    caja.innerHTML = '<div class="pcl-invitacion"><h3>' + U.ico('check', 18) + ' Invitación lista para ' + txt(data.contacto.nombre) + '</h3>' +
       '<p>Mándale este mensaje por WhatsApp. El enlace sirve una sola vez y vence el ' + txt(fecha(data.vence, true)) + '.</p>' +
-      '<pre class="pc2-mensaje">' + txt(data.mensaje) + '</pre>' +
-      '<div class="pc2-acciones">' + (data.con_telefono ? '<a class="sx2-boton sx2-boton--primario" href="' + txt(data.whatsapp) + '" target="_blank" rel="noopener">' + U.ico('comentario', 16) + 'Abrir WhatsApp con el mensaje</a>' : '<span class="sx2-tenue">Sin teléfono válido: copia el mensaje y mándalo tú.</span>') +
+      '<pre class="pcl-mensaje">' + txt(data.mensaje) + '</pre>' +
+      '<div class="pcl-acciones">' + (data.con_telefono ? '<a class="sx2-boton sx2-boton--primario" href="' + txt(data.whatsapp) + '" target="_blank" rel="noopener">' + U.ico('comentario', 16) + 'Abrir WhatsApp con el mensaje</a>' : '<span class="sx2-tenue">Sin teléfono válido: copia el mensaje y mándalo tú.</span>') +
         U.boton({ texto: 'Copiar mensaje', icono: 'copiar', clase: 'js-pc-copiar' }) + '</div></div>';
     caja.querySelector('.js-pc-copiar').addEventListener('click', function () {
       var t = data.mensaje;
       (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { aviso('Mensaje copiado.', 'exito'); }, function () {
-        var r = document.createRange(); r.selectNodeContents(caja.querySelector('.pc2-mensaje')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); aviso('Selecciónalo y cópialo.');
+        var r = document.createRange(); r.selectNodeContents(caja.querySelector('.pcl-mensaje')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); aviso('Selecciónalo y cópialo.');
       });
     });
     caja.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
