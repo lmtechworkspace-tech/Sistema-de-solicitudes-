@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#17304F">
+  <meta name="robots" content="noindex">
+  <title>SIGSO · Portal de clientes de HomePymes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
+  <link rel="stylesheet" href="css/portal-cliente.css">
+</head>
+<body>
+  <!-- Portal de clientes (2026-10-07): la aplicación del contratista. Habla con el
+       servidor por su propio canal (cliente_token, backend/logica/portalClientes.js);
+       nada de la plataforma interna se carga aquí. -->
+  <div class="app" id="app" aria-live="polite"><div class="cargando"><span class="rueda"></span>Cargando…</div></div>
+  <div id="capa"></div>
+  <script src="js/config.js"></script>
+  <script src="js/portal-cliente.js"></script>
+</body>
+</html>

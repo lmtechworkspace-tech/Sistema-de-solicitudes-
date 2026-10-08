@@ -294,6 +294,289 @@ function guardarObra(db, data, ctx, meta) {
   return r;
 }
 
+// ================================================================ E2: pedir y conversar
+// Qué puede pedir y qué se le pregunta. Las preguntas salen de la columna
+// «Input» de los DOC-10..13 de la ISO (lo que cada servicio necesita del
+// cliente). `busca` liga la plantilla con el servicio del catálogo del área
+// (SOL_SERVICIOS) para heredar su plazo y prioridad; si el área no lo tiene,
+// el pedido entra como «Otro pedido» con el nombre de la plantilla.
+// tipo: nuevos (una ficha por trabajador nuevo) | elegir (de «Mis
+// trabajadores») | campos | libre. Un campo: [clave, etiqueta, ejemplo].
+const PLANTILLAS = {
+  RRHH: [
+    { id: 'contrato', nombre: 'Contrato de trabajo', ayuda: 'Para trabajadores que entran a la obra.', tipo: 'nuevos', plazo_dias: 2, busca: /contrat|ingreso/i,
+      campos: [['nombre', 'Nombre completo', 'Ej: Juan Pérez Soto'], ['rut', 'RUT', 'Ej: 12.345.678-5'], ['cargo', 'Cargo', 'Ej: Maestro albañil'], ['fecha_inicio', 'Desde cuándo trabaja', 'Ej: 14-10'], ['sueldo', 'Sueldo líquido', 'Ej: 650.000'], ['afp', 'AFP (si no sabes, déjalo en blanco)', 'Ej: Modelo'], ['salud', 'Salud', 'Ej: Fonasa']],
+      foto: 'Saca una foto al carnet por los dos lados' },
+    { id: 'finiquito', nombre: 'Finiquito', ayuda: 'Cuando un trabajador deja la obra.', tipo: 'elegir', plazo_dias: 3, busca: /finiquit|desvincul/i,
+      campos: [['termino', 'Último día de trabajo', 'Ej: 31-10']], motivo: ['Término de obra', 'Renuncia', 'Despido', 'No sé'], foto: 'Si tiene carta de renuncia, sácale una foto' },
+    { id: 'liquidaciones', nombre: 'Liquidaciones del mes', ayuda: 'Las de todos tus trabajadores.', tipo: 'campos', plazo_dias: 3, busca: /liquidac|remunerac/i, repetir: true,
+      campos: [['mes', 'Mes', 'Ej: octubre'], ['cambios', '¿Hubo cambios? (horas extra, bonos, faltas, ingresos o salidas)', 'Ej: Juan 10 horas extra; Ana faltó el lunes']], foto: 'Foto del libro de asistencia (si tienes)' },
+    { id: 'f30', nombre: 'Certificado F30', ayuda: 'Para mostrar que estás al día con tus trabajadores.', tipo: 'campos', plazo_dias: 2, busca: /f\s*-?\s*30/i,
+      campos: [['mes', 'Mes del certificado', 'Ej: septiembre'], ['para', '¿Para quién es?', 'Ej: Inmobiliaria Los Robles']] },
+    { id: 'anexo', nombre: 'Anexo de contrato', ayuda: 'Cambio de sueldo, obra, cargo u horario.', tipo: 'elegir', plazo_dias: 2, busca: /anexo/i,
+      campos: [['cambio', '¿Qué cambia y desde cuándo?', 'Ej: pasa a la obra Vista Cordillera desde el 20-10']] },
+    { id: 'carta', nombre: 'Carta de aviso', ayuda: 'Aviso de término de contrato.', tipo: 'elegir', plazo_dias: 2, busca: /carta/i,
+      campos: [['termino', 'Fecha de término', 'Ej: 31-10'], ['causal', 'Motivo', 'Ej: término de la obra']] },
+    { id: 'constancia', nombre: 'Constancia laboral', ayuda: 'Para dejar registro de una falta o un hecho.', tipo: 'elegir', plazo_dias: 2, busca: /constancia/i,
+      campos: [['razon', '¿Qué pasó?', 'Ej: no se presentó el lunes 13']] }
+  ],
+  CONTABILIDAD: [
+    { id: 'factura', nombre: 'Emitir factura', ayuda: 'Te la hacemos y te la mandamos.', tipo: 'campos', plazo_dias: 1, busca: /factur/i,
+      campos: [['a', '¿A quién le facturas?', 'Ej: Inmobiliaria Los Robles'], ['monto', 'Monto (con IVA)', 'Ej: 2.380.000'], ['detalle', '¿Por qué trabajo?', 'Ej: estado de pago 3, obra Los Robles']], foto: 'Foto del estado de pago u orden de compra' },
+    { id: 'nota_credito', nombre: 'Anular o corregir una factura', ayuda: 'Nota de crédito.', tipo: 'campos', plazo_dias: 1, busca: /nota.*cr[eé]dito/i,
+      campos: [['folio', 'Número de la factura', 'Ej: 1452'], ['motivo', '¿Qué pasó?', 'Ej: el monto estaba mal']] },
+    { id: 'deuda', nombre: 'Certificado de deuda (TGR)', ayuda: 'Para licitaciones o bancos.', tipo: 'campos', plazo_dias: 1, busca: /deuda|tgr/i, campos: [['para', '¿Para qué lo necesitas?', 'Ej: licitación']] },
+    { id: 'carta_iva', nombre: 'Carta del IVA', ayuda: 'Cuánto pagas de IVA este mes.', tipo: 'campos', plazo_dias: 2, busca: /iva/i, campos: [['mes', 'Mes', 'Ej: septiembre']] },
+    { id: 'factoring', nombre: 'Factoring', ayuda: 'Adelantar el pago de una factura.', tipo: 'campos', plazo_dias: 2, busca: /factoring|cesi[oó]n/i,
+      campos: [['folio', 'Número de la factura', 'Ej: 1452'], ['empresa', '¿Con qué factoring?', 'Ej: el mismo de la vez pasada']] }
+  ],
+  PREVENCION: [
+    { id: 'charla', nombre: 'Charla de inducción', ayuda: 'Para trabajadores nuevos en obra.', tipo: 'campos', obra: true, plazo_dias: 3, busca: /charla|inducci/i,
+      campos: [['cuantos', '¿Cuántos trabajadores?', 'Ej: 6'], ['fecha', '¿Qué día te acomoda?', 'Ej: jueves en la mañana']] },
+    { id: 'accidente', nombre: 'Avisar un accidente', ayuda: 'Te ayudamos con la denuncia y la investigación.', tipo: 'elegir', obra: true, plazo_dias: 1, busca: /accident/i,
+      campos: [['que', '¿Qué pasó?', 'Ej: se cayó de la escalera y se golpeó el brazo']], foto: 'Fotos del lugar y de la lesión (si se puede)' },
+    { id: 'reglamento', nombre: 'Reglamento interno', ayuda: 'El reglamento de orden, higiene y seguridad.', tipo: 'campos', plazo_dias: 5, busca: /reglamento/i, campos: [['cuantos', '¿Cuántos trabajadores tienes?', 'Ej: 14']] },
+    { id: 'procedimiento', nombre: 'Procedimiento de trabajo seguro', ayuda: 'Para una tarea con riesgo.', tipo: 'campos', obra: true, plazo_dias: 5, busca: /procedimiento|pts/i,
+      campos: [['tarea', '¿Qué tarea?', 'Ej: trabajo en altura']], foto: 'Foto del lugar de trabajo (si puedes)' },
+    { id: 'visita', nombre: 'Visita a obra', ayuda: 'Revisión de seguridad en terreno.', tipo: 'campos', obra: true, plazo_dias: 5, busca: /visita|terreno/i, campos: [['fecha', '¿Qué día?', 'Ej: martes']] }
+  ]
+};
+// «Mandar un documento»: lo que hoy llega por WhatsApp o correo, sin pedir nada nuevo.
+const DOCUMENTOS = [
+  { id: 'doc_asistencia', depto: 'RRHH', nombre: 'Asistencia del mes', ayuda: 'Para hacer las liquidaciones.', tipo: 'campos', plazo_dias: 3, campos: [['mes', 'Mes', 'Ej: octubre']], foto: 'Foto del libro o planilla de asistencia', foto_obligatoria: true },
+  { id: 'doc_licencia', depto: 'RRHH', nombre: 'Licencia médica', ayuda: 'De uno de tus trabajadores.', tipo: 'elegir', uno: true, plazo_dias: 2, campos: [], foto: 'Foto de la licencia', foto_obligatoria: true },
+  { id: 'doc_comprobante', depto: 'CONTABILIDAD', nombre: 'Comprobante de pago', ayuda: 'Si pagaste una factura o alguien pagó por ti.', tipo: 'campos', plazo_dias: 1,
+    campos: [['monto', 'Monto pagado', 'Ej: 1.190.000'], ['quien', '¿Quién hizo la transferencia?', 'Ej: yo / Constructora Kraken']], foto: 'Foto o captura del comprobante', foto_obligatoria: true },
+  { id: 'doc_oc', depto: 'CONTABILIDAD', nombre: 'Orden de compra o estado de pago', ayuda: 'Para que te hagamos la factura.', tipo: 'campos', plazo_dias: 1, campos: [['a', '¿De qué empresa?', 'Ej: Inmobiliaria Los Robles']], foto: 'Foto o PDF del documento', foto_obligatoria: true },
+  { id: 'doc_otro', depto: 'RRHH', nombre: 'Otro documento', ayuda: 'Cualquier otra cosa que nos tengas que mandar.', tipo: 'libre', plazo_dias: 2, campos: [], foto: 'Foto o archivo', foto_obligatoria: true }
+];
+const EMPRESA_PORTAL = process.env.PORTAL_EMPRESA_ID || 'HP';
+
+function serviciosContratados_(db, clienteId) {
+  const s = json_((perfilCliente_(db, clienteId) || {}).servicios, []) || [];
+  return s.length ? s : ['RRHH'];
+}
+function servicioDelArea_(db, depto, plantilla) {
+  if (!plantilla.busca) return null;
+  let filas = [];
+  try { filas = leer_(db, 'SOL_SERVICIOS'); } catch (e) { return null; }
+  return filas.find((s) => s.depto === depto && v_(s.activa) && plantilla.busca.test(String(s.nombre || ''))) || null;
+}
+function plantillaPublica_(db, depto, p) {
+  const srv = servicioDelArea_(db, depto, p);
+  return { id: p.id, depto, nombre: p.nombre, ayuda: p.ayuda, tipo: p.tipo, uno: !!p.uno, obra: !!p.obra, repetir: !!p.repetir,
+    campos: p.campos.map((c) => ({ clave: c[0], etiqueta: c[1], ejemplo: c[2] })), motivo: p.motivo || null,
+    foto: p.foto || '', foto_obligatoria: !!p.foto_obligatoria, plazo_dias: srv && Number(srv.plazo_dias) > 0 ? Number(srv.plazo_dias) : p.plazo_dias };
+}
+function encargadoDe_(db, clienteId, depto) {
+  const e = json_((perfilCliente_(db, clienteId) || {}).encargados, {}) || {};
+  const correo = normalizarEmail_(e[depto]);
+  return correo && Servicios.equipoDepto_(db, depto).some((m) => m.email === correo) ? correo : '';
+}
+
+function catalogo(db, data, ctx) {
+  const areas = serviciosContratados_(db, ctx.cliente_id).filter((a) => PLANTILLAS[a]);
+  const enc = encargados_(db, perfilCliente_(db, ctx.cliente_id));
+  return {
+    areas: areas.map((a) => ({ clave: a, nombre: (Servicios.departamento_(a) || {}).nombre || a,
+      encargado: (enc.find((e) => e.area === a) || {}).nombre || '', servicios: PLANTILLAS[a].map((p) => plantillaPublica_(db, a, p)) })),
+    documentos: DOCUMENTOS.filter((d) => areas.indexOf(d.depto) !== -1).map((d) => Object.assign(plantillaPublica_(db, d.depto, d), { documento: true }))
+  };
+}
+
+function lineas_(pares) { return pares.filter((p) => p[1] !== undefined && String(p[1]).trim() !== '').map((p) => p[0] + ': ' + String(p[1]).trim()).join('\n'); }
+
+async function crearPedido(db, data, ctx, meta) {
+  const Solicitudes = require('./solicitudes');
+  const esDoc = String(data.plantilla_id || '').indexOf('doc_') === 0;
+  let depto = '', p = null;
+  if (esDoc) { p = DOCUMENTOS.find((d) => d.id === data.plantilla_id); depto = p ? p.depto : ''; }
+  else if (data.plantilla_id === 'otra') { depto = String(data.depto || 'RRHH').toUpperCase(); p = { id: 'otra', nombre: 'Otra cosa', tipo: 'libre', campos: [], plazo_dias: 2 }; }
+  else Object.keys(PLANTILLAS).some((a) => { const x = PLANTILLAS[a].find((y) => y.id === data.plantilla_id); if (x) { p = x; depto = a; } return !!x; });
+  if (!p) return errorValidacion('plantilla_id', 'Elige qué necesitas.');
+  if (serviciosContratados_(db, ctx.cliente_id).indexOf(depto) === -1 || !Servicios.departamento_(depto)) return errorValidacion('plantilla_id', 'Ese servicio no está en lo que tienes contratado.');
+
+  const c = contacto_(db, ctx.contacto_id);
+  const cat = clienteCat_(db, ctx.cliente_id) || {};
+  const perfil = perfilCliente_(db, ctx.cliente_id) || {};
+  const datos = data.datos && typeof data.datos === 'object' ? data.datos : {};
+  const obra = data.obra_id ? obras_(db, ctx.cliente_id).find((o) => o.obra_id === data.obra_id) : null;
+  if (data.obra_id && !obra) return errorValidacion('obra_id', 'Esa obra no es tuya.');
+  const misTrab = leer_(db, 'PORTAL_TRABAJADORES').filter((t) => t.cliente_id === ctx.cliente_id);
+  const extra = p.campos.filter((k) => p.tipo !== 'nuevos').map((k) => [k[1], datos[k[0]]]);
+  if (p.motivo && data.motivo) extra.push(['Motivo', txt_(data.motivo, 60)]);
+  if (obra) extra.push(['Obra', obra.nombre + (obra.comuna ? ' (' + obra.comuna + ')' : '')]);
+  const srv = esDoc || p.id === 'otra' ? null : servicioDelArea_(db, depto, p);
+  const destinatario = encargadoDe_(db, ctx.cliente_id, depto);
+  const items = [];
+  const nuevos = [];
+
+  if (p.tipo === 'nuevos') {
+    const personas = (Array.isArray(data.personas) ? data.personas : []).filter((x) => x && txt_(x.nombre));
+    if (!personas.length) return errorValidacion('personas', 'Agrega al menos una persona con su nombre.');
+    if (personas.length > 20) return errorValidacion('personas', 'Hasta 20 personas por pedido.');
+    for (const x of personas) {
+      if (x.rut && !rutValido_(x.rut)) return errorValidacion('personas', 'El RUT de ' + txt_(x.nombre, 60) + ' no es válido. Revísalo.');
+    }
+    personas.forEach((x) => {
+      const obraNombre = obra ? obra.nombre : '';
+      items.push({ titulo: p.nombre + ' · ' + txt_(x.nombre, 80),
+        descripcion: lineas_(p.campos.map((k) => [k[1], k[0] === 'rut' && x.rut ? rutBonito_(x.rut) : x[k[0]]]).concat([['Obra', obraNombre]])) || p.nombre,
+        persona: x });
+    });
+  } else if (p.tipo === 'elegir') {
+    const ids = (Array.isArray(data.trabajadores) ? data.trabajadores : []).filter(Boolean);
+    const elegidos = ids.map((id) => misTrab.find((t) => t.trabajador_id === id)).filter(Boolean);
+    if (!elegidos.length || elegidos.length !== ids.length) return errorValidacion('trabajadores', p.uno ? 'Elige al trabajador.' : 'Elige al menos un trabajador.');
+    if (p.uno && elegidos.length > 1) return errorValidacion('trabajadores', 'Elige un solo trabajador.');
+    elegidos.forEach((t) => items.push({ titulo: p.nombre + ' · ' + t.nombre, trabajador_id: t.trabajador_id,
+      descripcion: lineas_([['Trabajador', t.nombre], ['RUT', rutBonito_(t.rut)], ['Cargo', t.cargo]].concat(extra)) || p.nombre }));
+  } else if (p.tipo === 'campos') {
+    const desc = lineas_(extra);
+    if (!desc && !txt_(data.texto)) return errorValidacion('datos', 'Completa al menos un dato.');
+    const mes = txt_(datos.mes, 30);
+    items.push({ titulo: p.nombre + (mes ? ' · ' + mes : ''), descripcion: desc || txt_(data.texto, 2000) });
+  } else {
+    const texto = txt_(data.texto, 4000);
+    if (!texto && !data.con_archivos) return errorValidacion('texto', 'Cuéntanos qué necesitas (o adjunta un archivo).');
+    items.push({ titulo: p.nombre + (texto ? ' · ' + texto.slice(0, 60) : ''), descripcion: texto || 'Envío de documentos desde el portal.' });
+  }
+  if (txt_(data.texto) && p.tipo !== 'libre' && p.tipo !== 'campos') items.forEach((it) => { it.descripcion += '\nNota: ' + txt_(data.texto, 1000); });
+
+  const r = await Solicitudes.crearSolicitud(db, {
+    empresa_id: EMPRESA_PORTAL, asociada_plataforma: false,
+    solicitante_nombre: c.nombre, solicitante_cargo: c.cargo || 'Contratista',
+    solicitante_email: c.correo || ('c-' + c.contacto_id + '@portal.invalid'),
+    empresa_cliente: cat.razon_social || '', rut_cliente: cat.rut || '', cliente_obra: obra ? obra.nombre : '',
+    contacto_cliente: c.nombre, telefono_cliente: c.telefono || perfil.telefono || '',
+    observaciones_generales: 'Pedido desde el portal de clientes.',
+    subsolicitudes: items.map((it) => ({ titulo: it.titulo.slice(0, 200), descripcion: it.descripcion, depto, servicio_id: srv ? srv.servicio_id : '', destinatario }))
+  });
+  if (!r || !r.solicitud_id) return r;
+  actualizarFilaPorId_(db, 'SOLICITUDES', 'solicitud_id', r.solicitud_id, { cliente_id: ctx.cliente_id, origen: 'PORTAL', contacto_id: ctx.contacto_id });
+  // Los trabajadores nuevos quedan en «Mis trabajadores» con el contrato en trámite.
+  for (let i = 0; i < items.length; i++) {
+    const subId = r.solicitud_id + '-' + ('0' + (i + 1)).slice(-2);
+    let trabId = items[i].trabajador_id || '';
+    if (items[i].persona) {
+      const x = items[i].persona;
+      const t = guardarTrabajador_(db, ctx.cliente_id, { nombre: x.nombre, rut: x.rut, cargo: x.cargo, obra_id: obra ? obra.obra_id : '', fecha_inicio: x.fecha_inicio,
+        sueldo: x.sueldo, afp: x.afp, salud: x.salud, estado: 'TRAMITE' }, 'contacto:' + ctx.contacto_id);
+      if (t && t.trabajador_id) { trabId = t.trabajador_id; nuevos.push(t.nombre); }
+    }
+    if (trabId) actualizarFilaPorId_(db, 'SUBSOLICITUDES', 'subsolicitud_id', subId, { trabajador_id: trabId });
+  }
+  registrar_(db, { cliente_id: ctx.cliente_id, contacto_id: ctx.contacto_id, actor: 'contacto', accion: esDoc ? 'DOCUMENTO' : 'PEDIDO',
+    detalle: r.solicitud_id + ' · ' + p.nombre + (items.length > 1 ? ' (' + items.length + ')' : ''), ip: (meta && meta.ip) || '' });
+  const fichaEnc = destinatario ? (DirectorioPersonas.fichas(db, [destinatario])[destinatario] || {}) : {};
+  return { solicitud_id: r.solicitud_id, items: items.length, primer_item: r.solicitud_id + '-01', recibe: fichaEnc.nombre || ((Servicios.departamento_(depto) || {}).nombre || depto),
+    plazo_dias: srv && Number(srv.plazo_dias) > 0 ? Number(srv.plazo_dias) : p.plazo_dias, trabajadores_nuevos: nuevos };
+}
+
+// Lo que ve el contratista de un ítem: cuatro palabras, no los 11 estados.
+function estadoCliente_(e) {
+  if (e === 'S01') return 'ENVIADO';
+  if (e === 'S06' || e === 'S08') return 'TU';
+  if (e === 'S09') return 'LISTO';
+  if (e === 'S10' || e === 'S11') return 'CERRADO';
+  return 'CURSO';
+}
+const ORDEN_EST = { TU: 0, ENVIADO: 1, CURSO: 2, LISTO: 3, CERRADO: 4 };
+function solicitudDelCliente_(db, ctx, solicitudId) {
+  const s = leer_(db, 'SOLICITUDES').find((x) => x.solicitud_id === solicitudId);
+  return s && s.cliente_id === ctx.cliente_id ? s : null;
+}
+
+function pedidos(db, data, ctx) {
+  const sols = leer_(db, 'SOLICITUDES').filter((s) => s.cliente_id === ctx.cliente_id);
+  const ids = {}; sols.forEach((s) => { ids[s.solicitud_id] = true; });
+  const subs = leer_(db, 'SUBSOLICITUDES').filter((s) => ids[s.solicitud_id]);
+  const coms = leer_(db, 'COMENTARIOS').filter((m) => ids[m.solicitud_id] && !(m.es_interno === true || m.es_interno === 'TRUE'));
+  const arch = leer_(db, 'ARCHIVOS').filter((a) => ids[a.solicitud_id]);
+  return { pedidos: sols.map((s) => {
+    const its = subs.filter((x) => x.solicitud_id === s.solicitud_id).sort((a, b) => a.numero_item - b.numero_item);
+    const est = its.map((x) => estadoCliente_(x.estado));
+    const estado = est.slice().sort((a, b) => ORDEN_EST[a] - ORDEN_EST[b])[0] || 'ENVIADO';
+    const ms = coms.filter((m) => m.solicitud_id === s.solicitud_id).sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
+    const ult = ms[ms.length - 1];
+    const suyo = ult && normalizarEmail_(ult.usuario) === normalizarEmail_(s.solicitante_email);
+    const fechas = its.filter((x) => x.fecha_comprometida && ['S09', 'S10', 'S11'].indexOf(x.estado) === -1).map((x) => String(x.fecha_comprometida).slice(0, 10)).sort();
+    const nombreBase = String((its[0] || {}).titulo || '').split(' · ')[0];
+    return {
+      solicitud_id: s.solicitud_id, titulo: its.length > 1 ? nombreBase + ' (' + its.length + ')' : ((its[0] || {}).titulo || ''),
+      area: (its[0] || {}).depto || '', area_nombre: (its[0] || {}).depto_nombre || '', estado, items: its.length,
+      listos: est.filter((e) => e === 'LISTO').length, por_confirmar: its.filter((x) => x.estado === 'S08').length, preguntas: its.filter((x) => x.estado === 'S06').length,
+      fecha_creacion: s.fecha_creacion, para_el: fechas[0] || '', archivos: arch.filter((a) => a.solicitud_id === s.solicitud_id).length,
+      ultimo_mensaje: ult ? { de_ti: !!suyo, timestamp: ult.timestamp } : null, documento: /^(Asistencia|Licencia|Comprobante|Orden de compra|Otro documento)/.test(nombreBase)
+    };
+  }).sort((a, b) => ORDEN_EST[a.estado] - ORDEN_EST[b.estado] || String(b.fecha_creacion).localeCompare(String(a.fecha_creacion))) };
+}
+
+function pedido(db, data, ctx) {
+  const s = solicitudDelCliente_(db, ctx, txt_(data.solicitud_id, 60));
+  if (!s) return errorValidacion('solicitud_id', 'Ese pedido no existe.');
+  const SP = require('./solicitudesPublico');
+  const v = SP.estadoPublico(db, s.solicitud_id, s.solicitante_email);
+  if (v && (v._forbidden || v._validationError)) return v;
+  // Los archivos se bajan con la sesión (clienteArchivo), nunca con el enlace con llave.
+  v.subsolicitudes.forEach((it) => {
+    it.estado_cliente = estadoCliente_(it.estado);
+    it.archivos = (it.archivos || []).map((a) => ({ archivo_id: a.archivo_id, nombre: a.nombre_original, tipo_mime: a.tipo_mime, tamano_bytes: a.tamano_bytes, fecha: a.fecha_subida }));
+  });
+  delete v.url_pdf;
+  delete v.posicion_cola;
+  return v;
+}
+
+async function mensaje(db, data, ctx, meta) {
+  const s = solicitudDelCliente_(db, ctx, txt_(data.solicitud_id, 60));
+  if (!s) return errorValidacion('solicitud_id', 'Ese pedido no existe.');
+  const texto = txt_(data.texto, 4000);
+  if (!texto) return errorValidacion('texto', 'Escribe tu mensaje.');
+  const sub = data.subsolicitud_id ? leer_(db, 'SUBSOLICITUDES').find((x) => x.subsolicitud_id === data.subsolicitud_id && x.solicitud_id === s.solicitud_id) : null;
+  if (data.subsolicitud_id && !sub) return errorValidacion('subsolicitud_id', 'Ese ítem no es de este pedido.');
+  const SP = require('./solicitudesPublico');
+  const r = await SP.enviarMensajeSolicitud(db, { solicitud_id: s.solicitud_id, subsolicitud_id: sub ? sub.subsolicitud_id : '', email: s.solicitante_email, texto });
+  if (r && !r._validationError && !r._forbidden) registrar_(db, { cliente_id: ctx.cliente_id, contacto_id: ctx.contacto_id, actor: 'contacto', accion: 'MENSAJE', detalle: s.solicitud_id, ip: (meta && meta.ip) || '' });
+  return r;
+}
+
+async function subirArchivo(db, data, ctx, meta) {
+  const s = solicitudDelCliente_(db, ctx, txt_(data.solicitud_id, 60));
+  if (!s) return errorValidacion('solicitud_id', 'Ese pedido no existe.');
+  const sub = data.subsolicitud_id ? leer_(db, 'SUBSOLICITUDES').find((x) => x.subsolicitud_id === data.subsolicitud_id && x.solicitud_id === s.solicitud_id) : null;
+  if (data.subsolicitud_id && !sub) return errorValidacion('subsolicitud_id', 'Ese ítem no es de este pedido.');
+  const A = require('./archivosSolicitud');
+  const r = await A.subirArchivo(db, { solicitud_id: s.solicitud_id, subsolicitud_id: sub ? sub.subsolicitud_id : (s.solicitud_id + '-01'),
+    nombre_archivo: txt_(data.nombre_archivo, 150), contenido_base64: data.contenido_base64, email: s.solicitante_email });
+  if (r && r.archivo_id) {
+    registrar_(db, { cliente_id: ctx.cliente_id, contacto_id: ctx.contacto_id, actor: 'contacto', accion: 'ARCHIVO', detalle: s.solicitud_id + ' · ' + txt_(data.nombre_archivo, 80), ip: (meta && meta.ip) || '' });
+    return { archivo_id: r.archivo_id, tipo_mime: r.tipo_mime, tamano_bytes: r.tamano_bytes };
+  }
+  return r;
+}
+
+async function confirmar(db, data, ctx, meta) {
+  const s = solicitudDelCliente_(db, ctx, txt_(data.solicitud_id, 60));
+  if (!s) return errorValidacion('solicitud_id', 'Ese pedido no existe.');
+  const accion = data.accion === 'reabrir' ? 'reabrir' : 'confirmar';
+  const SP = require('./solicitudesPublico');
+  const r = await SP.validarCierre(db, { solicitud_id: s.solicitud_id, subsolicitud_id: txt_(data.subsolicitud_id, 80), email: s.solicitante_email, accion, comentario: txt_(data.comentario, 2000), atencion_directa: null });
+  if (r && !r._validationError && !r._forbidden) registrar_(db, { cliente_id: ctx.cliente_id, contacto_id: ctx.contacto_id, actor: 'contacto', accion: accion === 'confirmar' ? 'CONFIRMACION' : 'REAPERTURA', detalle: txt_(data.subsolicitud_id, 80), ip: (meta && meta.ip) || '' });
+  return r;
+}
+
+async function archivo(db, data, ctx, meta) {
+  const a = leer_(db, 'ARCHIVOS').find((x) => x.archivo_id === txt_(data.archivo_id, 60));
+  if (!a || !solicitudDelCliente_(db, ctx, a.solicitud_id)) return errorValidacion('archivo_id', 'Ese archivo no existe.');
+  const A = require('./archivosSolicitud');
+  const llave = (String(a.url || '').match(/[?&]k=([^&]+)/) || [])[1] || '';
+  const f = await A.servirArchivo(db, a.archivo_id, llave);
+  if (!f) return errorValidacion('archivo_id', 'No se pudo abrir el archivo.');
+  registrar_(db, { cliente_id: ctx.cliente_id, contacto_id: ctx.contacto_id, actor: 'contacto', accion: 'DESCARGA', detalle: a.solicitud_id + ' · ' + f.nombre, ip: (meta && meta.ip) || '' });
+  return { nombre: f.nombre, tipo_mime: f.mime, contenido_base64: f.buffer.toString('base64') };
+}
+
 // Lista CERRADA de lo que un contratista puede hacer. `publica` = sin sesión.
 const ACCIONES_CLIENTE = {
   clienteVerInvitacion: { publica: true, fn: verInvitacion },
@@ -303,7 +586,15 @@ const ACCIONES_CLIENTE = {
   clienteSalir: { fn: salir },
   clienteTrabajadores: { fn: trabajadores },
   clienteGuardarTrabajador: { fn: guardarTrabajador },
-  clienteGuardarObra: { fn: guardarObra }
+  clienteGuardarObra: { fn: guardarObra },
+  clienteCatalogo: { fn: catalogo },
+  clienteCrearPedido: { fn: crearPedido },
+  clientePedidos: { fn: pedidos },
+  clientePedido: { fn: pedido },
+  clienteMensaje: { fn: mensaje },
+  clienteSubirArchivo: { fn: subirArchivo },
+  clienteConfirmar: { fn: confirmar },
+  clienteArchivo: { fn: archivo }
 };
 
 async function ejecutarCliente(db, action, data, meta) {

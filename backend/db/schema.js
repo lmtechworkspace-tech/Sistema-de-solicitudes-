@@ -159,7 +159,9 @@ const COLUMNAS = {
     // Solicitudes, etapa 2 (2026-10-05): el pedido va a un DEPARTAMENTO y a un
     // servicio de su catálogo (serviciosSolicitud.js). Vacíos = soporte de
     // plataformas (Desarrollo / TI), con su ruteo de siempre por área.
-    'depto', 'depto_nombre', 'servicio_id', 'servicio_nombre'
+    'depto', 'depto_nombre', 'servicio_id', 'servicio_nombre',
+    // Portal de clientes: el trabajador del contratista al que se refiere el ítem.
+    'trabajador_id'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',
