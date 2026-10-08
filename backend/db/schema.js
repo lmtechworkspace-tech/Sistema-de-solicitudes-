@@ -193,7 +193,10 @@ const COLUMNAS = {
   CONFIG_FERIADOS: ['fecha', 'nombre', 'anio'],
   ARCHIVOS: [
     'archivo_id', 'solicitud_id', 'subsolicitud_id',
-    'nombre_original', 'url', 'tipo_mime', 'tamano_bytes', 'fecha_subida'
+    'nombre_original', 'url', 'tipo_mime', 'tamano_bytes', 'fecha_subida',
+    // Portal de clientes (2026-10-07): 'equipo:<correo>' = lo entregó el equipo
+    // (contrato, F30…); vacío = lo subió quien pidió.
+    'subido_por'
   ],
   USUARIOS: [
     'usuario_id', 'nombre', 'email', 'empresa_id', 'rol',

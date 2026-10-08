@@ -95,6 +95,12 @@ async function subirArchivo(db, data) {
   const esDuenio = compararEmail_(data.email, solicitud.solicitante_email) ||
     (esVerdadero_(solicitud.es_cliente) && compararEmail_(data.email, solicitud.correo_cliente));
   if (!esDuenio) return errorForbidden('El correo no coincide con el registrado para esta solicitud.');
+  return guardarArchivo_(db, data, '');
+}
+
+// El cuerpo común: valida tipo, tamaño y límites, sube a R2 y registra. `subidoPor`
+// lo fija SIEMPRE quien llama desde el servidor (nunca viene del pedido).
+async function guardarArchivo_(db, data, subidoPor) {
 
   let bytes;
   try { bytes = Buffer.from(String(data.contenido_base64), 'base64'); } catch (e) { bytes = null; }
@@ -123,7 +129,7 @@ async function subirArchivo(db, data) {
   agregarFila_(db, 'ARCHIVOS', {
     archivo_id: archivoId, solicitud_id: data.solicitud_id, subsolicitud_id: data.subsolicitud_id || '',
     nombre_original: nombreSeguro_(data.nombre_archivo), url, tipo_mime: tipo.mime, tamano_bytes: bytes.length,
-    fecha_subida: new Date().toISOString()
+    fecha_subida: new Date().toISOString(), subido_por: subidoPor || ''
   });
   return { archivo_id: archivoId, url, tipo_mime: tipo.mime, tamano_bytes: bytes.length };
 }
@@ -155,4 +161,31 @@ async function eliminarDelAlmacen(archivo) {
   return Almacenamiento.eliminarArchivo_(claveR2_(archivo.solicitud_id, archivo.archivo_id));
 }
 
-module.exports = { subirArchivo, servirArchivo, eliminarDelAlmacen, esArchivoPropio, resolverTipo_, LIMITES_TAMANO, URL_PUBLICA };
+/**
+ * Portal de clientes (2026-10-07): el equipo entrega un documento (contrato,
+ * F30, factura…) en un ítem. Mismas reglas que tocar el ítem en la Bandeja
+ * (lo suyo, o todo el departamento si es su jefatura; Gerencia solo mira).
+ * Queda marcado como del equipo y, salvo que se pida lo contrario, se avisa en
+ * la conversación del ítem: así le llega a quien pidió (portal, campana o correo).
+ */
+async function subirArchivoEquipo(db, data, contexto) {
+  data = data || {};
+  if (!contexto || contexto.rol === 'GERENCIA') return errorForbidden('Tu rol no puede entregar documentos.');
+  const sub = leerFilas_(db, 'SUBSOLICITUDES', COLUMNAS.SUBSOLICITUDES).find((s) => s.subsolicitud_id === data.subsolicitud_id);
+  if (!sub) return errorValidacion('subsolicitud_id', 'Ese ítem no existe.');
+  const BO = require('./solicitudesBackoffice');
+  const veto = BO.vetoFueraDeAlcance_(db, contexto, sub, 'entregar documentos');
+  if (veto) return veto;
+  if (!data.nombre_archivo || !data.contenido_base64) return errorValidacion('archivo', 'Falta el archivo.');
+  const r = await guardarArchivo_(db, { solicitud_id: sub.solicitud_id, subsolicitud_id: sub.subsolicitud_id, nombre_archivo: data.nombre_archivo, contenido_base64: data.contenido_base64 },
+    'equipo:' + String(contexto.email || '').toLowerCase());
+  if (!r || !r.archivo_id) return r;
+  if (data.avisar !== false) {
+    const Comentarios = require('./comentarios');
+    Comentarios.agregarComentario(db, { solicitud_id: sub.solicitud_id, subsolicitud_id: sub.subsolicitud_id, es_interno: false,
+      texto: (String(data.mensaje || '').trim() || 'Te mandé un documento') + ': ' + nombreSeguro_(data.nombre_archivo) }, contexto);
+  }
+  return r;
+}
+
+module.exports = { subirArchivo, subirArchivoEquipo, servirArchivo, eliminarDelAlmacen, esArchivoPropio, resolverTipo_, LIMITES_TAMANO, URL_PUBLICA };

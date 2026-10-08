@@ -539,6 +539,8 @@ function getCola(db, filtros, contexto) {
       empresa_id: s.empresa_id, empresa_nombre: s.empresa_nombre || s.empresa_id, plataforma_nombre: s.plataforma_nombre || s.plataforma || '',
       solicitante_nombre: s.solicitante_nombre || '', solicitante_email: s.solicitante_email || '',
       es_cliente: s.es_cliente === true || s.es_cliente === 'TRUE', empresa_cliente: s.empresa_cliente || '',
+      // Portal de clientes: el pedido lo hizo un contratista desde su teléfono.
+      origen: s.origen || '', cliente_obra: s.cliente_obra || '',
       depto: i.depto || '', depto_nombre: i.depto_nombre || '', servicio_nombre: i.servicio_nombre || '',
       // Tomar: lo sin asignar y abierto de un departamento donde la persona trabaja.
       puede_tomar: !!i.depto && !asignado && ESTADOS_CERRADOS.indexOf(i.estado) === -1 && i.estado !== ESTADOS.S08 && Servicios.puedeTrabajar_(rolesDepto[i.depto]),

@@ -721,5 +721,5 @@ module.exports = {
   actualizarEstado, actualizarPrioridad, comprometerFecha, derivarSolicitud,
   editarContenidoSubsolicitud, getDetalle, tomarItem, recibirItems,
   recalcularEstadoDerivado_, calcularEstadoDerivado_,
-  buscarSolicitudPorId_, buscarSubsolicitud_, fechaHoraCelda_
+  buscarSolicitudPorId_, buscarSubsolicitud_, fechaHoraCelda_, vetoFueraDeAlcance_
 };

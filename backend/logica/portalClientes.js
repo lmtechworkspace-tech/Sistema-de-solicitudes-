@@ -519,9 +519,19 @@ function pedido(db, data, ctx) {
   const v = SP.estadoPublico(db, s.solicitud_id, s.solicitante_email);
   if (v && (v._forbidden || v._validationError)) return v;
   // Los archivos se bajan con la sesión (clienteArchivo), nunca con el enlace con llave.
+  // De cada uno se dice si lo entregó el equipo (y quién) o lo mandó el contratista.
+  const subidoPor = {};
+  leer_(db, 'ARCHIVOS').filter((a) => a.solicitud_id === s.solicitud_id).forEach((a) => { subidoPor[a.archivo_id] = String(a.subido_por || ''); });
+  const correosEquipo = Object.keys(subidoPor).map((k) => subidoPor[k]).filter((x) => x.indexOf('equipo:') === 0).map((x) => x.slice(7));
+  const fichas = correosEquipo.length ? DirectorioPersonas.fichas(db, correosEquipo) : {};
   v.subsolicitudes.forEach((it) => {
     it.estado_cliente = estadoCliente_(it.estado);
-    it.archivos = (it.archivos || []).map((a) => ({ archivo_id: a.archivo_id, nombre: a.nombre_original, tipo_mime: a.tipo_mime, tamano_bytes: a.tamano_bytes, fecha: a.fecha_subida }));
+    it.archivos = (it.archivos || []).map((a) => {
+      const sp = subidoPor[a.archivo_id] || '';
+      const correo = sp.indexOf('equipo:') === 0 ? sp.slice(7) : '';
+      return { archivo_id: a.archivo_id, nombre: a.nombre_original, tipo_mime: a.tipo_mime, tamano_bytes: a.tamano_bytes, fecha: a.fecha_subida,
+        del_equipo: !!correo, quien: correo ? ((fichas[correo] || {}).nombre || 'El equipo') : '' };
+    });
   });
   delete v.url_pdf;
   delete v.posicion_cola;

@@ -303,7 +303,11 @@
       var est = it.estado_cliente;
       var nota = it.estado === 'S06' ? 'Te preguntaron: ' + (it.pregunta_pendiente || 'revisa la conversación') : (it.estado === 'S08' ? 'Está listo. ¿Quedó bien?' : (EST_ITEM[est] || '') + (it.fecha_comprometida && est === 'CURSO' ? ' · para el ' + fecha(String(it.fecha_comprometida).slice(0, 10)) : ''));
       return '<div class="item-sub"><b>' + esc(multi ? it.titulo.split(' · ').slice(1).join(' · ') || it.titulo : it.titulo) + '</b>' + chip(est) + '<span class="sub">' + esc(nota) + (it.responsable_nombre && est !== 'ENVIADO' ? ' · ' + esc(it.responsable_nombre) : '') + '</span>' +
-        (it.archivos || []).map(function (a) { return '<div class="doc">' + ico(/^image\//.test(a.tipo_mime) ? 'camara' : 'doc') + '<span class="grow">' + esc(a.nombre) + '</span><button type="button" class="btn btn-main btn-chico" data-descargar="' + esc(a.archivo_id) + '" style="width:auto">Abrir</button></div>'; }).join('') +
+        (it.archivos || []).slice().sort(function (x, y) { return (y.del_equipo ? 1 : 0) - (x.del_equipo ? 1 : 0); }).map(function (a) {
+          return '<div class="doc">' + ico(/^image\//.test(a.tipo_mime) ? 'camara' : 'doc') + '<span class="grow">' + esc(a.nombre) +
+            '<small class="sub" style="display:block;font-weight:400">' + (a.del_equipo ? 'Te lo mandó ' + esc(a.quien) : 'Lo mandaste tú') + ' · ' + esc(fecha(a.fecha, true)) + '</small></span>' +
+            '<button type="button" class="btn ' + (a.del_equipo ? 'btn-main' : 'btn-sec') + ' btn-chico" data-descargar="' + esc(a.archivo_id) + '" style="width:auto">Abrir</button></div>';
+        }).join('') +
         (it.estado === 'S08' ? '<div class="fila" style="flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ok btn-chico" data-confirmar="' + esc(it.subsolicitud_id) + '">' + ico('check') + 'Sí, quedó bien</button><button type="button" class="btn btn-sec btn-chico" data-algo-mal="' + esc(it.subsolicitud_id) + '" style="width:auto">Algo está mal</button></div>' : '') +
       '</div>';
     }).join('');

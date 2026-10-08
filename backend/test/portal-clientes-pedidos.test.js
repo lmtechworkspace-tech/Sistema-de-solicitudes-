@@ -143,3 +143,26 @@ test('resuelto por el equipo, el contratista confirma desde el portal y queda re
   assert.equal(p.estado, 'LISTO');
   assert.ok(filas(db, 'PORTAL_REGISTRO').some((x) => x.accion === 'CONFIRMACION'));
 });
+
+test('la Bandeja sabe que el pedido viene del portal; entrega documentos solo quien atiende el ítem', async () => {
+  const db = dbPortal();
+  const tok = await activado(db, 'CLI-1', RUT_PEDRO, 'Pedro Sáez');
+  const obra = (await cliente(db, 'clienteGuardarObra', { cliente_token: tok, nombre: 'Los Robles' })).body.data;
+  const solId = (await cliente(db, 'clienteCrearPedido', { cliente_token: tok, plantilla_id: 'f30', obra_id: obra.obra_id, datos: { mes: 'septiembre' } })).body.data.solicitud_id;
+  let r = await staff(db, VANESSA, 'getColaSolicitudes', {});
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const it = r.body.data.items.find((x) => x.solicitud_id === solId);
+  assert.equal(it.origen, 'PORTAL');
+  assert.equal(it.empresa_cliente, 'Constructora Cerro Alto SpA');
+  assert.equal(it.cliente_obra, 'Los Robles');
+  // Lisseth (JEFATURA de RR. HH.) puede; una cuenta sin el ítem, no; el almacenamiento no está en pruebas.
+  const doc = { subsolicitud_id: solId + '-01', nombre_archivo: 'F30.pdf', contenido_base64: Buffer.from('%PDF-1.4 prueba').toString('base64') };
+  r = await staff(db, VANESSA, 'subirArchivoEquipo', doc);
+  assert.notEqual(r.status, 403, 'la encargada pasa el permiso: ' + JSON.stringify(r.body));
+  r = await staff(db, LISSETH, 'subirArchivoEquipo', doc);
+  assert.notEqual(r.status, 403, 'la jefatura del área también');
+  const vacio = (hoja) => Object.fromEntries(COLUMNAS[hoja].map((c) => [c, '']));
+  agregarFila_(db, 'CUENTAS_PORTAL', Object.assign(vacio('CUENTAS_PORTAL'), { cuenta_id: 'c-otro@homepymes.cl', usuario: 'otro', nombre: 'Otro', emails: JSON.stringify(['otro@homepymes.cl']), rol: 'SOLICITANTE', activo: true }));
+  r = await staff(db, 'otro@homepymes.cl', 'subirArchivoEquipo', doc);
+  assert.equal(r.status, 403, 'quien no atiende el ítem no entrega');
+});

@@ -716,6 +716,8 @@ const ACCIONES = {
   // (Hompy ve las redes sociales). Ver credenciales.js.
   // Portal de clientes (2026-10-07): la administración, para el super admin y quien él autorice.
   portalAdmEstado: (db, data, contexto) => PortalClientes.admEstado(db, data, contexto),
+  // El equipo entrega un documento en un ítem (lo ve quien pidió: portal, Mis solicitudes).
+  subirArchivoEquipo: (db, data, contexto) => ArchivosSolicitud.subirArchivoEquipo(db, data, contexto),
   portalAdmCliente: (db, data, contexto) => PortalClientes.admCliente(db, data, contexto),
   portalAdmGuardarCliente: (db, data, contexto) => PortalClientes.admGuardarCliente(db, data, contexto),
   portalAdmGuardarObra: (db, data, contexto) => PortalClientes.admGuardarObra(db, data, contexto),

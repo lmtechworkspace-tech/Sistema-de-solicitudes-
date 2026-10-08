@@ -539,7 +539,8 @@
         var titulos = todos.map(function (x) { return x.numero_item + '. ' + (x.titulo || ''); });
         var personas = {}, lista = [];
         todos.forEach(function (x) { if (x.asignado && !personas[x.asignado]) { personas[x.asignado] = true; lista.push(PY.persona(x.asignado, x.asignado_nombre)); } });
-        var donde = i0.depto ? (f.cola ? '' : i0.depto_nombre + ' · ') + (i0.servicio_nombre || 'Otro pedido') : (i0.empresa_nombre || '');
+        var donde = i0.origen === 'PORTAL' ? 'Portal · ' + (i0.empresa_cliente || '') + (i0.cliente_obra ? ' · ' + i0.cliente_obra : '')
+          : (i0.depto ? (f.cola ? '' : i0.depto_nombre + ' · ') + (i0.servicio_nombre || 'Otro pedido') : (i0.empresa_nombre || ''));
         var resumen = pasosTxt(todos).texto;
         return '<tr class="bj2-tr bj2-tr-sol' + (abierta ? ' bj2-tr-sol--abierta' : '') + '" data-sol="' + U.esc(g.id) + '" tabindex="0" title="Abrir la solicitud completa">' +
             '<td class="bj2-tc-check"><button type="button" class="bj2-expandir js-bj2-expandir" data-sol="' + U.esc(g.id) + '" aria-expanded="' + abierta + '" aria-label="' + (abierta ? 'Ocultar' : 'Ver') + ' los ' + todos.length + ' ítems de ' + U.esc(g.id) + '">' + U.ico('derecha', 14) + '</button></td>' +
@@ -562,7 +563,8 @@
   function filaSolicitudSola(i, todos) {
     var marcado = !!sel_[i.subsolicitud_id];
     var persona = i.asignado ? PY.persona(i.asignado, i.asignado_nombre) : null;
-    var donde = i.depto ? (f.cola ? '' : i.depto_nombre + ' · ') + (i.servicio_nombre || 'Otro pedido') : (i.empresa_nombre || '') + (i.tipo_nombre ? ' · ' + i.tipo_nombre : '');
+    var donde = i.origen === 'PORTAL' ? 'Portal · ' + (i.empresa_cliente || '') + (i.cliente_obra ? ' · ' + i.cliente_obra : '')
+      : (i.depto ? (f.cola ? '' : i.depto_nombre + ' · ') + (i.servicio_nombre || 'Otro pedido') : (i.empresa_nombre || '') + (i.tipo_nombre ? ' · ' + i.tipo_nombre : ''));
     var paso = caminoDe(i).filter(function (p) { return p.est === 'actual' || p.est === 'falta'; })[0];
     return '<tr class="bj2-tr bj2-tr-sol bj2-tr-sol--uno' + (marcado ? ' bj2-fila--sel' : '') + '" data-bj2-item="' + U.esc(i.subsolicitud_id) + '" data-sol="' + U.esc(i.solicitud_id) + '" tabindex="0">' +
       '<td class="bj2-tc-check">' + (datos_.solo_lectura ? '' : '<label class="bj2-check" title="Seleccionar"><input type="checkbox" class="js-bj2-sel"' + (marcado ? ' checked' : '') + ' aria-label="Seleccionar ' + U.esc(i.titulo) + '"></label>') + '</td>' +
@@ -1232,7 +1234,9 @@
       cab.querySelectorAll('.sx2-tenue').forEach(function (e) { if (!e.closest('.bj2-det-sub')) e.remove(); });
       sub.innerHTML = (subs.length > 1 ? '<span class="bj2-det-mixto">' + barraAvance(subs) + '<span>' + U.esc(pasosTxt(subs).texto) + '</span></span>' : U.badge(estadoVis(s.estado_derivado), tonoEstado(s.estado_derivado))) +
         U.badge(s.prioridad_derivada || '—', tonoPrioridad(s.prioridad_derivada), true) +
-        '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(s.empresa_nombre || s.empresa_id || '') + ' · ' + U.esc(s.solicitante_nombre || s.solicitante_email || '') + '</span>';
+        (s.origen === 'PORTAL'
+          ? '<span class="sx2-tenue" style="font-size:.8125rem">Portal de clientes · ' + U.esc(s.empresa_cliente || '') + (s.cliente_obra ? ' · obra ' + U.esc(s.cliente_obra) : '') + ' · ' + U.esc(s.solicitante_nombre || '') + '</span>'
+          : '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(s.empresa_nombre || s.empresa_id || '') + ' · ' + U.esc(s.solicitante_nombre || s.solicitante_email || '') + '</span>');
       var nConv = conversacion_().length;
       // Etapa 4: el ítem con su paso siguiente y, debajo, la conversación con quien pidió, en la misma vista.
       var tabs = [['seguimiento', 'Seguimiento' + (nConv ? ' · ' + nConv + (nConv === 1 ? ' mensaje' : ' mensajes') : '')], ['ficha', 'Ficha'], ['actividad', 'Actividad'], ['archivos', 'Archivos (' + (detalle.archivos || []).length + ')']];
@@ -1261,7 +1265,17 @@
 
     // 2026-10-07: con el correo caído, quien pidió solo ve los avisos si entra a SIGSO.
     function avisoCorreo(s) {
-      if (!datos_ || !datos_.correo_caido || soloLectura()) return '';
+      if (soloLectura()) return '';
+      // Pedido del portal de clientes: el contratista ve las respuestas al entrar a su portal.
+      // Mientras no tenga avisos en el teléfono, un WhatsApp directo a su número.
+      if (s.origen === 'PORTAL') {
+        var tel = String(s.telefono_cliente || '').replace(/\D/g, '');
+        if (tel.length === 9 && tel[0] === '9') tel = '56' + tel;
+        var msj = 'Hola ' + String(s.solicitante_nombre || '').split(' ')[0] + ', te respondimos en tu portal de clientes de HomePymes (pedido ' + s.solicitud_id + '). Entra a revisarlo.';
+        return '<p class="bj2-correo-caido bj2-aviso-portal">' + U.ico('info', 15) + '<span><b>Pedido del portal de clientes.</b> ' + U.esc(s.solicitante_nombre || 'El contratista') + ' ve tus mensajes y documentos cuando entra a su portal. Si es urgente, avísale.</span>' +
+          '<a class="sx2-boton sx2-boton--secundario sx2-boton--sm" href="https://wa.me/' + (tel.length >= 11 ? tel : '') + '?text=' + encodeURIComponent(msj) + '" target="_blank" rel="noopener">' + U.ico('comentario', 14) + 'Avisar por WhatsApp</a></p>';
+      }
+      if (!datos_ || !datos_.correo_caido) return '';
       var nombre = s.solicitante_nombre || 'quien pidió';
       var texto = 'Hola ' + String(nombre).split(' ')[0] + ', te respondí en SIGSO sobre la solicitud ' + s.solicitud_id + '. Revísala en Mis solicitudes: ' + location.origin + location.pathname + '#/mis_solicitudes';
       return '<p class="bj2-correo-caido">' + U.ico('alerta', 15) + '<span><b>El correo de SIGSO no está saliendo.</b> ' + U.esc(nombre) + ' solo ve tus mensajes y cambios si entra a SIGSO. Avísale por otro medio.</span>' +
@@ -1375,6 +1389,34 @@
     // esencial (número, título, estado y lo que sigue). Abierto queda uno a la vez por defecto: el que se
     // tocó en la Bandeja o el primero por hacer. Lo terminado va atenuado, con un check, al final.
     var expandido = null, enCurso_ = {};
+    // 2026-10-07 (portal de clientes): lo que se entrega (contrato, F30…) se adjunta al ítem y le
+    // llega a quien pidió. Aquí se ve qué mandó cada parte.
+    function docsItem(it) {
+      var as = (detalle.archivos || []).filter(function (a) { return a.subsolicitud_id === it.subsolicitud_id; });
+      var puede = !soloLectura() && ['S09', 'S10', 'S11'].indexOf(it.estado) === -1;
+      if (!as.length && !puede) return '';
+      return '<div class="bj2-it__docs"><span class="bj2-it__et">' + U.ico('documento', 12) + ' Documentos' + (as.length ? ' · ' + as.length : '') + '</span>' +
+        (as.length ? '<ul class="bj2-docs">' + as.map(function (a) {
+          var equipo = String(a.subido_por || '').indexOf('equipo:') === 0;
+          return '<li><a class="sx2-enlace" href="' + U.esc(a.url) + '" target="_blank" rel="noopener">' + U.ico(/^image\//.test(a.tipo_mime || '') ? 'imagen' : 'documento', 14) + U.esc(a.nombre_original || 'Archivo') + '</a>' +
+            '<span class="bj2-docs__quien' + (equipo ? ' bj2-docs__quien--equipo' : '') + '">' + (equipo ? 'Entregado por ' + U.esc(PY.persona(String(a.subido_por).slice(7)).nombre) : 'Lo mandó quien pidió') + ' · ' + U.esc(PY.fecha(a.fecha_subida, true)) + '</span></li>';
+        }).join('') + '</ul>' : '') +
+        (puede ? '<label class="sx2-boton sx2-boton--secundario sx2-boton--sm bj2-entregar">' + U.ico('subir', 14) + 'Entregar un documento' +
+          '<input type="file" class="js-bj2-entregar" data-id="' + U.esc(it.subsolicitud_id) + '" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple hidden></label>' : '') +
+      '</div>';
+    }
+    function subirEntregables(subId, files, avisar) {
+      var fallas = [];
+      return files.reduce(function (p, fl) {
+        return p.then(function () {
+          if (fl.size > 10 * 1024 * 1024) { fallas.push(fl.name + ' pesa más de 10 MB'); return; }
+          return U.leerBase64(fl).then(function (b64) {
+            return api('subirArchivoEquipo', { subsolicitud_id: subId, nombre_archivo: fl.name, contenido_base64: b64, avisar: avisar }).then(function (r) { if (!r || !r.ok) fallas.push(fl.name + ': ' + ((r && r.message) || 'no se pudo')); });
+          });
+        });
+      }, Promise.resolve()).then(function () { return fallas; });
+    }
+
     function itemsHtml(subs) {
       var trans = detalle.transiciones_por_subsolicitud || {};
       var nuevos = subs.filter(function (it) { return it.estado === 'S01'; });
@@ -1448,6 +1490,7 @@
               (it.contexto ? '<p><b>Contexto:</b> ' + U.esc(it.contexto) + '</p>' : '') + (it.resultado_esperado ? '<p><b>Resultado esperado:</b> ' + U.esc(it.resultado_esperado) + '</p>' : '') + '</details>' : '') +
             (multi ? '<div class="bj2-it__conv" id="bj2-conv-' + U.esc(id) + '"><span class="bj2-it__et">' + U.ico('comentario', 12) + ' Conversación de este ítem' + (msj.length ? ' · ' + msj.length : '') + '</span>' +
               conversacionHtml(detalle.solicitud || {}, msj, { sub: id }) + '</div>' : '') +
+            docsItem(it) +
             '<div class="bj2-it__accion">' +
               '<span class="bj2-it__et">' + (hecho ? 'Camino recorrido' : 'Camino y siguiente paso') + '</span>' +
               caminoHtml(it) +
@@ -1527,7 +1570,8 @@
         if (it.estado === 'S01') falta.push('recibido');
         if (!it.fecha_comprometida) falta.push('con fecha comprometida hoy');
         campos = (falta.length ? '<p class="bj2-completa">' + U.ico('info', 14) + '<span>Este ítem no estaba ' + falta.join(' ni ') + '. Al resolverlo queda registrado como <b>' + falta.join(' y ') + '</b> (resuelto el mismo día), para que el camino quede completo.</span></p>' : '') +
-          PY.campo('¿Qué se hizo? (opcional)', '<textarea class="sx2-input" name="comentario" maxlength="1000" placeholder="Lo ve el solicitante en el correo y en la conversación"></textarea>', 'Le pedimos que confirme; si no responde, se cierra solo a los 5 días hábiles.');
+          PY.campo('¿Qué se hizo? (opcional)', '<textarea class="sx2-input" name="comentario" maxlength="1000" placeholder="Lo ve el solicitante en el correo y en la conversación"></textarea>', 'Le pedimos que confirme; si no responde, se cierra solo a los 5 días hábiles.') +
+          PY.campo('Adjunta lo que entregas (opcional)', '<input class="sx2-input" type="file" name="entregables" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple>', 'El contrato, el F30, la factura… Quien pidió lo abre desde su portal o Mis solicitudes.');
         boton = 'Marcar resuelta';
       } else if (acc === 'preguntar') {
         campos = PY.campo('¿Qué necesitas saber?', '<textarea class="sx2-input" name="comentario" maxlength="1000" placeholder="Le llega escrita por correo"></textarea>', 'El ítem queda en "Esperando respuesta" y vuelve solo a "En curso" cuando conteste.');
@@ -1612,14 +1656,18 @@
       }
       var btn = form.querySelector('[type=submit]');
       btn.disabled = true;
-      api(accion, datos).then(function (r) {
+      var entregables = acc === 'resolver' && form.entregables ? [].slice.call(form.entregables.files || []) : [];
+      (entregables.length ? subirEntregables(id, entregables, false) : Promise.resolve([])).then(function (fallas) {
+        if (fallas.length) { btn.disabled = false; return mal('No se pudo subir: ' + fallas.join('; ') + '. El ítem no se marcó resuelto.'); }
+        return api(accion, datos).then(function (r) {
         btn.disabled = false;
         if (!r || !r.ok) return mal((r && r.message) || 'No se pudo aplicar.');
         abiertoAcc[id] = '';
         var completo = r.data && r.data.completado && r.data.completado.length;
-        PY.aviso(acc === 'recibir' ? 'Recibido: le avisamos a quien pidió para cuándo estará.' : (completo ? 'Resuelta. El camino quedó completo: recibido y con fecha hoy.' : 'Listo.'), 'exito');
+        PY.aviso(acc === 'recibir' ? 'Recibido: le avisamos a quien pidió para cuándo estará.' : (completo ? 'Resuelta. El camino quedó completo: recibido y con fecha hoy.' : (entregables.length ? 'Resuelta, con ' + entregables.length + (entregables.length === 1 ? ' documento entregado.' : ' documentos entregados.') : 'Listo.')), 'exito');
         cargarDetalle();
         avisarCambio();
+        });
       });
     }
     // «Recibir los N y dar fecha»: un envío, un aviso a quien pidió.
@@ -1789,6 +1837,18 @@
       form.texto.value = 'Hola, no tengo acceso al enlace de Drive' + (multi && !form.getAttribute('data-sub') ? ' del ítem ' + b.getAttribute('data-n') : '') + '. ¿Puedes subir el archivo en SIGSO? En Mis solicitudes abre esta solicitud y usa «Adjuntar archivos», junto a la conversación. O compártelo como «Cualquier persona con el enlace». Gracias.';
       form.scrollIntoView({ block: 'center', behavior: 'smooth' });
       form.texto.focus();
+    });
+    d.el.addEventListener('change', function (ev) {
+      var inp = ev.target;
+      if (!inp.classList || !inp.classList.contains('js-bj2-entregar')) return;
+      var files = [].slice.call(inp.files || []);
+      if (!files.length) return;
+      PY.aviso('Subiendo ' + files.length + (files.length === 1 ? ' documento…' : ' documentos…'), 'info');
+      subirEntregables(inp.getAttribute('data-id'), files, true).then(function (fallas) {
+        if (fallas.length) PY.aviso('No se pudo subir: ' + fallas.join('; '), 'error');
+        else PY.aviso('Entregado: le avisamos a quien pidió.', 'exito');
+        cargarDetalle(); avisarCambio();
+      });
     });
     d.el.addEventListener('submit', function (ev) {
       ev.preventDefault();

@@ -655,3 +655,15 @@ button.bj2-it__cab:focus-visible { outline: 2px solid var(--sx-primario); outlin
 .bj2-tabla--sol td.bj2-tc-acc { padding-left: 4px; text-overflow: clip; }
 .bj2-tabla--sol .bj2-sig--espera { padding: 4px 8px; }
 .bj2-tabla--sol td.bj2-tc-sem { padding-left: 2px; padding-right: 2px; text-overflow: clip; text-align: center; }
+
+/* Portal de clientes: documentos del ítem (lo que mandó quien pidió y lo que entregó el equipo). */
+.bj2-it__docs { display: flex; flex-direction: column; gap: 8px; }
+.bj2-it__docs .bj2-it__et { display: inline-flex; align-items: center; gap: 5px; margin: 0; }
+.bj2-docs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bj2-docs li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font: var(--sx-t-chico); }
+.bj2-docs a { display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.bj2-docs__quien { color: var(--sx-texto-3); font-size: .75rem; }
+.bj2-docs__quien--equipo { color: var(--sx-ok); font-weight: 600; }
+.bj2-entregar { align-self: flex-start; cursor: pointer; }
+.bj2-aviso-portal { background: var(--sx-info-suave); border-color: color-mix(in srgb, var(--sx-info) 35%, transparent); }
+.bj2-aviso-portal > svg { color: var(--sx-info); }
