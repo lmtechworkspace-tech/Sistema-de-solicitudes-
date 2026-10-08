@@ -650,7 +650,8 @@ function admEstado(db, data, contexto) {
   });
   const out = {
     clientes, equipos, areas: AREAS_PORTAL.map((a) => ({ clave: a, nombre: (Servicios.departamento_(a) || {}).nombre || a })),
-    catalogo_clientes: cat.filter((c) => v_(c.activo) || c.activo === '').map((c) => ({ cliente_id: c.cliente_id, razon_social: c.razon_social, rut: rutBonito_(c.rut) }))
+    catalogo_clientes: cat.filter((c) => v_(c.activo) || c.activo === '').map((c) => ({ cliente_id: c.cliente_id, razon_social: c.razon_social, rut: rutBonito_(c.rut),
+        correo: c.correo || '', telefono: c.telefono || '', direccion: c.direccion || '', representante: c.representante_legal || '' }))
       .sort((a, b) => String(a.razon_social).localeCompare(String(b.razon_social), 'es')),
     puede_otorgar: !!contexto.super_admin, url_portal: URL_PORTAL
   };
@@ -682,10 +683,114 @@ function admCliente(db, data, contexto) {
   };
 }
 
+// ---------------------------------------------------------------- base de contratistas
+// 2026-10-08: la ficha de clientes de SIGSO (CAT_CLIENTES) se edita desde aquí, y
+// un contratista que no estaba se crea aquí mismo. Es UNA sola base: Control
+// interno, prestaciones SGC y Finanzas la leen, así que el cliente nuevo queda
+// disponible en todo SIGSO. Nunca se borra (otras tablas apuntan a cliente_id):
+// se da de baja con `activo`. Cada cambio queda en PORTAL_REGISTRO.
+const CAMPOS_FICHA = {
+  razon_social: ['Razón social', 150], rut: ['RUT', 15], codigo_cliente: ['Código', 30], contacto: ['Contacto', 120],
+  correo: ['Correo', 120], telefono: ['Teléfono', 30], representante_legal: ['Representante legal', 120], direccion: ['Dirección', 150]
+};
+function fichaPublica_(c, perfiles) {
+  const p = perfiles ? perfiles[c.cliente_id] : null;
+  return { cliente_id: c.cliente_id, razon_social: c.razon_social || '', rut: c.rut ? rutBonito_(c.rut) : '', codigo_cliente: c.codigo_cliente || '', contacto: c.contacto || '',
+    correo: c.correo || '', telefono: c.telefono || '', representante_legal: c.representante_legal || '', direccion: c.direccion || '',
+    activo: v_(c.activo) || c.activo === '' || c.activo == null, portal: p ? (v_(p.habilitado) ? 'HABILITADO' : 'DESHABILITADO') : '' };
+}
+/** Revisa un campo de la ficha; devuelve [valor limpio] o un error de validación. */
+function validarCampoFicha_(db, campo, valor, clienteId) {
+  const def = CAMPOS_FICHA[campo];
+  let v = txt_(valor, def[1]);
+  if (campo === 'razon_social' && !v) return errorValidacion(campo, 'La razón social no puede quedar vacía.');
+  if (campo === 'rut') {
+    if (!rutValido_(v)) return errorValidacion(campo, 'Ese RUT no es válido. Revísalo.');
+    const otro = leer_(db, 'CAT_CLIENTES').find((c) => c.cliente_id !== clienteId && rutNorm_(c.rut) === rutNorm_(v));
+    if (otro) return errorValidacion(campo, 'Ese RUT ya está en la base: ' + (otro.razon_social || otro.cliente_id) + '.');
+    v = rutBonito_(v);
+  }
+  if (campo === 'correo' && v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return errorValidacion(campo, 'Ese correo no es válido.');
+  return [v];
+}
+function nuevoClienteId_(db, rut) {
+  const ids = {}; leer_(db, 'CAT_CLIENTES').forEach((c) => { ids[c.cliente_id] = true; });
+  const base = 'CLI-' + rutNorm_(rut).slice(0, -1);
+  let id = base, n = 2;
+  while (ids[id]) id = base + '-' + (n++);
+  return id;
+}
+/** Crea la ficha en la base de clientes. Devuelve la fila o un error de validación. */
+function crearFicha_(db, datos, contexto) {
+  const fila = { estado: 'ACTIVO', bloqueo: '', activo: true };
+  for (const campo of Object.keys(CAMPOS_FICHA)) {
+    const r = validarCampoFicha_(db, campo, datos[campo], '');
+    if (r._validationError) return r;
+    fila[campo] = r[0];
+  }
+  fila.cliente_id = nuevoClienteId_(db, fila.rut);
+  agregarFila_(db, 'CAT_CLIENTES', fila);
+  registrar_(db, { cliente_id: fila.cliente_id, actor: actorStaff_(contexto), accion: 'BASE_NUEVO', detalle: fila.razon_social + ' · ' + fila.rut });
+  return fila;
+}
+
+function admBase(db, data, contexto) {
+  if (!puedeAdministrar_(db, contexto)) return negar_();
+  const perfiles = {}; leer_(db, 'PORTAL_CLIENTES').forEach((p) => { perfiles[p.cliente_id] = p; });
+  const contratistas = leer_(db, 'CAT_CLIENTES').map((c) => fichaPublica_(c, perfiles))
+    .sort((a, b) => String(a.razon_social).localeCompare(String(b.razon_social), 'es'));
+  return { contratistas, campos: Object.keys(CAMPOS_FICHA).map((k) => ({ clave: k, nombre: CAMPOS_FICHA[k][0] })) };
+}
+
+/**
+ * Crea (sin cliente_id) o corrige (con cliente_id + cambios {campo: valor}) una
+ * ficha de la base. `cambios.activo` da de baja o reactiva.
+ */
+function admGuardarFicha(db, data, contexto) {
+  if (!puedeAdministrar_(db, contexto)) return negar_();
+  const perfiles = {}; leer_(db, 'PORTAL_CLIENTES').forEach((p) => { perfiles[p.cliente_id] = p; });
+  if (!data.cliente_id) {
+    const r = crearFicha_(db, data.datos || {}, contexto);
+    if (r._validationError) return r;
+    return { contratista: fichaPublica_(r, perfiles), creado: true };
+  }
+  const clienteId = txt_(data.cliente_id, 80);
+  const actual = clienteCat_(db, clienteId);
+  if (!actual) return errorValidacion('cliente_id', 'Ese contratista no existe en la base.');
+  const cambios = data.cambios || {};
+  const fila = {}, detalle = [];
+  for (const campo of Object.keys(cambios)) {
+    if (campo === 'activo') {
+      const activo = cambios.activo === true || cambios.activo === 'true';
+      if (!activo && perfiles[clienteId] && v_(perfiles[clienteId].habilitado)) return errorValidacion('activo', 'Tiene el portal habilitado: deshabilítalo primero en su ficha.');
+      fila.activo = activo; detalle.push(activo ? 'reactivado' : 'dado de baja');
+      continue;
+    }
+    if (!CAMPOS_FICHA[campo]) return errorValidacion(campo, 'Ese dato no se puede editar aquí.');
+    const r = validarCampoFicha_(db, campo, cambios[campo], clienteId);
+    if (r._validationError) return r;
+    if (String(actual[campo] || '') === r[0]) continue;
+    fila[campo] = r[0];
+    detalle.push(CAMPOS_FICHA[campo][0] + ': «' + String(actual[campo] || '').slice(0, 60) + '» → «' + r[0].slice(0, 60) + '»');
+  }
+  if (Object.keys(fila).length) {
+    actualizarFilaPorId_(db, 'CAT_CLIENTES', 'cliente_id', clienteId, fila);
+    registrar_(db, { cliente_id: clienteId, actor: actorStaff_(contexto), accion: 'BASE_EDITADA', detalle: detalle.join(' · ').slice(0, 500) });
+  }
+  return { contratista: fichaPublica_(clienteCat_(db, clienteId), perfiles), cambiados: Object.keys(fila) };
+}
+
 function admGuardarCliente(db, data, contexto) {
   if (!puedeAdministrar_(db, contexto)) return negar_();
-  const clienteId = txt_(data.cliente_id, 80);
-  if (!clienteCat_(db, clienteId)) return errorValidacion('cliente_id', 'Ese cliente no existe en la ficha de clientes.');
+  const esNuevo = !data.cliente_id && !!data.nuevo;
+  if (!esNuevo && !clienteCat_(db, txt_(data.cliente_id, 80))) return errorValidacion('cliente_id', 'Ese cliente no existe en la ficha de clientes.');
+  if (esNuevo) {
+    // Se revisa antes de crear nada: un error no deja una ficha a medias.
+    for (const campo of ['razon_social', 'rut']) {
+      const r = validarCampoFicha_(db, campo, data.nuevo[campo], '');
+      if (r._validationError) return r;
+    }
+  }
   const servicios = (Array.isArray(data.servicios) ? data.servicios : []).filter((a) => AREAS_PORTAL.indexOf(a) !== -1);
   const encargados = {};
   const e = data.encargados || {};
@@ -699,6 +804,15 @@ function admGuardarCliente(db, data, contexto) {
   }
   const correo = txt_(data.correo, 120);
   if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) return errorValidacion('correo', 'Ese correo no es válido.');
+  let clienteId = txt_(data.cliente_id, 80);
+  // Contratista que no estaba en la base: se crea su ficha con los mismos datos de contacto.
+  if (esNuevo) {
+    const n = data.nuevo;
+    const r = crearFicha_(db, { razon_social: n.razon_social, rut: n.rut, codigo_cliente: n.codigo_cliente, contacto: n.contacto,
+      correo, telefono: data.telefono, direccion: data.direccion, representante_legal: data.representante }, contexto);
+    if (r._validationError) return r;
+    clienteId = r.cliente_id;
+  }
   const fila = { habilitado: data.habilitado !== false, correo, telefono: txt_(data.telefono, 30), direccion: txt_(data.direccion, 150),
     representante: txt_(data.representante, 120), servicios: JSON.stringify(servicios), encargados: JSON.stringify(encargados),
     observaciones: txt_(data.observaciones, 500), actualizado_por: actorStaff_(contexto), fecha_actualizacion: ahora_() };
@@ -804,6 +918,6 @@ function tieneAcceso(db, contexto) { try { return puedeAdministrar_(db, contexto
 
 module.exports = {
   ACCIONES_CLIENTE, ejecutarCliente, resolverCliente_,
-  admEstado, admCliente, admGuardarCliente, admGuardarObra, admGuardarTrabajador, admInvitar, admContacto, admPermisos, tieneAcceso,
+  admEstado, admCliente, admGuardarCliente, admBase, admGuardarFicha, admGuardarObra, admGuardarTrabajador, admInvitar, admContacto, admPermisos, tieneAcceso,
   rutNorm_, rutValido_, rutBonito_, pinDebil_, URL_PORTAL
 };
