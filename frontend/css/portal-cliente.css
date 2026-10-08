@@ -493,6 +493,43 @@ button.doc:active { transform: scale(.98); }
 .visor__pie .btn-sec { background: rgba(255,255,255,.1); color: #FFFFFF; border-color: rgba(255,255,255,.25); }
 @media (min-width: 620px) { .visor__pie { justify-content: center; } .visor__pie .btn { flex: 0 1 260px; } }
 
+/* ==========================================================================
+   2026-10-08 · App instalada, avisos y «Mis documentos».
+   ========================================================================== */
+/* Instalada en iPhone la barra de estado queda encima: la cabecera la respeta. */
+.top { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+.compacto .top { padding-top: calc(8px + env(safe-area-inset-top, 0px)); }
+.login { padding-top: calc(40px + env(safe-area-inset-top, 0px)); }
+
+.avisos { border: 2px solid var(--info); background: linear-gradient(180deg, var(--info-soft), var(--surface) 75%); }
+.avisos__cab { display: flex; align-items: center; gap: 10px; }
+.avisos__ico { width: 40px; height: 40px; border-radius: 50%; background: var(--info); color: var(--on-strong); display: grid; place-items: center; flex: none; animation: campanita 2.6s var(--ease) 1s 2; transform-origin: 50% 10%; }
+.avisos__ico svg { width: 22px; height: 22px; }
+.avisos p { font-size: 15.5px; }
+.avisos p svg { vertical-align: -3px; }
+.avisos .btn-main { width: auto; }
+@keyframes campanita { 0%, 30%, 100% { transform: none; } 5% { transform: rotate(14deg); } 10% { transform: rotate(-12deg); } 15% { transform: rotate(8deg); } 20% { transform: rotate(-5deg); } }
+
+.mandar--claro { background: var(--surface); color: var(--ink); border: 2px solid var(--line); min-height: 76px; }
+.mandar--claro .mandar__ico { background: var(--orange-soft); color: var(--orange); }
+.mandar--claro small { color: var(--muted); opacity: 1; }
+.card .mandar--claro { box-shadow: none; }
+
+.segmento { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border: 2px solid var(--line); border-radius: 14px; padding: 4px; gap: 4px; }
+.segmento button { min-height: 46px; border: 0; border-radius: 10px; background: none; font-weight: 700; font-size: 15.5px; color: var(--muted); transition: background-color var(--rapido), color var(--rapido); }
+.segmento button[aria-selected="true"] { background: var(--orange); color: var(--on-strong); }
+.buscar { position: relative; display: block; }
+.buscar svg { position: absolute; left: 14px; top: 50%; width: 22px; height: 22px; margin-top: -11px; color: var(--muted); pointer-events: none; }
+.buscar .inp { padding-left: 46px; }
+.chip--quitar { cursor: pointer; font: inherit; font-weight: 700; font-size: 15px; color: var(--ink); min-height: 40px; }
+.docs-mes { display: flex; flex-direction: column; gap: 10px; }
+.docs-mes h2 small { font-size: 15px; color: var(--muted); font-weight: 400; }
+.doc--fila { box-shadow: var(--shadow); padding: 12px; }
+.doc--fila .grow small + small { font-size: 13px; }
+.doc--fila .flecha { color: var(--muted); flex: none; }
+.doc--fila .flecha svg { width: 20px; height: 20px; color: var(--muted); }
+.doc__tipo img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+
 /* Sin movimiento para quien lo pidió (sobrescribe todo lo de arriba). */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition: none !important; }

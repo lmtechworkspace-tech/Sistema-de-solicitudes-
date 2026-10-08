@@ -412,7 +412,8 @@
         var e = ESTADO_CONTACTO[c.estado] || [c.estado, 'neutro'];
         return '<li class="pcl-persona"><div class="pcl-persona__cab"><span class="pcl-fila__txt"><b>' + txt(c.nombre) + '</b><small>' + txt(c.rut) + (c.cargo ? ' · ' + txt(c.cargo) : '') + (c.telefono ? ' · ' + txt(c.telefono) : '') + '</small></span>' +
           U.badge(c.rol === 'ADMIN' ? 'Administra la cuenta' : 'Colaborador', 'neutro', true) + U.badge(e[0], e[1]) + '</div>' +
-          '<p class="pcl-sub">' + (c.estado === 'INVITADO' ? (c.invitacion_vigente ? 'Invitación vigente: aún no elige su clave.' : 'La invitación venció: mándale una nueva.') : 'Último ingreso: ' + txt(c.ultimo_ingreso ? fecha(c.ultimo_ingreso, true) : 'nunca')) + '</p>' +
+          '<p class="pcl-sub">' + (c.estado === 'INVITADO' ? (c.invitacion_vigente ? 'Invitación vigente: aún no elige su clave.' : 'La invitación venció: mándale una nueva.') : 'Último ingreso: ' + txt(c.ultimo_ingreso ? fecha(c.ultimo_ingreso, true) : 'nunca') +
+            (c.estado === 'ACTIVO' ? ' · ' + (c.telefonos_con_avisos ? 'Recibe avisos en ' + c.telefonos_con_avisos + (c.telefonos_con_avisos === 1 ? ' teléfono' : ' teléfonos') : 'Sin avisos al teléfono (solo se entera si entra)') : '')) + '</p>' +
           '<div class="pcl-acciones">' +
             U.boton({ texto: c.estado === 'ACTIVO' ? 'Nueva clave (reinvitar)' : 'Reenviar invitación', icono: 'correo', sm: true, clase: 'js-pc-reinvitar', datos: { id: c.contacto_id } }) +
             (c.estado === 'BLOQUEADO' ? U.boton({ texto: 'Desbloquear', icono: 'check', sm: true, clase: 'js-pc-op', datos: { id: c.contacto_id, op: 'desbloquear' } })

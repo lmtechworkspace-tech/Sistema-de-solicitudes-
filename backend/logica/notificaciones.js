@@ -579,6 +579,20 @@ function campanaEstado_(db, destinatario, solicitudId, estado, tituloItem) {
   }]);
 }
 
+// 2026-10-08: pedidos del portal de clientes → además, aviso al teléfono del
+// contratista (portalPush.js). En sus palabras, corto; nunca frena lo demás.
+function avisoTelefono_(db, solicitudId, titulo, cuerpo) {
+  try { require('./portalPush').avisarPedido(db, solicitudId, { titulo, cuerpo }); } catch (err) { console.error('aviso al teléfono:', err); }
+}
+const AVISO_HITO_ = {
+  EN_CURSO: (o, it) => [(o.responsable || 'El equipo') + ' está con tu pedido', it.titulo || ''],
+  PREGUNTA: (o, it) => ['Te hicieron una pregunta', (o.comentario ? '«' + o.comentario + '»' : it.titulo || '') ],
+  RESUELTA: (o, it) => ['¡Tu pedido está listo!', (it.titulo || '') + '. Revísalo y confírmanos que quedó bien.'],
+  CERRADA: (o, it) => ['Pedido cerrado', it.titulo || ''],
+  RECHAZADA: (o, it) => ['No se pudo hacer tu pedido', (it.titulo || '') + (o.comentario ? ': ' + o.comentario : '')],
+  CANCELADA: (o, it) => ['Pedido cancelado', it.titulo || '']
+};
+
 function notificarCambioEstado(db, solicitudId, subsolicitudId, estadoAnterior, estadoNuevo, opciones) {
   const opts = opciones || {};
   const solicitud = leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).find((s) => s.solicitud_id === solicitudId);
@@ -597,6 +611,11 @@ function notificarCambioEstado(db, solicitudId, subsolicitudId, estadoAnterior, 
 
   const hito = hitoSolicitante_(estadoAnterior, estadoNuevo);
   if (!hito) return { enviado: false, motivo: 'no_es_hito', campana: conCuenta };
+  if (solicitud.origen === 'PORTAL' && AVISO_HITO_[hito] && !(hito === 'CERRADA' && !opts.automatico)) {
+    const responsableAviso = hito === 'EN_CURSO' ? nombreDe_(db, item.desarrollador_asignado) : '';
+    const t = AVISO_HITO_[hito](Object.assign({}, opts, { responsable: responsableAviso }), item);
+    avisoTelefono_(db, solicitudId, t[0], t[1]);
+  }
 
   // Cada pregunta es distinta: una por ítem. Los demás hitos, uno por solicitud.
   const evento = 'HITO:' + hito + ':' + (hito === 'PREGUNTA' ? subsolicitudId : solicitudId);
@@ -625,6 +644,12 @@ function notificarCambioEstado(db, solicitudId, subsolicitudId, estadoAnterior, 
   return resultado.encolado ? { encolado: true } : resultado;
 }
 
+function nombreDe_(db, email) {
+  const a = String(email || '').trim().toLowerCase();
+  if (!a) return '';
+  try { return (DirectorioPersonal.directorioPersonalActivo_(db).find((p) => String(p.email).toLowerCase() === a) || {}).nombre || ''; } catch (err) { return ''; }
+}
+
 /** Un mensaje del equipo (comentario no interno) le llega al solicitante. */
 async function avisarMensajeEquipo(db, comentario) {
   const solicitud = leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).find((s) => s.solicitud_id === comentario.solicitud_id);
@@ -637,6 +662,10 @@ async function avisarMensajeEquipo(db, comentario) {
       destinatario: solicitud.solicitante_email, tipo: 'SOLICITUD_MENSAJE', titulo: solicitud.solicitud_id + ': mensaje de ' + nombre,
       mensaje: String(comentario.texto || '').slice(0, 140), modulo_id: 'mis_solicitudes', texto_accion: 'Ver mi solicitud', vidaHoras: 168
     }]);
+  }
+  if (solicitud.origen === 'PORTAL') {
+    const doc = /:\s+.+\.(pdf|docx?|xlsx?|jpe?g|png|gif)$/i.test(String(comentario.texto || '').trim());
+    avisoTelefono_(db, solicitud.solicitud_id, nombre + (doc ? ' te mandó un documento' : ' te escribió'), String(comentario.texto || '').slice(0, 180));
   }
   const asunto = 'SIGSO — Mensaje sobre tu solicitud ' + solicitud.solicitud_id;
   const cuerpo = 'Hola' + (solicitud.solicitante_nombre ? ' ' + solicitud.solicitante_nombre : '') + ':\n\n' +
@@ -659,6 +688,7 @@ function avisarCierreProximo(db, solicitud, items, fechaCierreIso) {
       mensaje: 'Confirma que quedó resuelto o cuéntanos qué falta.', modulo_id: 'mis_solicitudes', texto_accion: 'Validar', vidaHoras: 168
     }]);
   }
+  if (solicitud.origen === 'PORTAL') avisoTelefono_(db, solicitud.solicitud_id, 'Confírmanos tu pedido', 'Está listo y se cerrará solo el ' + fecha + '. Tócalo para revisarlo.');
   const asunto = 'SIGSO — Tu solicitud ' + solicitud.solicitud_id + ' se cerrará el ' + fecha;
   const cuerpo = 'Hola' + (solicitud.solicitante_nombre ? ' ' + solicitud.solicitante_nombre : '') + ':\n\n' +
     'Lo siguiente de tu solicitud ' + solicitud.solicitud_id + ' está resuelto y espera tu confirmación:\n\n' +
@@ -680,6 +710,10 @@ async function avisarRecepcion(db, solicitud, items, quienEmail) {
   const lineas = items.map((i) => '- ' + (i.titulo || i.subsolicitud_id) + (i.fecha_comprometida ? ': estará para el ' + fechaDia_(i.fecha_comprometida) : ''));
   if (tieneCuentaActiva_(db, solicitud.solicitante_email)) {
     campanaEstado_(db, solicitud.solicitante_email, solicitud.solicitud_id, 'recibida por ' + quien, items.length === 1 ? (items[0].titulo || '') : items.length + ' ítems con fecha');
+  }
+  if (solicitud.origen === 'PORTAL') {
+    const conFecha = items.filter((i) => i.fecha_comprometida).map((i) => fechaDia_(i.fecha_comprometida)).sort();
+    avisoTelefono_(db, solicitud.solicitud_id, quien + ' recibió tu pedido', conFecha.length ? 'Estará para el ' + conFecha[conFecha.length - 1] + '.' : 'Te avisaremos cuando esté listo.');
   }
   const asunto = 'SIGSO — ' + quien + ' recibió tu solicitud ' + solicitud.solicitud_id;
   const cuerpo = 'Hola' + (solicitud.solicitante_nombre ? ' ' + solicitud.solicitante_nombre : '') + ':\n\n' +

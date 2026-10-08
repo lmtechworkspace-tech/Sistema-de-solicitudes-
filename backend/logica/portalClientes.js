@@ -593,6 +593,35 @@ async function archivo(db, data, ctx, meta) {
   return { nombre: f.nombre, tipo_mime: f.mime, contenido_base64: f.buffer.toString('base64') };
 }
 
+// «Mis documentos» (2026-10-08): todo lo que el equipo le ha entregado (y lo que
+// él mandó), de todos sus pedidos, con el pedido, el área y el trabajador. Así
+// no busca el contrato de Juan pedido por pedido. Sin contenido: se abre con
+// clienteArchivo como siempre.
+function documentos(db, data, ctx) {
+  const sols = leer_(db, 'SOLICITUDES').filter((s) => s.cliente_id === ctx.cliente_id);
+  const ids = {}; sols.forEach((s) => { ids[s.solicitud_id] = s; });
+  const subs = {}; leer_(db, 'SUBSOLICITUDES').forEach((x) => { if (ids[x.solicitud_id]) subs[x.subsolicitud_id] = x; });
+  const trab = {}; leer_(db, 'PORTAL_TRABAJADORES').forEach((t) => { if (t.cliente_id === ctx.cliente_id) trab[t.trabajador_id] = t; });
+  const archs = leer_(db, 'ARCHIVOS').filter((a) => ids[a.solicitud_id]);
+  const correos = archs.map((a) => String(a.subido_por || '')).filter((x) => x.indexOf('equipo:') === 0).map((x) => x.slice(7));
+  const fichas = correos.length ? DirectorioPersonas.fichas(db, Array.from(new Set(correos))) : {};
+  return { documentos: archs.map((a) => {
+    const it = subs[a.subsolicitud_id] || {};
+    const correo = String(a.subido_por || '').indexOf('equipo:') === 0 ? String(a.subido_por).slice(7) : '';
+    const t = trab[it.trabajador_id];
+    return { archivo_id: a.archivo_id, nombre: a.nombre_original, tipo_mime: a.tipo_mime, tamano_bytes: a.tamano_bytes, fecha: a.fecha_subida,
+      solicitud_id: a.solicitud_id, pedido: it.titulo || '', area: it.depto || '', trabajador_id: t ? t.trabajador_id : '', trabajador: t ? t.nombre : '',
+      del_equipo: !!correo, quien: correo ? ((fichas[correo] || {}).nombre || 'El equipo') : '' };
+  }).sort((x, y) => String(y.fecha).localeCompare(String(x.fecha))) };
+}
+
+const Push = require('./portalPush');
+function pushSuscribir(db, data, ctx, meta) {
+  const r = Push.suscribir(db, data, ctx);
+  if (r && r.ok) registrar_(db, { cliente_id: ctx.cliente_id, contacto_id: ctx.contacto_id, actor: 'contacto', accion: 'AVISOS_ACTIVADOS', detalle: txt_(data.dispositivo, 80), ip: (meta && meta.ip) || '' });
+  return r;
+}
+
 // Lista CERRADA de lo que un contratista puede hacer. `publica` = sin sesión.
 const ACCIONES_CLIENTE = {
   clienteVerInvitacion: { publica: true, fn: verInvitacion },
@@ -610,7 +639,12 @@ const ACCIONES_CLIENTE = {
   clienteMensaje: { fn: mensaje },
   clienteSubirArchivo: { fn: subirArchivo },
   clienteConfirmar: { fn: confirmar },
-  clienteArchivo: { fn: archivo }
+  clienteArchivo: { fn: archivo },
+  clienteDocumentos: { fn: documentos },
+  clientePushClave: { fn: (db) => Push.clave(db) },
+  clientePushSuscribir: { fn: pushSuscribir },
+  clientePushQuitar: { fn: (db, data, ctx) => Push.quitar(db, data, ctx) },
+  clientePushProbar: { fn: (db, data, ctx) => Push.probar(db, data, ctx) }
 };
 
 async function ejecutarCliente(db, action, data, meta) {
@@ -682,7 +716,8 @@ function admCliente(db, data, contexto) {
     perfil: { habilitado: v_(p.habilitado), correo: p.correo || '', telefono: p.telefono || '', direccion: p.direccion || '', representante: p.representante || '',
       servicios: json_(p.servicios, []) || [], encargados: json_(p.encargados, {}) || {}, observaciones: p.observaciones || '', existe: !!p.cliente_id },
     obras: leer_(db, 'PORTAL_OBRAS').filter((o) => o.cliente_id === clienteId),
-    contactos: leer_(db, 'PORTAL_CONTACTOS').filter((c) => c.cliente_id === clienteId).map(contactoPublico_),
+    contactos: (() => { const av = Push.resumenCliente(db, clienteId).por_contacto;
+      return leer_(db, 'PORTAL_CONTACTOS').filter((c) => c.cliente_id === clienteId).map((c) => Object.assign(contactoPublico_(c), { telefonos_con_avisos: av[c.contacto_id] || 0 })); })(),
     trabajadores: leer_(db, 'PORTAL_TRABAJADORES').filter((t) => t.cliente_id === clienteId).map(trabajadorPublico_),
     registro: leer_(db, 'PORTAL_REGISTRO').filter((r) => r.cliente_id === clienteId).slice(-200).reverse()
       .map((r) => Object.assign({}, r, { contacto_nombre: nombres[r.contacto_id] || '' }))

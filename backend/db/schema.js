@@ -906,6 +906,13 @@ const COLUMNAS = {
     'trabajador_id', 'cliente_id', 'obra_id', 'nombre', 'rut', 'cargo', 'fecha_inicio', 'fecha_termino',
     'sueldo', 'afp', 'salud', 'estado', 'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion'
   ],
+  // 2026-10-08: avisos al teléfono del contratista (Web Push estándar, sin
+  // servicios de terceros). Un teléfono por fila; `activa` false cuando el
+  // navegador la dio de baja (404/410) o la persona salió.
+  PORTAL_PUSH: ['suscripcion_id', 'cliente_id', 'contacto_id', 'endpoint', 'p256dh', 'auth', 'dispositivo', 'creada', 'ultimo_envio', 'ultimo_ok', 'fallos', 'activa'],
+  // Par de llaves VAPID con que el servidor firma los avisos (se crea solo la
+  // primera vez; las variables de entorno VAPID_PUBLICA/VAPID_PRIVADA mandan si existen).
+  PORTAL_PUSH_CLAVES: ['clave_id', 'publica', 'privada_jwk', 'creada'],
   // Quién más (aparte del super admin) administra el portal. Lo otorga solo el super admin.
   PORTAL_PERMISOS: ['permiso_id', 'usuario_email', 'permiso', 'otorgado_por', 'fecha', 'activo'],
 

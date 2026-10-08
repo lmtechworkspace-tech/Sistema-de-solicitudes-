@@ -38,7 +38,11 @@
     reloj: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     salir: '<path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9"/>',
     candado: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
-    obra: '<path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6"/>'
+    obra: '<path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6"/>',
+    campana: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+    telefono: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+    lupa: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
+    carpeta: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
   };
   var ICONO_AREA = { RRHH: 'personas', CONTABILIDAD: 'calc', PREVENCION: 'casco' };
   // Cada área con su color, igual en el inicio y en la lista de pedidos: se reconoce sin leer.
@@ -86,11 +90,13 @@
   var S = { dentro: false, vista: 'inicio', perfil: null, cat: null, pedidos: [], trab: [], pedido: null, detalle: null, pedir: null, trabId: null, desde: null, invitacion: null, ocupado: false };
 
   function cargarTodo() {
-    return Promise.all([api('clienteSesion'), api('clienteCatalogo'), api('clientePedidos'), api('clienteTrabajadores')]).then(function (r) {
+    return Promise.all([api('clienteSesion'), api('clienteCatalogo'), api('clientePedidos'), api('clienteTrabajadores'), api('clienteDocumentos')]).then(function (r) {
       if (!r[0] || !r[0].ok) { S.dentro = false; return; }
       S.perfil = r[0].data; S.cat = r[1] && r[1].ok ? r[1].data : { areas: [], documentos: [] };
       S.pedidos = r[2] && r[2].ok ? r[2].data.pedidos : []; S.trab = r[3] && r[3].ok ? r[3].data.trabajadores : [];
+      S.docs = r[4] && r[4].ok ? r[4].data.documentos : null;
       S.dentro = true;
+      if (AV.sub) api('clientePushSuscribir', { suscripcion: AV.sub.toJSON(), dispositivo: dispositivo() });
     });
   }
   function refrescarPedidos() { return api('clientePedidos').then(function (r) { if (r && r.ok) S.pedidos = r.data.pedidos; }); }
@@ -114,7 +120,7 @@
   }
   function nav() {
     var tuyos = S.pedidos.filter(function (p) { return p.estado === 'TU'; }).length;
-    var actual = { pedido: 'pedidos', pedir: 'pedir', trab: 'trabajadores' }[S.vista] || S.vista;
+    var actual = { pedido: 'pedidos', pedir: 'pedir', trab: 'trabajadores', documentos: S.docDesde === 'empresa' ? 'empresa' : 'inicio' }[S.vista] || S.vista;
     var b = function (id, txt, icono, extra) { return '<button type="button" data-ir="' + id + '"' + (actual === id ? ' aria-current="page"' : '') + '>' + ico(icono) + txt + (extra || '') + '</button>'; };
     return '<nav class="nav" aria-label="Menú">' + b('inicio', 'Inicio', 'casa') + b('pedir', 'Pedir', 'mas') + b('pedidos', 'Pedidos', 'chat', tuyos ? '<span class="badge">' + tuyos + '</span>' : '') + b('trabajadores', 'Trabajadores', 'personas') + b('empresa', 'Mi empresa', 'edificio') + '</nav>';
   }
@@ -126,6 +132,10 @@
   function botonMandar() {
     if (!((S.cat || {}).documentos || []).length) return '';
     return '<button type="button" class="mandar" data-area="__doc"><span class="mandar__ico">' + ico('subir') + '</span><span><b>Mandar un documento</b><small>' + esc(S.cat.documentos.slice(0, 3).map(function (d) { return d.nombre.toLowerCase(); }).join(', ').replace(/^./, function (c) { return c.toUpperCase(); })) + '…</small></span></button>';
+  }
+  function botonDocumentos() {
+    var n = (S.docs || []).filter(function (a) { return a.del_equipo; }).length;
+    return '<button type="button" class="mandar mandar--claro" data-documentos><span class="mandar__ico">' + ico('carpeta') + '</span><span><b>Mis documentos' + (n ? ' (' + n + ')' : '') + '</b><small>Contratos, certificados y todo lo que te entregamos</small></span></button>';
   }
   function areasHtml() {
     var as = ((S.cat || {}).areas || []).map(function (a) {
@@ -248,7 +258,7 @@
     cont.innerHTML = '<div class="visor__otro"><span class="visor__icono">' + ico('doc', 56) + '</span><b>' + esc(x.nombre) + '</b><p>' + esc(motivo) + '</p></div>';
   }
   function abrirVisor(id) {
-    var a = archivosDelPedido().filter(function (z) { return z.archivo_id === id; })[0] || { archivo_id: id, nombre: 'Archivo', tipo_mime: '' };
+    var a = archivosDelPedido().concat(S.docs || []).filter(function (z) { return z.archivo_id === id; })[0] || { archivo_id: id, nombre: 'Archivo', tipo_mime: '' };
     var puedeCompartir = !!(navigator.share && navigator.canShare), yaAbierto = !!capa.querySelector('.visor');
     capa.innerHTML = '<div class="visor" role="dialog" aria-modal="true" aria-labelledby="vs-t" data-visor="' + esc(id) + '">' +
       '<header class="visor__cab"><button type="button" class="visor__btn" data-cerrar-capa aria-label="Cerrar">' + ico('atras') + '</button>' +
@@ -287,6 +297,166 @@
     var f; try { f = new File([x.blob], x.nombre, { type: x.tipo }); } catch (e) { f = null; }
     if (!f || !navigator.canShare || !navigator.canShare({ files: [f] })) { guardarArchivo(id); return; }
     navigator.share({ files: [f], title: x.nombre }).catch(function () { /* la persona canceló */ });
+  }
+
+  // ---------- App instalada y avisos al teléfono (2026-10-08) ----------
+  // El contratista se enteraba de una respuesta solo si entraba al portal. Ahora el
+  // teléfono le avisa (Web Push, portalPush.js) y el aviso abre el pedido. En iPhone
+  // los avisos web exigen tener el portal instalado en la pantalla de inicio; en el
+  // navegador interno de WhatsApp no existen: se le explica cómo salir de ahí.
+  var AV = { soporta: 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window, reg: null, sub: null, instalar: null, ocupado: false };
+  var LLAVE_AV_NO = 'sigso_cliente_avisos_no';
+  function esIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+  function instalada() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+  function enWebView() { var u = navigator.userAgent || ''; return /; wv\)|FBAN|FBAV|Instagram|WhatsApp/.test(u) || (esIOS() && !/Safari\//.test(u) && !instalada()); }
+  function estadoAvisos() {
+    if (AV.sub && typeof Notification !== 'undefined' && Notification.permission === 'granted') return 'activo';
+    if (enWebView()) return 'webview';
+    if (esIOS() && !instalada()) return 'instalar-ios';
+    if (!AV.soporta) return 'no-soporta';
+    if (Notification.permission === 'denied') return 'bloqueado';
+    return 'apagado';
+  }
+  function avisosPospuestos() { try { return Number(localStorage.getItem(LLAVE_AV_NO) || 0) > Date.now(); } catch (e) { return false; } }
+  function posponerAvisos() { try { localStorage.setItem(LLAVE_AV_NO, String(Date.now() + 7 * 864e5)); } catch (e) { /* sin almacenamiento */ } }
+  function bytesDeB64u(s) { var b = atob(String(s).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(s).length + 3) % 4)), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+  function prepararAvisos() {
+    if (!AV.soporta) return Promise.resolve();
+    navigator.serviceWorker.addEventListener('message', function (ev) { var d = ev.data || {}; if (d.tipo === 'abrir-pedido' && d.pedido && S.dentro) abrirPedido(d.pedido); });
+    return navigator.serviceWorker.register('portal-sw.js', { scope: './portal.html' }).then(function (reg) {
+      AV.reg = reg; return reg.pushManager.getSubscription();
+    }).then(function (sub) {
+      AV.sub = sub;
+      // Se vuelve a informar al servidor: si el navegador renovó la suscripción, queda al día.
+      if (sub && S.dentro) api('clientePushSuscribir', { suscripcion: sub.toJSON(), dispositivo: dispositivo() });
+    }).catch(function () { AV.soporta = false; });
+  }
+  window.addEventListener('beforeinstallprompt', function (ev) { ev.preventDefault(); AV.instalar = ev; if (S.dentro && (S.vista === 'inicio' || S.vista === 'empresa')) pintar(); });
+  window.addEventListener('appinstalled', function () { AV.instalar = null; toast('¡Listo! El portal quedó en tu pantalla de inicio.'); });
+  function instalarApp() {
+    if (!AV.instalar) return;
+    AV.instalar.prompt();
+    AV.instalar.userChoice.then(function () { AV.instalar = null; pintar(); }).catch(function () { /* nada */ });
+  }
+  function activarAvisos() {
+    if (AV.ocupado || !AV.soporta) return;
+    AV.ocupado = true; pintar();
+    // El permiso se pide en el mismo toque (Safari lo exige).
+    Notification.requestPermission().then(function (p) {
+      if (p !== 'granted') throw new Error(p === 'denied' ? 'bloqueado' : 'cancelado');
+      return (AV.reg ? Promise.resolve(AV.reg) : navigator.serviceWorker.register('portal-sw.js', { scope: './portal.html' }));
+    }).then(function (reg) {
+      AV.reg = reg;
+      return api('clientePushClave').then(function (r) {
+        if (!r || !r.ok) throw new Error((r && r.message) || 'sin clave');
+        return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytesDeB64u(r.data.publica) });
+      });
+    }).then(function (sub) {
+      AV.sub = sub;
+      return api('clientePushSuscribir', { suscripcion: sub.toJSON(), dispositivo: dispositivo() });
+    }).then(function (r) {
+      AV.ocupado = false;
+      if (!r || !r.ok) { toast((r && r.message) || 'No se pudo activar los avisos.'); pintar(); return; }
+      vibrar([20, 40, 20]); toast('¡Listo! Te mandamos un aviso de prueba.');
+      api('clientePushProbar', { endpoint: AV.sub.endpoint }); pintar();
+    }).catch(function (e) {
+      AV.ocupado = false;
+      toast(e && e.message === 'bloqueado' ? 'No se pudo: los avisos están bloqueados para esta página. Mira en «Mi empresa» cómo activarlos.' : 'No se activaron los avisos. Puedes intentarlo cuando quieras.');
+      pintar();
+    });
+  }
+  function apagarAvisos() {
+    var sub = AV.sub; if (!sub) return Promise.resolve();
+    AV.sub = null;
+    return api('clientePushQuitar', { endpoint: sub.endpoint }).then(function () { return sub.unsubscribe().catch(function () { /* ya no estaba */ }); });
+  }
+  // Tarjeta en Inicio: solo si sirve (no activos, no pospuestos) y con el paso que toca.
+  function tarjetaAvisos() {
+    var e = estadoAvisos(), inst = AV.instalar && !instalada();
+    if (e === 'activo' && !inst) return '';
+    if (avisosPospuestos() || e === 'no-soporta' || e === 'bloqueado') return inst ? tarjetaInstalar() : '';
+    var cuerpo, botones;
+    if (e === 'webview') {
+      cuerpo = 'Estás dentro de WhatsApp. Para que te lleguen avisos al teléfono, abre el portal en ' + (esIOS() ? 'Safari' : 'Chrome') + ': toca los tres puntos ' + (esIOS() ? 'o el ícono de la brújula' : '⋮') + ' y elige «Abrir en el navegador».';
+      botones = '<button type="button" class="btn btn-sec btn-chico" data-copiar-enlace>Copiar el enlace</button>';
+    } else if (e === 'instalar-ios') {
+      cuerpo = 'En iPhone, los avisos llegan con el portal en tu pantalla de inicio: toca <b>Compartir</b> ' + ico('subir', 18) + ' abajo y luego <b>«Agregar a inicio»</b>. Después ábrelo desde el ícono nuevo.';
+      botones = '';
+    } else {
+      cuerpo = 'Te avisamos en el teléfono cuando te respondan, te pregunten algo o te manden un documento. Sin abrir el portal.';
+      botones = '<button type="button" class="btn btn-main btn-chico" data-activar-avisos' + (AV.ocupado ? ' disabled' : '') + '>' + ico('campana') + (AV.ocupado ? 'Activando…' : 'Activar avisos') + '</button>';
+    }
+    return '<section class="card avisos"><div class="avisos__cab"><span class="avisos__ico">' + ico('campana') + '</span><h3>Recibe avisos en tu teléfono</h3></div><p>' + cuerpo + '</p>' +
+      '<div class="fila" style="flex-wrap:wrap;gap:8px">' + botones + '<button type="button" class="quitar" data-avisos-no>Ahora no</button></div></section>' + (inst ? tarjetaInstalar() : '');
+  }
+  function tarjetaInstalar() {
+    return '<button type="button" class="mandar mandar--claro" data-instalar><span class="mandar__ico">' + ico('telefono') + '</span><span><b>Instalar la app</b><small>Queda un ícono en tu teléfono, como WhatsApp</small></span></button>';
+  }
+  function seccionAvisos() {
+    var e = estadoAvisos(), txt = {
+      activo: 'Los avisos están <b>activados</b> en este teléfono.',
+      apagado: 'Los avisos están apagados en este teléfono.',
+      bloqueado: 'Los avisos están <b>bloqueados</b> para esta página. Para activarlos: toca el candado ' + ico('candado', 16) + ' junto a la dirección (o Ajustes del teléfono › Notificaciones) y permite las notificaciones. Después vuelve aquí.',
+      'instalar-ios': 'En iPhone, primero agrega el portal a tu pantalla de inicio (Compartir › «Agregar a inicio») y ábrelo desde el ícono.',
+      webview: 'Estás dentro de WhatsApp: abre el portal en el navegador para activar los avisos.',
+      'no-soporta': 'Este navegador no permite avisos. Prueba abriendo el portal en Chrome (Android) o Safari (iPhone).'
+    }[e];
+    return '<section class="card"><h3>' + ico('campana', 22) + ' Avisos y app</h3><p class="sub">' + txt + '</p><div class="fila" style="flex-wrap:wrap;gap:8px">' +
+      (e === 'apagado' ? '<button type="button" class="btn btn-main btn-chico" data-activar-avisos' + (AV.ocupado ? ' disabled' : '') + '>Activar avisos</button>' : '') +
+      (e === 'activo' ? '<button type="button" class="btn btn-sec btn-chico" data-probar-aviso style="width:auto">Mandar un aviso de prueba</button><button type="button" class="quitar" data-apagar-avisos>Apagar avisos</button>' : '') +
+      (e === 'webview' ? '<button type="button" class="btn btn-sec btn-chico" data-copiar-enlace style="width:auto">Copiar el enlace</button>' : '') +
+      '</div>' + (AV.instalar && !instalada() ? tarjetaInstalar() : '') + '</section>';
+  }
+
+  // ---------- Mis documentos (2026-10-08) ----------
+  // Todo lo que el equipo le entregó (contratos, F30, liquidaciones…) y lo que él
+  // mandó, de todos sus pedidos, por mes, con buscador. Antes había que entrar
+  // pedido por pedido.
+  var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  function cargarDocs() { return api('clienteDocumentos').then(function (r) { if (r && r.ok) S.docs = r.data.documentos; }); }
+  function sinTildes(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function docsFiltrados() {
+    var F = S.docFiltro || {}, q = sinTildes(F.q).trim();
+    return (S.docs || []).filter(function (a) {
+      if (!!a.del_equipo !== (F.lado !== 'tu')) return false;
+      if (F.trab && a.trabajador_id !== F.trab) return false;
+      return !q || sinTildes([a.nombre, a.pedido, a.trabajador, a.quien, nombreArea(a.area)].join(' ')).indexOf(q) !== -1;
+    });
+  }
+  function docFila(a) {
+    var foto = esImagen(a.tipo_mime) && Number(a.tamano_bytes || 0) <= MAX_MINI, u = ARCH_LISTO[a.archivo_id];
+    return '<button type="button" class="doc doc--fila' + (a.del_equipo ? ' del-equipo' : '') + '" data-ver="' + esc(a.archivo_id) + '">' +
+      '<span class="doc__tipo">' + (foto ? '<img data-vista="' + esc(a.archivo_id) + '"' + (u ? ' src="' + esc(u.url) + '"' : '') + ' alt="">' : (esPdf(a.tipo_mime) ? 'PDF' : (esImagen(a.tipo_mime) ? ico('camara') : (/sheet|excel/.test(a.tipo_mime) ? 'XLS' : 'DOC')))) + '</span>' +
+      '<span class="grow">' + esc(a.nombre) + '<small>' + esc([a.trabajador, a.pedido && a.pedido.split(' · ')[0]].filter(Boolean).join(' · ') || nombreArea(a.area)) + '</small>' +
+      '<small>' + (a.del_equipo ? 'De ' + esc(a.quien) : 'Lo mandaste tú') + ' · ' + esc(fecha(a.fecha, true)) + '</small></span><span class="flecha">' + ico('flecha') + '</span></button>';
+  }
+  function listaDocsHtml() {
+    var ds = docsFiltrados(), F = S.docFiltro || {};
+    if (!ds.length) return '<div class="vacio"><span class="vacio__ico">' + ico('doc') + '</span><b>' + (F.q ? 'No encontramos nada con «' + esc(F.q) + '»' : (F.lado === 'tu' ? 'Todavía no has mandado documentos' : 'Todavía no te hemos entregado documentos')) + '</b>' +
+      (F.lado !== 'tu' && !F.q ? '<span>Aquí quedan guardados los contratos, certificados y liquidaciones que te mandemos.</span>' : '') + '</div>';
+    var grupos = [], porMes = {};
+    ds.forEach(function (a) { var k = String(a.fecha).slice(0, 7); if (!porMes[k]) { porMes[k] = []; grupos.push(k); } porMes[k].push(a); });
+    return grupos.map(function (k) {
+      var p = k.split('-'), titulo = (MESES[+p[1] - 1] || '') + ' ' + p[0];
+      return '<section class="docs-mes"><h2>' + esc(titulo.charAt(0).toUpperCase() + titulo.slice(1)) + ' <small>(' + porMes[k].length + ')</small></h2><div class="lista">' + porMes[k].map(docFila).join('') + '</div></section>';
+    }).join('');
+  }
+  function documentosVista() {
+    var F = S.docFiltro = S.docFiltro || { lado: 'equipo', q: '' };
+    if (!S.docs) return top('Mis documentos', 'Lo que te entregamos y lo que mandaste', true) + '<main aria-busy="true"><section class="card"><div class="esq esq-linea"></div><div class="esq esq-linea esq-corta"></div></section><section class="card"><div class="esq esq-linea"></div><div class="esq esq-linea esq-corta"></div></section></main>' + nav();
+    var nEq = S.docs.filter(function (a) { return a.del_equipo; }).length, nTu = S.docs.length - nEq;
+    var t = F.trab ? S.trab.filter(function (x) { return x.trabajador_id === F.trab; })[0] : null;
+    return top('Mis documentos', S.perfil.cliente.razon_social, true) + '<main>' +
+      '<div class="segmento" role="tablist"><button type="button" role="tab" data-doc-lado="equipo" aria-selected="' + (F.lado !== 'tu') + '">Te entregamos (' + nEq + ')</button><button type="button" role="tab" data-doc-lado="tu" aria-selected="' + (F.lado === 'tu') + '">Mandaste (' + nTu + ')</button></div>' +
+      '<label class="buscar" for="doc-q">' + ico('lupa') + '<input class="inp" id="doc-q" type="search" placeholder="Buscar: Juan, contrato, F30…" value="' + esc(F.q || '') + '" autocomplete="off" aria-label="Buscar un documento"></label>' +
+      (t ? '<div class="chips"><button type="button" class="chip chip--quitar" data-doc-trab="">De ' + esc(t.nombre) + ' <span aria-hidden="true">×</span><span class="oculto-visual">Quitar filtro</span></button></div>' : '') +
+      '<div id="doc-lista" style="display:flex;flex-direction:column;gap:16px">' + listaDocsHtml() + '</div></main>' + nav();
+  }
+  function irDocumentos(trabId) {
+    S.docDesde = S.vista === 'documentos' ? S.docDesde : S.vista;
+    S.docFiltro = { lado: 'equipo', q: '', trab: trabId || '' };
+    ir('documentos', 'adelante');
+    cargarDocs().then(function () { if (S.vista === 'documentos') pintar(); });
   }
 
   // ---------- Entrada ----------
@@ -331,7 +501,8 @@
     var baldosa = function (n, txt, ir, tono) { return '<button type="button" class="stat" data-ir="' + ir + '"' + (tono ? ' data-tono="' + tono + '"' : '') + '><b>' + n + '</b><span>' + txt + '</span></button>'; };
     return top(saludo() + ', ' + primerNombre(S.perfil.contacto.nombre), S.perfil.cliente.razon_social) + '<main>' +
       (tuyos.length ? '<section class="card toca"><div class="toca-cab"><span class="latido"></span>Te toca a ti (' + tuyos.length + ')</div><div class="lista">' + tuyos.map(itemPedido).join('') + '</div></section>' : '') +
-      '<section style="display:flex;flex-direction:column;gap:12px"><h2>¿Qué necesitas?</h2>' + areasHtml() + botonMandar() + '</section>' +
+      tarjetaAvisos() +
+      '<section style="display:flex;flex-direction:column;gap:12px"><h2>¿Qué necesitas?</h2>' + areasHtml() + botonMandar() + botonDocumentos() + '</section>' +
       '<section class="card"><div class="mes-cab"><h3>Este mes</h3><small>' + esc(nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)) + '</small></div><div class="stats">' +
         baldosa(delMes.length, delMes.length === 1 ? 'pedido hecho' : 'pedidos hechos', 'pedidos', 'gris') +
         baldosa(listosMes, listosMes === 1 ? 'listo' : 'listos', 'pedidos', 'ok') +
@@ -590,6 +761,7 @@
       '</dl><button type="button" class="btn btn-sec btn-chico" data-editar-trab="' + esc(t.trabajador_id) + '">Corregir sus datos</button></section>' +
       (t.estado !== 'FINIQUITADO' && acciones.length ? '<section class="card"><h3>¿Qué necesitas para ' + esc(primerNombre(t.nombre)) + '?</h3><div class="lista">' +
         acciones.map(function (a) { return '<button type="button" class="opcion" data-accion-trab="' + a[0] + '" data-accion-area="' + a[1] + '"><span>' + esc(a[2]) + '</span></button>'; }).join('') + '</div></section>' : '') +
+      ((S.docs || []).some(function (a) { return a.trabajador_id === t.trabajador_id; }) ? '<button type="button" class="btn btn-sec" data-documentos-trab="' + esc(t.trabajador_id) + '">' + ico('carpeta') + 'Ver sus documentos (' + S.docs.filter(function (a) { return a.trabajador_id === t.trabajador_id; }).length + ')</button>' : '') +
       (suyos.length ? '<section style="display:flex;flex-direction:column;gap:10px"><h2>Sus pedidos</h2><div class="lista">' + suyos.map(itemPedido).join('') + '</div></section>' : '') +
     '</main>' + nav();
   }
@@ -620,6 +792,8 @@
         '<form class="fila" id="f-obra" novalidate style="flex-wrap:wrap"><input class="inp" name="nombre" placeholder="Nueva obra (ej: Los Robles)" aria-label="Nombre de la obra" style="flex:1;min-width:180px"><input class="inp" name="comuna" placeholder="Comuna" aria-label="Comuna" style="flex:1;min-width:120px"><button type="submit" class="btn btn-sec btn-chico">Agregar</button></form></section>' +
       '<section class="card"><h3>Lo que tienes contratado</h3><div class="chips">' + (c.servicios || []).map(function (s) { return '<span class="chip">' + esc(nombreArea(s)) + '</span>'; }).join('') + '</div></section>' +
       ((S.perfil.encargados || []).length ? '<section class="card"><h3>Quién te atiende</h3>' + S.perfil.encargados.map(function (e) { return '<div class="fila"><span class="inicial">' + esc(inicial(e.nombre)) + '</span><div class="grow"><b>' + esc(e.nombre) + '</b><p class="sub">' + esc(e.area_nombre) + (e.cargo ? ' · ' + esc(e.cargo) : '') + '</p></div></div>'; }).join('') + '</section>' : '') +
+      '<button type="button" class="mandar mandar--claro" data-documentos><span class="mandar__ico">' + ico('carpeta') + '</span><span><b>Mis documentos</b><small>Todo lo que te entregamos, por mes</small></span></button>' +
+      seccionAvisos() +
       '<div class="nota-seg">' + ico('candado') + '<span><b>Nunca te pediremos claves por aquí</b> (SII, Previred, TGR ni bancos). Si alguien te las pide por el portal, avísale a tu encargado.</span></div>' +
       '<button type="button" class="btn btn-sec" data-salir>' + ico('salir') + 'Salir</button>' +
       '<p class="pie-marca"><b>SIGSO</b> · Portal de clientes de HomePymes</p>' +
@@ -636,7 +810,8 @@
     pedidos: ['Tus pedidos, ordenados: primero lo que necesita tu respuesta.', 'Toca uno para ver la conversación y los documentos.'],
     trabajadores: ['Tus trabajadores, por obra.', 'Toca uno para ver sus datos y pedir algo para él (finiquito, anexo, licencia).'],
     trab: ['Los datos de este trabajador. Los botones hacen el pedido con sus datos ya puestos.'],
-    empresa: ['Tus datos, tus obras y quién te atiende.', 'Nunca te pediremos claves por el portal.']
+    empresa: ['Tus datos, tus obras y quién te atiende.', 'En «Avisos y app» activas los avisos al teléfono.', 'Nunca te pediremos claves por el portal.'],
+    documentos: ['Aquí quedan todos los documentos que te entregamos (contratos, certificados, liquidaciones) y los que tú nos mandaste.', 'Escribe en el buscador el nombre del trabajador o del documento.', 'Toca uno para verlo; desde ahí lo guardas o lo compartes por WhatsApp.']
   };
   function ayuda() {
     var clave = !S.dentro ? (S.invitacion ? 'activar' : 'entrar') : S.vista;
@@ -650,7 +825,7 @@
   // Aviso que sube desde abajo. El tipo se deduce del texto si no se indica: los errores
   // del portal empiezan con «No se pudo», «Sin conexión»…
   function toast(t, tipo) {
-    tipo = tipo || (/^(No se pudo|Sin conexi|Un archivo|La señal|Recursos Humanos no|Esta foto|Se alcanzó|El archivo)/.test(t) ? 'error' : (/^(¡|Listo|Guardado|Entraste|Archivo enviado|Obra agregada|Lo enviamos)/.test(t) ? 'ok' : 'info'));
+    tipo = tipo || (/^(No se pudo|Sin conexi|Un archivo|La señal|Recursos Humanos no|Esta foto|Se alcanzó|El archivo)/.test(t) ? 'error' : (/^(¡|Listo|Guardado|Entraste|Archivo enviado|Archivos enviados|Obra agregada|Lo enviamos|Avisos apagados)/.test(t) ? 'ok' : 'info'));
     [].forEach.call(document.querySelectorAll('.toast'), function (v) { v.remove(); });
     var el = document.createElement('div'); el.className = 'toast t-' + tipo; el.setAttribute('role', tipo === 'error' ? 'alert' : 'status');
     el.innerHTML = ico(tipo === 'error' ? 'alerta' : (tipo === 'ok' ? 'check' : 'reloj')) + '<span>' + esc(t) + '</span>';
@@ -690,6 +865,7 @@
     else if (S.vista === 'empresa') h = empresa();
     else if (S.vista === 'trabajadores') h = trabajadores();
     else if (S.vista === 'trab') h = trabajador();
+    else if (S.vista === 'documentos') h = documentosVista();
     else if (S.vista === 'pedir') {
       var P = S.pedir;
       if (!P || !P.area) h = pedirAreas();
@@ -715,7 +891,7 @@
   }
   function animarCambio() {
     var clave = claveDePantalla(), dir = S.dir || 'fade';
-    var pest = { pedido: 'pedidos', pedir: 'pedir', trab: 'trabajadores' }[S.vista] || S.vista;
+    var pest = { pedido: 'pedidos', pedir: 'pedir', trab: 'trabajadores', documentos: S.docDesde === 'empresa' ? 'empresa' : 'inicio' }[S.vista] || S.vista;
     var n = app.querySelector('.nav');
     if (n && ultimaPestana && pest !== ultimaPestana) n.classList.add('cambio');
     ultimaPestana = S.dentro ? pest : '';
@@ -776,6 +952,7 @@
     S.dir = 'atras';
     if (S.vista === 'pedido') return ir(S.desde || 'pedidos');
     if (S.vista === 'trab') return ir('trabajadores');
+    if (S.vista === 'documentos') return ir(S.docDesde && S.docDesde !== 'documentos' ? S.docDesde : 'inicio');
     if (S.vista === 'pedir' && P) {
       guardarCampos(); P.error = '';
       if (P.paso === 'revisar') P.paso = plantillaActual().foto ? 'foto' : 'datos';
@@ -907,6 +1084,20 @@
     if (t.closest('[data-enviar]')) { enviarPedido(); return; }
     if ((b = t.closest('[data-pedido]'))) { abrirPedido(b.getAttribute('data-pedido')); return; }
     if ((b = t.closest('[data-ver]'))) { abrirVisor(b.getAttribute('data-ver')); return; }
+    if (t.closest('[data-documentos]')) { capa.innerHTML = ''; capaHist = false; irDocumentos(); return; }
+    if ((b = t.closest('[data-documentos-trab]'))) { irDocumentos(b.getAttribute('data-documentos-trab')); return; }
+    if ((b = t.closest('[data-doc-lado]'))) { S.docFiltro.lado = b.getAttribute('data-doc-lado'); pintar(); return; }
+    if ((b = t.closest('[data-doc-trab]'))) { S.docFiltro.trab = ''; pintar(); return; }
+    if (t.closest('[data-activar-avisos]')) { activarAvisos(); return; }
+    if (t.closest('[data-avisos-no]')) { posponerAvisos(); pintar(); return; }
+    if (t.closest('[data-instalar]')) { instalarApp(); return; }
+    if (t.closest('[data-apagar-avisos]')) { apagarAvisos().then(function () { toast('Avisos apagados en este teléfono.'); pintar(); }); return; }
+    if (t.closest('[data-probar-aviso]')) { api('clientePushProbar', { endpoint: AV.sub && AV.sub.endpoint }).then(function (r) { toast(r && r.ok ? 'Listo: debería llegarte un aviso en unos segundos.' : ((r && r.message) || 'No se pudo.')); }); return; }
+    if (t.closest('[data-copiar-enlace]')) {
+      var enlace = location.origin + location.pathname;
+      (navigator.clipboard ? navigator.clipboard.writeText(enlace) : Promise.reject()).then(function () { toast('Listo: pega el enlace en ' + (esIOS() ? 'Safari' : 'Chrome') + '.'); }, function () { toast(enlace); });
+      return;
+    }
     if (t.closest('[data-guardar]')) { guardarArchivo((t.closest('[data-visor]') || {}).getAttribute('data-visor')); return; }
     if (t.closest('[data-compartir]')) { compartirArchivo((t.closest('[data-visor]') || {}).getAttribute('data-visor')); return; }
     if ((b = t.closest('[data-confirmar]'))) {
@@ -925,7 +1116,7 @@
       empujarHistoria(); capa.querySelector('textarea').focus(); return;
     }
     if (t.closest('[data-foto-chat]')) { document.getElementById('f-foto-chat').click(); return; }
-    if (t.closest('[data-salir]')) { api('clienteSalir').then(function () { guardarToken(''); S.dentro = false; S.perfil = null; pintar(); }); return; }
+    if (t.closest('[data-salir]')) { apagarAvisos().then(function () { return api('clienteSalir'); }).then(function () { guardarToken(''); S.dentro = false; S.perfil = null; pintar(); }); return; }
   });
 
   document.addEventListener('submit', function (ev) {
@@ -939,7 +1130,7 @@
         S.ocupado = false;
         if (!r || !r.ok) { S.errorEntrar = (r && r.message) || 'No se pudo entrar.'; vibrar([30, 60, 30]); pintar(); var i = document.getElementById('l-rut'); if (i) i.value = rut; return; }
         guardarToken(r.data.cliente_token, recordar);
-        cargarTodo().then(function () { S.vista = 'inicio'; pintar(); toast('Entraste. Este ingreso quedó registrado.'); });
+        cargarTodo().then(function () { S.vista = 'inicio'; pintar(); toast('Entraste. Este ingreso quedó registrado.'); abrirPendiente(); });
       });
       return;
     }
@@ -1060,6 +1251,7 @@
     } else if (inp.id === 'l-rut' && inp.selectionStart === inp.value.length) {
       inp.value = formatoRut(inp.value);
     } else if (inp.id === 'c-msg') crecer(inp);
+    else if (inp.id === 'doc-q') { S.docFiltro.q = inp.value; var l = document.getElementById('doc-lista'); if (l) { l.innerHTML = listaDocsHtml(); hidratarVistas(); } }
   });
   document.addEventListener('focusin', function (ev) { if (ev.target.classList && ev.target.classList.contains('pin-real')) pintarPin(ev.target); });
   document.addEventListener('focusout', function (ev) { if (ev.target.classList && ev.target.classList.contains('pin-real')) setTimeout(function () { pintarPin(ev.target); }, 0); });
@@ -1084,6 +1276,10 @@
 
   // ---------- Arranque ----------
   function arrancar() {
+    // Un aviso tocado abre portal.html#pedido=<id>: se abre ese pedido apenas haya sesión.
+    var mp = /#pedido=([A-Za-z0-9_-]+)/.exec(location.hash || '');
+    if (mp) { S.pedidoPendiente = decodeURIComponent(mp[1]); history.replaceState(null, '', location.pathname + location.search); }
+    prepararAvisos();
     var m = /#invitacion=([A-Za-z0-9_-]+)/.exec(location.hash || '');
     if (m) {
       S.invitacion = { codigo: m[1], info: null, error: '' };
@@ -1094,7 +1290,15 @@
       return;
     }
     if (!token()) { pintar(); return; }
-    cargarTodo().then(function () { pintar(); });
+    cargarTodo().then(function () { pintar(); abrirPendiente(); });
   }
+  // Con el portal ya abierto, un enlace #pedido=<id> (de un aviso) también abre el pedido.
+  window.addEventListener('hashchange', function () {
+    var mp = /#pedido=([A-Za-z0-9_-]+)/.exec(location.hash || '');
+    if (!mp) return;
+    S.pedidoPendiente = decodeURIComponent(mp[1]); history.replaceState(null, '', location.pathname + location.search);
+    abrirPendiente();
+  });
+  function abrirPendiente() { if (S.dentro && S.pedidoPendiente) { var id = S.pedidoPendiente; S.pedidoPendiente = null; abrirPedido(id); } }
   arrancar();
 })();
