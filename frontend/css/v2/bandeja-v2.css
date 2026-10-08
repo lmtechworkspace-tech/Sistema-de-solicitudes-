@@ -669,6 +669,6 @@ button.bj2-it__cab:focus-visible { outline: 2px solid var(--sx-primario); outlin
 .bj2-aviso-portal > svg { color: var(--sx-info); }
 
 /* 2026-10-08 · Miniaturas de las fotos adjuntas (portal de clientes y formulario). */
-.bj2-mini { flex: none; object-fit: cover; border-radius: 8px; border: 1px solid var(--sx-borde-suave); background: var(--sx-fondo); }
-.bj2-docs .bj2-mini { width: 44px; height: 44px; }
-.bj2-archivo .bj2-mini { width: 56px; height: 56px; }
+.bj2-foto-mini { flex: none; object-fit: cover; border-radius: 8px; border: 1px solid var(--sx-borde-suave); background: var(--sx-fondo); }
+.bj2-docs .bj2-foto-mini { width: 44px; height: 44px; }
+.bj2-archivo .bj2-foto-mini { width: 56px; height: 56px; }

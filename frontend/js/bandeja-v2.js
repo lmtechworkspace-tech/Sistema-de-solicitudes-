@@ -1394,7 +1394,7 @@
     // 2026-10-08: las fotos propias (servidor SIGSO, no Drive) se ven en miniatura, sin abrirlas.
     function miniFoto(a, px) {
       if (!/^image\//.test(a.tipo_mime || '') || !/\/v1\/archivo\/[0-9a-f-]{36}\?k=/.test(String(a.url || ''))) return '';
-      return '<img class="bj2-mini" src="' + U.esc(a.url) + '" alt="" loading="lazy" width="' + px + '" height="' + px + '">';
+      return '<img class="bj2-foto-mini" src="' + U.esc(a.url) + '" alt="" loading="lazy" width="' + px + '" height="' + px + '">';
     }
     function docsItem(it) {
       var as = (detalle.archivos || []).filter(function (a) { return a.subsolicitud_id === it.subsolicitud_id; });
