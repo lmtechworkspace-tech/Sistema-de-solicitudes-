@@ -39,7 +39,7 @@ Informe real de Codex con 4 hallazgos (commit base `065240a`). Correcciones en c
 
 ### D-002 · H1: probar el correo antes de ver o tocar una solicitud — opción B (dueño, 2026-10-08)
 - **Opción elegida: B** (código al correo). Se descartó la A (enlaces firmados) porque rompe los enlaces ya enviados.
-- **Diseño implementado (SIN commit al 2026-10-08, pendiente de revisión de Codex):**
+- **Diseño implementado (commit `5b4d829`, revisado por Codex en D-003 y D-004):**
   - `router.js` → `conCorreoVerificado_` envuelve las 7 acciones públicas: `consultarEstado`, `editarSubsolicitud`, `eliminarArchivo`, `responderConsulta`, `enviarMensajeSolicitud`, `validarCierre`, `subirArchivo`. Sin correo probado → 403 con `requiere_codigo: true`.
   - Correo probado = un correo de la **cuenta de la plataforma** (`portal_token`) o un **pase de acceso** (`pase_acceso`).
   - Pase de acceso (`solicitudesPublico.js`): se entrega al verificar el código (`verificarCodigoAcceso`, y `misSolicitudes` con código). Dura **8 h** y vive en la memoria del servidor (un reinicio o despliegue lo borra; se pide el código otra vez).
