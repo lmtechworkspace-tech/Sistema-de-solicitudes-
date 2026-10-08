@@ -200,7 +200,6 @@ textarea.inp { min-height: 96px; resize: vertical; }
 .ojo { color: var(--muted); font-size: 15px; }
 .pie-marca { text-align: center; color: var(--muted); font-size: 13px; }
 .pie-marca b { font-family: var(--f-mono); letter-spacing: .06em; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
 /* Portal real (no prototipo): estados de carga y error, archivos y respaldo. */
 .cargando { display: grid; place-items: center; min-height: 60vh; color: var(--muted); font-weight: 700; gap: 12px; text-align: center; }
@@ -214,3 +213,217 @@ textarea.inp { min-height: 96px; resize: vertical; }
 .subiendo { color: var(--muted); font-size: 15px; font-weight: 700; }
 .oculto-visual { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .pie-marca { padding-bottom: 8px; }
+
+/* ==========================================================================
+   2026-10-07 · Mejora visual, interacción y movimiento.
+   El movimiento orienta (de dónde vengo, qué cambió), no adorna: entradas
+   cortas, nada que parpadee salvo «Te toca a ti», y todo se apaga con
+   prefers-reduced-motion (regla al final).
+   ========================================================================== */
+:root { --navy-2: #24507F; --ease: cubic-bezier(.2, .8, .2, 1); --rapido: .16s; --medio: .3s; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --navy-2: #1A3557; } }
+:root[data-theme="dark"] { --navy-2: #1A3557; }
+
+/* El contenedor ya no corta lo pegajoso (overflow: clip no crea zona de scroll). */
+@media (min-width: 620px) { .app { overflow: clip; } }
+
+/* Cabecera: degradado con un círculo de marca; se compacta al bajar. */
+.top { position: sticky; top: 0; z-index: 4; background: linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%); overflow: hidden; transition: box-shadow var(--medio) var(--ease), padding var(--medio) var(--ease); }
+.top::after { content: ""; position: absolute; right: -60px; top: -70px; width: 190px; height: 190px; border-radius: 50%; border: 26px solid rgba(255,255,255,.06); pointer-events: none; }
+.top > * { position: relative; z-index: 1; }
+.sello { max-height: 30px; transition: max-height var(--medio) var(--ease), opacity var(--rapido), margin var(--medio) var(--ease); }
+.compacto .top { padding-top: 8px; padding-bottom: 10px; box-shadow: 0 6px 18px rgba(10, 20, 35, .22); }
+.compacto .sello { max-height: 0; opacity: 0; margin-bottom: -8px; }
+.compacto .top h1 { font-size: 18px; }
+.top h1 { transition: font-size var(--medio) var(--ease); }
+.ico-btn { transition: background var(--rapido), transform var(--rapido) var(--ease); }
+.ico-btn:active { transform: scale(.9); background: rgba(255,255,255,.26); }
+
+/* Tacto: todo lo que se toca se hunde un poco. */
+.btn, .item, .area, .opcion, .chip-sel, .mandar, .stat, .nav button, .redondo, .quitar { transition: transform var(--rapido) var(--ease), box-shadow var(--rapido), border-color var(--rapido), background-color var(--rapido); }
+.btn:active:not([disabled]), .item:active, .area:active, .opcion:active, .chip-sel:active, .mandar:active, .stat:active, .redondo:active { transform: scale(.97); }
+@media (hover: hover) {
+  .item:hover, .area:hover, .stat:hover { border-color: color-mix(in srgb, var(--orange) 45%, var(--line)); box-shadow: 0 2px 4px rgba(10,20,35,.08), 0 10px 24px rgba(10,20,35,.09); }
+  .btn-main:hover:not([disabled]) { filter: brightness(1.06); }
+}
+.btn-main { box-shadow: 0 4px 14px color-mix(in srgb, var(--orange) 32%, transparent); }
+.btn-main[disabled] { box-shadow: none; }
+
+/* Áreas: ícono en círculo de color propio, igual que en la lista de pedidos. */
+.area { gap: 10px; }
+.area__ico, .item .ico, .stat { --tono: var(--orange); --tono-suave: var(--orange-soft); }
+[data-tono="info"] { --tono: var(--info); --tono-suave: var(--info-soft); }
+[data-tono="ok"] { --tono: var(--ok); --tono-suave: var(--ok-soft); }
+[data-tono="warn"] { --tono: var(--warn); --tono-suave: var(--warn-soft); }
+[data-tono="gris"] { --tono: var(--ink); --tono-suave: var(--bg); }
+.area__ico { width: 60px; height: 60px; border-radius: 50%; background: var(--tono-suave); color: var(--tono); display: grid; place-items: center; transition: transform var(--medio) var(--ease); }
+.area .area__ico svg { width: 32px; height: 32px; color: currentColor; }
+.area:active .area__ico { transform: scale(.9) rotate(-6deg); }
+.item .ico { background: var(--tono-suave); color: var(--tono); }
+.item[data-estado="TU"] { border-left: 5px solid var(--orange); padding-left: 11px; }
+.item .flecha { transition: transform var(--rapido) var(--ease); }
+.item:active .flecha { transform: translateX(3px); }
+.mandar { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%); }
+.mandar .mandar__ico { width: 52px; height: 52px; border-radius: 14px; background: rgba(255,255,255,.14); display: grid; place-items: center; flex: none; }
+.mandar .mandar__ico svg { width: 30px; height: 30px; }
+
+/* «Te toca a ti»: el único elemento que late. */
+.toca { background: linear-gradient(180deg, var(--orange-soft), var(--surface) 70%); }
+.latido { position: relative; width: 12px; height: 12px; flex: none; border-radius: 50%; background: var(--orange); }
+.latido::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--orange); animation: latir 1.8s var(--ease) infinite; }
+@keyframes latir { 0% { transform: scale(1); opacity: .55; } 80%, 100% { transform: scale(2.8); opacity: 0; } }
+
+/* «Este mes» en baldosas. */
+.mes-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.mes-cab small { color: var(--muted); font-size: 14px; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 2px; text-align: left; color: var(--ink); min-height: 84px; }
+.stat b { font: 700 28px/1.1 var(--f); font-variant-numeric: tabular-nums; color: var(--tono); }
+.stat span { font-size: 14px; color: var(--muted); line-height: 1.25; }
+
+/* Barra de pasos al pedir: el tramo recién alcanzado se llena. */
+.pasos span { overflow: hidden; position: relative; }
+.pasos span.on { background: var(--line); }
+.pasos span.on::before { content: ""; position: absolute; inset: 0; background: var(--orange); border-radius: inherit; transform-origin: left; }
+.pasos span.nuevo::before { animation: llenar .5s var(--ease) .12s both; }
+@keyframes llenar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* Camino del pedido: tres puntos unidos. */
+.camino { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); }
+.camino li { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 700; color: var(--muted); position: relative; text-align: center; }
+.camino li::before { content: ""; position: absolute; top: 16px; right: 50%; width: 100%; height: 4px; background: var(--line); z-index: 0; }
+.camino li:first-child::before { display: none; }
+.camino li.hecho::before, .camino li.actual::before { background: var(--orange); }
+.camino .bola { width: 36px; height: 36px; border-radius: 50%; background: var(--surface); border: 3px solid var(--line); display: grid; place-items: center; position: relative; z-index: 1; color: var(--muted); font-size: 15px; }
+.camino .bola svg { width: 20px; height: 20px; }
+.camino li.hecho { color: var(--ink); }
+.camino li.hecho .bola { background: var(--orange); border-color: var(--orange); color: var(--on-strong); }
+.camino li.actual { color: var(--ink); }
+.camino li.actual .bola { border-color: var(--orange); color: var(--orange); animation: aro 2s var(--ease) infinite; }
+@keyframes aro { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--orange) 45%, transparent); } 70%, 100% { box-shadow: 0 0 0 10px transparent; } }
+.camino.todo li.hecho::before { background: var(--ok); }
+.camino.todo li.hecho .bola { background: var(--ok); border-color: var(--ok); }
+
+/* Documento del equipo resaltado. */
+.doc.del-equipo { border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); background: color-mix(in srgb, var(--ok-soft) 55%, var(--surface)); }
+.doc.del-equipo svg { color: var(--ok); }
+
+/* Chat: iniciales, días y burbujas que aparecen. */
+.chat { gap: 6px; }
+.dia { align-self: center; font-size: 13px; font-weight: 700; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; margin: 8px 0 2px; }
+.msg { display: flex; align-items: flex-end; gap: 8px; }
+.msg.mio-fila { justify-content: flex-end; }
+.msg .av { width: 32px; height: 32px; border-radius: 50%; background: var(--navy); color: #FFFFFF; display: grid; place-items: center; font-size: 12.5px; font-weight: 700; flex: none; }
+.msg .av.oculto { visibility: hidden; }
+.msg .burbuja { max-width: calc(100% - 52px); }
+.msg.mio-fila .burbuja { max-width: 86%; }
+.msg.sigue .de-ellos { border-top-left-radius: 16px; }
+.msg.sigue .mio { border-top-right-radius: 16px; }
+.burbuja .hora { align-self: flex-end; font-size: 12px; }
+.burbuja.enviando { opacity: .7; }
+.burbuja.fallo { outline: 2px solid var(--orange); }
+.nueva { animation: burbuja-entra .34s var(--ease) both; }
+.mio-fila.nueva { transform-origin: bottom right; }
+.msg:not(.mio-fila).nueva { transform-origin: bottom left; }
+@keyframes burbuja-entra { from { opacity: 0; transform: translateY(8px) scale(.94); } to { opacity: 1; transform: none; } }
+.composer textarea.inp { min-height: 52px; max-height: 160px; resize: none; overflow-y: auto; line-height: 1.35; }
+.composer .enviar[disabled] { opacity: .5; }
+
+/* Navegación: píldora detrás del ícono activo. */
+.nav { box-shadow: 0 -4px 16px rgba(10, 20, 35, .06); }
+.nav button { isolation: isolate; }
+.nav button::before { content: ""; position: absolute; top: 9px; left: 50%; width: 58px; height: 34px; margin-left: -29px; border-radius: 17px; background: var(--orange-soft); z-index: -1; opacity: 0; }
+.nav button[aria-current="page"]::before { opacity: 1; }
+.nav.cambio button[aria-current="page"]::before { animation: pildora .34s var(--ease) both; }
+@keyframes pildora { from { opacity: 0; transform: scaleX(.4); } to { opacity: 1; transform: none; } }
+.nav.cambio button[aria-current="page"] svg { animation: salto .4s var(--ease); }
+@keyframes salto { 40% { transform: translateY(-3px); } }
+.badge { border: 2px solid var(--surface); top: 4px; }
+.nav.cambio .badge, .badge.nuevo { animation: badge-entra .4s var(--ease) both; }
+@keyframes badge-entra { from { transform: scale(0); } 60% { transform: scale(1.2); } to { transform: scale(1); } }
+
+/* Transiciones entre pantallas (las aplica pintar() solo cuando cambia la pantalla). */
+.anim-adelante > :not(.composer) { animation: entra-der var(--medio) var(--ease) both; animation-delay: calc(var(--i, 0) * 35ms); }
+.anim-atras > :not(.composer) { animation: entra-izq var(--medio) var(--ease) both; animation-delay: calc(var(--i, 0) * 25ms); }
+.anim-fade > :not(.composer) { animation: entra-sube .36s var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
+@keyframes entra-der { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes entra-izq { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes entra-sube { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.top-anim .top-fila .grow { animation: entra-sube .3s var(--ease) both; }
+
+/* Hojas de abajo (ayuda, formularios): suben y bajan. */
+.ayuda-fondo { animation: fondo-entra .22s ease both; }
+.ayuda { animation: hoja-sube .32s var(--ease) both; position: relative; padding-top: 28px; }
+.ayuda::before { content: ""; position: absolute; top: 10px; left: 50%; width: 44px; height: 5px; margin-left: -22px; border-radius: 3px; background: var(--line); }
+.cerrando .ayuda-fondo { animation: fondo-sale .2s ease both; }
+.cerrando .ayuda { animation: hoja-baja .2s ease-in both; }
+@keyframes fondo-entra { from { opacity: 0; } }
+@keyframes fondo-sale { to { opacity: 0; } }
+@keyframes hoja-sube { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes hoja-baja { to { transform: translateY(100%); } }
+
+/* Avisos: suben con ícono y se van solos. */
+.toast { display: flex; align-items: center; gap: 10px; text-align: left; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); animation: toast-entra .32s var(--ease) both; }
+.toast svg { width: 22px; height: 22px; flex: none; }
+.toast.t-error { background: var(--orange); color: var(--on-strong); }
+.toast.sale { animation: toast-sale .22s ease-in both; }
+@keyframes toast-entra { from { opacity: 0; transform: translate(-50%, 16px) scale(.96); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes toast-sale { to { opacity: 0; transform: translate(-50%, 10px); } }
+
+/* Errores: una sacudida corta para que se note dónde está el problema. */
+.error-caja { animation: sacudir .42s var(--ease) both; }
+@keyframes sacudir { 0% { opacity: 0; } 20% { opacity: 1; transform: translateX(-7px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(2px); } 100% { transform: none; } }
+
+/* «¡Listo!»: la palomita se dibuja y salen chispas. */
+.listo .gran { position: relative; width: 96px; height: 96px; background: none; }
+.listo .gran svg.dibujo { width: 96px; height: 96px; }
+.dibujo .circulo { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 3; stroke-dasharray: 160; stroke-dashoffset: 160; animation: trazo .6s var(--ease) .1s forwards; }
+.dibujo .palomita { fill: none; stroke: var(--ok); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: trazo .35s var(--ease) .6s forwards; }
+@keyframes trazo { to { stroke-dashoffset: 0; } }
+.chispas { position: absolute; inset: 0; pointer-events: none; }
+.chispas i { position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px; border-radius: 50%; background: var(--c, var(--orange)); opacity: 0; animation: chispa .7s var(--ease) .75s both; }
+.chispas i:nth-child(3n) { --c: var(--ok); }
+.chispas i:nth-child(3n+1) { --c: var(--info); }
+@keyframes chispa { 0% { opacity: 1; transform: rotate(var(--r)) translateY(-30px) scale(1); } 100% { opacity: 0; transform: rotate(var(--r)) translateY(-70px) scale(.4); } }
+.listo h2 { animation: entra-sube .4s var(--ease) .5s both; }
+
+/* Esqueleto mientras carga un pedido. */
+.esq { background: linear-gradient(90deg, var(--line) 0%, color-mix(in srgb, var(--line) 40%, var(--surface)) 50%, var(--line) 100%); background-size: 200% 100%; animation: brillo 1.2s linear infinite; border-radius: 8px; }
+@keyframes brillo { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.esq-linea { height: 14px; }
+.esq-corta { width: 60%; }
+.esq-titulo { height: 22px; width: 55%; }
+.esq-bola { width: 36px; height: 36px; border-radius: 50%; }
+
+/* Clave de 6 casillas (el input real queda encima, invisible). */
+.pin-caja { position: relative; }
+.pin-real { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; border: 0; z-index: 2; cursor: text; }
+.pin-puntos { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.pin-puntos i { height: 58px; border: 2px solid var(--line); border-radius: 12px; background: var(--surface); display: grid; place-items: center; transition: border-color var(--rapido), box-shadow var(--rapido); }
+.pin-puntos i::after { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); transform: scale(0); transition: transform .2s var(--ease); }
+.pin-puntos i.lleno::after { transform: scale(1); }
+.pin-puntos i.actual { border-color: var(--orange); box-shadow: 0 0 0 4px var(--orange-soft); }
+.pin-caja.completo .pin-puntos i { border-color: var(--ok); }
+
+/* Entrada: fondo de marca detrás del formulario. */
+.login { position: relative; isolation: isolate; justify-content: flex-start; padding-top: 40px; }
+.login::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 230px; background: linear-gradient(160deg, var(--navy) 0%, var(--navy-2) 100%); border-radius: 0 0 36px 36px; z-index: -1; }
+.login > .logo h2, .login > .logo .sub { color: #FFFFFF; }
+.login > .logo .sub { opacity: .85; }
+.login > .logo .marca-s { background: #FFFFFF; color: #17304F; box-shadow: 0 8px 20px rgba(0,0,0,.2); }
+.login.entra > * { animation: entra-sube .45s var(--ease) both; }
+.login.entra > :nth-child(2) { animation-delay: .06s; }
+.login.entra > :nth-child(3) { animation-delay: .12s; }
+.login.entra > :nth-child(4) { animation-delay: .18s; }
+.login.entra > :nth-child(5) { animation-delay: .24s; }
+.login .card { box-shadow: 0 2px 4px rgba(10,20,35,.06), 0 18px 40px rgba(10,20,35,.12); }
+
+/* Vacíos con ícono en círculo. */
+.vacio .vacio__ico { width: 84px; height: 84px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; }
+.vacio .vacio__ico svg { color: var(--muted); width: 40px; height: 40px; }
+
+/* Sin movimiento para quien lo pidió (sobrescribe todo lo de arriba). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition: none !important; }
+  .latido::after { display: none; }
+}
