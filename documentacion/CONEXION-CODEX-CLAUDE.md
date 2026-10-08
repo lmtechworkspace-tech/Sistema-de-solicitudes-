@@ -12,6 +12,8 @@ El puente usa `codex exec` en modo solo lectura y devuelve un informe estructura
 4. En la raíz del proyecto, ejecuta `node tools/codex-audit.mjs --check`. Solo comprueba el ejecutable, no certifica el inicio de sesión.
 5. Prueba `node tools/codex-audit.mjs "Autenticación y separación de datos entre empresas"`. Una ejecución real que produzca INFORME-PARA-CLAUDE.md confirma la comunicación con Codex.
 
+Windows: si la auditoría devuelve «setup refresh had errors» (sandbox `elevated` puesto por la app de escritorio), ejecútala con `CODEX_AUDIT_WINDOWS_SANDBOX=unelevated`: el puente pasa `-c windows.sandbox="unelevated"` solo a esa ejecución. Las decisiones y el contexto común están en `documentacion/DECISIONES-CODEX-CLAUDE.md`, que Codex debe leer primero.
+
 Windows: el script soporta el instalador npm habitual y ejecutables nativos codex.exe. Si usas WSL o un contenedor, instala e inicia sesión dentro de ese mismo entorno; instalar en Windows no configura WSL automáticamente. En Claude Code web, comprueba que su entorno permite instalar y autenticar el CLI; tener el repositorio conectado no garantiza esos requisitos.
 
 ## Instrucción para la sesión de Claude Code

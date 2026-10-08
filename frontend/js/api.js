@@ -227,12 +227,38 @@ function ejecutarLlamada_(url, action, data) {
 // ACCIONES_REINTENTABLES). Solo se reintenta ante un fallo de transporte
 // (promesa rechazada), nunca ante un {ok:false} del backend (eso llega como
 // valor resuelto y se devuelve tal cual).
+// Revisión Codex 2026-10-08 (D-002, hallazgo 3): primero en memoria de la pestaña
+// (siempre funciona) y después, si se puede, en sessionStorage (sobrevive a recargar).
+var LLAVE_PASES_ = 'sigso_pases_acceso';
+var PASES_MEMORIA_ = [];
+function pasesAcceso_() {
+  var guardados = [];
+  try { var l = JSON.parse(sessionStorage.getItem(LLAVE_PASES_) || '[]'); if (Array.isArray(l)) guardados = l; }
+  catch (err) { /* sessionStorage bloqueado: solo memoria */ }
+  var todos = PASES_MEMORIA_.slice();
+  guardados.forEach(function (p) { if (todos.indexOf(p) === -1) todos.push(p); });
+  return todos.slice(0, 10);
+}
+function guardarPaseAcceso_(pase) {
+  pase = String(pase);
+  PASES_MEMORIA_ = [pase].concat(PASES_MEMORIA_.filter(function (p) { return p !== pase; })).slice(0, 10);
+  try {
+    var l = pasesAcceso_().filter(function (p) { return p !== pase; });
+    l.unshift(pase);
+    sessionStorage.setItem(LLAVE_PASES_, JSON.stringify(l.slice(0, 10)));
+  } catch (err) { /* sin storage: queda en memoria de esta pestaña */ }
+}
+
 async function llamarApi(url, action, data) {
   const cfg = window.SIGSO_CONFIG || {};
   let tokenPortal = null;
   try { tokenPortal = localStorage.getItem('sigso_portal_token'); } catch (err) { /* sin storage */ }
   const destino = cfg.NODE_API_URL;
   if (tokenPortal) data = Object.assign({}, data, { portal_token: tokenPortal });
+  // Pases de acceso (opción B, auditoría 2026-10-08): prueban que el correo es
+  // tuyo en las páginas públicas de una solicitud. Viven solo en esta pestaña.
+  const pases = pasesAcceso_();
+  if (pases.length && !(data && data.pase_acceso)) data = Object.assign({}, data, { pase_acceso: pases });
 
   const medir = medicionTimingActiva_();
   const maxIntentos = esAccionDeLectura_(action) ? MAX_INTENTOS_LECTURA : 1;
@@ -241,6 +267,7 @@ async function llamarApi(url, action, data) {
     const inicio = performance.now();
     try {
       const resultado = await ejecutarLlamada_(destino, action, data);
+      if (resultado && resultado.ok && resultado.data && resultado.data.pase_acceso) guardarPaseAcceso_(resultado.data.pase_acceso);
       const rt = Math.round(performance.now() - inicio);
       const s = (MS_SERVIDOR_ && resultado && typeof resultado === 'object' && MS_SERVIDOR_.has(resultado)) ? MS_SERVIDOR_.get(resultado) : null;
       perfRegistrar_({ t: Date.now(), a: action, rt: rt, s: s, io: null, ops: null, i: intento, ok: true });

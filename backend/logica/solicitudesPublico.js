@@ -279,20 +279,133 @@ async function solicitarCodigoAcceso(db, data) {
   // Igual responde ok: no revela nada del correo.
   // Ventana deslizante (2.ª ronda de Codex): se guarda la hora de cada envío y
   // solo cuentan los de los últimos 10 minutos.
-  const claveEnvios = 'CODIGO_ACCESO_ENVIOS:' + email;
+  // 2.ª ronda de Codex (D-003): los pedidos del MISMO correo van en fila (uno termina
+  // de enviar antes de que el siguiente genere su código), y cada intento solo deshace
+  // lo suyo: así un envío que falla nunca borra el código ni el cupo de otro que salió.
+  const previo = colaCodigos_.get(email) || Promise.resolve();
+  const turno = previo.catch(() => null).then(() => enviarCodigoEnFila_(db, data, email));
+  colaCodigos_.set(email, turno);
+  try { return await turno; } finally { if (colaCodigos_.get(email) === turno) colaCodigos_.delete(email); }
+}
+
+const colaCodigos_ = new Map(); // correo -> promesa del último pedido en curso
+function enviosVigentes_(claveEnvios) {
+  let lista = [];
+  try { lista = JSON.parse(Cache.get(claveEnvios) || '[]'); } catch (e) { lista = []; }
   const ahora = Date.now();
-  let envios = [];
-  try { envios = JSON.parse(Cache.get(claveEnvios) || '[]'); } catch (e) { envios = []; }
-  envios = (Array.isArray(envios) ? envios : []).filter((t) => ahora - Number(t) < VENTANA_CODIGO_MS);
+  return (Array.isArray(lista) ? lista : [])
+    .map((x) => (typeof x === 'object' && x ? x : { t: Number(x), id: '' }))
+    .filter((x) => ahora - Number(x.t) < VENTANA_CODIGO_MS);
+}
+async function enviarCodigoEnFila_(db, data, email) {
+  const claveEnvios = 'CODIGO_ACCESO_ENVIOS:' + email;
+  const claveCodigo = 'CODIGO_ACCESO:' + email;
+  // Ventana deslizante: se guarda la hora de cada envío (con un id por intento) y solo
+  // cuentan los de los últimos 10 minutos.
+  const envios = enviosVigentes_(claveEnvios);
   if (envios.length >= ENVIOS_CODIGO_MAX) return { ok: true };
-  envios.push(ahora);
+  const intento = { t: Date.now(), id: crypto.randomBytes(8).toString('hex') };
+  envios.push(intento);
   Cache.put(claveEnvios, JSON.stringify(envios), VENTANA_CODIGO_MS / 1000);
   // crypto.randomInt: Math.random no sirve para códigos de seguridad.
   const codigo = String(crypto.randomInt(100000, 1000000));
-  Cache.put('CODIGO_ACCESO:' + email, codigo, 600);
+  // Se recuerda el código anterior (y cuándo vence) por si este envío falla.
+  const claveVence = 'CODIGO_ACCESO_VENCE:' + email;
+  const anterior = Cache.get(claveCodigo);
+  const venceAnterior = Number(Cache.get(claveVence) || 0);
+  Cache.put(claveCodigo, codigo, 600);
+  Cache.put(claveVence, String(Date.now() + 600 * 1000), 600);
   Cache.remove('CODIGO_ACCESO_FALLOS:' + email);
-  await Notificaciones.enviarCodigoAcceso(db, data.email, codigo);
+  const envio = await Notificaciones.enviarCodigoAcceso(db, data.email, codigo);
+  // Revisión Codex 2026-10-08 (D-002, hallazgo 4): con D-002 el código es la llave de
+  // acceso; si el correo no sale, se dice (sin revelar si hay solicitudes), el código
+  // no queda vigente y ese intento no gasta cupo. Solo se deshace LO DE ESTE INTENTO,
+  // leyendo el estado actual (no una copia de antes del envío).
+  if (envio && envio.enviado === false && (envio.motivo === 'canal_desactivado' || envio.motivo === 'error_envio')) {
+    if (Cache.get(claveCodigo) === codigo) {
+      // El código de un envío anterior que SÍ salió vuelve a valer, con su vencimiento.
+      const resta = venceAnterior - Date.now();
+      if (anterior && resta > 0) { Cache.put(claveCodigo, anterior, resta / 1000); Cache.put(claveVence, String(venceAnterior), resta / 1000); }
+      else { Cache.remove(claveCodigo); Cache.remove(claveVence); }
+    }
+    const restantes = enviosVigentes_(claveEnvios).filter((x) => x.id !== intento.id);
+    if (restantes.length) Cache.put(claveEnvios, JSON.stringify(restantes), VENTANA_CODIGO_MS / 1000); else Cache.remove(claveEnvios);
+    return errorValidacion_('email', 'No pudimos enviar el código en este momento. Intenta de nuevo en unos minutos.');
+  }
   return { ok: true };
+}
+
+// Valida el código de un solo uso de ese correo (con el límite de fallos del
+// hallazgo 4). true = correcto (y ya no sirve otra vez).
+function validarCodigo_(emailCrudo, codigoCrudo) {
+  const email = String(emailCrudo || '').trim().toLowerCase();
+  const clave = 'CODIGO_ACCESO:' + email;
+  const codigoValido = Cache.get(clave);
+  if (!codigoValido || codigoValido !== String(codigoCrudo || '').trim()) {
+    // Auditoría Codex 2026-10-08 (hallazgo 4): tras INTENTOS_CODIGO_MAX fallos el
+    // código deja de servir, aunque después se escriba bien.
+    if (codigoValido) {
+      const claveFallos = 'CODIGO_ACCESO_FALLOS:' + email;
+      const fallos = Number(Cache.get(claveFallos) || 0) + 1;
+      if (fallos >= INTENTOS_CODIGO_MAX) { Cache.remove(clave); Cache.remove(claveFallos); }
+      else Cache.put(claveFallos, String(fallos), 600);
+    }
+    return false;
+  }
+  Cache.remove(clave); // un solo uso
+  Cache.remove('CODIGO_ACCESO_FALLOS:' + email);
+  return true;
+}
+
+// --- Opción B del hallazgo 1 (auditoría Codex 2026-10-08) ---------------------------------
+// Ver o tocar una solicitud desde las páginas públicas exige PROBAR el correo:
+// con la sesión de la plataforma (correos de la cuenta) o con un «pase de acceso»
+// que se entrega al verificar el código enviado a ese correo. El pase vive en
+// memoria del servidor PASE_HORAS horas (un reinicio pide el código otra vez).
+const PASE_HORAS = 8;
+// solicitudId (opcional): el pase sirve SOLO para esa solicitud. Es el que recibe
+// quien acaba de crear una solicitud sin cuenta, para subir sus adjuntos: no
+// prueba el correo, así que no puede abrir otras solicitudes de ese correo.
+// Revisión Codex 2026-10-08 (D-002, hallazgo 1): dos tipos de pase.
+//  - 'codigo': probó el correo con el código → todas las acciones de ese correo.
+//  - 'creacion': lo recibe quien acaba de crear la solicitud SIN probar el correo →
+//    SOLO subir los adjuntos de esa solicitud (ACCIONES_PASE_CREACION).
+const ACCIONES_PASE_CREACION = ['subirArchivo'];
+function crearPaseAcceso_(emailCrudo, solicitudId, tipo) {
+  const pase = crypto.randomBytes(24).toString('base64url');
+  const t = tipo === 'creacion' ? 'creacion' : 'codigo';
+  Cache.put('PASE_ACCESO:' + pase, JSON.stringify({ e: String(emailCrudo || '').trim().toLowerCase(), s: solicitudId || '', t: t }), PASE_HORAS * 3600);
+  return pase;
+}
+/** Correos que esta llamada PROBÓ ser suyos (sesión de la plataforma o pase), para esa acción. */
+function correosVerificados_(db, data, accion) {
+  const out = [];
+  if (data && data.portal_token) {
+    const cuenta = Sesiones.resolverCuentaPorToken(db, data.portal_token);
+    if (cuenta) Portal.parsearListaPortal(cuenta.emails).forEach((e) => out.push(String(e).trim().toLowerCase()));
+  }
+  // El navegador manda todos los pases que tiene (uno o varios).
+  const pases = data && data.pase_acceso ? (Array.isArray(data.pase_acceso) ? data.pase_acceso : [data.pase_acceso]) : [];
+  pases.slice(0, 20).forEach((p) => {
+    let v = null;
+    try { v = JSON.parse(Cache.get('PASE_ACCESO:' + String(p)) || 'null'); } catch (e) { v = null; }
+    if (!v || !v.e) return;
+    if (v.s && v.s !== String((data && data.solicitud_id) || '')) return;
+    if (v.t === 'creacion' && ACCIONES_PASE_CREACION.indexOf(accion) === -1) return;
+    out.push(v.e);
+  });
+  return out;
+}
+/** El correo con que se pide ver o tocar la solicitud, ¿está probado? */
+function correoVerificado_(db, data, accion) {
+  const email = String((data && data.email) || '').trim().toLowerCase();
+  return !!email && correosVerificados_(db, data, accion).indexOf(email) !== -1;
+}
+/** Verifica el código y entrega el pase (para la consulta por número). */
+function verificarCodigoAcceso(db, data) {
+  if (!data || !data.email || !data.codigo) return errorValidacion_('codigo', 'Debes indicar tu correo y el código recibido.');
+  if (!validarCodigo_(data.email, data.codigo)) return { _forbidden: true, message: 'Código inválido o expirado. Solicita uno nuevo.' };
+  return { pase_acceso: crearPaseAcceso_(data.email), horas: PASE_HORAS };
 }
 
 // v3.0 (Fase 3, §4): segundo paso -- valida el codigo de un solo uso (o una
@@ -304,6 +417,7 @@ async function solicitarCodigoAcceso(db, data) {
 function misSolicitudes(db, data) {
   data = data || {};
   let emails;
+  let pase = '';
 
   // v3.3 (plataforma): con sesion de la plataforma, la identidad es la
   // CUENTA, y una cuenta puede tener VARIOS correos -- se juntan las
@@ -324,22 +438,10 @@ function misSolicitudes(db, data) {
     if (!data.email || !data.codigo) {
       return errorValidacion_('codigo', 'Debes indicar tu correo y el codigo recibido.');
     }
-    const email = String(data.email).trim().toLowerCase();
-    const clave = 'CODIGO_ACCESO:' + email;
-    const codigoValido = Cache.get(clave);
-    if (!codigoValido || codigoValido !== String(data.codigo).trim()) {
-      // Auditoría Codex 2026-10-08 (hallazgo 4): tras INTENTOS_CODIGO_MAX fallos el
-      // código deja de servir, aunque después se escriba bien.
-      if (codigoValido) {
-        const claveFallos = 'CODIGO_ACCESO_FALLOS:' + email;
-        const fallos = Number(Cache.get(claveFallos) || 0) + 1;
-        if (fallos >= INTENTOS_CODIGO_MAX) { Cache.remove(clave); Cache.remove(claveFallos); }
-        else Cache.put(claveFallos, String(fallos), 600);
-      }
+    if (!validarCodigo_(data.email, data.codigo)) {
       return { _forbidden: true, message: 'Código inválido o expirado. Solicita uno nuevo.' };
     }
-    Cache.remove(clave); // un solo uso
-    Cache.remove('CODIGO_ACCESO_FALLOS:' + email);
+    pase = crearPaseAcceso_(data.email);
     emails = [data.email];
   }
 
@@ -402,7 +504,9 @@ function misSolicitudes(db, data) {
     };
   }).sort((a, b) => new Date(b.fecha_creacion) - new Date(a.fecha_creacion));
 
-  return { resumen: resumen, solicitudes: lista };
+  // Opción B (auditoría Codex 2026-10-08): con el código verificado, el pase de
+  // acceso para abrir y responder estas solicitudes sin volver a pedir código.
+  return pase ? { resumen: resumen, solicitudes: lista, pase_acceso: pase } : { resumen: resumen, solicitudes: lista };
 }
 
 const EDITABLES_SOLICITANTE = [ESTADOS.S01, ESTADOS.S02, ESTADOS.S03, ESTADOS.S04];
@@ -715,6 +819,6 @@ async function validarCierre(db, data) {
 }
 
 module.exports = {
-  estadoPublico, solicitarCodigoAcceso, misSolicitudes,
+  estadoPublico, solicitarCodigoAcceso, misSolicitudes, verificarCodigoAcceso, correoVerificado_, correosVerificados_, crearPaseAcceso_,
   editarSubsolicitud, eliminarArchivo, responderConsulta, enviarMensajeSolicitud, validarCierre
 };

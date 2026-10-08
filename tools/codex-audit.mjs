@@ -6,6 +6,13 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const scope = process.argv.slice(2).join(' ').trim() || 'SIGSO completo: inventario por módulos y primera revisión de riesgos prioritarios';
 const cliArgs = ['exec', '--sandbox', 'read-only'];
+// Windows: si la app de escritorio dejó el sandbox en «elevated» y este falla al
+// prepararse («setup refresh had errors»), CODEX_AUDIT_WINDOWS_SANDBOX=unelevated
+// lo cambia SOLO para la auditoría (no toca ~/.codex/config.toml). Sigue en solo lectura.
+const modoSandbox = String(process.env.CODEX_AUDIT_WINDOWS_SANDBOX || '').trim();
+if (process.platform === 'win32' && /^(elevated|unelevated)$/.test(modoSandbox)) {
+  cliArgs.splice(1, 0, '-c', `windows.sandbox="${modoSandbox}"`);
+}
 
 // Native executables on Windows work directly. npm .cmd launchers need their
 // JavaScript entry point; never send the user's prompt through cmd.exe/a shell.

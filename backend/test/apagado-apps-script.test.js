@@ -198,7 +198,9 @@ test('HTTP: subirArchivo sin sesión + GET /v1/archivo sirve la imagen aislada',
   const db = dbBase();
   await conServidor(db, async (server) => {
     const sub = await pedir(server, 'POST', '/v1/accion', { action: 'subirArchivo', data: {
-      solicitud_id: 'SOL-1', nombre_archivo: 'foto.png', contenido_base64: PNG_1X1, email: 'ana@cliente.cl' } });
+      solicitud_id: 'SOL-1', nombre_archivo: 'foto.png', contenido_base64: PNG_1X1, email: 'ana@cliente.cl',
+      // Opción B (2026-10-08): el correo se prueba con un pase (el que entrega crearSolicitud).
+      pase_acceso: require('../logica/solicitudesPublico').crearPaseAcceso_('ana@cliente.cl', 'SOL-1') } });
     const json = JSON.parse(sub.buffer.toString());
     assert.equal(json.ok, true, sub.buffer.toString());
     const ruta = json.data.url.replace(/^https?:\/\/[^/]+/, '');

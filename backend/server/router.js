@@ -32,6 +32,8 @@ const Solicitudes = require('../logica/solicitudes');
 const SolicitudesBO = require('../logica/solicitudesBackoffice');
 const ServiciosSolicitud = require('../logica/serviciosSolicitud');
 const SolicitudesPublico = require('../logica/solicitudesPublico');
+const { leerFilas_ } = require('../db/sqliteRepo');
+const { COLUMNAS } = require('../db/schema');
 const Jefatura = require('../logica/jefatura');
 const Dashboard = require('../logica/dashboard');
 const Gerencia = require('../logica/gerencia');
@@ -113,12 +115,35 @@ const PortalClientes = require('../logica/portalClientes');
 // es el formulario de ingreso (backend/intake), que cualquier persona sin
 // cuenta puede enviar -- igual que en Apps Script, donde Intake es un
 // proyecto separado sin gate de identidad.
+// Opción B del hallazgo 1 (auditoría Codex 2026-10-08): ver o tocar una solicitud
+// desde las páginas públicas exige PROBAR el correo (sesión de la plataforma con
+// ese correo, o el pase que da el código enviado a ese correo). Saber el número
+// y el correo ya no basta. requiere_codigo le dice a la página que pida el código.
+function conCorreoVerificado_(accion, fn) {
+  return (db, data, meta) => {
+    data = data || {};
+    // Con la sesión de la plataforma y sin correo indicado (p. ej. los adjuntos de
+    // «Nueva solicitud»): se usa el correo de la cuenta que corresponde a esa solicitud.
+    if (!data.email && data.portal_token && data.solicitud_id) {
+      const sol = leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).find((x) => x.solicitud_id === data.solicitud_id);
+      const igual = (a, b) => !!a && !!b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+      const propio = sol && SolicitudesPublico.correosVerificados_(db, { portal_token: data.portal_token })
+        .find((e) => igual(e, sol.solicitante_email) || (!!sol.es_cliente && igual(e, sol.correo_cliente)));
+      if (propio) data = Object.assign({}, data, { email: propio });
+    }
+    if (!SolicitudesPublico.correoVerificado_(db, data, accion)) {
+      return { _forbidden: true, requiere_codigo: true, message: 'Para ver o modificar esta solicitud, confirma tu correo con el código que te enviaremos.' };
+    }
+    return fn(db, data, meta);
+  };
+}
+
 const ACCIONES_PUBLICAS = new Set([
   // Robot TGR de la oficina (2026-10-02): el PC se identifica con su propia
   // llave (se verifica adentro, contra el hash guardado), no con una sesión.
   'robotAgenteTomar', 'robotAgentePaso', 'robotAgenteEntregar',
   'portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud',
-  'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes',
+  'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes', 'verificarCodigoAcceso',
   'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'enviarMensajeSolicitud', 'validarCierre',
   'getCatalogos',
   // Apagado de Apps Script (2026-09-27): lo que quedaba del Intake. subirArchivo
@@ -146,21 +171,27 @@ const ACCIONES = {
   guardarCatalogo: (db, data, contexto) => Catalogos.guardar(db, data, contexto),
   listarCatalogo: (db, data, contexto) => Catalogos.listar(db, data, contexto),
 
-  crearSolicitud: (db, data) => Solicitudes.crearSolicitud(db, data),
+  // Opción B: quien crea la solicitud recibe un pase SOLO para ella (sus adjuntos).
+  crearSolicitud: async (db, data) => {
+    const r = await Solicitudes.crearSolicitud(db, data);
+    if (r && r.solicitud_id && !r._validationError && !r._forbidden) r.pase_acceso = SolicitudesPublico.crearPaseAcceso_((data || {}).solicitante_email, r.solicitud_id, 'creacion');
+    return r;
+  },
   getCatalogos: (db) => Catalogos.getCatalogosPublicos(db),
   getClientes: (db) => Catalogos.getClientes(db),
-  subirArchivo: (db, data) => ArchivosSolicitud.subirArchivo(db, data),
+  subirArchivo: conCorreoVerificado_('subirArchivo', (db, data) => ArchivosSolicitud.subirArchivo(db, data)),
   crearQuejaSgc: (db, data) => Quejas.crearPublica(db, data),
 
-  consultarEstado: (db, data) => SolicitudesPublico.estadoPublico(db, data.solicitud_id, data.email),
+  consultarEstado: conCorreoVerificado_('consultarEstado', (db, data) => SolicitudesPublico.estadoPublico(db, data.solicitud_id, data.email)),
+  verificarCodigoAcceso: (db, data) => SolicitudesPublico.verificarCodigoAcceso(db, data),
   solicitarCodigoAcceso: (db, data) => SolicitudesPublico.solicitarCodigoAcceso(db, data),
   misSolicitudes: (db, data) => SolicitudesPublico.misSolicitudes(db, data),
-  editarSubsolicitud: (db, data) => SolicitudesPublico.editarSubsolicitud(db, data),
-  eliminarArchivo: (db, data) => SolicitudesPublico.eliminarArchivo(db, data),
-  responderConsulta: (db, data) => SolicitudesPublico.responderConsulta(db, data),
+  editarSubsolicitud: conCorreoVerificado_('editarSubsolicitud', (db, data) => SolicitudesPublico.editarSubsolicitud(db, data)),
+  eliminarArchivo: conCorreoVerificado_('eliminarArchivo', (db, data) => SolicitudesPublico.eliminarArchivo(db, data)),
+  responderConsulta: conCorreoVerificado_('responderConsulta', (db, data) => SolicitudesPublico.responderConsulta(db, data)),
   // Etapa 3: el solicitante escribe en la conversación (mismo control de correo).
-  enviarMensajeSolicitud: (db, data) => SolicitudesPublico.enviarMensajeSolicitud(db, data),
-  validarCierre: (db, data) => SolicitudesPublico.validarCierre(db, data),
+  enviarMensajeSolicitud: conCorreoVerificado_('enviarMensajeSolicitud', (db, data) => SolicitudesPublico.enviarMensajeSolicitud(db, data)),
+  validarCierre: conCorreoVerificado_('validarCierre', (db, data) => SolicitudesPublico.validarCierre(db, data)),
 
   actualizarEstado: (db, data, contexto) => SolicitudesBO.actualizarEstado(db, data, contexto),
   actualizarPrioridad: (db, data, contexto) => SolicitudesBO.actualizarPrioridad(db, data, contexto),
@@ -815,6 +846,7 @@ function responderResultado_(resultado) {
   if (resultado && resultado._forbidden) {
     const body = { ok: false, error: 'forbidden', message: resultado.message };
     if (resultado.boveda_cerrada) body.boveda_cerrada = true;
+    if (resultado.requiere_codigo) body.requiere_codigo = true;
     return { status: 403, body };
   }
   return { status: 200, body: { ok: true, data: resultado } };

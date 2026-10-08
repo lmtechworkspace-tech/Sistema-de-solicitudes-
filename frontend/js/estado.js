@@ -110,6 +110,10 @@
         if (respuesta.ok) {
           ultimaConsulta = { solicitud_id: solicitudId, email: email, contenedorId: contenedor };
           mostrarEstado_(respuesta.data, contenedor);
+        } else if (respuesta.requiere_codigo) {
+          // Opción B (auditoría 2026-10-08): el número y el correo ya no bastan;
+          // se confirma el correo con un código y se vuelve a consultar.
+          pedirCodigoParaConsulta_(solicitudId, email, contenedor);
         } else {
           mostrarError_(respuesta, contenedor);
         }
@@ -823,6 +827,57 @@
       : '<div class="sigso-adjuntos-item"><p><strong>Adjuntos que enviaste</strong></p>' + partes + '</div>';
   }
 
+  // Opción B: para ver una solicitud se confirma el correo con un código de un
+  // solo uso. Al verificarlo, el servidor entrega un pase (lo guarda api.js en
+  // esta pestaña) y la consulta se repite sola.
+  function pedirCodigoParaConsulta_(solicitudId, email, contenedorId) {
+    var contenedor = document.getElementById(contenedorId || 'resultado');
+    var esc = Componentes.escaparHtml;
+    contenedor.innerHTML =
+      '<form id="form-codigo-consulta" novalidate>' +
+        '<h2>Confirma que eres tú</h2>' +
+        '<p>Para ver la solicitud <strong>' + esc(solicitudId) + '</strong> confirma tu correo con el código de 6 dígitos que se envía a <strong>' + esc(email) + '</strong>. Puede tardar unos minutos en llegar.</p>' +
+        '<div class="sigso-campo"><label for="campo-codigo-consulta">Código</label>' +
+          '<input type="text" id="campo-codigo-consulta" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required /></div>' +
+        '<button type="submit" class="sigso-boton" id="btn-codigo-consulta">Ver mi solicitud</button> ' +
+        '<button type="button" class="sigso-boton sigso-boton--secundario" id="btn-reenviar-codigo-consulta">Enviar otro código</button>' +
+        '<div id="resultado-codigo-consulta"></div>' +
+      '</form>';
+    contenedor.classList.remove('sigso-oculto');
+    var aviso = function (msg, tipo) { document.getElementById('resultado-codigo-consulta').innerHTML = msg ? Componentes.alerta(msg, tipo || 'error') : ''; };
+    // Revisión Codex 2026-10-08 (D-002, hallazgo 4): solo se confirma el envío si el
+    // servidor dice que salió; un fallo nunca se muestra como éxito.
+    var enviar = function () {
+      return llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'solicitarCodigoAcceso', { email: email })
+        .then(function (r) {
+          if (r && r.ok) return true;
+          aviso((r && r.message) || 'No se pudo enviar el código. Intenta nuevamente.');
+          return false;
+        })
+        .catch(function () { aviso('No se pudo conectar con el servidor. Intenta nuevamente.'); return false; });
+    };
+    enviar();
+    document.getElementById('btn-reenviar-codigo-consulta').addEventListener('click', function () {
+      enviar().then(function (ok) { if (ok) aviso('Te enviamos otro código.', 'info'); });
+    });
+    document.getElementById('form-codigo-consulta').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var codigo = document.getElementById('campo-codigo-consulta').value.trim();
+      if (!codigo) return;
+      var boton = document.getElementById('btn-codigo-consulta');
+      boton.disabled = true;
+      llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'verificarCodigoAcceso', { email: email, codigo: codigo })
+        .then(function (r) {
+          boton.disabled = false;
+          if (!r || !r.ok) { aviso((r && r.message) || 'Código inválido o expirado. Solicita uno nuevo.'); return null; }
+          return consultar_(solicitudId, email, contenedorId);
+        })
+        .catch(function () { boton.disabled = false; aviso('No se pudo conectar con el servidor. Intenta nuevamente.'); });
+    });
+    var campo = document.getElementById('campo-codigo-consulta');
+    if (campo) campo.focus();
+  }
+
   function mostrarError_(respuesta, contenedorId) {
     var mensaje = respuesta.message || 'No se pudo consultar el estado.';
     var contenedor = document.getElementById(contenedorId || 'resultado');
@@ -852,7 +907,12 @@
     boton.disabled = true;
 
     llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'solicitarCodigoAcceso', { email: email })
-      .then(function () {
+      .then(function (r) {
+        // Revisión Codex 2026-10-08 (hallazgo 4): mismo criterio en «Mis solicitudes».
+        if (!r || !r.ok) {
+          resultado.innerHTML = Componentes.alerta((r && r.message) || 'No se pudo enviar el código. Intenta nuevamente.', 'error');
+          return;
+        }
         correoParaCodigo_ = email;
         document.getElementById('form-pedir-codigo').classList.add('sigso-oculto');
         document.getElementById('form-verificar-codigo').classList.remove('sigso-oculto');

@@ -190,7 +190,7 @@ test('archivos del portal: cada lado tiene su cupo, la miniatura no llena el reg
     }
     // Desde el formulario público, aunque mande `conversacion`, rige el tope de siempre (5 por ítem).
     const sol = filas(db, 'SOLICITUDES').find((s) => s.solicitud_id === solId);
-    const pub = await ejecutarAccion(db, 'subirArchivo', { solicitud_id: solId, subsolicitud_id: solId + '-01', nombre_archivo: 'x.jpg', contenido_base64: jpg, email: sol.solicitante_email, conversacion: true }, { ip: '1.1.1.1' });
+    const pub = await ejecutarAccion(db, 'subirArchivo', { solicitud_id: solId, subsolicitud_id: solId + '-01', nombre_archivo: 'x.jpg', contenido_base64: jpg, email: sol.solicitante_email, conversacion: true, pase_acceso: require('../logica/solicitudesPublico').crearPaseAcceso_(sol.solicitante_email, solId) }, { ip: '1.1.1.1' });
     assert.equal(pub.status, 400);
     assert.match(pub.body.message, /máximo de 5/);
     // Miniatura: se baja sin registrar; abrirla en grande sí queda.
