@@ -69,8 +69,26 @@
     gira: '¡Vuelta completa!',
     baila: '♪ Un pasito pa\'lante… ♪',
     saluda: '¡Hola, hola!',
-    sorpresa: '¡Oh! ¿Y eso?'
+    sorpresa: '¡Oh! ¿Y eso?',
+    corazon: '¡Saranghae! Un corazón coreano para ti.',
+    guino: 'Te guiño un ojo: lo estás haciendo bien.',
+    asiente: 'Sí, sí, ¡de acuerdo!',
+    risa: '¡Jajaja! Me dio risa.',
+    pulgar: '¡Buen trabajo, equipo!',
+    piensa: 'Mmm… déjame pensar…'
   };
+  // Cuánto dura cada gesto (ms), para quitar su clase al terminar.
+  var DURA = { salta: 620, gira: 900, baila: 1300, saluda: 1800, sorpresa: 550, mareo: 1600, estira: 1600, corazon: 2000, guino: 800, asiente: 1100, niega: 1000, risa: 1400, pulgar: 1100, piensa: 2200 };
+  var CHISTES = [
+    '¿Qué le dijo el chaleco reflectante a la noche? ¡Contigo brillo!',
+    '¿Por qué el extintor es tan tranquilo? Porque sabe apagar cualquier problema.',
+    'Me dijeron que hiciera pausas activas… y me pausé activamente en el sillón.',
+    '¿Qué hace un rinoceronte en una obra? ¡Pone el cuerno a trabajar!',
+    'Mi casco y yo somos inseparables: él me protege y yo lo luzco.',
+    '¿Por qué el casco nunca se preocupa? Porque siempre tiene la cabeza bien puesta.',
+    '¿El colmo de una mascota? Que le pidan sacarse el traje… ¡si es mi piel!'
+  ];
+  var DICHOS_CABEZA = ['¡Mi casco! Recién lo limpié.', '¡Ey, que me despeinas el cuerno!', 'Toc, toc… ¿hay alguien en este casco? ¡Sí, yo!'];
 
   // --- Lo que Hompy sabe del día ---------------------------------------------------------------
   // Frase: { t: texto, acc: { texto, ir: [vista, arg] } | { texto, fn } }.
@@ -178,15 +196,16 @@
       '<button type="submit" class="hp2-globo__btn">' + U.ico('nueva', 12) + 'Anotar</button></form>';
     el.querySelector('input').focus();
   }
-  function particulas(simbolo, n, color) {
+  // o (opcional): { x, y } en % de la escena desde donde salen; grande: un símbolo enorme.
+  function particulas(simbolo, n, color, o) {
     var cont = esc_ && esc_.querySelector('.js-hp2-efectos');
     if (!cont || sinMov()) return;
     for (var i = 0; i < (n || 5); i++) {
       var s = document.createElement('span');
-      s.className = 'hp2-fx';
+      s.className = 'hp2-fx' + (o && o.grande ? ' hp2-fx--grande' : '');
       s.textContent = simbolo;
-      s.style.setProperty('--x', (30 + Math.random() * 40).toFixed(0) + '%');
-      s.style.setProperty('--y', (8 + Math.random() * 30).toFixed(0) + '%');
+      s.style.setProperty('--x', (o ? o.x + (Math.random() - 0.5) * 10 : 30 + Math.random() * 40).toFixed(0) + '%');
+      s.style.setProperty('--y', (o ? o.y + (Math.random() - 0.5) * 8 : 8 + Math.random() * 30).toFixed(0) + '%');
       s.style.setProperty('--dx', Math.round((Math.random() - 0.5) * 70) + 'px');
       s.style.setProperty('--r', Math.round((Math.random() - 0.5) * 50) + 'deg');
       s.style.setProperty('--s', (14 + Math.random() * 10).toFixed(0) + 'px');
@@ -207,10 +226,17 @@
     btn.className = btn.className.replace(/\s?hp2-(salta|truco--\w+)/g, '');
     void btn.offsetWidth;
     btn.classList.add(nombre === 'salta' ? 'hp2-salta' : 'hp2-truco--' + nombre);
+    clearTimeout(truco.t);
+    truco.t = setTimeout(function () { btn.className = btn.className.replace(/\s?hp2-(salta|truco--\w+)/g, ''); }, (DURA[nombre] || 1000) + 60);
     if (nombre === 'baila') particulas('♪', 5, 'var(--hp-azul)');
     else if (nombre === 'sorpresa') particulas('!', 3, 'var(--hp-naranja)');
-    else if (nombre === 'saluda') particulas('✦', 4, '#f59e0b');
+    else if (nombre === 'saluda') particulas('✦', 4, '#f59e0b', { x: 12, y: 30 });
     else if (nombre === 'mareo') particulas('★', 6, '#f59e0b');
+    else if (nombre === 'corazon') setTimeout(function () { particulas('♥', 1, '#e11d48', { x: 16, y: 30, grande: true }); particulas('♥', 4, '#fb7185', { x: 18, y: 34 }); }, 450);
+    else if (nombre === 'risa') particulas('ja', 4, 'var(--hp-naranja)');
+    else if (nombre === 'pulgar') particulas('✦', 4, '#f59e0b', { x: 14, y: 36 });
+    else if (nombre === 'piensa') particulas('?', 3, 'var(--hp-azul)', { x: 64, y: 4 });
+    else if (nombre === 'guino') particulas('✦', 2, '#f59e0b', { x: 38, y: 16 });
     return nombre;
   }
   function despertar() {
@@ -243,8 +269,9 @@
       return;
     }
     var r = Math.random();
-    if (r < 0.35) { esc_.classList.remove('hp2-escena--mira'); void esc_.offsetWidth; esc_.classList.add('hp2-escena--mira'); }
-    else if (r < 0.6) truco('estira');
+    if (r < 0.25) { esc_.classList.remove('hp2-escena--mira'); void esc_.offsetWidth; esc_.classList.add('hp2-escena--mira'); }
+    else if (r < 0.42) truco('estira');
+    else if (r < 0.62) truco(azar(['guino', 'piensa', 'saluda']));
     else decir(azar(RATOS_LIBRES));
     programarOcio();
   }
@@ -254,8 +281,11 @@
     programarOcio();
     return false;
   }
-  function tocarMascota() {
+  // Dónde se lo toca importa: la cabeza reacciona, el brazo levanta el pulgar y el cuerpo cuenta algo.
+  function tocarMascota(ev) {
     if (actividad()) return;
+    var r = ev && ev.detail ? ev.currentTarget.getBoundingClientRect() : null;
+    var zx = r ? (ev.clientX - r.left) / r.width : 0.5, zy = r ? (ev.clientY - r.top) / r.height : 0.6;
     var ahora = Date.now();
     clics_ = clics_.filter(function (t) { return ahora - t < 2600; }).concat([ahora]);
     if (clics_.length >= 6) {
@@ -264,6 +294,8 @@
       truco('mareo');
       return;
     }
+    if (zy < 0.44 && zx > 0.24) { decir(azar(DICHOS_CABEZA)); truco(azar(['asiente', 'guino', 'risa', 'niega'])); return; }
+    if (zx < 0.3 && zy >= 0.3 && zy < 0.6) { decir(TRUCOS.pulgar); truco('pulgar'); return; }
     fraseI_ = (fraseI_ + 1) % frases_.length;
     decir(frases_[fraseI_]);
     truco(clics_.length > 2 ? null : 'salta');
@@ -292,15 +324,12 @@
     frases_ = frasesDelDia();
     // Un repintado de fondo mantiene lo que Hompy estaba diciendo (sin volver a tipearlo).
     if (quieto && actual_) decir(actual_, true);
-    else { fraseI_ = 0; setTimeout(function () { if (esc_ === esc) decir(frases_[0]); }, sinMov() ? 0 : 650); }
+    // Al llegar a la portada, Hompy saluda con la mano.
+    else { fraseI_ = 0; setTimeout(function () { if (esc_ === esc) { decir(frases_[0]); truco('saluda'); } }, sinMov() ? 0 : 900); }
     programarOcio();
 
     var btn = esc.querySelector('.js-hp2-mascota');
     btn.addEventListener('click', tocarMascota);
-    btn.addEventListener('animationend', function (ev) {
-      // Al terminar un truco (en el botón o, el saludo, en la imagen) Hompy vuelve a respirar.
-      if (/^hp2-(salta|gira|baila|saluda-grande|sorpresa|mareo|estira)$/.test(ev.animationName)) btn.className = btn.className.replace(/\s?hp2-(salta|truco--\w+)/g, '');
-    });
     esc.addEventListener('animationend', function (ev) { if (ev.target === esc) esc.classList.remove('hp2-escena--mira'); });
     if (sinMov() || !window.matchMedia('(hover: hover)').matches) return;
     btn.addEventListener('pointermove', cosquillas);
@@ -325,12 +354,21 @@
     ['hoy', '¿Qué hay hoy?', 'calendario'],
     ['idea', 'Anotar una idea', 'bombilla'],
     ['video', 'Idea de video', 'camara'],
-    ['dato', 'Dato de seguridad', 'casco'],
-    ['truco', 'Haz un truco', 'estrella']
+    ['dato', 'Dato de seguridad', 'casco']
+  ];
+  var JUEGOS = [
+    ['saluda', 'Saluda', 'hompy'],
+    ['corazon', 'Corazón coreano', 'corazon'],
+    ['baila', 'Baila', 'actividad'],
+    ['chiste', 'Cuéntame un chiste', 'comentario'],
+    ['guino', 'Guiño', 'ojo'],
+    ['truco', 'Sorpréndeme', 'destello']
   ];
   function preguntas() {
     return '<div class="hp2a-preguntas" role="group" aria-label="Pregúntale a Hompy"><span class="hp2a-preguntas__et">Pregúntale a Hompy</span>' +
       PREGUNTAS.map(function (p) { return '<button type="button" class="hp2a-pregunta js-hp2a-p" data-p="' + p[0] + '">' + U.ico(p[2], 14) + txt(p[1]) + '</button>'; }).join('') +
+      '<span class="hp2a-preguntas__et hp2a-preguntas__et--juego">Juega con Hompy</span>' +
+      JUEGOS.map(function (p) { return '<button type="button" class="hp2a-pregunta hp2a-pregunta--juego js-hp2a-p" data-p="' + p[0] + '">' + U.ico(p[2], 14) + txt(p[1]) + '</button>'; }).join('') +
       (ses('hp2a-oculto') ? '<button type="button" class="hp2a-pregunta js-hp2a-volver">' + U.ico('hompy', 14) + 'Traer al ayudante</button>' : '') +
     '</div>';
   }
@@ -341,6 +379,8 @@
     else if (p === 'video') { decir(ideaDeVideo()); truco('gira'); }
     else if (p === 'dato') { decir(datoSeguridad()); truco('sorpresa'); }
     else if (p === 'truco') { var n = truco(); decir(n ? TRUCOS[n] : 'Con «reducir movimiento» activado me quedo quieto… ¡pero sonrío!'); }
+    else if (p === 'chiste') { decir(azar(CHISTES)); setTimeout(function () { truco('risa'); }, sinMov() ? 0 : 1600); }
+    else if (TRUCOS[p]) { decir(TRUCOS[p]); truco(p); }
   }
 
   // --- El Hompy de la esquina (las demás vistas) ------------------------------------------------

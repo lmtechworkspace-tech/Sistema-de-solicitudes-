@@ -330,12 +330,25 @@
       setTimeout(function (x) { return function () { x.remove(); }; }(s), 800);
     }
   }
+  // Hompy «títere» (2026-10-08): la misma imagen en tres capas recortadas (cuerpo, cabeza y el
+  // brazo del pulgar) que se mueven por separado, más párpados y mejillas dibujados encima.
+  // Los recortes y pivotes están en hompy-v2.css (.hp2-t-*). Es una sola imagen descargada.
+  function titere() {
+    var img = function (c) { return '<img class="' + c + '" src="' + IMG + '" alt="" width="559" height="900" decoding="async" draggable="false">'; };
+    return '<span class="hp2-titere">' + img('hp2-t-cuerpo') +
+      '<span class="hp2-t-relleno hp2-t-relleno--cuello"></span><span class="hp2-t-relleno hp2-t-relleno--hombro"></span>' +
+      '<span class="hp2-t-cabeza"><span class="hp2-t-mov">' + img('hp2-t-img-cabeza') +
+        '<i class="hp2-t-parpado hp2-t-parpado--izq"></i><i class="hp2-t-parpado hp2-t-parpado--der"></i>' +
+        '<i class="hp2-t-rubor hp2-t-rubor--izq"></i><i class="hp2-t-rubor hp2-t-rubor--der"></i></span></span>' +
+      '<span class="hp2-t-brazo"><span class="hp2-t-mov">' + img('hp2-t-img-brazo') + '</span></span>' +
+    '</span>';
+  }
   function mascota(alto) {
     return '<div class="hp2-escena js-hp2-escena" style="--alto:' + (alto || 300) + 'px">' +
       '<div class="hp2-globo js-hp2-globo"><span class="hp2-globo__txt js-hp2-globo-txt" aria-hidden="true"></span><span class="sigso-oculto-visual js-hp2-globo-sr" role="status" aria-live="polite"></span>' +
         '<span class="hp2-globo__acc js-hp2-globo-acc"></span></div>' +
       '<button type="button" class="hp2-mascota js-hp2-mascota" aria-label="Hompy. Tócalo para que te cuente algo">' +
-        '<span class="hp2-mascota__giro"><img src="' + IMG + '" alt="" width="559" height="900" decoding="async"></span>' +
+        '<span class="hp2-mascota__giro">' + titere() + '</span>' +
       '</button>' +
       '<span class="hp2-sombra" aria-hidden="true"></span>' +
       '<span class="hp2-efectos js-hp2-efectos" aria-hidden="true"></span>' +

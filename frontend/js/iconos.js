@@ -56,6 +56,7 @@ var Iconos = (function () {
     equis: '<path d="M18 6L6 18M6 6l12 12"/>',
     alerta: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/>',
+    corazon: '<path d="M12 20.5s-7.2-4.4-9.2-8.9A5 5 0 0112 6.6a5 5 0 019.2 5c-2 4.5-9.2 8.9-9.2 8.9z"/>', // Hompy: corazón coreano
     ojo: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
     ojoTachado: '<path d="M9.9 5.2A9.6 9.6 0 0112 5c6.5 0 10 7 10 7a17 17 0 01-2.7 3.7M6.6 6.6A17 17 0 002 12s3.5 7 10 7a9.6 9.6 0 004.1-.9"/><path d="M10 10a3 3 0 004 4"/><path d="M2 2l20 20"/>',
     copiar: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/>',
