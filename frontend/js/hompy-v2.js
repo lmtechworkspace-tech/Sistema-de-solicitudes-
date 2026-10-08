@@ -17,7 +17,7 @@
 
   var U = UIv2;
   var IMG = 'assets/hompy/hompy.webp';
-  var VISTAS = { inicio: 1, calendario: 1, salidas: 1, tipos: 1, salida: 1, estudio: 1, idea: 1, marcas: 1, marca: 1, reportes: 1, redes: 1 };
+  var VISTAS = { inicio: 1, calendario: 1, salidas: 1, tipos: 1, salida: 1, estudio: 1, idea: 1, marcas: 1, marca: 1, reportes: 1, redes: 1, traje: 1, resultados: 1 };
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   var DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   var DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -215,6 +215,9 @@
   function M() { return window.SigsoHompyMarcas || null; }
   // La mascota que ayuda: frases con acción, trucos, ratos libres y el Hompy de la esquina.
   function A() { return window.SigsoHompyAyudante || null; }
+  // Antes de salir y el traje (hompy-traje-v2.js); Resultados TikTok (hompy-resultados-v2.js).
+  function T() { return window.SigsoHompyTraje || null; }
+  function R() { return window.SigsoHompyResultados || null; }
   function refrescar() {
     if (!raiz_ || raiz_.classList.contains('sigso-oculto')) return;
     // Nunca por debajo de un formulario abierto, de un reporte a medio llenar ni de una idea guardándose.
@@ -243,6 +246,7 @@
     if (vista_ === 'salida' && !evento(arg_)) { vista_ = 'salidas'; arg_ = ''; }
     if ((vista_ === 'estudio' || vista_ === 'idea') && !E()) { vista_ = 'inicio'; arg_ = ''; }
     if ((vista_ === 'marcas' || vista_ === 'marca' || vista_ === 'reportes') && !M()) { vista_ = 'inicio'; arg_ = ''; }
+    if ((vista_ === 'traje' && !T()) || (vista_ === 'resultados' && !R())) { vista_ = 'inicio'; arg_ = ''; }
     if (vista_ === 'marca' && !(D.marcas || []).some(function (x) { return x.marca_id === arg_; })) { vista_ = 'marcas'; arg_ = ''; }
     if (vista_ === 'idea' && !(D.ideas || []).some(function (x) { return x.idea_id === arg_; })) { vista_ = 'estudio'; arg_ = ''; }
     sucio_ = false;
@@ -258,6 +262,8 @@
     else if (vista_ === 'marca') M().ficha(arg_);
     else if (vista_ === 'reportes') M().mensual();
     else if (vista_ === 'redes') pintarRedes();
+    else if (vista_ === 'traje') T().vista();
+    else if (vista_ === 'resultados') R().vista();
     if (!sinRuta) window.scrollTo({ top: 0, behavior: sinMov() ? 'auto' : 'smooth' });
   }
   function pagina(html) {
@@ -281,9 +287,11 @@
     { id: 'inicio', nombre: 'Portada', icono: 'inicio', items: [{ id: 'inicio', nombre: 'Portada' }] },
     { id: 'calendario', nombre: 'Calendario', icono: 'calendario', items: [{ id: 'calendario', nombre: 'Calendario' }] },
     { id: 'estudio', nombre: 'Estudio TikTok', icono: 'camara', items: [{ id: 'estudio', nombre: 'Estudio TikTok' }] },
+    { id: 'resultados', nombre: 'Resultados TikTok', icono: 'tendencia', items: [{ id: 'resultados', nombre: 'Resultados TikTok' }] },
     { id: 'marcas', nombre: 'Marcas colaboradoras', icono: 'megafono', items: [{ id: 'marcas', nombre: 'Marcas colaboradoras' }] },
     { id: 'redes', nombre: 'Redes sociales', icono: 'llave', items: [{ id: 'redes', nombre: 'Redes sociales' }] },
     { id: 'salidas', nombre: 'Salidas a terreno', icono: 'ubicacion', items: [{ id: 'salidas', nombre: 'Salidas a terreno' }] },
+    { id: 'traje', nombre: 'El traje', icono: 'casco', items: [{ id: 'traje', nombre: 'El traje' }] },
     { id: 'tipos', nombre: 'Tipos de evento', icono: 'ajustes', items: [{ id: 'tipos', nombre: 'Tipos de evento' }] },
     { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true, descripcion: 'El mes de Hompy, con PDF', items: [{ id: 'reportes', nombre: 'Reporte mensual' }] }
   ];
@@ -397,10 +405,11 @@
     var cardPend = U.card({ titulo: 'Reportes por llenar', icono: 'portapapeles', i: 6, accion: pend.length ? { texto: 'Todas las salidas', clase: 'js-hp2-ir', datos: { ir: 'salidas' } } : null,
       cuerpo: listaPend ? '<ul class="hp2-lista">' + listaPend + '</ul>' : '<div class="hp2-todo-listo"><img src="assets/hompy/hompy-cara.webp" alt="" width="56" height="56"><p><b>¡Todo al día!</b> No hay reportes de salida pendientes.</p></div>' });
 
+    var preparar = T() ? T().tarjetaPortada() : '';
     var estudio = E() ? E().tarjetaPortada() : '';
     var pronto = M() ? M().tarjetaPortada() : '';
 
-    pagina(heroe + kpis + '<div class="sx2-grid hp2-dos"><div class="sx2-col-7">' + cardProx + '</div><div class="sx2-col-5">' + cardPend + '</div></div>' + estudio + pronto);
+    pagina(heroe + kpis + '<div class="sx2-grid hp2-dos"><div class="sx2-col-7">' + cardProx + '</div><div class="sx2-col-5">' + cardPend + preparar + '</div></div>' + estudio + pronto);
     if (A()) A().portada(raiz_.querySelector('.js-hp2-escena'), quieto_);
   }
   function filaEvento(e, i, pendiente) {
@@ -544,7 +553,7 @@
     var d = U.drawer({
       titulo: e.titulo,
       subtitulo: '<span class="sx2-flex" style="gap:6px;flex-wrap:wrap">' + chipTipo(t) + U.badge(est.t, est.tono) + '</span>',
-      cuerpo: '<div class="hp2-detalle hp2-color-' + txt(t.color) + '"><div class="hp2-detalle__franja"></div>' + datosEv + bloqueSalida + '</div>',
+      cuerpo: '<div class="hp2-detalle hp2-color-' + txt(t.color) + '"><div class="hp2-detalle__franja"></div>' + datosEv + bloqueSalida + (T() ? T().bloqueEvento(e) : '') + '</div>',
       pie: menu + '<span style="flex:1"></span>' + acc.join('')
     });
     d.el.classList.add('hp2-drawer');
@@ -640,7 +649,7 @@
     e = e || {};
     var nuevo = !e.evento_id;
     var tipoIni = e.tipo_id || (tiposActivos()[0] || {}).tipo_id;
-    var campos = datalistPersonas(e.participantes) +
+    var campos = (T() ? T().avisoFormulario() : '') + datalistPersonas(e.participantes) +
       U.campo('Tipo de evento', selectorTipos(tipoIni)) +
       U.campo('¿Qué actividad es?', '<input class="sx2-input" name="titulo" maxlength="120" required value="' + txt(e.titulo || '') + '" placeholder="Ej.: Feria de seguridad en Mall Plaza">') +
       (M() && (D.marcas || []).length ? U.campo('Marca (opcional)', M().selector('marca_id', e.marca_id || ''), 'Si la actividad es con una marca colaboradora, como BCI.') : '') +

@@ -108,6 +108,7 @@
     if (hoyEv.length) f.push({ t: '¡Hoy salimos! «' + corto(hoyEv[0].titulo) + '»' + (hoyEv[0].hora_inicio ? ' a las ' + hoyEv[0].hora_inicio : '') + '. ¡Casco puesto!', acc: { texto: 'Ver la actividad', fn: function () { h.abrirEvento(hoyEv[0].evento_id); } } });
     if (pend.length) f.push({ t: pend.length === 1 ? 'Tengo una salida sin reporte: «' + corto(pend[0].titulo) + '». ¿La anotamos?' : 'Tengo ' + pend.length + ' salidas sin reporte. ¿Las anotamos?', acc: { texto: 'Llenar ahora', ir: ['salida', pend[0].evento_id] } });
     if (!hoyEv.length && !pend.length) f.push({ t: saludo() });
+    if (window.SigsoHompyTraje) f = f.concat(SigsoHompyTraje.frases());
     var dev = h.porDevolver();
     if (dev.length) f.push({ t: 'Hay ' + h.pesos(dev.reduce(function (a, g) { return a + (Number(g.monto) || 0); }, 0)) + ' por devolver a quienes pagaron gastos míos.', acc: { texto: 'Ver salidas', ir: ['salidas'] } });
     if (manana.length) f.push({ t: 'Mañana tenemos «' + corto(manana[0].titulo) + '». ¿Está listo el traje?', acc: { texto: 'Ver la actividad', fn: function () { h.abrirEvento(manana[0].evento_id); } } });
@@ -117,6 +118,8 @@
     f.push({ t: 'Tómense pausas con el traje: ¡aquí adentro hace calor!' });
     f.push({ t: 'Seguridad primero: casco, chaleco… y una buena sonrisa.' });
     if (E()) f = f.concat(E().frases().map(function (x) { return typeof x === 'string' ? { t: x } : x; }));
+    var res = window.SigsoHompyResultados && SigsoHompyResultados.frase();
+    if (res) f.push(res);
     return f;
   }
   function resumenHoy() {
@@ -408,6 +411,13 @@
     } else if (vista === 'tipos') {
       if (d.tipos.every(function (t) { return t.origen === 'PROPUESTA'; })) c.push({ t: 'Estos tipos son una propuesta: cámbienles el nombre y lo agendado se actualiza solo.' });
       c.push({ t: 'Si un tipo ya no se usa, apáguenlo: lo agendado se conserva.' });
+    } else if (vista === 'traje') {
+      c.push({ t: 'Cuando el traje vuelva de la lavandería o de la reparación, márquenlo como listo: así no salgo con él malo.' });
+      c.push({ t: 'Rotar quién usa el traje reparte el calor. Miren los turnos: les digo a quién le toca.' });
+    } else if (vista === 'resultados') {
+      var rf = window.SigsoHompyResultados && SigsoHompyResultados.frase();
+      if (rf) c.push({ t: rf.t.replace(/ ¿Vemos qué nos funciona\?$/, '') });
+      c.push({ t: 'Anoten las vistas a las 24 horas y a los 7 días: con eso comparo qué tipo de video nos resulta mejor.', acc: { texto: 'Ir al Estudio', ir: ['estudio'] } });
     } else if (vista === 'redes') {
       c.push({ t: 'Activen la verificación en dos pasos en cada red: si alguien saca la clave, igual no entra.' });
     }

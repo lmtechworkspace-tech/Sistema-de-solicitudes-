@@ -925,9 +925,13 @@ const COLUMNAS = {
   ],
   HOMPY_EVENTOS: [
     'evento_id', 'tipo_id', 'titulo', 'fecha', 'hora_inicio', 'hora_fin', 'lugar', 'direccion', 'comuna',
-    'participantes', 'descripcion', 'estado', 'motivo_cancelacion', 'idea_id', 'marca_id', 'presupuesto', 'presupuesto_nota',
+    'participantes', 'descripcion', 'estado', 'motivo_cancelacion', 'idea_id', 'marca_id', 'presupuesto', 'presupuesto_nota', 'preparacion',
     'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
   ],
+  // El traje de Hompy (2026-10-08): cada cambio de estado anotado a mano (limpio,
+  // necesita limpieza o reparación). Los reportes de salida cerrados también
+  // cuentan: el estado vigente es el último de ambos (logica/hompy.js, traje_).
+  HOMPY_TRAJE: ['registro_id', 'estado', 'nota', 'creado_por', 'fecha_creacion', 'activo'],
   HOMPY_SALIDAS: [
     'salida_id', 'evento_id', 'datos', 'estado', 'cerrado_por', 'fecha_cierre',
     'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'

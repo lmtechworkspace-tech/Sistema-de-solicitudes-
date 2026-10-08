@@ -382,3 +382,37 @@ test('Dinero en el reporte mensual: gastado, presupuesto, en qué se fue, sobre 
   assert.match(html, /Reembolsos por devolver/);
   assert.match(html, /Sobre el presupuesto: Feria BCI/);
 });
+
+test('preparación de la salida: parte vacía, se guarda entera y no en canceladas', () => {
+  const db = crear();
+  const tipo = H.datos(db, {}, BARBARA).tipos[0].tipo_id;
+  const ev = H.guardarEvento(db, { tipo_id: tipo, titulo: 'Feria', fecha: mover(hoy(), 2) }, BARBARA).evento;
+  assert.equal(ev.preparacion, null, 'sin tocar: el front usa la lista base');
+  assert.ok(H.datos(db, {}, BARBARA).catalogos.preparacion.length >= 5);
+  assert.ok(rechazado(H.guardarPreparacion(db, { evento_id: ev.evento_id, items: [{ t: 'x' }] }, OTRA)));
+  assert.ok(invalido(H.guardarPreparacion(db, { evento_id: ev.evento_id, items: [] }, BARBARA)), 'al menos una cosa');
+  const r = H.guardarPreparacion(db, { evento_id: ev.evento_id, items: [{ t: 'Traje limpio', hecho: true }, { t: '  ', hecho: true }, { t: 'Agua', hecho: false }] }, BARBARA);
+  assert.deepEqual(r.evento.preparacion.items, [{ t: 'Traje limpio', hecho: true }, { t: 'Agua', hecho: false }]);
+  assert.equal(r.evento.preparacion.actualizado_por, BARBARA.email);
+  H.cambiarEstadoEvento(db, { evento_id: ev.evento_id, estado: 'CANCELADO', motivo: 'Lluvia' }, BARBARA);
+  assert.ok(invalido(H.guardarPreparacion(db, { evento_id: ev.evento_id, items: [{ t: 'Agua' }] }, BARBARA)));
+});
+
+test('traje: el estado vigente es lo último entre lo anotado y los reportes cerrados', () => {
+  const db = crear();
+  assert.equal(H.datos(db, {}, BARBARA).traje.estado, 'BUENO', 'sin historia: en buen estado');
+  assert.ok(rechazado(H.registrarTraje(db, { estado: 'BUENO' }, OTRA)));
+  assert.ok(invalido(H.registrarTraje(db, { estado: 'ROTO' }, BARBARA)));
+  assert.ok(invalido(H.registrarTraje(db, { estado: 'REPARACION' }, BARBARA)), 'reparación pide una nota');
+  let t = H.registrarTraje(db, { estado: 'REPARACION', nota: 'Costura del guante' }, BARBARA).traje;
+  assert.equal(t.estado, 'REPARACION'); assert.equal(t.fuente, 'MANUAL');
+  // Un reporte cerrado después manda.
+  const tipo = H.datos(db, {}, BARBARA).tipos[0].tipo_id;
+  const ev = H.guardarEvento(db, { tipo_id: tipo, titulo: 'Salida', fecha: hoy() }, BARBARA).evento;
+  H.guardarSalida(db, { evento_id: ev.evento_id, cerrar: true, datos: { hora_inicio: '10:00', hora_fin: '11:00', traje: 'Lisseth', publico: 10, estado_traje: 'LIMPIEZA', calificacion: 4, nota_traje: 'Barro' } }, BARBARA);
+  t = H.datos(db, {}, BARBARA).traje;
+  assert.equal(t.estado, 'LIMPIEZA'); assert.equal(t.fuente, 'SALIDA'); assert.equal(t.titulo, 'Salida');
+  assert.equal(t.historial.length, 2);
+  t = H.registrarTraje(db, { estado: 'BUENO', nota: '' }, BARBARA).traje;
+  assert.equal(t.estado, 'BUENO', 'marcarlo limpio después del reporte lo deja bueno');
+});

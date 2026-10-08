@@ -32,6 +32,9 @@ const COLORES = ['naranja', 'azul', 'rosa', 'verde', 'ambar', 'violeta', 'turque
 const ICONOS = ['ubicacion', 'megafono', 'camara', 'maletin', 'estrella', 'equipo', 'calendario', 'casco', 'bombilla', 'actividad'];
 const ESTADOS_TRAJE = ['BUENO', 'LIMPIEZA', 'REPARACION'];
 const MATERIAL = ['Traje de Hompy', 'Pendón', 'Regalos / merch', 'Volantes', 'Parlante', 'Mesa / toldo'];
+// Lo que se revisa antes de cada salida (2026-10-08). Cada actividad parte con esta lista y la ajustan.
+const PREPARACION_BASE = ['Traje limpio y revisado', 'Confirmar hora y lugar con el contacto', 'Agua y pausas para quien usa el traje',
+  'Material listo (pendón, regalos…)', 'Transporte coordinado', 'Celular con batería para fotos y videos'];
 
 // La propuesta inicial de los 5 tipos: ellas la cambian cuando los definan.
 const TIPOS_PROPUESTA = [
@@ -140,8 +143,18 @@ function eventoPublico_(e) {
     lugar: e.lugar || '', direccion: e.direccion || '', comuna: e.comuna || '', participantes: json_(e.participantes, []),
     descripcion: e.descripcion || '', estado: ESTADOS_EVENTO.indexOf(e.estado) !== -1 ? e.estado : 'PLANIFICADO',
     motivo_cancelacion: e.motivo_cancelacion || '', idea_id: e.idea_id || '', marca_id: e.marca_id || '',
-    presupuesto: entero_(e.presupuesto), presupuesto_nota: e.presupuesto_nota || '', creado_por: e.creado_por || '', fecha_creacion: e.fecha_creacion || ''
+    presupuesto: entero_(e.presupuesto), presupuesto_nota: e.presupuesto_nota || '', preparacion: preparacion_(e.preparacion),
+    creado_por: e.creado_por || '', fecha_creacion: e.fecha_creacion || ''
   };
+}
+/** La lista de preparación guardada (null = todavía no la tocan: el front muestra PREPARACION_BASE). */
+function preparacion_(v) {
+  const p = json_(v, null);
+  if (!p || !Array.isArray(p.items)) return null;
+  return { items: limpiarItems_(p.items), actualizado_por: p.actualizado_por || '', fecha_actualizacion: p.fecha_actualizacion || '' };
+}
+function limpiarItems_(l) {
+  return (Array.isArray(l) ? l : []).slice(0, 15).map((i) => ({ t: linea_(i && i.t, 80), hecho: esVerdadero_(i && i.hecho) })).filter((i) => i.t);
 }
 function eventos_(db) { return leer_(db, 'HOMPY_EVENTOS').filter((e) => esVerdadero_(e.activo)).map(eventoPublico_); }
 function eventoFila_(db, id) { return leer_(db, 'HOMPY_EVENTOS').find((e) => e.evento_id === id && esVerdadero_(e.activo)) || null; }
@@ -177,6 +190,52 @@ function guardarEvento(db, data, contexto) {
   const nuevo = Object.assign({ evento_id: id_('HE'), estado: 'PLANIFICADO', motivo_cancelacion: '', creado_por: contexto.email, fecha_creacion: ahora_(), activo: true }, fila);
   agregarFila_(db, 'HOMPY_EVENTOS', nuevo);
   return { evento: eventoPublico_(nuevo) };
+}
+
+/** Marca o ajusta la lista «antes de salir» de una actividad (se guarda entera). */
+function guardarPreparacion(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  data = data || {};
+  const e = eventoFila_(db, data.evento_id);
+  if (!e) return errorValidacion('evento_id', 'Esa actividad ya no existe.');
+  if (e.estado === 'CANCELADO') return errorValidacion('evento_id', 'La actividad está cancelada.');
+  const items = limpiarItems_(data.items);
+  if (!items.length) return errorValidacion('items', 'La lista necesita al menos una cosa por revisar.');
+  actualizarFilaPorId_(db, 'HOMPY_EVENTOS', 'evento_id', e.evento_id, {
+    preparacion: JSON.stringify({ items, actualizado_por: contexto.email, fecha_actualizacion: ahora_() })
+  });
+  return { evento: eventoPublico_(eventoFila_(db, e.evento_id)) };
+}
+
+// --- el traje -----------------------------------------------------------------------------------
+/**
+ * Estado vigente del traje: el último entre lo anotado a mano (HOMPY_TRAJE) y
+ * el «¿cómo quedó el traje?» de cada reporte de salida cerrado.
+ */
+function traje_(db, salidas, eventos) {
+  const porId = {};
+  (eventos || eventos_(db)).forEach((e) => { porId[e.evento_id] = e; });
+  const h = leer_(db, 'HOMPY_TRAJE').filter((r) => esVerdadero_(r.activo) && ESTADOS_TRAJE.indexOf(r.estado) !== -1)
+    .map((r) => ({ fecha: r.fecha_creacion || '', estado: r.estado, nota: r.nota || '', fuente: 'MANUAL', por: r.creado_por || '' }));
+  (salidas || []).forEach((s) => {
+    if (s.estado !== 'CERRADO' || !s.datos.estado_traje) return;
+    const e = porId[s.evento_id];
+    h.push({ fecha: s.fecha_cierre || '', estado: s.datos.estado_traje, nota: s.datos.nota_traje || '', fuente: 'SALIDA', por: s.cerrado_por || '',
+      evento_id: s.evento_id, titulo: e ? e.titulo : '', usado_por: s.datos.traje || '' });
+  });
+  h.sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+  const actual = h[0] || { estado: 'BUENO', fecha: '', nota: '', fuente: 'INICIAL' };
+  return { estado: actual.estado, fecha: actual.fecha, nota: actual.nota, fuente: actual.fuente, titulo: actual.titulo || '', historial: h.slice(0, 40) };
+}
+function registrarTraje(db, data, contexto) {
+  if (!puede_(contexto)) return sinAcceso_();
+  data = data || {};
+  if (ESTADOS_TRAJE.indexOf(data.estado) === -1) return errorValidacion('estado', 'Elige cómo está el traje.');
+  const nota = texto_(data.nota, 300);
+  if (data.estado !== 'BUENO' && !nota) return errorValidacion('nota', 'Cuenta qué necesita el traje (ej.: se soltó una costura del guante).');
+  agregarFila_(db, 'HOMPY_TRAJE', { registro_id: id_('HTJ'), estado: data.estado, nota, creado_por: contexto.email, fecha_creacion: ahora_(), activo: true });
+  const salidas = leer_(db, 'HOMPY_SALIDAS').filter((s) => esVerdadero_(s.activo)).map(salidaPublica_);
+  return { traje: traje_(db, salidas) };
 }
 
 function cambiarEstadoEvento(db, data, contexto) {
@@ -561,9 +620,10 @@ function agendarGrabacion(db, data, contexto) {
 function datos(db, data, contexto) {
   if (!puede_(contexto)) return sinAcceso_();
   const salidas = leer_(db, 'HOMPY_SALIDAS').filter((s) => esVerdadero_(s.activo)).map(salidaPublica_);
+  const eventos = eventos_(db);
   return {
-    hoy: hoy_(), tipos: tipos_(db), eventos: eventos_(db), salidas, ideas: ideas_(db), marcas: marcas_(db), colaboraciones: colabs_(db), personas: personas_(db), nombres: nombres_(db),
-    catalogos: { colores: COLORES, iconos: ICONOS, estados_traje: ESTADOS_TRAJE, material: MATERIAL, max_tipos: MAX_TIPOS,
+    hoy: hoy_(), tipos: tipos_(db), eventos, salidas, traje: traje_(db, salidas, eventos), ideas: ideas_(db), marcas: marcas_(db), colaboraciones: colabs_(db), personas: personas_(db), nombres: nombres_(db),
+    catalogos: { colores: COLORES, iconos: ICONOS, estados_traje: ESTADOS_TRAJE, material: MATERIAL, max_tipos: MAX_TIPOS, preparacion: PREPARACION_BASE,
       etapas: ETAPAS, nombres_etapa: NOMBRE_ETAPA, objetivos: OBJETIVOS, formatos: FORMATOS, duraciones: DURACIONES, planos: PLANOS, checklist: CHECKLIST, metricas: METRICAS,
       estados_marca: ESTADOS_MARCA, tipos_colab: TIPOS_COLAB, estados_colab: ESTADOS_COLAB,
       categorias_gasto: CATEGORIAS_GASTO.map((c) => [c, NOMBRE_CATEGORIA[c]]) }
@@ -973,6 +1033,7 @@ module.exports = {
   datos, guardarTipo, guardarEvento, cambiarEstadoEvento, eliminarEvento, guardarSalida, reabrirSalida, pdfSalida,
   guardarIdea, moverIdea, votarIdea, eliminarIdea, agendarGrabacion,
   guardarMarca, eliminarMarca, guardarColaboracion, eliminarColaboracion, reporteMensual, pdfMensual, marcarReembolso,
+  guardarPreparacion, registrarTraje,
   // para las pruebas
   puede_, gastosDe_, totalGastos_, resumenMes_, cuerpoPdfMensual_, limpiarDatosSalida_, faltaParaAvanzar_, limpiarDialogo_, limpiarGuion_, faltantesParaCerrar_, cuerpoPdf_, TIPOS_PROPUESTA, MODULO
 };

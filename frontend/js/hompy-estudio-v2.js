@@ -131,7 +131,7 @@
         '</div></section>';
     }).join('');
     H().pagina(H().cabecera('Estudio TikTok', 'De la idea al video. Anoten todo: las mejores ideas salen de muchas.',
-      (nDesc ? U.boton({ texto: (verDescartadas_ ? 'Ocultar' : 'Ver') + ' descartadas (' + nDesc + ')', icono: 'caja', variante: 'fantasma', clase: 'js-hp2e-descartadas' }) : '')) +
+      U.boton({ texto: 'Resultados', icono: 'tendencia', variante: 'fantasma', clase: 'js-hp2-ir', datos: { ir: 'resultados' } }) + (nDesc ? U.boton({ texto: (verDescartadas_ ? 'Ocultar' : 'Ver') + ' descartadas (' + nDesc + ')', icono: 'caja', variante: 'fantasma', clase: 'js-hp2e-descartadas' }) : '')) +
       captura + embudo + '<div class="hp2e-tablero' + (verDescartadas_ ? ' hp2e-tablero--6' : '') + '">' + cols + '</div>' +
       (lista.length ? '' : '<div class="hp2e-bienvenida sx2-entra"><img src="assets/hompy/hompy-cara.webp" alt="" width="64" height="64"><div><b>¡Mi Estudio está listo!</b><p>Anoten la primera idea arriba. Después la convertimos en diálogo, guión y video, paso a paso.</p></div></div>'));
     var el = H().raiz().querySelector('.hp2e-captura__input');
