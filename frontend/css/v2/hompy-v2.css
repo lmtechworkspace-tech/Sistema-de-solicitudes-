@@ -4,6 +4,9 @@
  * Las clases hp2-pdf-* son del PDF del reporte de salida (documentoV2.js las
  * toma de esta hoja). */
 
+/* Un enlace o una palabra larguísima (p. ej. una URL en el título) se corta en vez de salirse de su caja. */
+.hp2, .hp2-drawer, .hp2-celebra { overflow-wrap: break-word; }
+
 .hp2, .hp2-drawer, .hp2-celebra, .hp2-pdf, .sigso-ico--hompy {
   --hp-naranja: var(--mod-hompy, #E8590C);
   --hp-azul: #1F5FD6;
@@ -62,7 +65,8 @@
 .hp2-heroe h1 { margin: 12px 0 8px; font-size: clamp(1.75rem, 1.2rem + 2vw, 2.5rem); line-height: 1.1; letter-spacing: -.02em; color: var(--sx-texto); }
 .hp2-heroe p { margin: 0 0 20px; font-size: 1rem; color: var(--sx-texto-2); line-height: 1.5; }
 .hp2-heroe__acciones { display: flex; flex-wrap: wrap; gap: 10px; }
-.hp2-heroe__mascota { position: relative; display: flex; justify-content: center; align-self: end; }
+/* Hompy pegado a la derecha: así su globo cabe en su columna y no tapa el texto del héroe. */
+.hp2-heroe__mascota { position: relative; display: flex; justify-content: flex-end; padding-right: 4%; align-self: end; }
 
 /* La escena: globo + Hompy + sombra. --mx/--my: hacia dónde está el cursor (-1..1). */
 .hp2-escena { --mx: 0; --my: 0; position: relative; height: var(--alto, 300px); width: calc(var(--alto, 300px) * .62); perspective: 700px; }
@@ -92,7 +96,17 @@
 .hp2-globo { position: absolute; z-index: 2; right: 72%; top: 6%; width: max-content; max-width: min(250px, 46vw); min-height: 44px;
   padding: 11px 14px; border-radius: 16px 16px 4px 16px; background: var(--sx-superficie); color: var(--sx-texto);
   border: 1.5px solid color-mix(in srgb, var(--hp-naranja) 45%, var(--sx-borde)); font-size: .875rem; font-weight: 500; line-height: 1.4;
-  box-shadow: 0 14px 30px -14px color-mix(in srgb, var(--hp-azul) 50%, transparent); transform-origin: 100% 100%; opacity: 0; }
+  box-shadow: 0 14px 30px -14px color-mix(in srgb, var(--hp-azul) 50%, transparent); transform-origin: 100% 100%; opacity: 0;
+  overflow-wrap: anywhere; display: flex; flex-direction: column; gap: 8px; }
+.hp2-globo--fijo { opacity: 1; }
+.hp2-globo__acc:empty { display: none; }
+.hp2-globo__btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px; border: 0; cursor: pointer;
+  font: inherit; font-size: .75rem; font-weight: 700; color: #fff; background: var(--hp-naranja); box-shadow: 0 6px 14px -8px var(--hp-naranja); transition: transform .18s var(--hp-curva), background .18s; }
+.hp2-globo__btn:hover { transform: translateY(-1px) scale(1.03); background: color-mix(in srgb, var(--hp-naranja) 88%, #000); }
+.hp2-globo__btn:focus-visible { outline: 2px solid var(--hp-azul); outline-offset: 2px; }
+.hp2-globo__form { display: flex; flex-direction: column; gap: 6px; }
+.hp2-globo__form .sx2-input { width: 100%; min-width: 0; padding: 6px 9px; font-size: .8125rem; }
+.hp2-globo__form .hp2-globo__btn { align-self: flex-end; }
 .hp2-globo::after { content: ''; position: absolute; right: -9px; bottom: 6px; width: 14px; height: 14px; background: inherit;
   border-right: 1.5px solid color-mix(in srgb, var(--hp-naranja) 45%, var(--sx-borde)); border-bottom: 1.5px solid color-mix(in srgb, var(--hp-naranja) 45%, var(--sx-borde));
   transform: rotate(-45deg) skew(10deg, 10deg); border-bottom-right-radius: 4px; }
@@ -449,7 +463,10 @@
   .hp2-datos--2 { grid-template-columns: minmax(0, 1fr); }
   .hp2-lectura-portada { grid-template-columns: minmax(0, 1fr); padding: 18px 16px 0; }
   .hp2-lectura-portada__hompy { display: none; }
-  .hp2-globo { right: calc(100% - 40px); top: 2%; width: max-content; max-width: 165px; font-size: .8125rem; padding: 9px 12px; }
+  /* En el celular Hompy va a la izquierda y el globo a su derecha: hacia la izquierda no cabe. */
+  .hp2-heroe__mascota { justify-content: flex-start; padding: 0 0 0 2%; }
+  .hp2-globo { left: 58%; right: auto; top: 2%; width: max-content; max-width: min(175px, calc(100vw - 196px)); font-size: .8125rem; padding: 9px 12px; border-radius: 16px 16px 16px 4px; transform-origin: 0 100%; }
+  .hp2-globo::after { right: auto; left: -9px; transform: rotate(135deg) skew(10deg, 10deg); }
   .hp2-fila { flex-wrap: wrap; }
   .hp2-fila > .sx2-boton { margin-left: auto; }
   .hp2-fila:has(> .sx2-boton) .hp2-fila__btn { flex-basis: 100%; }
@@ -528,7 +545,7 @@
 
 .hp2e-tablero { display: grid; grid-template-columns: repeat(5, minmax(176px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; }
 .hp2e-tablero--6 { grid-template-columns: repeat(6, minmax(176px, 1fr)); }
-.hp2e-col { scroll-snap-align: start; display: flex; flex-direction: column; min-height: 260px; border-radius: 18px; background: color-mix(in srgb, var(--hp-c) 5%, var(--sx-superficie-2, var(--sx-fondo)));
+.hp2e-col { min-width: 0; scroll-snap-align: start; display: flex; flex-direction: column; min-height: 260px; border-radius: 18px; background: color-mix(in srgb, var(--hp-c) 5%, var(--sx-superficie-2, var(--sx-fondo)));
   border: 1px solid color-mix(in srgb, var(--hp-c) 18%, var(--sx-borde)); transition: border-color .2s, background .2s, box-shadow .2s, transform .2s; }
 .hp2e-col__cab { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px; border-bottom: 1px solid color-mix(in srgb, var(--hp-c) 16%, transparent); }
 .hp2e-col__cab > div { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
@@ -541,7 +558,7 @@
 .hp2e-tablero--arrastrando .hp2e-col { border-style: dashed; }
 .hp2e-col--sobre { border-color: var(--hp-c) !important; border-style: solid !important; background: color-mix(in srgb, var(--hp-c) 12%, var(--sx-superficie)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hp-c) 20%, transparent); transform: translateY(-2px); }
 
-.hp2e-tarjeta { position: relative; display: flex; flex-direction: column; gap: 7px; padding: 12px; border-radius: 14px; background: var(--sx-superficie); border: 1px solid var(--sx-borde); cursor: grab;
+.hp2e-tarjeta { min-width: 0; position: relative; display: flex; flex-direction: column; gap: 7px; padding: 12px; border-radius: 14px; background: var(--sx-superficie); border: 1px solid var(--sx-borde); cursor: grab;
   box-shadow: var(--sx-sombra-1); transition: transform .22s var(--hp-curva), box-shadow .22s, border-color .2s; }
 .hp2e-tarjeta::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0; background: var(--hp-c); opacity: .8; }
 .hp2e-tarjeta:hover { transform: translateY(-2px) rotate(-.4deg); box-shadow: 0 14px 26px -16px color-mix(in srgb, var(--hp-c) 70%, transparent); border-color: color-mix(in srgb, var(--hp-c) 40%, var(--sx-borde)); }
@@ -555,8 +572,8 @@
 @keyframes hp2e-llega { 0% { transform: scale(.92); } 60% { transform: scale(1.04); } 100% { transform: none; } }
 .hp2e-tarjeta__chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .hp2e-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px; font-size: .6875rem; font-weight: 600; color: var(--sx-texto-2); background: var(--sx-superficie-2, var(--sx-fondo)); }
-.hp2e-tarjeta__t { font-size: .9375rem; line-height: 1.3; color: var(--sx-texto); }
-.hp2e-tarjeta__g { margin: 0; font-size: .8125rem; color: var(--sx-texto-2); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.hp2e-tarjeta__t { font-size: .9375rem; line-height: 1.3; color: var(--sx-texto); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.hp2e-tarjeta__g { margin: 0; font-size: .8125rem; color: var(--sx-texto-2); line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .hp2e-tarjeta__g .sigso-ico { vertical-align: -2px; margin-right: 4px; }
 .hp2e-tarjeta__g--falta { color: var(--sx-texto-3); font-style: italic; }
 .hp2e-tarjeta__barra { height: 5px; border-radius: 999px; background: var(--sx-superficie-2, var(--sx-fondo)); overflow: hidden; }
@@ -975,4 +992,82 @@ img.hp2e-av { background: #fff; box-shadow: 0 0 0 2px var(--hp-naranja); }
   .hp2-gasto__fila .hp2-gasto__borrar { justify-self: end; }
   .hp2-dinero-res, .hp2-dinero-res--5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hp2m-dinero__grilla { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* --- Repintado de fondo (2026-10-08) -------------------------------------------------------
+   Cuando llegan datos nuevos por detrás, la vista se repinta sin entradas en cascada: con
+   duración 0 las animaciones quedan en su estado final y, al quitar la clase, no se repiten. */
+.hp2--quieto *, .hp2--quieto *::before, .hp2--quieto *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition: none !important; }
+
+/* --- Hompy ayudante (hompy-ayudante-v2.js) -------------------------------------------------- */
+/* Trucos al tocarlo. */
+.hp2-mascota.hp2-truco--gira { animation: hp2-gira .9s cubic-bezier(.3, .7, .4, 1); }
+.hp2-mascota.hp2-truco--baila { animation: hp2-baila 1.3s ease-in-out; transform-origin: 50% 100%; }
+.hp2-mascota.hp2-truco--saluda img { animation: hp2-saluda-grande 1.1s ease-in-out; }
+.hp2-mascota.hp2-truco--sorpresa { animation: hp2-sorpresa .55s cubic-bezier(.3, .7, .4, 1); transform-origin: 50% 100%; }
+.hp2-mascota.hp2-truco--mareo { animation: hp2-mareo 1.6s ease-in-out; transform-origin: 50% 100%; }
+.hp2-mascota.hp2-truco--estira { animation: hp2-estira 1.6s ease-in-out; transform-origin: 50% 100%; }
+.hp2-escena--mira .hp2-mascota__giro { animation: hp2-mira 2.6s ease-in-out; }
+/* Dormido: respira lento, cabecea y pierde un poco de color. */
+.hp2-mascota--duerme img { animation: hp2-duerme 3.6s ease-in-out infinite; filter: saturate(.8) drop-shadow(0 12px 18px color-mix(in srgb, var(--hp-azul) 18%, transparent)); }
+@keyframes hp2-gira { 0% { transform: none; } 45% { transform: translateY(-26px) rotateY(180deg); } 100% { transform: rotateY(360deg); } }
+@keyframes hp2-baila { 0%, 100% { transform: none; } 12% { transform: rotate(-7deg) translateX(-6px); } 25% { transform: rotate(7deg) translateX(6px); } 38% { transform: rotate(-7deg) translateX(-6px); } 50% { transform: rotate(7deg) translateX(6px); } 66% { transform: translateY(-16px) scale(.98, 1.04); } 80% { transform: translateY(0) scale(1.04, .95); } }
+@keyframes hp2-saluda-grande { 0%, 100% { rotate: 0deg; } 15% { rotate: -9deg; } 35% { rotate: 7deg; } 55% { rotate: -7deg; } 75% { rotate: 4deg; } }
+@keyframes hp2-sorpresa { 0% { transform: none; } 25% { transform: translateY(-10px) scale(.94, 1.08); } 55% { transform: scale(1.06, .94); } 100% { transform: none; } }
+@keyframes hp2-mareo { 0%, 100% { transform: none; } 15% { transform: rotate(-10deg); } 30% { transform: rotate(9deg) translateX(4px); } 45% { transform: rotate(-8deg) translateX(-4px); } 60% { transform: rotate(6deg); } 75% { transform: rotate(-3deg); } }
+@keyframes hp2-estira { 0%, 100% { transform: none; } 40%, 60% { transform: scale(.97, 1.07); } }
+@keyframes hp2-mira { 0%, 100% { transform: none; } 25%, 45% { transform: rotateY(-22deg) translateX(-4px); } 70%, 85% { transform: rotateY(22deg) translateX(4px); } }
+@keyframes hp2-duerme { 0%, 100% { transform: rotate(-3deg) translateY(3px); } 50% { transform: rotate(-4deg) translateY(5px) scale(1.012, .99); } }
+
+/* Efectos que flotan desde Hompy: notas, corazones, estrellas, zetas. */
+.hp2-efectos { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.hp2-fx { position: absolute; left: var(--x); top: var(--y); font-size: var(--s); font-weight: 800; line-height: 1; color: var(--c); opacity: 0;
+  text-shadow: 0 2px 6px color-mix(in srgb, var(--c) 35%, transparent); animation: hp2-fx 1.6s ease-out both; }
+@keyframes hp2-fx { 0% { opacity: 0; transform: translate(0, 0) scale(.5); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), -80px) scale(1.15) rotate(var(--r)); } }
+
+/* «Pregúntale a Hompy»: en la portada, bajo los botones del héroe. */
+.hp2a-preguntas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 18px; }
+.hp2a-preguntas__et { width: 100%; font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--sx-texto-3); }
+.hp2a-pregunta { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; cursor: pointer; font: inherit; font-size: .8125rem; font-weight: 600;
+  color: var(--sx-texto); background: color-mix(in srgb, var(--sx-superficie) 80%, transparent); border: 1px solid color-mix(in srgb, var(--hp-naranja) 25%, var(--sx-borde));
+  transition: transform .2s var(--hp-curva), border-color .2s, background .2s, box-shadow .2s; }
+.hp2a-pregunta .sigso-ico { color: var(--hp-naranja); }
+.hp2a-pregunta:hover { transform: translateY(-2px); border-color: var(--hp-naranja); background: var(--sx-superficie); box-shadow: 0 8px 18px -12px var(--hp-naranja); }
+.hp2a-pregunta:hover .sigso-ico { animation: hp2-saluda .7s ease-in-out; }
+.hp2a-pregunta:focus-visible { outline: 2px solid var(--hp-naranja); outline-offset: 2px; }
+
+/* El Hompy de la esquina, en las demás vistas del módulo. */
+.hp2a-flota { position: fixed; z-index: 40; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.hp2a-boton { position: relative; width: 58px; height: 58px; padding: 0; border-radius: 50%; border: 0; cursor: pointer; background: #fff;
+  box-shadow: 0 0 0 3px var(--hp-naranja), 0 14px 28px -12px color-mix(in srgb, var(--hp-naranja) 80%, transparent);
+  animation: hp2-globo .5s var(--hp-curva) .3s both; transition: transform .25s var(--hp-curva); }
+.hp2a-boton img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; object-position: 50% 12%; display: block; }
+.hp2a-boton:hover { transform: rotate(-8deg) scale(1.08); }
+.hp2a-boton:focus-visible { outline: 3px solid var(--hp-azul); outline-offset: 3px; }
+.hp2a-flota--abierta .hp2a-boton { transform: scale(.92); }
+.hp2a-boton__punto { position: absolute; top: 1px; right: 1px; width: 14px; height: 14px; border-radius: 50%; background: #dc2626; border: 2px solid #fff; }
+.hp2a-panel { width: min(300px, calc(100vw - 40px)); padding: 14px; border-radius: 18px 18px 6px 18px; background: var(--sx-superficie); color: var(--sx-texto);
+  border: 1.5px solid color-mix(in srgb, var(--hp-naranja) 40%, var(--sx-borde)); box-shadow: 0 24px 50px -20px rgba(15, 23, 42, .45);
+  transform-origin: 100% 100%; animation: hp2-globo .35s var(--hp-curva) both; overflow-wrap: anywhere; }
+.hp2a-panel[hidden] { display: none; }
+.hp2a-panel__cab { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.hp2a-panel__cab img { border-radius: 50%; background: #fff; object-fit: cover; object-position: 50% 12%; box-shadow: 0 0 0 2px var(--hp-naranja); }
+.hp2a-panel__cab > div { flex: 1; display: flex; flex-direction: column; line-height: 1.2; }
+.hp2a-panel__cab small { font-size: .75rem; color: var(--sx-texto-3); }
+.hp2a-panel__x { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--sx-texto-2); cursor: pointer; }
+.hp2a-panel__x:hover { background: var(--sx-superficie-2, var(--sx-fondo)); }
+.hp2a-panel__txt { margin: 0 0 12px; font-size: .875rem; line-height: 1.45; }
+.hp2a-panel__acc { display: flex; flex-wrap: wrap; gap: 6px; }
+.hp2a-panel__acc:empty { display: none; }
+.hp2a-panel__pie { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--sx-borde); font-size: .75rem; }
+@media (max-width: 900px) {
+  .hp2a-flota { right: 14px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  .hp2a-boton { width: 50px; height: 50px; }
+}
+@media (max-width: 720px) {
+  .hp2a-preguntas { margin-top: 12px; }
+  .hp2a-pregunta { padding: 5px 10px; font-size: .75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hp2a-flota, .hp2a-flota * { animation: none !important; transition: none !important; }
 }

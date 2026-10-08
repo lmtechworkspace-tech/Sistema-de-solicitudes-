@@ -101,7 +101,7 @@
       ((obj || i.idea.duracion) && i.etapa !== 'DESCARTADA' ? '<span class="hp2e-tarjeta__chips">' + (obj ? '<span class="hp2e-chip">' + U.ico(obj[1], 11) + txt(obj[0]) + '</span>' : '') +
         (i.marca_id && window.SigsoHompyMarcas && SigsoHompyMarcas.marca(i.marca_id) ? '<span class="hp2e-chip hp2e-chip--marca">' + U.ico('megafono', 11) + txt(SigsoHompyMarcas.marca(i.marca_id).nombre) + '</span>' : '') +
         '<span class="hp2e-chip">' + U.ico('reloj', 11) + i.idea.duracion + ' s</span></span>' : '') +
-      '<b class="hp2e-tarjeta__t">' + txt(i.titulo) + '</b>' +
+      '<b class="hp2e-tarjeta__t" title="' + txt(i.titulo) + '">' + txt(i.titulo) + '</b>' +
       (i.etapa === 'DESCARTADA' ? '<p class="hp2e-tarjeta__g">' + U.ico('info', 12) + txt(i.motivo_descarte) + '</p>'
         : (i.idea.gancho ? '<p class="hp2e-tarjeta__g">«' + txt(i.idea.gancho) + '»</p>' : '<p class="hp2e-tarjeta__g hp2e-tarjeta__g--falta">Falta el gancho</p>')) +
       prog +
@@ -560,18 +560,22 @@
   }
 
   // --- portada ------------------------------------------------------------------------------
+  // Lo que Hompy cuenta del Estudio: { t: texto, acc: { texto, ir: [vista, arg] } } (el ayudante pinta el botón).
   function frases() {
     var l = ideas(), f = [];
     var porEt = function (et) { return l.filter(function (i) { return i.etapa === et; }); };
     var top = porEt('IDEA').filter(function (i) { return i.votos.length > 1; }).sort(function (a, b) { return b.votos.length - a.votos.length; })[0];
-    if (top) f.push('«' + top.titulo + '» tiene ' + top.votos.length + ' votos. ¿La pasamos a diálogo?');
-    if (porEt('DIALOGO').length) f.push(porEt('DIALOGO').length === 1 ? 'Hay una idea esperando su diálogo en el Estudio.' : 'Hay ' + porEt('DIALOGO').length + ' ideas esperando su diálogo en el Estudio.');
+    if (top) f.push({ t: '«' + top.titulo + '» tiene ' + top.votos.length + ' votos. ¿La pasamos a diálogo?', acc: { texto: 'Abrir la idea', ir: ['idea', top.idea_id] } });
+    var dlg = porEt('DIALOGO');
+    if (dlg.length) f.push({ t: dlg.length === 1 ? 'Hay una idea esperando su diálogo en el Estudio.' : 'Hay ' + dlg.length + ' ideas esperando su diálogo en el Estudio.', acc: { texto: 'Escribir el diálogo', ir: ['idea', dlg[0].idea_id] } });
+    var sinGancho = porEt('IDEA').filter(function (i) { return !i.idea.gancho; });
+    if (sinGancho.length > 1) f.push({ t: 'Hay ' + sinGancho.length + ' ideas sin gancho. Sin gancho, la gente sigue de largo…', acc: { texto: 'Ponerle gancho', ir: ['idea', sinGancho[0].idea_id] } });
     var pub = porEt('PUBLICADO').filter(function (i) { return i.publicacion.h24.vistas != null; }).sort(function (a, b) { return a.publicacion.fecha < b.publicacion.fecha ? 1 : -1; })[0];
-    if (pub) f.push('Mi último video, «' + pub.titulo + '», tuvo ' + num(pub.publicacion.h24.vistas) + ' vistas en 24 horas.');
+    if (pub) f.push({ t: 'Mi último video, «' + pub.titulo + '», tuvo ' + num(pub.publicacion.h24.vistas) + ' vistas en 24 horas.', acc: { texto: 'Ver cómo le fue', ir: ['idea', pub.idea_id] } });
     var sinMetricas = porEt('PUBLICADO').find(function (i) { return i.publicacion.h24.vistas == null; });
-    if (sinMetricas) f.push('A «' + sinMetricas.titulo + '» le faltan las métricas. ¿Cuántas vistas lleva?');
-    if (!l.length) f.push('Mi Estudio TikTok está listo. ¡Anoten la primera idea!');
-    else f.push('Cualquier idea sirve: anótenla en el Estudio y la vamos puliendo.');
+    if (sinMetricas) f.push({ t: 'A «' + sinMetricas.titulo + '» le faltan las métricas. ¿Cuántas vistas lleva?', acc: { texto: 'Anotar métricas', ir: ['idea', sinMetricas.idea_id] } });
+    if (!l.length) f.push({ t: 'Mi Estudio TikTok está listo. ¡Anoten la primera idea!', acc: { texto: 'Abrir el Estudio', ir: ['estudio'] } });
+    else f.push({ t: 'Cualquier idea sirve: anótenla en el Estudio y la vamos puliendo.', acc: { texto: 'Abrir el Estudio', ir: ['estudio'] } });
     return f;
   }
   function tarjetaPortada() {
@@ -795,5 +799,5 @@
   });
   window.addEventListener('beforeunload', function (ev) { if (ocupado()) { guardarYa(); ev.preventDefault(); ev.returnValue = ''; } });
 
-  window.SigsoHompyEstudio = { tablero: tablero, taller: taller, frases: frases, tarjetaPortada: tarjetaPortada, ocupado: ocupado, guardarYa: guardarYa };
+  window.SigsoHompyEstudio = { tablero: tablero, taller: taller, frases: frases, tarjetaPortada: tarjetaPortada, ocupado: ocupado, guardarYa: guardarYa, ponerIdea: ponerIdea };
 })();

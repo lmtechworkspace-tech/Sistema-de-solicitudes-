@@ -4,7 +4,8 @@
  *
  * Es «el apartado de marketing» de SIGSO: por eso Hompy está a la vista y se
  * mueve (entra con un rebote, respira, saluda al pasar el mouse, salta al
- * tocarlo, mira hacia el cursor y celebra al cerrar un reporte). Todo el
+ * tocarlo, mira hacia el cursor y celebra al cerrar un reporte). Lo que dice,
+ * sus trucos y el Hompy de la esquina están en hompy-ayudante-v2.js. Todo el
  * movimiento se apaga con «reducir movimiento» del sistema.
  *
  * Vistas: Portada · Calendario · Estudio TikTok (hompy-estudio-v2.js, Etapa 2)
@@ -29,7 +30,11 @@
 
   var raiz_ = null, D = null, vista_ = 'inicio', arg_ = '', turno_ = 0;
   var mes_ = '', modoCal_ = 'mes', ocultos_ = {}, filtroSalidas_ = 'pendientes', diaSel_ = '';
-  var sucio_ = false, frases_ = [], fraseI_ = 0, tipeo_ = null;
+  var sucio_ = false;
+  // Refresco de fondo (2026-10-08): firma_ es lo último que llegó del servidor (si no cambió,
+  // no se repinta); toque_ cuenta clics y navegaciones (si la persona tocó algo mientras
+  // llegaba, su clic manda); quieto_ repinta sin animaciones de entrada.
+  var firma_ = '', toque_ = 0, quieto_ = false;
 
   // --- utilidades ---------------------------------------------------------------------------
   function txt(v) { return U.esc(v == null ? '' : String(v)); }
@@ -171,8 +176,10 @@
     var v = i === -1 ? s : s.slice(0, i);
     return { vista: VISTAS[v] ? v : 'inicio', arg: i === -1 ? '' : s.slice(i + 1) };
   }
+  // silencioso: true = recargar tras guardar algo (se aplica siempre); 'fondo' = el
+  // refresco automático del shell al volver a la ventana (solo si algo cambió y nadie tocó nada).
   function traer(v, arg, silencioso, reintento) {
-    var t = ++turno_;
+    var t = ++turno_, desde = toque_;
     if ((!silencioso || !D) && !reintento) pagina('<div class="hp2-cargando">' + U.esqueleto('kpis', 4) + U.esqueleto('tarjetas', 3) + '</div>');
     return api('hompyDatos').then(function (r) {
       if (t !== turno_) return;
@@ -185,22 +192,39 @@
           accion: U.boton({ texto: 'Reintentar', icono: 'derivar', variante: 'primario', sm: true, clase: 'js-hp2-reintentar hp2-boton-hompy' }) }) }));
         return;
       }
-      D = r.data;
+      var firma = JSON.stringify(r.data), habia = !!D;
+      if (silencioso === 'fondo' && habia && (firma === firma_ || toque_ !== desde || ocupadoAhora())) return;
+      D = r.data; firma_ = firma;
       if (!mes_) mes_ = D.hoy.slice(0, 7);
       pintarBadge();
-      ir(v, arg, true);
+      // Una recarga de fondo repinta DONDE ESTÁ la persona (no donde estaba al pedirla),
+      // en silencio: sin esqueleto ni animaciones de entrada.
+      if (silencioso && habia) { quieto_ = true; try { ir(vista_, arg_, true); } finally { quieto_ = false; } }
+      else ir(v, arg, true);
     });
+  }
+  // Algo a medio hacer que un repintado rompería: un formulario, un campo con el cursor, la celebración.
+  function ocupadoAhora() {
+    var a = document.activeElement;
+    return sucio_ || !!(E() && E().ocupado()) || !!document.querySelector('.sx2-drawer, .sx2-dialogo, .hp2-celebra, .hp2a-flota--abierta') ||
+      !!(a && raiz_ && raiz_.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
   }
   // El Estudio TikTok vive en su propio archivo (hompy-estudio-v2.js).
   function E() { return window.SigsoHompyEstudio || null; }
   // Marcas y reporte mensual (hompy-marcas-v2.js).
   function M() { return window.SigsoHompyMarcas || null; }
+  // La mascota que ayuda: frases con acción, trucos, ratos libres y el Hompy de la esquina.
+  function A() { return window.SigsoHompyAyudante || null; }
   function refrescar() {
     if (!raiz_ || raiz_.classList.contains('sigso-oculto')) return;
     // Nunca por debajo de un formulario abierto, de un reporte a medio llenar ni de una idea guardándose.
-    if (sucio_ || (E() && E().ocupado()) || document.querySelector('.sx2-drawer, .sx2-dialogo, .hp2-celebra')) return;
-    traer(vista_, arg_, true);
+    if (!D || ocupadoAhora()) return;
+    traer(vista_, arg_, 'fondo');
   }
+  // Cada clic o tecla dentro de Hompy: un refresco de fondo que llegue después no lo pisa.
+  ['pointerdown', 'keydown'].forEach(function (tipoEv) {
+    document.addEventListener(tipoEv, function (ev) { if (raiz_ && raiz_.contains(ev.target)) toque_++; }, true);
+  });
   function irAItem(item) {
     var p = partes(item);
     if (!D) { traer(p.vista, p.arg); return; }
@@ -215,6 +239,7 @@
   }
   function ir(v, arg, sinRuta) {
     vista_ = VISTAS[v] ? v : 'inicio'; arg_ = arg || '';
+    if (!quieto_) toque_++;
     if (vista_ === 'salida' && !evento(arg_)) { vista_ = 'salidas'; arg_ = ''; }
     if ((vista_ === 'estudio' || vista_ === 'idea') && !E()) { vista_ = 'inicio'; arg_ = ''; }
     if ((vista_ === 'marcas' || vista_ === 'marca' || vista_ === 'reportes') && !M()) { vista_ = 'inicio'; arg_ = ''; }
@@ -237,8 +262,16 @@
   }
   function pagina(html) {
     if (!raiz_) return;
-    raiz_.innerHTML = '<div class="sx2 sx2-pagina hp2">' + html + '</div>';
-    U.animar(raiz_);
+    raiz_.innerHTML = '<div class="sx2 sx2-pagina hp2' + (quieto_ ? ' hp2--quieto' : '') + '">' + html + '</div>';
+    // El ayudante: Hompy chico en la esquina de las demás vistas (hompy-ayudante-v2.js).
+    if (A() && D) A().flotante(vista_, arg_);
+    if (!quieto_) { U.animar(raiz_); return; }
+    // Repintado de fondo: barras y anillos en su lugar de una vez, sin cifras que cuentan desde
+    // cero ni entradas en cascada (se veía como si la página se recargara).
+    raiz_.querySelectorAll('[data-sx-pct]').forEach(function (el) { el.style.width = el.getAttribute('data-sx-pct') + '%'; });
+    raiz_.querySelectorAll('[data-sx-arco]').forEach(function (el) { el.setAttribute('stroke-dashoffset', el.getAttribute('data-sx-arco')); });
+    var envoltura = raiz_.firstChild;
+    setTimeout(function () { envoltura.classList.remove('hp2--quieto'); }, 1600);
   }
   function pintarBadge() {
     if (window.SigsoShell && SigsoShell.pintarBadge) { var n = pendientes().length; SigsoShell.pintarBadge('hompy', n, n ? 'ambar' : 'gris'); }
@@ -282,44 +315,13 @@
     return '<span class="hp2-fecha' + (f === D.hoy ? ' hp2-fecha--hoy' : '') + '"><b>' + d.getUTCDate() + '</b><span>' + MESES[d.getUTCMonth()].slice(0, 3) + '</span></span>';
   }
 
-  // --- Hompy: la mascota que habla ----------------------------------------------------------
-  function frasesDelDia() {
-    var f = [], pend = pendientes(), prox = proximas();
-    var hoyEv = prox.filter(function (e) { return e.fecha === D.hoy; });
-    var manana = prox.filter(function (e) { return e.fecha === sumarDias(D.hoy, 1); });
-    var semana = prox.filter(function (e) { return diasEntre(D.hoy, e.fecha) < 7; });
-    if (hoyEv.length) f.push('¡Hoy salimos! ' + hoyEv[0].titulo + (hoyEv[0].hora_inicio ? ' a las ' + hoyEv[0].hora_inicio : '') + '. ¡Casco puesto!');
-    var dev = porDevolver();
-    if (dev.length) f.push('Hay ' + pesos(dev.reduce(function (a, g) { return a + (Number(g.monto) || 0); }, 0)) + ' por devolver a quienes pagaron gastos míos. Se marca en el reporte de cada salida.');
-    if (pend.length) f.push(pend.length === 1 ? 'Tengo una salida sin reporte: «' + pend[0].titulo + '». ¿La anotamos?' : 'Tengo ' + pend.length + ' salidas sin reporte. ¿Las anotamos?');
-    if (manana.length) f.push('Mañana tenemos «' + manana[0].titulo + '». ¿Está listo el traje?');
-    if (semana.length > 1) f.push('Esta semana tenemos ' + semana.length + ' actividades. ¡Qué agenda!');
-    if (!prox.length) f.push('Mi agenda está vacía… ¿salimos a alguna parte?');
-    if (D.tipos.every(function (t) { return t.origen === 'PROPUESTA'; })) f.push('Mis tipos de evento son una propuesta: pónganles los nombres reales en «Tipos de evento».');
-    f.push('Tómense pausas con el traje: ¡aquí adentro hace calor!');
-    f.push('Seguridad primero: casco, chaleco… y una buena sonrisa.');
-    if (E()) f = f.concat(E().frases());
-    return f;
-  }
-  function decir(texto) {
-    var el = raiz_ && raiz_.querySelector('.js-hp2-globo');
-    if (!el) return;
-    var vis = el.querySelector('.js-hp2-globo-txt'), sr = el.querySelector('.js-hp2-globo-sr');
-    if (tipeo_) { clearInterval(tipeo_); tipeo_ = null; }
-    sr.textContent = texto;
-    el.classList.remove('hp2-globo--pop'); void el.offsetWidth; el.classList.add('hp2-globo--pop');
-    if (sinMov()) { vis.textContent = texto; return; }
-    var i = 0; vis.textContent = '';
-    tipeo_ = setInterval(function () {
-      i += 2; vis.textContent = texto.slice(0, i);
-      if (i >= texto.length) { clearInterval(tipeo_); tipeo_ = null; }
-    }, 22);
-  }
-  function chispas(cont) {
+  // --- Hompy: la mascota ----------------------------------------------------------------------
+  // Lo que dice, sus trucos y sus ratos libres viven en hompy-ayudante-v2.js; aquí solo la escena.
+  function chispas(cont, forma) {
     if (sinMov() || !cont) return;
     for (var i = 0; i < 8; i++) {
       var s = document.createElement('span');
-      s.className = 'hp2-chispa';
+      s.className = 'hp2-chispa' + (forma ? ' hp2-chispa--' + forma : '');
       var ang = (Math.PI * 2 * i) / 8 + Math.random() * 0.5, dist = 60 + Math.random() * 50;
       s.style.setProperty('--dx', Math.round(Math.cos(ang) * dist) + 'px');
       s.style.setProperty('--dy', Math.round(Math.sin(ang) * dist - 30) + 'px');
@@ -330,41 +332,14 @@
   }
   function mascota(alto) {
     return '<div class="hp2-escena js-hp2-escena" style="--alto:' + (alto || 300) + 'px">' +
-      '<div class="hp2-globo js-hp2-globo"><span class="js-hp2-globo-txt" aria-hidden="true"></span><span class="sigso-oculto-visual js-hp2-globo-sr" role="status" aria-live="polite"></span></div>' +
+      '<div class="hp2-globo js-hp2-globo"><span class="hp2-globo__txt js-hp2-globo-txt" aria-hidden="true"></span><span class="sigso-oculto-visual js-hp2-globo-sr" role="status" aria-live="polite"></span>' +
+        '<span class="hp2-globo__acc js-hp2-globo-acc"></span></div>' +
       '<button type="button" class="hp2-mascota js-hp2-mascota" aria-label="Hompy. Tócalo para que te cuente algo">' +
         '<span class="hp2-mascota__giro"><img src="' + IMG + '" alt="" width="559" height="900" decoding="async"></span>' +
       '</button>' +
       '<span class="hp2-sombra" aria-hidden="true"></span>' +
+      '<span class="hp2-efectos js-hp2-efectos" aria-hidden="true"></span>' +
     '</div>';
-  }
-  function animarMascota() {
-    var esc = raiz_.querySelector('.js-hp2-escena');
-    if (!esc) return;
-    frases_ = frasesDelDia(); fraseI_ = 0;
-    setTimeout(function () { decir(frases_[0]); }, sinMov() ? 0 : 650);
-    var btn = esc.querySelector('.js-hp2-mascota');
-    btn.addEventListener('click', function () {
-      fraseI_ = (fraseI_ + 1) % frases_.length;
-      decir(frases_[fraseI_]);
-      if (sinMov()) return;
-      btn.classList.remove('hp2-salta'); void btn.offsetWidth; btn.classList.add('hp2-salta');
-      chispas(esc);
-    });
-    // Mira hacia el cursor (un giro leve, sin bucle: solo cuando el mouse se mueve).
-    if (sinMov() || !window.matchMedia('(hover: hover)').matches) return;
-    var heroe = raiz_.querySelector('.hp2-heroe') || esc, pend = false, ex = 0, ey = 0;
-    heroe.addEventListener('pointermove', function (ev) {
-      ex = ev.clientX; ey = ev.clientY;
-      if (pend) return; pend = true;
-      requestAnimationFrame(function () {
-        pend = false;
-        var r = esc.getBoundingClientRect();
-        var dx = Math.max(-1, Math.min(1, (ex - (r.left + r.width / 2)) / (r.width * 1.5)));
-        var dy = Math.max(-1, Math.min(1, (ey - (r.top + r.height / 3)) / (r.height * 1.5)));
-        esc.style.setProperty('--mx', dx.toFixed(3)); esc.style.setProperty('--my', dy.toFixed(3));
-      });
-    });
-    heroe.addEventListener('pointerleave', function () { esc.style.setProperty('--mx', 0); esc.style.setProperty('--my', 0); });
   }
 
   // --- Portada ------------------------------------------------------------------------------
@@ -390,6 +365,7 @@
           U.boton({ texto: 'Ver calendario', icono: 'calendario', clase: 'js-hp2-ir', datos: { ir: 'calendario' } }) +
           (pend.length ? U.boton({ texto: 'Llenar reportes (' + pend.length + ')', icono: 'portapapeles', variante: 'fantasma', clase: 'js-hp2-ir', datos: { ir: 'salidas' } }) : '') +
         '</div>' +
+        (A() ? A().preguntas() : '') +
       '</div>' +
       '<div class="hp2-heroe__mascota">' + mascota(300) + '</div>' +
     '</section>';
@@ -412,7 +388,7 @@
     var pronto = M() ? M().tarjetaPortada() : '';
 
     pagina(heroe + kpis + '<div class="sx2-grid hp2-dos"><div class="sx2-col-7">' + cardProx + '</div><div class="sx2-col-5">' + cardPend + '</div></div>' + estudio + pronto);
-    animarMascota();
+    if (A()) A().portada(raiz_.querySelector('.js-hp2-escena'), quieto_);
   }
   function filaEvento(e, i, pendiente) {
     var t = tipo(e.tipo_id), est = estadoDe(e);
@@ -1119,6 +1095,9 @@
       datos: function () { return D; }, raiz: function () { return raiz_; }, api: api, aviso: aviso, txt: txt, sinMov: sinMov,
       pagina: pagina, cabecera: cabecera, ir: ir, irAItem: irAItem, traer: function (v, a) { return traer(v, a, true); },
       chipsInput: chipsInput, enlazarChips: enlazarChips, chispas: chispas, celebrar: celebrar, abrirEvento: abrirEvento,
+      // Para el ayudante (hompy-ayudante-v2.js).
+      vista: function () { return vista_; }, pendientes: pendientes, proximas: proximas, porDevolver: porDevolver, evento: evento,
+      nuevaActividad: function (f) { formularioEvento(null, f || ''); }, miNombre: miNombre, diasEntre: diasEntre, sumarDias: sumarDias,
       fechaLarga: fechaLarga, fechaCorta: fechaCorta, cuando: cuando, nombreDe: nombreDe, horaDe: horaDe, tipo: tipo, IMG: IMG,
       descargarBase64: descargarBase64, pesos: pesos,
       ponerSalida: function (s) { D.salidas = D.salidas.filter(function (x) { return x.evento_id !== s.evento_id; }).concat([s]); }
