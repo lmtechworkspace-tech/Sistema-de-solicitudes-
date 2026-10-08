@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#17304F">
   <meta name="robots" content="noindex">
   <title>SIGSO · Portal de clientes de HomePymes</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2317304F'/%3E%3Ctext x='32' y='44' font-family='monospace' font-weight='700' font-size='34' fill='white' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
@@ -21,7 +22,7 @@
     html:not(.con-estilos) #app :is(input:not([type=checkbox]), textarea, select, button[type=submit]) { display: block; width: 100%; margin: 6px 0 14px; }
     html:not(.con-estilos) #app :is(label, em) { display: block; }
   </style>
-  <link rel="stylesheet" href="css/portal-cliente.css" onload="document.documentElement.classList.add('con-estilos')" onerror="this.onerror=null;this.href='css/portal-cliente.css?r='+Date.now()">
+  <link rel="stylesheet" href="css/portal-cliente.css?v=2026-10-08b" onload="document.documentElement.classList.add('con-estilos')" onerror="this.onerror=null;this.href='css/portal-cliente.css?r='+Date.now()">
 </head>
 <body>
   <!-- Portal de clientes (2026-10-07): la aplicación del contratista. Habla con el
@@ -30,6 +31,6 @@
   <div class="app" id="app" aria-live="polite"><div class="cargando"><span class="rueda"></span>Cargando…</div></div>
   <div id="capa"></div>
   <script src="js/config.js"></script>
-  <script src="js/portal-cliente.js" onerror="var s=document.createElement('script');s.src='js/portal-cliente.js?r='+Date.now();document.body.appendChild(s)"></script>
+  <script src="js/portal-cliente.js?v=2026-10-08b" onerror="var s=document.createElement('script');s.src='js/portal-cliente.js?r='+Date.now();document.body.appendChild(s)"></script>
 </body>
 </html>

@@ -1391,6 +1391,11 @@
     var expandido = null, enCurso_ = {};
     // 2026-10-07 (portal de clientes): lo que se entrega (contrato, F30…) se adjunta al ítem y le
     // llega a quien pidió. Aquí se ve qué mandó cada parte.
+    // 2026-10-08: las fotos propias (servidor SIGSO, no Drive) se ven en miniatura, sin abrirlas.
+    function miniFoto(a, px) {
+      if (!/^image\//.test(a.tipo_mime || '') || !/\/v1\/archivo\/[0-9a-f-]{36}\?k=/.test(String(a.url || ''))) return '';
+      return '<img class="bj2-mini" src="' + U.esc(a.url) + '" alt="" loading="lazy" width="' + px + '" height="' + px + '">';
+    }
     function docsItem(it) {
       var as = (detalle.archivos || []).filter(function (a) { return a.subsolicitud_id === it.subsolicitud_id; });
       var puede = !soloLectura() && ['S09', 'S10', 'S11'].indexOf(it.estado) === -1;
@@ -1398,7 +1403,7 @@
       return '<div class="bj2-it__docs"><span class="bj2-it__et">' + U.ico('documento', 12) + ' Documentos' + (as.length ? ' · ' + as.length : '') + '</span>' +
         (as.length ? '<ul class="bj2-docs">' + as.map(function (a) {
           var equipo = String(a.subido_por || '').indexOf('equipo:') === 0;
-          return '<li><a class="sx2-enlace" href="' + U.esc(a.url) + '" target="_blank" rel="noopener">' + U.ico(/^image\//.test(a.tipo_mime || '') ? 'imagen' : 'documento', 14) + U.esc(a.nombre_original || 'Archivo') + '</a>' +
+          return '<li><a class="sx2-enlace" href="' + U.esc(a.url) + '" target="_blank" rel="noopener">' + (miniFoto(a, 44) || U.ico(/^image\//.test(a.tipo_mime || '') ? 'imagen' : 'documento', 14)) + U.esc(a.nombre_original || 'Archivo') + '</a>' +
             '<span class="bj2-docs__quien' + (equipo ? ' bj2-docs__quien--equipo' : '') + '">' + (equipo ? 'Entregado por ' + U.esc(PY.persona(String(a.subido_por).slice(7)).nombre) : 'Lo mandó quien pidió') + ' · ' + U.esc(PY.fecha(a.fecha_subida, true)) + '</span></li>';
         }).join('') + '</ul>' : '') +
         (puede ? '<label class="sx2-boton sx2-boton--secundario sx2-boton--sm bj2-entregar">' + U.ico('subir', 14) + 'Entregar un documento' +
@@ -1752,7 +1757,7 @@
       return '<ul class="bj2-archivos">' + as.map(function (a) {
         var img = /^image\//.test(a.tipo_mime || '');
         return '<li><a class="bj2-archivo" href="' + U.esc(a.url) + '" target="_blank" rel="noopener noreferrer">' +
-          '<span class="bj2-archivo__ico sx2-tono-' + (img ? 'hito' : 'info') + '">' + U.ico(img ? 'imagen' : 'documento', 18) + '</span>' +
+          (miniFoto(a, 56) || '<span class="bj2-archivo__ico sx2-tono-' + (img ? 'hito' : 'info') + '">' + U.ico(img ? 'imagen' : 'documento', 18) + '</span>') +
           '<span class="sx2-apilado" style="gap:2px;min-width:0;flex:1"><strong class="sx2-cortar">' + U.esc(a.nombre_original || 'Archivo') + '</strong>' +
             '<span class="sx2-tenue" style="font-size:.75rem">' + (nItem[a.subsolicitud_id] ? 'Ítem ' + nItem[a.subsolicitud_id] + ' · ' : '') + U.esc(PY.fecha(a.fecha_subida, true)) +
             (a.tamano_bytes ? ' · ' + Math.max(1, Math.round(Number(a.tamano_bytes) / 1024)) + ' KB' : '') + '</span></span>' + U.ico('derecha', 14) + '</a></li>';

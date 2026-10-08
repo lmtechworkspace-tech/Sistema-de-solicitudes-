@@ -166,3 +166,40 @@ test('la Bandeja sabe que el pedido viene del portal; entrega documentos solo qu
   r = await staff(db, 'otro@homepymes.cl', 'subirArchivoEquipo', doc);
   assert.equal(r.status, 403, 'quien no atiende el ítem no entrega');
 });
+
+// 2026-10-08: el tope del formulario público (5 fotos por ítem, contando también lo
+// que entrega el equipo) trababa la conversación del portal a la 6.ª foto.
+test('archivos del portal: cada lado tiene su cupo, la miniatura no llena el registro y el formulario público sigue con su tope', async () => {
+  const Almacen = require('../logica/almacenamiento');
+  const guardado = {}, orig = { s: Almacen.subirArchivo_, d: Almacen.descargarArchivo_ };
+  Almacen.subirArchivo_ = async (clave, b64) => { guardado[clave] = b64; return { ok: true, clave }; };
+  Almacen.descargarArchivo_ = async (clave) => (guardado[clave] ? { ok: true, contenido_base64: guardado[clave], content_type: 'image/jpeg' } : { ok: false });
+  try {
+    const db = dbPortal();
+    const tok = await activado(db, 'CLI-1', RUT_PEDRO, 'Pedro Sáez');
+    const solId = (await cliente(db, 'clienteCrearPedido', { cliente_token: tok, plantilla_id: 'liquidaciones', datos: { mes: 'octubre' } })).body.data.solicitud_id;
+    const jpg = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4]).toString('base64');
+    // El equipo entrega 5 fotos: no le quitan cupo al contratista.
+    for (let i = 0; i < 5; i++) {
+      const r = await staff(db, VANESSA, 'subirArchivoEquipo', { subsolicitud_id: solId + '-01', nombre_archivo: 'e' + i + '.jpg', contenido_base64: jpg, avisar: false });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+    }
+    for (let i = 0; i < 8; i++) {
+      const r = await cliente(db, 'clienteSubirArchivo', { cliente_token: tok, solicitud_id: solId, nombre_archivo: 'hoja' + i + '.jpg', contenido_base64: jpg });
+      assert.equal(r.status, 200, 'foto ' + (i + 1) + ': ' + JSON.stringify(r.body));
+    }
+    // Desde el formulario público, aunque mande `conversacion`, rige el tope de siempre (5 por ítem).
+    const sol = filas(db, 'SOLICITUDES').find((s) => s.solicitud_id === solId);
+    const pub = await ejecutarAccion(db, 'subirArchivo', { solicitud_id: solId, subsolicitud_id: solId + '-01', nombre_archivo: 'x.jpg', contenido_base64: jpg, email: sol.solicitante_email, conversacion: true }, { ip: '1.1.1.1' });
+    assert.equal(pub.status, 400);
+    assert.match(pub.body.message, /máximo de 5/);
+    // Miniatura: se baja sin registrar; abrirla en grande sí queda.
+    const arch = filas(db, 'ARCHIVOS').find((a) => a.solicitud_id === solId && !a.subido_por);
+    const antes = filas(db, 'PORTAL_REGISTRO').filter((x) => x.accion === 'DESCARGA').length;
+    const m = await cliente(db, 'clienteArchivo', { cliente_token: tok, archivo_id: arch.archivo_id, miniatura: true });
+    assert.equal(m.status, 200); assert.equal(m.body.data.contenido_base64, jpg);
+    assert.equal(filas(db, 'PORTAL_REGISTRO').filter((x) => x.accion === 'DESCARGA').length, antes);
+    assert.equal((await cliente(db, 'clienteArchivo', { cliente_token: tok, archivo_id: arch.archivo_id, solo_registro: true })).status, 200);
+    assert.equal(filas(db, 'PORTAL_REGISTRO').filter((x) => x.accion === 'DESCARGA').length, antes + 1);
+  } finally { Almacen.subirArchivo_ = orig.s; Almacen.descargarArchivo_ = orig.d; }
+});

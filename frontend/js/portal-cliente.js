@@ -33,6 +33,7 @@
     enviar: '<path d="M4 12l16-8-6 16-2.5-6.5z"/>',
     doc: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/>',
     subir: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/>',
+    bajar: '<path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 16v4h16v-4"/>',
     alerta: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5h0"/>',
     reloj: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     salir: '<path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9"/>',
@@ -61,16 +62,25 @@
   function guardarToken(t, recordar) {
     try { localStorage.removeItem(LLAVE); sessionStorage.removeItem(LLAVE); if (t) (recordar ? localStorage : sessionStorage).setItem(LLAVE, t); } catch (e) { /* sin almacenamiento */ }
   }
-  function api(accion, datos) {
+  // Con tiempo límite: con mala señal en la obra, una subida no puede quedar «Subiendo…»
+  // para siempre. Los archivos tienen más margen que el resto.
+  function api(accion, datos, ms) {
     var d = Object.assign({ cliente_token: token() }, datos || {});
-    return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: accion, data: d }) })
+    var ctl = window.AbortController ? new AbortController() : null, vencio = false;
+    var reloj = ctl ? setTimeout(function () { vencio = true; ctl.abort(); }, ms || 30000) : null;
+    return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: accion, data: d }), signal: ctl ? ctl.signal : undefined })
       .then(function (r) { return r.json(); })
       .then(function (r) {
+        clearTimeout(reloj);
         if (r && !r.ok && /sesi[oó]n termin[oó]/i.test(r.message || '')) { guardarToken(''); S.dentro = false; pintar(); }
         return r;
       })
-      .catch(function () { return { ok: false, message: 'Sin conexión. Revisa tu señal e inténtalo de nuevo.' }; });
+      .catch(function () {
+        clearTimeout(reloj);
+        return { ok: false, message: vencio ? 'La señal está muy lenta y no alcanzó. Inténtalo de nuevo donde tengas mejor señal.' : 'Sin conexión. Revisa tu señal e inténtalo de nuevo.' };
+      });
   }
+  var MS_ARCHIVO = 150000;
 
   // ---------- Estado ----------
   var S = { dentro: false, vista: 'inicio', perfil: null, cat: null, pedidos: [], trab: [], pedido: null, detalle: null, pedir: null, trabId: null, desde: null, invitacion: null, ocupado: false };
@@ -143,6 +153,141 @@
   }
   function saludo() { var h = new Date().getHours(); return h < 12 ? 'Buenos días' : (h < 20 ? 'Buenas tardes' : 'Buenas noches'); }
   function vibrar(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) { /* sin vibración */ } }
+  function peso(b) { b = Number(b) || 0; return b >= 1048576 ? (Math.round(b / 104857.6) / 10).toString().replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+
+  // ---------- Archivos: se ven DENTRO del portal ----------
+  // 2026-10-08: antes «Abrir» bajaba el archivo y recién ahí abría una pestaña nueva.
+  // El iPhone y el navegador de WhatsApp (por donde entra el contratista con la
+  // invitación) bloquean esa pestaña en silencio: el archivo «no se veía». Ahora se
+  // muestra en un visor propio (foto con zoom, PDF página por página) y desde ahí se
+  // guarda o se comparte, siempre dentro del mismo toque de la persona.
+  var ARCH = {}, ARCH_LISTO = {}, colaMini = Promise.resolve();
+  var MAX_MINI = 1.5 * 1024 * 1024;
+  function esImagen(t) { return /^image\//.test(t || ''); }
+  function esPdf(t) { return t === 'application/pdf'; }
+  function traerArchivo(id, miniatura) {
+    if (ARCH[id]) return ARCH[id];
+    ARCH[id] = api('clienteArchivo', { archivo_id: id, miniatura: !!miniatura }, MS_ARCHIVO).then(function (r) {
+      if (!r || !r.ok) { delete ARCH[id]; throw new Error((r && r.message) || 'No se pudo abrir el archivo.'); }
+      var bin = atob(r.data.contenido_base64), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var blob = new Blob([bytes], { type: r.data.tipo_mime || 'application/octet-stream' });
+      ARCH_LISTO[id] = { url: URL.createObjectURL(blob), blob: blob, tipo: r.data.tipo_mime || '', nombre: r.data.nombre || 'archivo', miniatura: !!miniatura };
+      return ARCH_LISTO[id];
+    });
+    return ARCH[id];
+  }
+  // Las fotos se pintan solas en miniatura, de a una (sin ahogar la señal); las muy
+  // pesadas esperan a que la persona las toque.
+  function hidratarVistas() {
+    [].forEach.call(app.querySelectorAll('img[data-vista]:not([src])'), function (img) {
+      var id = img.getAttribute('data-vista');
+      if (ARCH_LISTO[id]) { img.src = ARCH_LISTO[id].url; return; }
+      colaMini = colaMini.then(function () { return traerArchivo(id, true); }).then(function (x) {
+        [].forEach.call(app.querySelectorAll('img[data-vista="' + id + '"]'), function (i2) { i2.src = x.url; });
+      }, function () {
+        [].forEach.call(app.querySelectorAll('img[data-vista="' + id + '"]'), function (i2) { var m = i2.closest('.mini'); if (m) m.classList.add('mini--sin'); });
+      });
+    });
+  }
+  function archivosDelPedido() {
+    var d = S.detalle, out = [];
+    if (d) d.subsolicitudes.forEach(function (it) { (it.archivos || []).forEach(function (a) { out.push(a); }); });
+    return out;
+  }
+  // Una miniatura (foto) o una ficha (PDF, Word, Excel), tocable para abrir el visor.
+  function archivoHtml(a, grande) {
+    var quien = a.del_equipo ? 'Te lo mandó ' + esc(a.quien) : 'Lo mandaste tú';
+    if (esImagen(a.tipo_mime) && Number(a.tamano_bytes || 0) <= MAX_MINI) {
+      var u = ARCH_LISTO[a.archivo_id];
+      return '<button type="button" class="mini' + (grande ? ' mini--grande' : '') + (a.del_equipo ? ' del-equipo' : '') + '" data-ver="' + esc(a.archivo_id) + '" aria-label="Ver la foto ' + esc(a.nombre) + '">' +
+        '<img data-vista="' + esc(a.archivo_id) + '"' + (u ? ' src="' + esc(u.url) + '"' : '') + ' alt="">' + (grande ? '' : '<span class="mini__pie">' + quien + '</span>') + '</button>';
+    }
+    return '<button type="button" class="doc' + (a.del_equipo ? ' del-equipo' : '') + '" data-ver="' + esc(a.archivo_id) + '">' +
+      '<span class="doc__tipo">' + (esPdf(a.tipo_mime) ? 'PDF' : (esImagen(a.tipo_mime) ? ico('camara') : (/sheet|excel/.test(a.tipo_mime) ? 'XLS' : 'DOC'))) + '</span>' +
+      '<span class="grow">' + esc(a.nombre) + '<small>' + quien + ' · ' + esc(fecha(a.fecha, true)) + (a.tamano_bytes ? ' · ' + peso(a.tamano_bytes) : '') + '</small></span>' +
+      '<span class="doc__ver">Ver</span></button>';
+  }
+
+  var PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  var pdfJsCarga = null;
+  function cargarPdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (pdfJsCarga) return pdfJsCarga;
+    pdfJsCarga = new Promise(function (ok, mal) {
+      var s = document.createElement('script'); s.src = PDFJS + 'pdf.min.js';
+      s.onload = function () { if (!window.pdfjsLib) { pdfJsCarga = null; mal(new Error('sin visor')); return; } window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; ok(window.pdfjsLib); };
+      s.onerror = function () { pdfJsCarga = null; s.remove(); mal(new Error('sin visor')); };
+      document.head.appendChild(s);
+    });
+    return pdfJsCarga;
+  }
+  // Cada página del PDF como imagen, al ancho de la pantalla (hasta 40 páginas).
+  function pintarPdf(cont, x) {
+    return Promise.all([cargarPdfJs(), x.blob.arrayBuffer()]).then(function (r) {
+      return r[0].getDocument({ data: new Uint8Array(r[1]), isEvalSupported: false }).promise;
+    }).then(function (pdf) {
+      cont.innerHTML = '<p class="visor__nota">' + pdf.numPages + (pdf.numPages === 1 ? ' página' : ' páginas') + (pdf.numPages > 40 ? ' (se muestran las primeras 40; guárdalo para ver el resto)' : '') + '</p>';
+      var ancho = Math.min(cont.clientWidth || 360, 900), dpr = Math.min(window.devicePixelRatio || 1, 2), cadena = Promise.resolve();
+      for (var n = 1; n <= Math.min(pdf.numPages, 40); n++) (function (n) {
+        cadena = cadena.then(function () {
+          if (!cont.isConnected) return;
+          return pdf.getPage(n).then(function (pg) {
+            var vp0 = pg.getViewport({ scale: 1 }), vp = pg.getViewport({ scale: (ancho / vp0.width) * dpr });
+            var c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height); c.className = 'visor__pagina';
+            c.setAttribute('aria-label', 'Página ' + n);
+            cont.appendChild(c);
+            return pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+          });
+        });
+      })(n);
+      return cadena;
+    });
+  }
+  function visorSinVista(cont, x, motivo) {
+    cont.innerHTML = '<div class="visor__otro"><span class="visor__icono">' + ico('doc', 56) + '</span><b>' + esc(x.nombre) + '</b><p>' + esc(motivo) + '</p></div>';
+  }
+  function abrirVisor(id) {
+    var a = archivosDelPedido().filter(function (z) { return z.archivo_id === id; })[0] || { archivo_id: id, nombre: 'Archivo', tipo_mime: '' };
+    var puedeCompartir = !!(navigator.share && navigator.canShare), yaAbierto = !!capa.querySelector('.visor');
+    capa.innerHTML = '<div class="visor" role="dialog" aria-modal="true" aria-labelledby="vs-t" data-visor="' + esc(id) + '">' +
+      '<header class="visor__cab"><button type="button" class="visor__btn" data-cerrar-capa aria-label="Cerrar">' + ico('atras') + '</button>' +
+        '<div class="grow"><b id="vs-t">' + esc(a.nombre) + '</b><small>' + (a.del_equipo ? 'Te lo mandó ' + esc(a.quien) : 'Lo mandaste tú') + (a.fecha ? ' · ' + esc(fecha(a.fecha, true)) : '') + '</small></div></header>' +
+      '<div class="visor__cuerpo' + (esImagen(a.tipo_mime) ? ' visor__cuerpo--foto' : '') + '"><div class="cargando"><span class="rueda"></span>Abriendo…</div></div>' +
+      '<footer class="visor__pie"><button type="button" class="btn btn-main" data-guardar disabled>' + ico('bajar') + 'Guardar</button>' +
+        (puedeCompartir ? '<button type="button" class="btn btn-sec" data-compartir disabled>' + ico('enviar') + 'Compartir</button>' : '') + '</footer></div>';
+    if (!yaAbierto) empujarHistoria();
+    var cuerpo = capa.querySelector('.visor__cuerpo');
+    var previo = ARCH_LISTO[id];
+    traerArchivo(id, false).then(function (x) {
+      if (!cuerpo.isConnected) return;
+      // Lo que ya estaba en miniatura también queda registrado como «abierto».
+      if (previo && previo.miniatura) { previo.miniatura = false; api('clienteArchivo', { archivo_id: id, solo_registro: true }); }
+      [].forEach.call(capa.querySelectorAll('[data-guardar],[data-compartir]'), function (b) { b.disabled = false; });
+      if (esImagen(x.tipo)) { cuerpo.innerHTML = '<img class="visor__foto" src="' + esc(x.url) + '" alt="' + esc(x.nombre) + '">'; return; }
+      if (esPdf(x.tipo)) {
+        cuerpo.innerHTML = '<div class="cargando"><span class="rueda"></span>Preparando las páginas…</div>';
+        pintarPdf(cuerpo, x).catch(function () { if (cuerpo.isConnected) visorSinVista(cuerpo, x, 'No se pudo mostrar aquí. Toca «Guardar» y se abre con el lector de PDF del teléfono.'); });
+        return;
+      }
+      visorSinVista(cuerpo, x, 'Este archivo (Word o Excel) se abre con su aplicación: toca «Guardar».');
+    }, function (e) {
+      if (cuerpo.isConnected) cuerpo.innerHTML = '<div class="visor__otro"><span class="visor__icono">' + ico('alerta', 56) + '</span><b>No se pudo abrir</b><p>' + esc(e.message) + '</p><button type="button" class="btn btn-sec btn-chico" data-ver="' + esc(id) + '" style="width:auto">Intentar de nuevo</button></div>';
+    });
+  }
+  // Guardar: un enlace de descarga tocado en el mismo gesto (sin pestañas nuevas).
+  function guardarArchivo(id) {
+    var x = ARCH_LISTO[id]; if (!x) return;
+    var a = document.createElement('a'); a.href = x.url; a.download = x.nombre; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('Listo. Si no lo ves, búscalo en «Descargas» o «Archivos» de tu teléfono.');
+  }
+  function compartirArchivo(id) {
+    var x = ARCH_LISTO[id]; if (!x) return;
+    var f; try { f = new File([x.blob], x.nombre, { type: x.tipo }); } catch (e) { f = null; }
+    if (!f || !navigator.canShare || !navigator.canShare({ files: [f] })) { guardarArchivo(id); return; }
+    navigator.share({ files: [f], title: x.nombre }).catch(function () { /* la persona canceló */ });
+  }
 
   // ---------- Entrada ----------
   function pantallaEntrar(error) {
@@ -266,8 +411,13 @@
     var P = S.pedir, s = plantillaActual();
     return top(s.nombre, 'Respaldo', true) + '<main>' + cabPasos(2, 3, s.foto_obligatoria ? 'la foto' : 'el respaldo') +
       '<p>' + esc(s.foto) + (s.foto_obligatoria ? '.' : ' (si no tienes, puedes seguir).') + '</p>' +
-      '<label class="foto" for="f-foto">' + ico('camara') + '<span>Sacar foto o elegir archivo<br><span class="sub">Fotos, PDF, Word o Excel. Puedes mandar varios.</span></span><input type="file" id="f-foto" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple></label>' +
-      (P.fotos.length ? '<div class="miniaturas">' + P.fotos.map(function (f, k) { return (f.vista ? '<img src="' + f.vista + '" alt="' + esc(f.nombre) + '">' : '<span class="chip">' + esc(f.nombre) + '</span>') + ''; }).join('') + '</div><button type="button" class="quitar" data-quitar-fotos>Quitar los archivos</button>' : '') +
+      '<div class="tomar"><label class="foto foto--cam" for="f-foto-cam">' + ico('camara') + '<span>Sacar foto<br><span class="sub">Abre la cámara</span></span><input type="file" id="f-foto-cam" accept="image/*" capture="environment"></label>' +
+        '<label class="foto" for="f-foto">' + ico('doc') + '<span>Elegir de la galería o archivos<br><span class="sub">Fotos, PDF, Word o Excel. Varios a la vez.</span></span><input type="file" id="f-foto" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple></label></div>' +
+      (P.progreso ? '<p class="subiendo">' + esc(P.progreso) + '</p>' : '') +
+      (P.fotos.length ? '<div class="miniaturas">' + P.fotos.map(function (f, k) {
+        return '<span class="miniatura">' + (f.vista ? '<img src="' + f.vista + '" alt="' + esc(f.nombre) + '">' : '<span class="miniatura__doc">' + ico('doc') + '<small>' + esc(f.nombre) + '</small></span>') +
+          '<button type="button" class="miniatura__x" data-quitar-foto="' + k + '" aria-label="Quitar ' + esc(f.nombre) + '">×</button></span>';
+      }).join('') + '</div><p class="sub">' + P.fotos.length + (P.fotos.length === 1 ? ' archivo listo' : ' archivos listos') + '. Puedes agregar más.</p>' : '') +
       errorHtml(P.error) +
       '<button type="button" class="btn btn-main" data-siguiente' + (s.foto_obligatoria && !P.fotos.length ? ' disabled' : '') + '>' + (P.fotos.length || s.foto_obligatoria ? 'Siguiente' : 'Seguir sin foto') + '</button></main>' + nav();
   }
@@ -302,7 +452,8 @@
     var chispas = ''; for (var k = 0; k < 10; k++) chispas += '<i style="--r:' + (k * 36) + 'deg"></i>';
     return top(P.area === '__doc' ? 'Documento enviado' : 'Pedido enviado', '', false) + '<main><section class="card listo"><span class="gran"><svg class="dibujo" viewBox="0 0 52 52" aria-hidden="true"><circle class="circulo" cx="26" cy="26" r="24"/><path class="palomita" d="M15 27l7 7 15-16"/></svg><span class="chispas">' + chispas + '</span></span><h2>¡Listo! Lo enviamos</h2>' +
       '<p>' + esc(r.recibe || 'El equipo') + (P.area === '__doc' ? ' lo recibirá y te confirmará aquí.' : ' lo verá y te dirá para cuándo. El plazo normal es de <b>' + esc(r.plazo_dias) + (r.plazo_dias === 1 ? ' día hábil' : ' días hábiles') + '</b>.') + '</p>' +
-      (P.fallidos ? '<p class="error-caja">' + P.fallidos + (P.fallidos === 1 ? ' archivo no se pudo subir' : ' archivos no se pudieron subir') + '. Mándalos desde la conversación del pedido.</p>' : '') +
+      (P.fallas && P.fallas.length ? '<div class="error-caja"><p>' + (P.fallas.length === 1 ? 'Un archivo no se pudo subir' : P.fallas.length + ' archivos no se pudieron subir') + '. Mándalos desde la conversación del pedido (botón de la cámara).</p><ul>' +
+        P.fallas.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul></div>' : '') +
       '<p class="mono">' + esc(r.solicitud_id) + '</p></section>' +
       '<button type="button" class="btn btn-main" data-pedido="' + esc(r.solicitud_id) + '">Ver la conversación</button>' +
       '<button type="button" class="btn btn-sec" data-ir="inicio">Volver al inicio</button></main>' + nav();
@@ -339,11 +490,7 @@
       var est = it.estado_cliente;
       var nota = it.estado === 'S06' ? 'Te preguntaron: ' + (it.pregunta_pendiente || 'revisa la conversación') : (it.estado === 'S08' ? 'Está listo. ¿Quedó bien?' : (EST_ITEM[est] || '') + (it.fecha_comprometida && est === 'CURSO' ? ' · para el ' + fecha(String(it.fecha_comprometida).slice(0, 10)) : ''));
       return '<div class="item-sub"><b>' + esc(multi ? it.titulo.split(' · ').slice(1).join(' · ') || it.titulo : it.titulo) + '</b>' + chip(est) + '<span class="sub">' + esc(nota) + (it.responsable_nombre && est !== 'ENVIADO' ? ' · ' + esc(it.responsable_nombre) : '') + '</span>' +
-        (it.archivos || []).slice().sort(function (x, y) { return (y.del_equipo ? 1 : 0) - (x.del_equipo ? 1 : 0); }).map(function (a) {
-          return '<div class="doc' + (a.del_equipo ? ' del-equipo' : '') + '">' + ico(/^image\//.test(a.tipo_mime) ? 'camara' : 'doc') + '<span class="grow">' + esc(a.nombre) +
-            '<small class="sub" style="display:block;font-weight:400">' + (a.del_equipo ? 'Te lo mandó ' + esc(a.quien) : 'Lo mandaste tú') + ' · ' + esc(fecha(a.fecha, true)) + '</small></span>' +
-            '<button type="button" class="btn ' + (a.del_equipo ? 'btn-main' : 'btn-sec') + ' btn-chico" data-descargar="' + esc(a.archivo_id) + '" style="width:auto">Abrir</button></div>';
-        }).join('') +
+        archivosItemHtml(it.archivos || []) +
         (it.estado === 'S08' ? '<div class="fila" style="flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ok btn-chico" data-confirmar="' + esc(it.subsolicitud_id) + '">' + ico('check') + 'Sí, quedó bien</button><button type="button" class="btn btn-sec btn-chico" data-algo-mal="' + esc(it.subsolicitud_id) + '" style="width:auto">Algo está mal</button></div>' : '') +
       '</div>';
     }).join('');
@@ -356,24 +503,57 @@
     var diaDe = function (v) { var x = new Date(v); return isNaN(x) ? '' : x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
     var hoy = diaDe(new Date()), ayer = diaDe(Date.now() - 864e5);
     var horaDe = function (v) { var x = new Date(v); return isNaN(x) ? '' : ('0' + x.getHours()).slice(-2) + ':' + ('0' + x.getMinutes()).slice(-2); };
-    var chat = ms.map(function (m, k) {
-      var mio = m.autor === 'tu', ant = ms[k - 1], dia = diaDe(m.timestamp);
+    var evs = eventosChat(ms);
+    var chat = evs.map(function (ev, k) {
+      var m = ev.m, mio = m.autor === 'tu', ant = (evs[k - 1] || {}).m, dia = diaDe(m.timestamp);
       var nuevoDia = !ant || diaDe(ant.timestamp) !== dia;
       var sigue = !nuevoDia && ant && ant.autor === m.autor && (ant.nombre || '') === (m.nombre || '');
       return (nuevoDia && dia ? '<div class="dia">' + (dia === hoy ? 'Hoy' : (dia === ayer ? 'Ayer' : esc(fecha(dia)))) + '</div>' : '') +
-        '<div class="msg' + (mio ? ' mio-fila' : '') + (sigue ? ' sigue' : '') + (k >= visto ? ' nueva' : '') + '">' +
+        '<div class="msg' + (mio ? ' mio-fila' : '') + (sigue ? ' sigue' : '') + (ev.k >= visto ? ' nueva' : '') + '">' +
         (!mio ? '<span class="av' + (sigue ? ' oculto' : '') + '" aria-hidden="true">' + esc(inicial(m.nombre || 'Equipo')) + '</span>' : '') +
-        '<div class="burbuja ' + (mio ? 'mio' : 'de-ellos') + '">' + (!mio && !sigue ? '<small><b>' + esc(m.nombre || 'El equipo') + '</b></small>' : '') + (multi && m.subsolicitud_id && nombres[m.subsolicitud_id] ? '<small>Sobre ' + esc(nombres[m.subsolicitud_id]) + '</small>' : '') +
-        '<span style="white-space:pre-wrap">' + esc(m.texto) + '</span><small class="hora">' + esc(horaDe(m.timestamp) || fecha(m.timestamp, true)) + '</small></div></div>';
+        '<div class="burbuja ' + (mio ? 'mio' : 'de-ellos') + (ev.archivos.length ? ' con-archivo' : '') + '">' + (!mio && !sigue ? '<small><b>' + esc(m.nombre || 'El equipo') + '</b></small>' : '') + (multi && m.subsolicitud_id && nombres[m.subsolicitud_id] ? '<small>Sobre ' + esc(nombres[m.subsolicitud_id]) + '</small>' : '') +
+        ev.archivos.map(function (a) { return archivoHtml(a, true); }).join('') +
+        (ev.texto ? '<span style="white-space:pre-wrap">' + esc(ev.texto) + '</span>' : '') + '<small class="hora">' + esc(horaDe(m.timestamp) || fecha(m.timestamp, true)) + '</small></div></div>';
     }).join('');
     var abierto = d.subsolicitudes.some(function (it) { return ['S09', 'S10', 'S11'].indexOf(it.estado) === -1; });
     return top(p.titulo, d.solicitud_id, true) + '<main>' +
       '<section class="card">' + chip(p.estado) + b + '</section>' +
       '<section class="card"><h3>' + (multi ? 'Cada parte de tu pedido' : 'Tu pedido') + '</h3>' + items + '</section>' +
       '<section style="display:flex;flex-direction:column;gap:10px"><h2>Conversación</h2>' + (chat ? '<div class="chat">' + chat + '</div>' : '<p class="sub">Aquí aparece lo que te escriban. Puedes escribir cuando quieras.</p>') + '</section>' +
-      (abierto ? '<form class="composer" id="f-chat" novalidate><button type="button" class="redondo" data-foto-chat aria-label="Mandar foto o archivo">' + ico('camara') + '</button><input type="file" id="f-foto-chat" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" class="oculto-visual" tabindex="-1">' +
+      (abierto ? '<form class="composer" id="f-chat" novalidate><button type="button" class="redondo" data-foto-chat aria-label="Mandar foto o archivo">' + ico('camara') + '</button><input type="file" id="f-foto-chat" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple class="oculto-visual" tabindex="-1">' +
         '<textarea class="inp" id="c-msg" rows="1" placeholder="Escribe aquí…" aria-label="Mensaje"></textarea><button type="submit" class="redondo enviar" aria-label="Enviar">' + ico('enviar') + '</button></form>' : '') +
     '</main>' + nav();
+  }
+
+  // En cada ítem: las fotos en una fila de miniaturas y los documentos como fichas.
+  // Primero lo que entregó el equipo (es lo que el contratista viene a buscar).
+  function archivosItemHtml(as) {
+    if (!as.length) return '';
+    as = as.slice().sort(function (x, y) { return (y.del_equipo ? 1 : 0) - (x.del_equipo ? 1 : 0); });
+    var fotos = as.filter(function (a) { return esImagen(a.tipo_mime) && Number(a.tamano_bytes || 0) <= MAX_MINI; });
+    var docs = as.filter(function (a) { return fotos.indexOf(a) === -1; });
+    return (docs.length ? '<div class="docs">' + docs.map(function (a) { return archivoHtml(a); }).join('') + '</div>' : '') +
+      (fotos.length ? '<div class="galeria">' + fotos.map(function (a) { return archivoHtml(a); }).join('') + '</div>' : '');
+  }
+  // La conversación mezcla mensajes y archivos por hora, como WhatsApp. Un mensaje
+  // automático «Te mandé un archivo: X» se vuelve la foto o el documento X; si el
+  // equipo escribió algo propio («Aquí va tu contrato: X»), queda como texto al pie.
+  function eventosChat(ms) {
+    var archs = archivosDelPedido().slice().sort(function (x, y) { return String(x.fecha).localeCompare(String(y.fecha)); });
+    var usados = {};
+    var evs = ms.map(function (m, k) {
+      var ev = { m: m, k: k, texto: m.texto, archivos: [] };
+      var mm = /^([\s\S]*?):\s+([^\n]+)$/.exec(String(m.texto || ''));
+      if (mm) {
+        var f = archs.filter(function (a) { return !usados[a.archivo_id] && a.nombre === mm[2].trim() && (m.autor === 'tu') === !a.del_equipo; })[0];
+        if (f) { usados[f.archivo_id] = true; ev.archivos.push(f); ev.texto = /^Te mandé (un archivo|un documento)$/i.test(mm[1].trim()) ? '' : mm[1].trim(); }
+      }
+      return ev;
+    });
+    archs.filter(function (a) { return !usados[a.archivo_id]; }).forEach(function (a) {
+      evs.push({ m: { autor: a.del_equipo ? 'equipo' : 'tu', nombre: a.del_equipo ? a.quien : '', timestamp: a.fecha, subsolicitud_id: a.subsolicitud_id }, k: -1, texto: '', archivos: [a] });
+    });
+    return evs.sort(function (x, y) { return String(x.m.timestamp).localeCompare(String(y.m.timestamp)); });
   }
 
   // ---------- Trabajadores ----------
@@ -422,6 +602,7 @@
       (obras().length ? '<label class="campo" for="ft-obra">Obra<select class="inp" id="ft-obra" name="obra_id"><option value="">Sin obra</option>' + obras().map(function (o) { return '<option value="' + esc(o.obra_id) + '"' + (o.obra_id === t.obra_id ? ' selected' : '') + '>' + esc(o.nombre) + '</option>'; }).join('') + '</select></label>' : '') +
       '<p class="error-caja" data-error hidden></p>' +
       '<button type="submit" class="btn btn-main">Guardar</button><button type="button" class="btn btn-sec" data-cerrar-capa>Cancelar</button></form></div>';
+    empujarHistoria();
     var p = capa.querySelector('input[name=nombre]'); if (p) p.focus();
   }
 
@@ -464,11 +645,12 @@
     capa.innerHTML = '<div class="ayuda-fondo" data-cerrar-ayuda><div class="ayuda" role="dialog" aria-modal="true" aria-labelledby="ay-t"><h2 id="ay-t">¿Cómo se usa esta pantalla?</h2><ul>' + lista.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>' +
       (enc ? '<h3>¿Necesitas ayuda de una persona?</h3><p class="sub">Escríbele a ' + esc(enc.nombre) + ' (' + esc(enc.area_nombre) + ') con un pedido de «Otra cosa», o llama a la oficina de HomePymes.</p>' : '') +
       '<button type="button" class="btn btn-main" data-cerrar-ayuda>Entendido</button></div></div>';
+    empujarHistoria();
   }
   // Aviso que sube desde abajo. El tipo se deduce del texto si no se indica: los errores
   // del portal empiezan con «No se pudo», «Sin conexión»…
   function toast(t, tipo) {
-    tipo = tipo || (/^(No se pudo|Sin conexi|Un archivo|Recursos Humanos no)/.test(t) ? 'error' : (/^(¡|Listo|Guardado|Entraste|Archivo enviado|Obra agregada|Lo enviamos)/.test(t) ? 'ok' : 'info'));
+    tipo = tipo || (/^(No se pudo|Sin conexi|Un archivo|La señal|Recursos Humanos no|Esta foto|Se alcanzó|El archivo)/.test(t) ? 'error' : (/^(¡|Listo|Guardado|Entraste|Archivo enviado|Obra agregada|Lo enviamos)/.test(t) ? 'ok' : 'info'));
     [].forEach.call(document.querySelectorAll('.toast'), function (v) { v.remove(); });
     var el = document.createElement('div'); el.className = 'toast t-' + tipo; el.setAttribute('role', tipo === 'error' ? 'alert' : 'status');
     el.innerHTML = ico(tipo === 'error' ? 'alerta' : (tipo === 'ok' ? 'check' : 'reloj')) + '<span>' + esc(t) + '</span>';
@@ -477,7 +659,22 @@
     setTimeout(function () { el.classList.add('sale'); setTimeout(function () { el.remove(); }, 240); }, tipo === 'error' ? 4200 : 3000);
   }
   // Las hojas de abajo se van bajando, no desaparecen de golpe.
+  // El botón «atrás» del teléfono: cada pantalla que avanza y cada hoja que se abre deja
+  // una marca en el historial, así «atrás» retrocede dentro del portal (o cierra la foto)
+  // en vez de salir de la página o volver a WhatsApp.
+  var prof = 0, capaHist = false;
+  function empujarHistoria(esCapa) { try { history.pushState({ sigso: ++prof }, ''); if (esCapa !== false) capaHist = !!capa.innerHTML; } catch (e) { /* sin historial */ } }
+  function volver() { if (prof > 0 && !capa.innerHTML) history.back(); else atras(); }
+  window.addEventListener('popstate', function (ev) {
+    prof = (ev.state && ev.state.sigso) || 0;
+    if (capa.innerHTML) { capaHist = false; cerrarCapaAnim(); return; }
+    if (S.dentro) atras();
+  });
   function cerrarCapa() {
+    if (capaHist) { capaHist = false; history.back(); return; }
+    cerrarCapaAnim();
+  }
+  function cerrarCapaAnim() {
     if (!capa.innerHTML || capa.classList.contains('cerrando')) return;
     capa.classList.add('cerrando');
     setTimeout(function () { capa.innerHTML = ''; capa.classList.remove('cerrando'); }, 190);
@@ -505,6 +702,7 @@
     // Lo que se está escribiendo en el chat sobrevive a un repintado (refrescos en segundo plano).
     var ta = document.getElementById('c-msg'), borrador = ta ? ta.value : '';
     app.innerHTML = h;
+    hidratarVistas();
     if (borrador) { var ta2 = document.getElementById('c-msg'); if (ta2) { ta2.value = borrador; crecer(ta2); } }
     animarCambio();
   }
@@ -524,6 +722,7 @@
     S.dir = null;
     if (clave === ultimaPantalla) return;
     var antes = ultimaPantalla; ultimaPantalla = clave;
+    if (dir === 'adelante' && S.dentro) empujarHistoria(false);
     var login = app.querySelector('.login');
     if (login) { login.classList.add('entra'); return; }
     if (!antes) dir = 'fade';
@@ -573,7 +772,7 @@
   }
   function atras() {
     var P = S.pedir;
-    capa.innerHTML = '';
+    capa.innerHTML = ''; capaHist = false;
     S.dir = 'atras';
     if (S.vista === 'pedido') return ir(S.desde || 'pedidos');
     if (S.vista === 'trab') return ir('trabajadores');
@@ -589,35 +788,57 @@
   }
 
   // Las fotos se achican en el teléfono antes de subir (de ~4 MB a ~300 KB): menos datos móviles y menos espacio.
+  // 2026-10-08: TODA foto se convierte a JPG (también las HEIC del iPhone y las WebP):
+  // el servidor solo acepta JPG/PNG/GIF y antes una HEIC llegaba tal cual y se rechazaba
+  // sin explicar. Fondo blanco (una captura PNG transparente no queda negra). Devuelve
+  // { nombre, base64, vista, tamano } o { error } con una frase que la persona entiende.
+  var DOCS_OK = /\.(pdf|docx?|xlsx?)$/i;
   function prepararArchivo(f) {
+    var nombre = String(f.name || 'archivo');
+    var heic = /hei[cf]/i.test(f.type) || /\.hei[cf]$/i.test(nombre);
+    var esImg = /^image\//.test(f.type) || (!f.type && /\.(jpe?g|png|gif|webp|hei[cf])$/i.test(nombre));
+    var leerBase64 = function () {
+      return new Promise(function (ok) {
+        var lector = new FileReader();
+        lector.onload = function () { var u = String(lector.result); ok(u.slice(u.indexOf(',') + 1)); };
+        lector.onerror = function () { ok(''); };
+        lector.readAsDataURL(f);
+      });
+    };
+    if (!esImg) {
+      if (!DOCS_OK.test(nombre)) return Promise.resolve({ error: nombre + ': ese tipo de archivo no se puede mandar. Sirven fotos, PDF, Word o Excel.' });
+      if (f.size > 10 * 1024 * 1024) return Promise.resolve({ error: nombre + ' pesa más de 10 MB. Mándalo en partes o como fotos.' });
+      return leerBase64().then(function (b) { return b ? { nombre: nombre, base64: b, vista: '', tamano: f.size } : { error: nombre + ' no se pudo leer. Inténtalo de nuevo.' }; });
+    }
     return new Promise(function (resolver) {
-      var lector = new FileReader();
-      lector.onload = function () {
-        var dataUrl = String(lector.result);
-        if (!/^image\/(jpeg|png|webp)/.test(f.type)) { resolver({ nombre: f.name, base64: dataUrl.slice(dataUrl.indexOf(',') + 1), vista: '', tamano: f.size }); return; }
-        var img = new Image();
-        img.onload = function () {
-          var max = 1600, w = img.width, h = img.height, k = Math.min(1, max / Math.max(w, h));
-          var c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
-          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-          var jpg = c.toDataURL('image/jpeg', 0.8);
-          resolver({ nombre: f.name.replace(/\.(png|webp|jpe?g)$/i, '') + '.jpg', base64: jpg.slice(jpg.indexOf(',') + 1), vista: jpg, tamano: Math.round(jpg.length * 0.75) });
-        };
-        img.onerror = function () { resolver({ nombre: f.name, base64: dataUrl.slice(dataUrl.indexOf(',') + 1), vista: '', tamano: f.size }); };
-        img.src = dataUrl;
+      var url = URL.createObjectURL(f), img = new Image();
+      img.onload = function () {
+        var max = 1600, w = img.naturalWidth || img.width, h = img.naturalHeight || img.height, k = Math.min(1, max / Math.max(w, h));
+        var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+        var g = c.getContext('2d'); g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        var jpg = c.toDataURL('image/jpeg', 0.8);
+        resolver({ nombre: nombre.replace(/\.[a-z0-9]{2,5}$/i, '') + '.jpg', base64: jpg.slice(jpg.indexOf(',') + 1), vista: jpg, tamano: Math.round(jpg.length * 0.75) });
       };
-      lector.onerror = function () { resolver(null); };
-      lector.readAsDataURL(f);
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        if (heic) { resolver({ error: 'Esta foto está en formato HEIC y este teléfono no la deja convertir. Sácala de nuevo con «Sacar foto» o mándale una captura de pantalla.' }); return; }
+        if (/^image\/(jpeg|png|gif)$/.test(f.type) && f.size <= 5 * 1024 * 1024) { leerBase64().then(function (b) { resolver(b ? { nombre: nombre, base64: b, vista: '', tamano: f.size } : { error: nombre + ' no se pudo leer.' }); }); return; }
+        resolver({ error: nombre + ': esta foto no se pudo leer. Sácala de nuevo.' });
+      };
+      img.src = url;
     });
   }
+  // Sube de a uno y junta el motivo de lo que falló (lo dice el servidor: tamaño, tipo, tope).
   function subirArchivos(solicitudId, subId, archivos, alAvanzar) {
-    var fallidos = 0;
+    var fallas = [];
     return archivos.reduce(function (p, a, i) {
       return p.then(function () {
         if (alAvanzar) alAvanzar(i + 1, archivos.length);
-        return api('clienteSubirArchivo', { solicitud_id: solicitudId, subsolicitud_id: subId, nombre_archivo: a.nombre, contenido_base64: a.base64 }).then(function (r) { if (!r || !r.ok) fallidos++; });
+        return api('clienteSubirArchivo', { solicitud_id: solicitudId, subsolicitud_id: subId, nombre_archivo: a.nombre, contenido_base64: a.base64 }, MS_ARCHIVO)
+          .then(function (r) { if (!r || !r.ok) fallas.push(a.nombre + ': ' + ((r && r.message) || 'no se pudo subir')); });
       });
-    }, Promise.resolve()).then(function () { return fallidos; });
+    }, Promise.resolve()).then(function () { return fallas; });
   }
   function enviarPedido() {
     var P = S.pedir, s = plantillaActual();
@@ -629,26 +850,12 @@
       if (!r || !r.ok) { S.ocupado = false; P.progreso = ''; P.error = (r && r.message) || 'No se pudo enviar.'; pintar(); return null; }
       P.resultado = r.data;
       return subirArchivos(r.data.solicitud_id, r.data.primer_item, P.fotos, function (i, n) { P.progreso = 'Subiendo archivo ' + i + ' de ' + n + '…'; pintar(); })
-        .then(function (fallidos) {
-          P.fallidos = fallidos; S.ocupado = false; P.progreso = ''; P.paso = 'listo'; S.dir = 'adelante'; vibrar([20, 50, 40]);
+        .then(function (fallas) {
+          P.fallas = fallas; S.ocupado = false; P.progreso = ''; P.paso = 'listo'; S.dir = 'adelante'; vibrar([20, 50, 40]);
           return Promise.all([refrescarPedidos(), refrescarTrab()]);
         }).then(function () { pintar(); window.scrollTo(0, 0); });
     });
   }
-  function descargar(archivoId) {
-    toast('Abriendo…');
-    api('clienteArchivo', { archivo_id: archivoId }).then(function (r) {
-      if (!r || !r.ok) { toast((r && r.message) || 'No se pudo abrir.'); return; }
-      var bin = atob(r.data.contenido_base64), bytes = new Uint8Array(bin.length);
-      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      var url = URL.createObjectURL(new Blob([bytes], { type: r.data.tipo_mime || 'application/octet-stream' }));
-      var a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
-      if (!/^(image\/|application\/pdf)/.test(r.data.tipo_mime || '')) a.download = r.data.nombre || 'archivo';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
-    });
-  }
-
   // ---------- Eventos ----------
   document.addEventListener('click', function (ev) {
     var t = ev.target, b;
@@ -656,8 +863,8 @@
     if (t.closest('[data-cerrar-capa]') || t.classList.contains('ayuda-fondo')) { cerrarCapa(); return; }
     if (t.closest('[data-ayuda]')) { ayuda(); return; }
     if (t.closest('[data-ir-entrar]')) { S.invitacion = null; history.replaceState(null, '', location.pathname); pintar(); return; }
-    if (t.closest('[data-atras]')) { atras(); return; }
-    if ((b = t.closest('[data-ir]'))) { var v = b.getAttribute('data-ir'); if (v === 'pedir') S.pedir = null; capa.innerHTML = ''; ir(v); if (v === 'pedidos' || v === 'inicio') refrescarPedidos().then(function () { if (S.vista === v) pintar(); }); return; }
+    if (t.closest('[data-atras]')) { volver(); return; }
+    if ((b = t.closest('[data-ir]'))) { var v = b.getAttribute('data-ir'); if (v === 'pedir') S.pedir = null; capa.innerHTML = ''; capaHist = false; ir(v); if (v === 'pedidos' || v === 'inicio') refrescarPedidos().then(function () { if (S.vista === v) pintar(); }); return; }
     if ((b = t.closest('[data-area]'))) { nuevoPedir(b.getAttribute('data-area')); return; }
     if ((b = t.closest('[data-plantilla]'))) { S.pedir.plantilla = b.getAttribute('data-plantilla'); S.pedir.paso = 'datos'; S.pedir.personas = [{}]; S.pedir.datos = {}; S.pedir.error = ''; S.dir = 'adelante'; pintar(); window.scrollTo(0, 0); return; }
     if ((b = t.closest('[data-trab]'))) { S.trabId = b.getAttribute('data-trab'); ir('trab', 'adelante'); return; }
@@ -667,7 +874,7 @@
     if ((b = t.closest('[data-editar-trab]'))) { formTrabajador(S.trab.filter(function (x) { return x.trabajador_id === b.getAttribute('data-editar-trab'); })[0]); return; }
     if (t.closest('[data-agregar]')) { guardarCampos(); S.pedir.personas.push({}); pintar(); var u = app.querySelectorAll('.persona'); if (u.length) u[u.length - 1].scrollIntoView({ block: 'center' }); return; }
     if ((b = t.closest('[data-quitar]'))) { guardarCampos(); S.pedir.personas.splice(+b.getAttribute('data-quitar'), 1); pintar(); return; }
-    if (t.closest('[data-quitar-fotos]')) { S.pedir.fotos = []; pintar(); return; }
+    if ((b = t.closest('[data-quitar-foto]'))) { S.pedir.fotos.splice(+b.getAttribute('data-quitar-foto'), 1); S.pedir.error = ''; pintar(); return; }
     if ((b = t.closest('[data-elegir]'))) {
       guardarCampos(); var id = b.getAttribute('data-elegir'), s0 = plantillaActual(), L = S.pedir.elegidos, k = L.indexOf(id);
       if (s0.uno) S.pedir.elegidos = k === -1 ? [id] : []; else if (k === -1) L.push(id); else L.splice(k, 1);
@@ -699,7 +906,9 @@
     }
     if (t.closest('[data-enviar]')) { enviarPedido(); return; }
     if ((b = t.closest('[data-pedido]'))) { abrirPedido(b.getAttribute('data-pedido')); return; }
-    if ((b = t.closest('[data-descargar]'))) { descargar(b.getAttribute('data-descargar')); return; }
+    if ((b = t.closest('[data-ver]'))) { abrirVisor(b.getAttribute('data-ver')); return; }
+    if (t.closest('[data-guardar]')) { guardarArchivo((t.closest('[data-visor]') || {}).getAttribute('data-visor')); return; }
+    if (t.closest('[data-compartir]')) { compartirArchivo((t.closest('[data-visor]') || {}).getAttribute('data-visor')); return; }
     if ((b = t.closest('[data-confirmar]'))) {
       b.disabled = true;
       api('clienteConfirmar', { solicitud_id: S.pedido, subsolicitud_id: b.getAttribute('data-confirmar'), accion: 'confirmar' }).then(function (r) {
@@ -713,7 +922,7 @@
       capa.innerHTML = '<div class="ayuda-fondo"><form class="ayuda" id="f-reabrir" data-sub="' + esc(subId) + '" role="dialog" aria-modal="true" aria-labelledby="fr-t" novalidate><h2 id="fr-t">¿Qué está mal?</h2>' +
         '<label class="campo" for="fr-txt">Cuéntanos qué falta o qué hay que corregir<textarea class="inp" id="fr-txt" name="comentario"></textarea></label><p class="error-caja" data-error hidden></p>' +
         '<button type="submit" class="btn btn-main">Enviar</button><button type="button" class="btn btn-sec" data-cerrar-capa>Cancelar</button></form></div>';
-      capa.querySelector('textarea').focus(); return;
+      empujarHistoria(); capa.querySelector('textarea').focus(); return;
     }
     if (t.closest('[data-foto-chat]')) { document.getElementById('f-foto-chat').click(); return; }
     if (t.closest('[data-salir]')) { api('clienteSalir').then(function () { guardarToken(''); S.dentro = false; S.perfil = null; pintar(); }); return; }
@@ -799,26 +1008,41 @@
 
   document.addEventListener('change', function (ev) {
     var inp = ev.target;
-    if (inp.id === 'f-foto') {
-      var fs = [].slice.call(inp.files || []);
-      S.pedir.error = ''; S.pedir.progreso = 'Preparando…';
+    if (inp.id === 'f-foto' || inp.id === 'f-foto-cam') {
+      var fs = [].slice.call(inp.files || []); inp.value = '';
+      if (!fs.length) return;
+      S.pedir.error = ''; S.pedir.progreso = fs.length === 1 ? 'Preparando el archivo…' : 'Preparando ' + fs.length + ' archivos…'; pintar();
       Promise.all(fs.map(prepararArchivo)).then(function (xs) {
-        if (xs.some(function (x) { return !x; })) S.pedir.error = 'Un archivo no se pudo leer. Prueba sacando la foto de nuevo.';
-        xs.filter(Boolean).forEach(function (x) {
-          if (x.tamano > 10 * 1024 * 1024) S.pedir.error = x.nombre + ' pesa más de 10 MB.';
-          else S.pedir.fotos.push(x);
-        });
+        var errores = xs.filter(function (x) { return x.error; }).map(function (x) { return x.error; });
+        xs.filter(function (x) { return !x.error; }).forEach(function (x) { S.pedir.fotos.push(x); });
+        S.pedir.error = errores.join(' ');
         S.pedir.progreso = ''; pintar();
       });
     } else if (inp.id === 'f-foto-chat') {
-      var f0 = (inp.files || [])[0]; if (!f0) return;
-      toast('Subiendo…');
-      prepararArchivo(f0).then(function (x) {
-        if (!x) { toast('No se pudo leer el archivo.'); return; }
-        var primer = S.detalle && S.detalle.subsolicitudes[0] ? S.detalle.subsolicitudes[0].subsolicitud_id : '';
-        subirArchivos(S.pedido, primer, [x]).then(function (fallidos) {
-          if (fallidos) { toast('No se pudo subir. Prueba con otra foto.'); return; }
-          api('clienteMensaje', { solicitud_id: S.pedido, texto: 'Te mandé un archivo: ' + x.nombre }).then(function () { toast('Archivo enviado.'); recargarPedido(true); });
+      var fc = [].slice.call(inp.files || []); inp.value = '';
+      if (!fc.length || !S.detalle) return;
+      // Va al ítem que está esperando algo del contratista (o al primero abierto).
+      var its = S.detalle.subsolicitudes, destino = its.filter(function (it) { return it.estado === 'S06'; })[0] ||
+        its.filter(function (it) { return ['S09', 'S10', 'S11'].indexOf(it.estado) === -1; })[0] || its[0];
+      var subId = destino ? destino.subsolicitud_id : '';
+      var chatEl = app.querySelector('.chat'), fila = null;
+      Promise.all(fc.map(prepararArchivo)).then(function (xs) {
+        var buenos = xs.filter(function (x) { return !x.error; }), malos = xs.filter(function (x) { return x.error; });
+        if (malos.length) toast(malos[0].error);
+        if (!buenos.length) return;
+        if (chatEl) {
+          fila = document.createElement('div'); fila.className = 'msg mio-fila nueva';
+          fila.innerHTML = '<div class="burbuja mio enviando con-archivo">' + buenos.map(function (x) { return x.vista ? '<span class="mini mini--grande"><img src="' + x.vista + '" alt=""></span>' : '<span class="doc"><span class="doc__tipo">' + ico('doc') + '</span><span class="grow">' + esc(x.nombre) + '</span></span>'; }).join('') +
+            '<small class="hora">Subiendo…</small></div>';
+          chatEl.appendChild(fila); fila.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        } else toast('Subiendo…');
+        subirArchivos(S.pedido, subId, buenos, function (i, n) { if (fila && n > 1) fila.querySelector('.hora').textContent = 'Subiendo ' + i + ' de ' + n + '…'; }).then(function (fallas) {
+          var subidos = buenos.filter(function (x) { return !fallas.some(function (m) { return m.indexOf(x.nombre + ':') === 0; }); });
+          if (fallas.length) { toast('No se pudo subir: ' + fallas.join(' · ')); if (fila && !subidos.length) { fila.querySelector('.burbuja').classList.add('fallo'); fila.querySelector('.hora').textContent = 'No se envió'; } }
+          if (!subidos.length) return;
+          // Un aviso por archivo: así al equipo le llega «te escribió» y aquí se ve la foto en su lugar.
+          subidos.reduce(function (p, x) { return p.then(function () { return api('clienteMensaje', { solicitud_id: S.pedido, subsolicitud_id: subId, texto: 'Te mandé un archivo: ' + x.nombre }); }); }, Promise.resolve())
+            .then(function () { if (!fallas.length) toast(subidos.length === 1 ? 'Archivo enviado.' : 'Archivos enviados.'); refrescarPedidos(); recargarPedido(true); });
         });
       });
     }

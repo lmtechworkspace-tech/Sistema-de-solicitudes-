@@ -33,6 +33,13 @@ const URL_PUBLICA = (process.env.SIGSO_URL_PUBLICA || 'https://api.ctrly.cl').re
 const LIMITES_TAMANO = { imagen: 5 * 1024 * 1024, documento: 10 * 1024 * 1024 };
 const LIMITES_POR_ITEM = { imagen: 5, documento: 3 };
 const LIMITES_POR_SOLICITUD = { imagen: 30, documento: 15 };
+// Portal de clientes y entregas del equipo (2026-10-08): un pedido del portal es
+// una conversación larga (libro de asistencia de varias hojas, fotos que se van
+// pidiendo, contratos que se corrigen). Los topes del formulario público lo
+// trababan a la 6.ª foto. Además cada lado cuenta lo suyo: lo que entrega el
+// equipo no le quita cupo al contratista, ni al revés.
+const LIMITES_CONVERSACION = { item: { imagen: 20, documento: 10 }, solicitud: { imagen: 80, documento: 40 } };
+function esDelEquipo_(a) { return String(a.subido_por || '').indexOf('equipo:') === 0; }
 
 const FIRMAS = [
   { categoria: 'imagen', mime: 'image/jpeg', firma: [0xFF, 0xD8, 0xFF] },
@@ -85,7 +92,7 @@ function claveR2_(solicitudId, archivoId) { return 'solicitudes/' + solicitudId 
  * data: { solicitud_id, subsolicitud_id?, nombre_archivo, contenido_base64, email }.
  * Pública (el formulario de ingreso no tiene sesión): la prueba es el correo.
  */
-async function subirArchivo(db, data) {
+async function subirArchivo(db, data, opciones) {
   data = data || {};
   if (!data.solicitud_id || !data.nombre_archivo || !data.contenido_base64) {
     return errorValidacion('archivo', 'Faltan datos del archivo (solicitud_id, nombre_archivo o contenido).');
@@ -95,12 +102,13 @@ async function subirArchivo(db, data) {
   const esDuenio = compararEmail_(data.email, solicitud.solicitante_email) ||
     (esVerdadero_(solicitud.es_cliente) && compararEmail_(data.email, solicitud.correo_cliente));
   if (!esDuenio) return errorForbidden('El correo no coincide con el registrado para esta solicitud.');
-  return guardarArchivo_(db, data, '');
+  // `conversacion` (topes del portal) solo lo fija código del servidor, nunca el pedido.
+  return guardarArchivo_(db, data, '', !!(opciones && opciones.conversacion));
 }
 
 // El cuerpo común: valida tipo, tamaño y límites, sube a R2 y registra. `subidoPor`
 // lo fija SIEMPRE quien llama desde el servidor (nunca viene del pedido).
-async function guardarArchivo_(db, data, subidoPor) {
+async function guardarArchivo_(db, data, subidoPor, conversacion) {
 
   let bytes;
   try { bytes = Buffer.from(String(data.contenido_base64), 'base64'); } catch (e) { bytes = null; }
@@ -112,12 +120,15 @@ async function guardarArchivo_(db, data, subidoPor) {
     return errorValidacion('archivo', 'El archivo supera el tamaño máximo permitido (' + Math.round(LIMITES_TAMANO[tipo.categoria] / (1024 * 1024)) + ' MB).');
   }
 
-  const archivos = leerFilas_(db, 'ARCHIVOS', COLUMNAS.ARCHIVOS).filter((a) => a.solicitud_id === data.solicitud_id && categoriaDeMime_(a.tipo_mime) === tipo.categoria);
-  if (data.subsolicitud_id && archivos.filter((a) => a.subsolicitud_id === data.subsolicitud_id).length >= LIMITES_POR_ITEM[tipo.categoria]) {
-    return errorValidacion('archivo', 'Se alcanzó el máximo de ' + LIMITES_POR_ITEM[tipo.categoria] + ' archivos de tipo ' + tipo.categoria + ' para este ítem.');
+  const tope = conversacion ? LIMITES_CONVERSACION : { item: LIMITES_POR_ITEM, solicitud: LIMITES_POR_SOLICITUD };
+  const delEquipo = String(subidoPor || '').indexOf('equipo:') === 0;
+  const archivos = leerFilas_(db, 'ARCHIVOS', COLUMNAS.ARCHIVOS).filter((a) => a.solicitud_id === data.solicitud_id && categoriaDeMime_(a.tipo_mime) === tipo.categoria &&
+    (!conversacion || esDelEquipo_(a) === delEquipo));
+  if (data.subsolicitud_id && archivos.filter((a) => a.subsolicitud_id === data.subsolicitud_id).length >= tope.item[tipo.categoria]) {
+    return errorValidacion('archivo', 'Se alcanzó el máximo de ' + tope.item[tipo.categoria] + ' archivos de tipo ' + tipo.categoria + ' para este ítem.');
   }
-  if (archivos.length >= LIMITES_POR_SOLICITUD[tipo.categoria]) {
-    return errorValidacion('archivo', 'Se alcanzó el máximo de ' + LIMITES_POR_SOLICITUD[tipo.categoria] + ' archivos de tipo ' + tipo.categoria + ' para esta solicitud.');
+  if (archivos.length >= tope.solicitud[tipo.categoria]) {
+    return errorValidacion('archivo', 'Se alcanzó el máximo de ' + tope.solicitud[tipo.categoria] + ' archivos de tipo ' + tipo.categoria + ' para esta solicitud.');
   }
 
   const archivoId = crypto.randomUUID();
@@ -178,7 +189,7 @@ async function subirArchivoEquipo(db, data, contexto) {
   if (veto) return veto;
   if (!data.nombre_archivo || !data.contenido_base64) return errorValidacion('archivo', 'Falta el archivo.');
   const r = await guardarArchivo_(db, { solicitud_id: sub.solicitud_id, subsolicitud_id: sub.subsolicitud_id, nombre_archivo: data.nombre_archivo, contenido_base64: data.contenido_base64 },
-    'equipo:' + String(contexto.email || '').toLowerCase());
+    'equipo:' + String(contexto.email || '').toLowerCase(), true);
   if (!r || !r.archivo_id) return r;
   if (data.avisar !== false) {
     const Comentarios = require('./comentarios');

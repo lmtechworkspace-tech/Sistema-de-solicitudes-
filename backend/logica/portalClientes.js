@@ -558,7 +558,7 @@ async function subirArchivo(db, data, ctx, meta) {
   if (data.subsolicitud_id && !sub) return errorValidacion('subsolicitud_id', 'Ese ítem no es de este pedido.');
   const A = require('./archivosSolicitud');
   const r = await A.subirArchivo(db, { solicitud_id: s.solicitud_id, subsolicitud_id: sub ? sub.subsolicitud_id : (s.solicitud_id + '-01'),
-    nombre_archivo: txt_(data.nombre_archivo, 150), contenido_base64: data.contenido_base64, email: s.solicitante_email });
+    nombre_archivo: txt_(data.nombre_archivo, 150), contenido_base64: data.contenido_base64, email: s.solicitante_email }, { conversacion: true });
   if (r && r.archivo_id) {
     registrar_(db, { cliente_id: ctx.cliente_id, contacto_id: ctx.contacto_id, actor: 'contacto', accion: 'ARCHIVO', detalle: s.solicitud_id + ' · ' + txt_(data.nombre_archivo, 80), ip: (meta && meta.ip) || '' });
     return { archivo_id: r.archivo_id, tipo_mime: r.tipo_mime, tamano_bytes: r.tamano_bytes };
@@ -579,11 +579,17 @@ async function confirmar(db, data, ctx, meta) {
 async function archivo(db, data, ctx, meta) {
   const a = leer_(db, 'ARCHIVOS').find((x) => x.archivo_id === txt_(data.archivo_id, 60));
   if (!a || !solicitudDelCliente_(db, ctx, a.solicitud_id)) return errorValidacion('archivo_id', 'Ese archivo no existe.');
+  // Abrió en grande algo que ya tenía en miniatura: solo queda la evidencia, sin bajarlo de nuevo.
+  if (data.solo_registro) {
+    registrar_(db, { cliente_id: ctx.cliente_id, contacto_id: ctx.contacto_id, actor: 'contacto', accion: 'DESCARGA', detalle: a.solicitud_id + ' · ' + a.nombre_original, ip: (meta && meta.ip) || '' });
+    return { ok: true };
+  }
   const A = require('./archivosSolicitud');
   const llave = (String(a.url || '').match(/[?&]k=([^&]+)/) || [])[1] || '';
   const f = await A.servirArchivo(db, a.archivo_id, llave);
   if (!f) return errorValidacion('archivo_id', 'No se pudo abrir el archivo.');
-  registrar_(db, { cliente_id: ctx.cliente_id, contacto_id: ctx.contacto_id, actor: 'contacto', accion: 'DESCARGA', detalle: a.solicitud_id + ' · ' + f.nombre, ip: (meta && meta.ip) || '' });
+  // La miniatura que se pinta sola en la conversación no es «abrir»: no llena el registro.
+  if (!data.miniatura) registrar_(db, { cliente_id: ctx.cliente_id, contacto_id: ctx.contacto_id, actor: 'contacto', accion: 'DESCARGA', detalle: a.solicitud_id + ' · ' + f.nombre, ip: (meta && meta.ip) || '' });
   return { nombre: f.nombre, tipo_mime: f.mime, contenido_base64: f.buffer.toString('base64') };
 }
 

@@ -130,7 +130,11 @@ async function manejar(req, res, db) {
       'Cache-Control': 'private, max-age=3600',
       'Referrer-Policy': 'no-referrer'
     };
-    if (/^image\//.test(archivo.mime)) cabeceras['Content-Security-Policy'] = "sandbox; default-src 'none'";
+    // img-src 'self' y style-src 'unsafe-inline': el visor de imágenes del propio
+    // navegador (centrar, ajustar a la pantalla) es una página con estilos en línea
+    // que carga la imagen misma; sin esto Safari/Firefox la muestran mal o en blanco.
+    // Scripts siguen prohibidos (default-src 'none' + sandbox).
+    if (/^image\//.test(archivo.mime)) cabeceras['Content-Security-Policy'] = "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'";
     res.writeHead(200, cabeceras);
     return res.end(archivo.buffer);
   }
