@@ -103,6 +103,7 @@ const FinanzasMes = require('../logica/finanzasMes');
 const FinanzasAvisos = require('../logica/finanzasAvisos');
 const Credenciales = require('../logica/credenciales');
 const Hompy = require('../logica/hompy');
+const PortalClientes = require('../logica/portalClientes');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -713,6 +714,16 @@ const ACCIONES = {
   finanzasCerrarMes: (db, data, contexto) => FinanzasCierre.cerrar(db, data, contexto),
   // Credenciales (2026-10-07): bóveda de claves de la empresa por categoría
   // (Hompy ve las redes sociales). Ver credenciales.js.
+  // Portal de clientes (2026-10-07): la administración, para el super admin y quien él autorice.
+  portalAdmEstado: (db, data, contexto) => PortalClientes.admEstado(db, data, contexto),
+  portalAdmCliente: (db, data, contexto) => PortalClientes.admCliente(db, data, contexto),
+  portalAdmGuardarCliente: (db, data, contexto) => PortalClientes.admGuardarCliente(db, data, contexto),
+  portalAdmGuardarObra: (db, data, contexto) => PortalClientes.admGuardarObra(db, data, contexto),
+  portalAdmGuardarTrabajador: (db, data, contexto) => PortalClientes.admGuardarTrabajador(db, data, contexto),
+  portalAdmInvitar: (db, data, contexto) => PortalClientes.admInvitar(db, data, contexto),
+  portalAdmContacto: (db, data, contexto) => PortalClientes.admContacto(db, data, contexto),
+  portalAdmPermisos: (db, data, contexto) => PortalClientes.admPermisos(db, data, contexto),
+
   credEstado: (db, data, contexto) => Credenciales.estado(db, data, contexto),
   credDatos: (db, data, contexto) => Credenciales.datos(db, data, contexto),
   credPrepararAutenticador: (db, data, contexto) => Credenciales.prepararAutenticador(db, data, contexto),
@@ -844,6 +855,12 @@ function resolverContextoPortal_(db, token) {
 async function ejecutarAccion(db, action, data, meta) {
   data = data || {};
   meta = meta || {};
+  // Portal de clientes: el contratista tiene su PROPIA lista cerrada de acciones y
+  // su propio token (cliente_token). Nada de lo de abajo (personal) le es alcanzable,
+  // y un portal_token del personal no abre ninguna de estas.
+  if (Object.prototype.hasOwnProperty.call(PortalClientes.ACCIONES_CLIENTE, action)) {
+    return responderResultado_(await PortalClientes.ejecutarCliente(db, action, data, meta));
+  }
   const fn = ACCIONES[action];
   if (!fn) {
     return { status: 404, body: { ok: false, error: 'Acción desconocida: ' + action } };

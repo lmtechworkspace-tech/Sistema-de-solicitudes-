@@ -138,7 +138,10 @@ const COLUMNAS = {
     'dedup_hash', 'estimacion_total_horas', 'horas_reales',
     'observaciones_generales',
     'resumen_whatsapp', 'fecha_creacion', 'creado_por',
-    'cc', 'rut_cliente', 'codigo_cliente', 'atencion_directa', 'proyecto_id'
+    'cc', 'rut_cliente', 'codigo_cliente', 'atencion_directa', 'proyecto_id',
+    // Portal de clientes (2026-10-07): el pedido viene de un contratista. El
+    // cliente queda ligado a su ficha (CAT_CLIENTES), no como texto libre.
+    'cliente_id', 'origen', 'contacto_id'
   ],
   SUBSOLICITUDES: [
     'subsolicitud_id', 'solicitud_id', 'numero_item', 'titulo', 'descripcion',
@@ -864,6 +867,42 @@ const COLUMNAS = {
   // Preferencias de cada persona que la siguen a cualquier equipo (2026-10-05):
   // hoy, los fijados de la barra lateral (clave 'barra_fijados', valor JSON).
   PREFERENCIAS_CUENTA: ['cuenta_id', 'clave', 'valor', 'fecha_actualizacion'],
+
+  // Portal de clientes (2026-10-07, logica/portalClientes.js): SIGSO usado por
+  // HomePymes con sus contratistas. Mundo APARTE de las cuentas del personal:
+  // sus propias personas (contactos, entran con RUT + clave de 6 números), sus
+  // propias sesiones y su propia lista de acciones (router: ACCIONES_CLIENTE).
+  // Un token de contratista nunca sirve para una acción interna, ni al revés.
+  //
+  // Qué clientes tienen portal, sus datos de contacto y quién los atiende en
+  // cada área (encargados = JSON {RRHH: correo, ...}, siempre del equipo del área).
+  PORTAL_CLIENTES: [
+    'cliente_id', 'habilitado', 'correo', 'telefono', 'direccion', 'representante',
+    'servicios', 'encargados', 'observaciones',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion'
+  ],
+  PORTAL_OBRAS: ['obra_id', 'cliente_id', 'nombre', 'comuna', 'direccion', 'activa', 'creado_por', 'fecha_creacion'],
+  // Las personas del cliente que entran. rol: ADMIN (administra la cuenta) |
+  // COLABORADOR. estado: INVITADO | ACTIVO | BLOQUEADO. Del PIN y de la
+  // invitación solo se guarda el hash.
+  PORTAL_CONTACTOS: [
+    'contacto_id', 'cliente_id', 'nombre', 'rut', 'telefono', 'correo', 'cargo', 'rol', 'estado',
+    'pin_hash', 'pin_salt', 'invitacion_hash', 'invitacion_expira', 'fallos', 'pausa_hasta', 'ultimo_ingreso',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion'
+  ],
+  PORTAL_SESIONES: ['sesion_id', 'token_hash', 'contacto_id', 'recordar', 'dispositivo', 'ip', 'creada', 'expira', 'ultimo_uso', 'revocada'],
+  // Registro de ingresos y acciones (evidencia ISO). Solo se agrega: no hay
+  // acción que lo edite ni lo borre.
+  PORTAL_REGISTRO: ['registro_id', 'timestamp', 'cliente_id', 'contacto_id', 'actor', 'accion', 'detalle', 'ip', 'dispositivo'],
+  // «Mis trabajadores»: los trabajadores del contratista (datos personales:
+  // los ve el propio cliente y el personal con permiso). estado: ACTIVO |
+  // TRAMITE (contrato pedido) | FINIQUITADO.
+  PORTAL_TRABAJADORES: [
+    'trabajador_id', 'cliente_id', 'obra_id', 'nombre', 'rut', 'cargo', 'fecha_inicio', 'fecha_termino',
+    'sueldo', 'afp', 'salud', 'estado', 'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion'
+  ],
+  // Quién más (aparte del super admin) administra el portal. Lo otorga solo el super admin.
+  PORTAL_PERMISOS: ['permiso_id', 'usuario_email', 'permiso', 'otorgado_por', 'fecha', 'activo'],
 
   // Hompy, la mascota (2026-10-06, logica/hompy.js). Tipos de evento (5, los
   // definen Bárbara y Lisseth; parten como PROPUESTA), las actividades del

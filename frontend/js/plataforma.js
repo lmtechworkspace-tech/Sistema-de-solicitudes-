@@ -73,6 +73,9 @@
     // Credenciales (2026-10-07, credenciales-v2.js): claves de la empresa por
     // categoría. Lo pinta cuenta.credenciales; cada acción lo re-verifica.
     credenciales: { icono: 'llave', nombre: 'Credenciales', descripcion: 'Claves de la empresa y quién tiene acceso' },
+    // Portal de clientes (2026-10-07, portal-clientes-admin-v2.js): los contratistas de
+    // HomePymes. Lo pinta cuenta.portal_clientes (super admin o con permiso).
+    portal_clientes: { icono: 'empresa', nombre: 'Portal de clientes', descripcion: 'Contratistas: quién entra, quién los atiende y cada ingreso' },
     // Hompy (2026-10-06, hompy-v2.js): la mascota. Se asigna en la cuenta
     // (módulo `hompy`) y el servidor lo exige en cada acción. Su ícono es la
     // cara de Hompy (iconos.js la dibuja como imagen).
@@ -132,6 +135,7 @@
     calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' },
     finanzas: { acento: 'var(--mod-finanzas)', suave: 'var(--mod-finanzas-suave)' },
     credenciales: { acento: 'var(--mod-credenciales)', suave: 'var(--mod-credenciales-suave)' },
+    portal_clientes: { acento: 'var(--mod-portal)', suave: 'var(--mod-portal-suave)' },
     hompy: { acento: 'var(--mod-hompy)', suave: 'var(--mod-hompy-suave)' }
   };
   // Barra lateral, segunda versión (2026-10-05): cada área con su color, para reconocerla de lejos.
@@ -1305,7 +1309,7 @@
     // Sin esta guarda, renderNavAhora_ moria con una excepcion y el sidebar
     // quedaba VACIO: la persona no veia ni Inicio para reintentar.
     var cuenta = (sesion && sesion.cuenta) || {};
-    var propios = (cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m] && !esDepartamento_(m) && m !== 'finanzas' && m !== 'credenciales'; })
+    var propios = (cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m] && !esDepartamento_(m) && m !== 'finanzas' && m !== 'credenciales' && m !== 'portal_clientes'; })
       .concat((cuenta.departamentos || []).filter(esDepartamento_));
     // Quien es jefatura de un área tiene "Mi equipo" dentro de ella: el módulo
     // suelto "Mi departamento" queda para las jefaturas sin área (2026-10-03).
@@ -1313,6 +1317,7 @@
     // Finanzas: solo la lista fija de la bóveda (la sesión trae cuenta.finanzas).
     if (cuenta.finanzas === true) propios.push('finanzas');
     if (cuenta.credenciales === true) propios.push('credenciales');
+    if (cuenta.portal_clientes === true) propios.push('portal_clientes');
     // Solicitudes, etapa 2: quien está en la lista de un departamento recibe
     // sus pedidos en la Bandeja (la cola del área), tenga o no el módulo.
     if ((cuenta.colas_solicitudes || []).length && propios.indexOf('bandeja') === -1) propios.push('bandeja');
@@ -1348,7 +1353,7 @@
     { titulo: 'Mi espacio', modulos: ['home', 'novedades', 'mi_trabajo', 'bandeja'] },
     // Cada persona ve solo su(s) área(s); el orden es el del organigrama.
     { titulo: 'Áreas', modulos: IDS_DEPARTAMENTO.concat(['hompy', 'proyectos', 'jefatura', 'gerencia', 'pausas_coordinacion', 'calidad']) },
-    { titulo: 'Sistema', modulos: ['administracion'] }
+    { titulo: 'Sistema', modulos: ['administracion', 'portal_clientes'] }
   ];
   var FUERA_DEL_RIEL = ['mis_solicitudes', 'pausas'];
 
@@ -1552,7 +1557,7 @@
   // el contenedor ancho, como app.html. Los demas (formulario, mis
   // solicitudes) se leen mejor angostos y centrados -- por eso el ancho del
   // <main> se adapta al modulo en vez de ser fijo.
-  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad', 'hompy', 'finanzas'].concat(IDS_DEPARTAMENTO);
+  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad', 'hompy', 'finanzas', 'portal_clientes'].concat(IDS_DEPARTAMENTO);
 
   // SIGSO v2 (documentacion/SIGSO-v2-hoja-de-ruta.md). Desde el 2026-09-25 la
   // versión clásica está retirada: cada módulo tiene UNA implementación, la v2.
@@ -1718,6 +1723,7 @@
     // Finanzas: sin auto-refresco a propósito (mantendría la bóveda abierta).
     if (id === 'finanzas' && window.SigsoFinanzas) window.SigsoFinanzas.cargar();
     if (id === 'credenciales' && window.SigsoCredenciales) window.SigsoCredenciales.cargar();
+    if (id === 'portal_clientes' && window.SigsoPortalClientesAdmin) window.SigsoPortalClientesAdmin.cargar();
     if (id === 'hompy' && window.SigsoHompy) window.SigsoHompy.cargar();
     if (id === 'pausas' && moduloImpl_('pausas')) {
       moduloImpl_('pausas').cargar();

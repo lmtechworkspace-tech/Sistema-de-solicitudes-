@@ -242,6 +242,10 @@ function registrar_(db, { solicitudId, destinatario, evento, resultado, reintent
 // PENDIENTE_REINTENTO, para que procesarColaCorreo lo reintente despues.
 async function enviarCorreo_(db, { solicitudId, destinatario, evento, asunto, cuerpo, cc, ventanaMinutos }) {
   if (!destinatario) return { enviado: false, motivo: 'sin_destinatario' };
+  // Portal de clientes (2026-10-07): un contratista sin correo queda con una
+  // dirección «@portal.invalid» (dominio reservado, RFC 2606). Sus avisos van
+  // por el portal; aquí no se intenta enviar ni se cuenta como falla.
+  if (/\.invalid$/i.test(String(destinatario).trim())) return { enviado: false, motivo: 'sin_correo' };
   // v7.5: si el Admin apago el correo de la categoria de este evento, no se
   // manda (la alerta en vivo, si la hay, es una cola aparte y no se toca).
   if (!correoActivoParaEvento_(db, evento)) {
