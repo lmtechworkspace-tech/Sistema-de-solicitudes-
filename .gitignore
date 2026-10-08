@@ -1,4 +1,5 @@
 node_modules/
+.auditoria-codex/
 .clasp.json
 .claude/settings.local.json
 *.log

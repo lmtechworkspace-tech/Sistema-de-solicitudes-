@@ -14,6 +14,7 @@ const { agregarFila_, actualizarFilaPorId_, eliminarFilasPorId_, leerFilas_ } = 
 const { COLUMNAS, asegurarDirectorioPersonas_ } = require('../db/schema');
 const { errorValidacion, errorForbidden } = require('./errores');
 const Hash = require('./passwordHash');
+const Sesiones = require('./sesiones');
 const { parsearListaPortal, normalizarUsuario } = require('./portal');
 
 // Plantilla de modulos por rol (§2.3). Solo aplica al CREAR la cuenta (o al
@@ -219,12 +220,24 @@ function actualizar(db, data) {
   return { cuenta_id: data.cuenta_id, actualizado: Object.keys(cambios) };
 }
 
+// Auditoría Codex 2026-10-08 (hallazgo 3): una clave puesta por la administración
+// cierra TODAS las sesiones de esa cuenta (igual que la recuperación por correo):
+// quien seguía dentro con la clave vieja queda fuera. Juntos o nada.
+function cambiarClaveYCerrarSesiones_(db, cuentaId, cambios) {
+  db.exec('BEGIN');
+  try {
+    actualizarFilaPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', cuentaId, cambios);
+    Sesiones.revocarSesionesDeCuenta(db, cuentaId);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+
 function resetearPassword(db, data) {
   const cuenta = buscarCuenta(db, data.cuenta_id);
   if (!cuenta) return errorValidacion('cuenta_id', 'Cuenta no encontrada.');
   const claveTemporal = Hash.generarClaveTemporal();
   const salt = Hash.generarSalt();
-  actualizarFilaPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', data.cuenta_id, {
+  cambiarClaveYCerrarSesiones_(db, data.cuenta_id, {
     salt: salt,
     hash_password: Hash.hashPassword(claveTemporal, salt),
     debe_cambiar_password: true
@@ -262,7 +275,7 @@ function asignarPassword(db, data) {
   const password = String(data.password || '');
   if (password.length < 8) return errorValidacion('password', 'La clave debe tener al menos 8 caracteres.');
   const salt = Hash.generarSalt();
-  actualizarFilaPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', data.cuenta_id, {
+  cambiarClaveYCerrarSesiones_(db, data.cuenta_id, {
     salt: salt,
     hash_password: Hash.hashPassword(password, salt),
     debe_cambiar_password: true

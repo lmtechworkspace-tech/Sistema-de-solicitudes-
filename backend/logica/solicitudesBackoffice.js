@@ -50,6 +50,24 @@ function fueraDeSuPropioTrabajo_(contexto, subsolicitud, accion) {
   return errorForbidden('Tu cuenta solo puede ' + accion + ' en los items que tiene asignados.');
 }
 
+// Auditoría Codex 2026-10-08 (hallazgo 2): lo mismo para LEER. Una cuenta
+// SOLICITANTE (aunque tenga bandeja) solo abre las solicitudes que pidió o en
+// las que tiene algún ítem asignado. El personal de planta (DEV/ANA reales)
+// sigue viendo el trabajo de sus compañeros: decisión tomada aparte.
+function correosDe_(contexto) {
+  return (contexto && Array.isArray(contexto.emails) && contexto.emails.length ? contexto.emails : [contexto && contexto.email])
+    .map(normalizarEmail_).filter(Boolean);
+}
+function solicitudAjenaParaSolicitante_(contexto, solicitud, items) {
+  if (!contexto || contexto.rol_origen !== 'SOLICITANTE') return null;
+  const mios = correosDe_(contexto);
+  const es = (correo) => mios.indexOf(normalizarEmail_(correo)) !== -1;
+  // correo_cliente cuenta solo si la solicitud es de cliente (mismo criterio que solicitudesPublico).
+  if (es(solicitud.solicitante_email) || (!!solicitud.es_cliente && es(solicitud.correo_cliente)) || es(solicitud.desarrollador_asignado)) return null;
+  if ((items || []).some((i) => es(i.desarrollador_asignado))) return null;
+  return errorForbidden('Tu cuenta solo puede ver las solicitudes que pediste o en las que tienes un ítem asignado.');
+}
+
 // Etapa 2: la JEFATURA de un departamento (su lista en CI_MIEMBROS) actúa
 // sobre todo lo de su departamento aunque no lo tenga asignado; el resto
 // sigue con la regla de arriba (solo lo suyo).
@@ -642,6 +660,10 @@ function getDetalle(db, solicitudId, contexto) {
   const itemsGuardia = obtenerSubsolicitudesDeSolicitud_(db, solicitudId);
   const deptoPropio = itemsGuardia.find((i) => i.depto && rolesDepto[i.depto]);
   const trabajaDepto = itemsGuardia.some((i) => i.depto && Servicios.puedeTrabajar_(rolesDepto[i.depto]));
+  if (!deptoPropio) {
+    const ajena = solicitudAjenaParaSolicitante_(contexto, solicitud, itemsGuardia);
+    if (ajena) return ajena;
+  }
   if (contexto && contexto.rol === 'JEFATURA' && !deptoPropio) {
     const equipoJefe = Jefatura.obtenerEquipoJefe_(db, contexto.email);
     const equipoJefeSet = {};
@@ -718,6 +740,7 @@ function getDetalle(db, solicitudId, contexto) {
 }
 
 module.exports = {
+  correosDe_,
   actualizarEstado, actualizarPrioridad, comprometerFecha, derivarSolicitud,
   editarContenidoSubsolicitud, getDetalle, tomarItem, recibirItems,
   recalcularEstadoDerivado_, calcularEstadoDerivado_,

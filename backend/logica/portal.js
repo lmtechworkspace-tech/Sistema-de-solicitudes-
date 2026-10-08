@@ -161,11 +161,19 @@ function cambiarPassword(db, data) {
   }
 
   const salt = Hash.generarSalt();
-  actualizarFilaPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', cuenta.cuenta_id, {
-    salt: salt,
-    hash_password: Hash.hashPassword(nueva, salt),
-    debe_cambiar_password: false
-  });
+  // Clave nueva y cierre de las otras sesiones juntos: o pasan los dos o ninguno.
+  db.exec('BEGIN');
+  try {
+    actualizarFilaPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', cuenta.cuenta_id, {
+      salt: salt,
+      hash_password: Hash.hashPassword(nueva, salt),
+      debe_cambiar_password: false
+    });
+    // Auditoría Codex 2026-10-08 (hallazgo 3): otra sesión abierta con la clave
+    // vieja (otro equipo, alguien que la conocía) queda fuera; esta sigue.
+    Sesiones.revocarOtrasSesiones(db, cuenta.cuenta_id, data.token);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
   return { ok: true };
 }
 

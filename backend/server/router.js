@@ -834,6 +834,9 @@ function resolverContextoPortal_(db, token) {
   const modulos = Portal.parsearListaPortal(cuenta.modulos);
   return {
     email: emails[0] || '',
+    // Todos los correos de la cuenta: para reconocer «lo suyo» aunque haya
+    // pedido o trabaje con su segundo correo (auditoría Codex 2026-10-08).
+    emails: emails,
     rol: cuenta.rol === 'SOLICITANTE' ? 'DEV' : cuenta.rol,
     rol_origen: cuenta.rol,
     modulos: modulos,

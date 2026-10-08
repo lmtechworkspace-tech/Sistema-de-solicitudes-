@@ -118,6 +118,14 @@ function revocarSesionesDeCuenta(db, cuentaId) {
     .forEach((s) => revocarSesion(db, s.token));
 }
 
+// Auditoría Codex 2026-10-08 (hallazgo 3): al cambiar la contraseña desde la
+// sesión propia, las DEMÁS sesiones de la cuenta quedan fuera; la actual sigue.
+function revocarOtrasSesiones(db, cuentaId, tokenActual) {
+  leerFilas_(db, 'SESIONES_PORTAL', COLUMNAS.SESIONES_PORTAL)
+    .filter((s) => s.cuenta_id === cuentaId && s.token !== tokenActual)
+    .forEach((s) => revocarSesion(db, s.token));
+}
+
 /** Equivalente de purgarSesionesExpiradas_ (Triggers.gs, pase diario). */
 function purgarExpiradas(db) {
   const ahora = Date.now();
@@ -131,6 +139,6 @@ function purgarExpiradas(db) {
 
 module.exports = {
   loginBloqueado, registrarIntentoFallido, limpiarIntentos,
-  crearSesion, crearEnlaceMagico, resolverCuentaPorToken, revocarSesion, revocarSesionesDeCuenta,
+  crearSesion, crearEnlaceMagico, resolverCuentaPorToken, revocarSesion, revocarSesionesDeCuenta, revocarOtrasSesiones,
   purgarExpiradas, esCuentaActiva
 };

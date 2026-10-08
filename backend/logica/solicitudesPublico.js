@@ -29,6 +29,10 @@ const Notificaciones = require('./notificaciones');
 const Sesiones = require('./sesiones');
 const Portal = require('./portal');
 const Cache = require('./cacheEfimero');
+// Código de acceso a «Mis solicitudes»: intentos por código y códigos por correo cada 10 min.
+const INTENTOS_CODIGO_MAX = 5;
+const ENVIOS_CODIGO_MAX = 3;
+const VENTANA_CODIGO_MS = 10 * 60 * 1000;
 const ArchivosSolicitud = require('./archivosSolicitud');
 const DirectorioPersonal = require('./directorioPersonal');
 const CierreAutomatico = require('./cierreAutomaticoSolicitudes');
@@ -270,8 +274,23 @@ async function solicitarCodigoAcceso(db, data) {
     return errorValidacion_('email', 'Debes indicar tu correo.');
   }
   const email = String(data.email).trim().toLowerCase();
-  const codigo = String(Math.floor(100000 + Math.random() * 900000));
+  // Auditoría Codex 2026-10-08 (hallazgo 4): hasta ENVIOS_CODIGO_MAX códigos por
+  // correo cada 10 minutos, para que pedir otro no reinicie los intentos sin fin.
+  // Igual responde ok: no revela nada del correo.
+  // Ventana deslizante (2.ª ronda de Codex): se guarda la hora de cada envío y
+  // solo cuentan los de los últimos 10 minutos.
+  const claveEnvios = 'CODIGO_ACCESO_ENVIOS:' + email;
+  const ahora = Date.now();
+  let envios = [];
+  try { envios = JSON.parse(Cache.get(claveEnvios) || '[]'); } catch (e) { envios = []; }
+  envios = (Array.isArray(envios) ? envios : []).filter((t) => ahora - Number(t) < VENTANA_CODIGO_MS);
+  if (envios.length >= ENVIOS_CODIGO_MAX) return { ok: true };
+  envios.push(ahora);
+  Cache.put(claveEnvios, JSON.stringify(envios), VENTANA_CODIGO_MS / 1000);
+  // crypto.randomInt: Math.random no sirve para códigos de seguridad.
+  const codigo = String(crypto.randomInt(100000, 1000000));
   Cache.put('CODIGO_ACCESO:' + email, codigo, 600);
+  Cache.remove('CODIGO_ACCESO_FALLOS:' + email);
   await Notificaciones.enviarCodigoAcceso(db, data.email, codigo);
   return { ok: true };
 }
@@ -309,9 +328,18 @@ function misSolicitudes(db, data) {
     const clave = 'CODIGO_ACCESO:' + email;
     const codigoValido = Cache.get(clave);
     if (!codigoValido || codigoValido !== String(data.codigo).trim()) {
+      // Auditoría Codex 2026-10-08 (hallazgo 4): tras INTENTOS_CODIGO_MAX fallos el
+      // código deja de servir, aunque después se escriba bien.
+      if (codigoValido) {
+        const claveFallos = 'CODIGO_ACCESO_FALLOS:' + email;
+        const fallos = Number(Cache.get(claveFallos) || 0) + 1;
+        if (fallos >= INTENTOS_CODIGO_MAX) { Cache.remove(clave); Cache.remove(claveFallos); }
+        else Cache.put(claveFallos, String(fallos), 600);
+      }
       return { _forbidden: true, message: 'Código inválido o expirado. Solicita uno nuevo.' };
     }
     Cache.remove(clave); // un solo uso
+    Cache.remove('CODIGO_ACCESO_FALLOS:' + email);
     emails = [data.email];
   }
 

@@ -19,7 +19,7 @@
 
 const { leerFilas_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
-const { errorValidacion } = require('./errores');
+const { errorValidacion, errorForbidden } = require('./errores');
 const { ESTADOS, ESTADOS_CERRADOS, ESTADOS_EXCLUIDOS_DERIVACION } = require('./constantesSolicitudes');
 const Utils = require('./utils');
 const Cumplimiento = require('./cumplimiento');
@@ -400,6 +400,15 @@ function getData(db, filtros, contexto) {
 function getPautaDesarrollador(db, data, contexto) {
   const desarrollador = data && data.desarrollador;
   if (!desarrollador) return errorValidacion('desarrollador', 'Falta indicar el desarrollador.');
+  // Auditoría Codex 2026-10-08 (hallazgo 2): una cuenta SOLICITANTE solo saca su
+  // propia pauta; el personal de planta puede sacar la de un compañero.
+  if (contexto && contexto.rol_origen === 'SOLICITANTE') {
+    const mios = (Array.isArray(contexto.emails) && contexto.emails.length ? contexto.emails : [contexto.email])
+      .map((e) => String(e || '').trim().toLowerCase());
+    if (mios.indexOf(String(desarrollador).trim().toLowerCase()) === -1) {
+      return errorForbidden('Tu cuenta solo puede sacar su propia pauta de trabajo.');
+    }
+  }
 
   const solicitudPorId = {};
   leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).forEach((s) => { solicitudPorId[s.solicitud_id] = s; });
