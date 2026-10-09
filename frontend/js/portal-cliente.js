@@ -53,16 +53,28 @@
   function primerNombre(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
   // Mejora B (D-012): «Para hoy», «Para mañana», «Para el jueves 15» (y el mes si no es este).
   // Solo para fechas que el equipo COMPROMETIÓ; un plazo normal del servicio no es una promesa.
+  // Revisión Codex D-013: días de CALENDARIO de Chile, sin importar la zona del teléfono.
+  // Una fecha sin hora es ese día tal cual; un instante con hora se lleva al día chileno.
+  var FMT_CL = (function () { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }); } catch (e) { return null; } })();
+  function diaChile(v) {
+    var s = v instanceof Date ? '' : String(v || '');
+    var m = /^(\d{4})-(\d{2})-(\d{2})(?:$|T00:00(?::00(?:\.0+)?)?(?:Z|[+-]00:?00)?$)/.exec(s);
+    if (m) return m[1] + '-' + m[2] + '-' + m[3];
+    var d = v instanceof Date ? v : new Date(s);
+    if (isNaN(d)) return '';
+    return FMT_CL ? FMT_CL.format(d) : d.toISOString().slice(0, 10);
+  }
+  function diasEntre(a, b) { var x = a.split('-').map(Number), y = b.split('-').map(Number); return Math.round((Date.UTC(y[0], y[1] - 1, y[2]) - Date.UTC(x[0], x[1] - 1, x[2])) / 864e5); }
   function paraCuando(v) {
-    var m = /^(d{4})-(d{2})-(d{2})/.exec(String(v || ''));
-    if (!m) return '';
-    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])), h = new Date(); h.setHours(0, 0, 0, 0);
-    var dias = Math.round((d - h) / 864e5);
+    var k = diaChile(v);
+    if (!k) return '';
+    var hoy = diaChile(new Date()), dias = diasEntre(hoy, k);
     if (dias === 0) return 'Para hoy';
     if (dias === 1) return 'Para mañana';
-    var dia = d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric' }).replace(',', '');
-    var mes = d.getMonth() !== h.getMonth() || d.getFullYear() !== h.getFullYear() ? ' de ' + d.toLocaleDateString('es-CL', { month: 'long' }) : '';
-    return (dias < 0 ? 'Era para el ' : 'Para el ') + dia + mes;
+    var p = k.split('-').map(Number), h = hoy.split('-').map(Number), u = new Date(Date.UTC(p[0], p[1] - 1, p[2], 12));
+    var dia = u.toLocaleDateString('es-CL', { timeZone: 'UTC', weekday: 'long', day: 'numeric' }).replace(',', '');
+    var mes = p[1] !== h[1] || p[0] !== h[0] ? ' de ' + u.toLocaleDateString('es-CL', { timeZone: 'UTC', month: 'long' }) : '';
+    return (dias < 0 ? 'Era para el ' : 'Para el ') + dia + mes + (p[0] !== h[0] ? ' de ' + p[0] : '');
   }
   function fecha(v, conHora) {
     if (!v) return '';

@@ -156,6 +156,17 @@ De las mejoras de D-005 el dueño eligió A (E3-10), B (E3-11) y C (E3-12). Impl
 - **Pruebas en navegador** (datos ficticios): portal 25/25 (inicio con una área → filas ≥ 72 px y avisos al final; «Te toca» primero con confirmación; «Aún no tenemos una fecha») y Bandeja 19/19 (cuentas por origen, «Clientes» acota tabla, «Plazo» cabe, «Próximo paso» → «Ir» enfoca la fecha, «Mañana» la llena).
 - Cruce: el rediseño de la Bandeja con Claude Design (brief 2) sigue pendiente; estas mejoras usan los componentes actuales.
 
+Mejoras A, B y C subidas a main a pedido del dueño ANTES del informe de Codex: commit `a3462ce`.
+
+### D-013 · Revisión de Codex de las mejoras A, B y C — 1.ª ronda (2026-10-09, informe real `.auditoria-codex/2026-10-09T01-41*`)
+Veredicto: A CUMPLE; B y C PARCIALES. Cuatro defectos, confirmados y corregidos (sin commit):
+1. **Fechas comprometidas mal en producción** → `paraCuando` (portal) y `diaCorto` (Bandeja) tenían el patrón `d{4}` sin la barra invertida (se perdió al escribirlo desde bash): el portal omitía la fecha y la Bandeja caía en `new Date('AAAA-MM-DD')` (medianoche UTC = día anterior en Chile). Ahora ambos usan `diaChile()` (día civil: una fecha sin hora es ese día; un instante con hora se lleva a America/Santiago con `Intl`) y comparan hoy/mañana con el calendario chileno, independiente de la zona del navegador; muestran el mes cuando cambia y el año cuando difiere. Revisados todos los patrones agregados en la sesión: no quedan otros rotos.
+2. **Hoy/Mañana rápidos en la zona del navegador** → `ponerRapidas` usa `diaChile(new Date())` y `sumarDias` (día civil, sin sumar 24 h); `hoyIso()` (mínimo de los campos) y `fechaSugerida()` (días hábiles) también pasan al calendario chileno. El `min` en zona del navegador ocultaba «Hoy» con el navegador adelantado.
+3. **«Ir» a recibir no abría la acción** → `proximoPaso` genera `acc: 'recibir'` para S01: «Ir» abre «Recibir y dar fecha» y enfoca la fecha.
+4. **El filtro de origen perdía el foco** → tras repintar se enfoca el botón equivalente.
+Pruebas en navegador con el navegador en **Asia/Tokyo**: Bandeja 23/23 («Plazo» y «Hoy» con el día de Chile, «Ir» en S01 abre «Recibir», foco del filtro) y portal 24/24 (fecha prometida en palabras: «Para el miércoles 14»).
+Lección (también en la memoria del proyecto): código con barras invertidas NUNCA se escribe a través de `node -e` en bash; usar Edit/Write.
+
 ## Pendiente
 - (D-003, de Codex) Recuperar el acceso cuando el pase vence con un formulario de edición/respuesta abierto: hoy solo la consulta pide el código otra vez; las demás acciones muestran el mensaje de error.
 - (D-003, de Codex) Ampliar pruebas: caducidad del pase, reinicio, sesión revocada.

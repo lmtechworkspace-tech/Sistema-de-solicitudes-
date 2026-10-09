@@ -118,15 +118,30 @@
   }
   // Mejora C (D-012): «Plazo» en vez de «Antigüedad». Lo que importa al priorizar es cuándo
   // vence lo prometido (o que no hay promesa / responsable / se espera al cliente).
-  function diaCorto(v) {
-    var m = /^(d{4})-(d{2})-(d{2})/.exec(String(v || '')), d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v);
+  // Revisión Codex D-013: días de CALENDARIO de Chile, sin importar la zona del navegador.
+  // Una fecha sin hora es ese día tal cual; un instante con hora se lleva al día chileno.
+  var FMT_CL = (function () { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }); } catch (e) { return null; } })();
+  function diaChile(v) {
+    var s = v instanceof Date ? '' : String(v || '');
+    var m = /^(\d{4})-(\d{2})-(\d{2})(?:$|T00:00(?::00(?:\.0+)?)?(?:Z|[+-]00:?00)?$)/.exec(s);
+    if (m) return m[1] + '-' + m[2] + '-' + m[3];
+    var d = v instanceof Date ? v : new Date(s.replace(' ', 'T'));
     if (isNaN(d)) return '';
-    var h = new Date(); h.setHours(0, 0, 0, 0); d.setHours(0, 0, 0, 0);
-    var n = Math.round((d - h) / 864e5);
+    return FMT_CL ? FMT_CL.format(d) : d.toISOString().slice(0, 10);
+  }
+  function sumarDias(clave, n) { var p = clave.split('-').map(Number), u = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)); return u.toISOString().slice(0, 10); }
+  function diasEntre(a, b) { var x = a.split('-').map(Number), y = b.split('-').map(Number); return Math.round((Date.UTC(y[0], y[1] - 1, y[2]) - Date.UTC(x[0], x[1] - 1, x[2])) / 864e5); }
+  function diaCorto(v) {
+    var k = diaChile(v);
+    if (!k) return '';
+    var hoy = diaChile(new Date()), n = diasEntre(hoy, k);
     if (n === 0) return 'hoy';
     if (n === 1) return 'mañana';
     if (n === -1) return 'ayer';
-    return d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric' }).replace('.', '').replace(',', '') + (Math.abs(n) > 6 ? ' ' + d.toLocaleDateString('es-CL', { month: 'short' }).replace('.', '') : '');
+    var p = k.split('-').map(Number), h = hoy.split('-').map(Number), u = new Date(Date.UTC(p[0], p[1] - 1, p[2], 12));
+    var txt = u.toLocaleDateString('es-CL', { timeZone: 'UTC', weekday: 'short', day: 'numeric' }).replace('.', '').replace(',', '');
+    if (Math.abs(n) > 6 || p[1] !== h[1]) txt += ' ' + u.toLocaleDateString('es-CL', { timeZone: 'UTC', month: 'short' }).replace('.', '');
+    return txt + (p[0] !== h[0] ? ' ' + p[0] : '');
   }
   function plazoInfo(i) {
     if (!abierto(i)) return i.estado === 'S08' ? { t: 'Por validar', c: 'ok', k: 7 } : { t: '—', c: '', k: 9 };
@@ -400,11 +415,12 @@
   // La fecha que se propone al recibir: el plazo del ítem en días hábiles (jornada de 9 h), mínimo 1.
   function fechaSugerida(it) {
     var dias = Math.max(1, Math.ceil((Number(it && it.sla_objetivo_horas) || 27) / 9));
-    var d = new Date();
-    while (dias > 0) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) dias--; }
-    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    // D-013: se cuenta en días hábiles del calendario de Chile, no del navegador.
+    var k = diaChile(new Date());
+    while (dias > 0) { k = sumarDias(k, 1); var dw = new Date(k + 'T12:00:00Z').getUTCDay(); if (dw !== 0 && dw !== 6) dias--; }
+    return k;
   }
-  function hoyIso() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function hoyIso() { return diaChile(new Date()); }
 
   // «3 ítems: 1 nueva · 1 esperando respuesta · 1 resuelta (espera validación)».
   var VIS_TXT = { NUEVA: ['nueva', 'nuevas'], EN_CURSO: ['en curso', 'en curso'], ESPERANDO: ['esperando respuesta', 'esperando respuesta'], RESUELTA: ['resuelta (espera validación)', 'resueltas (esperan validación)'], CERRADA: ['cerrada', 'cerradas'] };
@@ -1033,12 +1049,12 @@
   // avance y al final resume qué no se pudo y por qué.
   // Mejora C (D-012): fechas rápidas bajo cada campo de fecha de la Bandeja (Hoy, Mañana y la
   // sugerida, que es el valor con que se abrió el campo). Respetan el mínimo del campo.
-  function claveLocal(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function ponerRapidas(inp) {
     if (inp.hasAttribute('data-rapidas-ok')) return;
     inp.setAttribute('data-rapidas-ok', '');
-    var hoy = new Date(), man = new Date(); man.setDate(man.getDate() + 1);
-    var ops = [['Hoy', claveLocal(hoy)], ['Mañana', claveLocal(man)]];
+    // Hoy y mañana del calendario de Chile (D-013), no del navegador.
+    var hoy = diaChile(new Date());
+    var ops = [['Hoy', hoy], ['Mañana', sumarDias(hoy, 1)]];
     var sug = inp.defaultValue;
     if (sug && sug !== ops[0][1] && sug !== ops[1][1]) ops.push(['Sugerida (' + diaCorto(sug) + ')', sug]);
     var min = inp.getAttribute('min') || '';
@@ -1496,7 +1512,7 @@
       var t = function (it) { return subs.length > 1 ? ' · ' + it.numero_item + '. ' + it.titulo : ''; };
       var cuando = function (it) { return it.fecha_comprometida ? 'Prometido para ' + diaCorto(it.fecha_comprometida) : 'Sin fecha prometida'; };
       var paso = null, x;
-      if ((x = abiertos.filter(function (it) { return it.estado === 'S01'; })[0])) paso = { it: x, txt: 'Recibirlo y darle fecha', acc: '' };
+      if ((x = abiertos.filter(function (it) { return it.estado === 'S01'; })[0])) paso = { it: x, txt: 'Recibirlo y darle fecha', acc: 'recibir' };
       else if ((x = abiertos.filter(function (it) { return it.estado !== 'S06' && !it.fecha_comprometida; })[0])) paso = { it: x, txt: 'Darle fecha', acc: 'fecha' };
       else if ((x = abiertos.filter(function (it) { return ['S02', 'S03', 'S04'].indexOf(it.estado) !== -1; })[0])) paso = { it: x, txt: 'Empezarlo', acc: '' };
       else if ((x = abiertos.filter(function (it) { return ['S05', 'S07'].indexOf(it.estado) !== -1; })[0])) paso = { it: x, txt: 'Resolverlo', acc: 'resolver' };
@@ -2092,7 +2108,14 @@
       return;
     }
     if ((b = t.closest('.js-bj2-vista'))) { f.vista = b.getAttribute('data-id'); pintar(); if (f.vista === 'reportes' && !rep_.datos) cargarReporte(); return; }
-    if ((b = t.closest('.js-bj2-origen'))) { f.origen = b.getAttribute('data-id'); try { localStorage.setItem('sigso_bj2_origen', f.origen); } catch (e) { /* sin storage */ } mostrar_ = POR_PAGINA; pintar(true); return; }
+    if ((b = t.closest('.js-bj2-origen'))) {
+      f.origen = b.getAttribute('data-id'); try { localStorage.setItem('sigso_bj2_origen', f.origen); } catch (e) { /* sin storage */ }
+      mostrar_ = POR_PAGINA; pintar(true);
+      // D-013: el repintado reemplaza el botón; el foco vuelve al mismo filtro (teclado).
+      var nuevo = document.querySelector('.js-bj2-origen[data-id="' + f.origen + '"]');
+      if (nuevo) nuevo.focus({ preventScroll: true });
+      return;
+    }
     if ((b = t.closest('.js-bj2-densidad'))) { f.densidad = b.getAttribute('data-id'); try { localStorage.setItem('sigso_bj2_densidad', f.densidad); } catch (e) { /* sin storage */ } pintar(true); return; }
     if ((b = t.closest('.js-bj2-rep-excel'))) { excelReporte(b); return; }
     if ((b = t.closest('.js-bj2-rep-abrir'))) { abrirDetalle(b.getAttribute('data-sol'), b.getAttribute('data-sub')); return; }
