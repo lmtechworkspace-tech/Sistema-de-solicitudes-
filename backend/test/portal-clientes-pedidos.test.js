@@ -203,3 +203,84 @@ test('archivos del portal: cada lado tiene su cupo, la miniatura no llena el reg
     assert.equal(filas(db, 'PORTAL_REGISTRO').filter((x) => x.accion === 'DESCARGA').length, antes + 1);
   } finally { Almacen.subirArchivo_ = orig.s; Almacen.descargarArchivo_ = orig.d; }
 });
+
+test('auditoría Codex E1-3: reintentar el mismo envío no duplica el pedido (intento_id)', async () => {
+  const db = dbPortal();
+  const tok = await activado(db, 'CLI-1', RUT_PEDRO, 'Pedro Sáez');
+  const pedido = { cliente_token: tok, plantilla_id: 'f30', datos: { mes: 'septiembre' }, intento_id: 'int-abc-1' };
+  const nSol = () => filas(db, 'SOLICITUDES').length;
+  const r1 = await cliente(db, 'clienteCrearPedido', pedido);
+  assert.equal(r1.status, 200, JSON.stringify(r1.body));
+  const r2 = await cliente(db, 'clienteCrearPedido', pedido);
+  assert.equal(r2.status, 200, JSON.stringify(r2.body));
+  assert.equal(r2.body.data.solicitud_id, r1.body.data.solicitud_id, 'mismo intento → misma solicitud');
+  assert.equal(r2.body.data.repetido, true);
+  assert.equal(nSol(), 1);
+  // Dos envíos simultáneos del mismo intento: una sola solicitud.
+  const dobles = Object.assign({}, pedido, { intento_id: 'int-abc-2' });
+  const [a, b] = await Promise.all([cliente(db, 'clienteCrearPedido', dobles), cliente(db, 'clienteCrearPedido', dobles)]);
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.equal(b.status, 200, JSON.stringify(b.body));
+  assert.equal(a.body.data.solicitud_id, b.body.data.solicitud_id);
+  assert.equal(nSol(), 2);
+  // Mismo intento con otro contenido: se rechaza (no se reutiliza en silencio).
+  const r3 = await cliente(db, 'clienteCrearPedido', Object.assign({}, pedido, { datos: { mes: 'octubre' } }));
+  assert.notEqual(r3.status, 200);
+  assert.equal(nSol(), 2);
+  // Sin intento_id (clientes antiguos) se comporta como siempre.
+  const r4 = await cliente(db, 'clienteCrearPedido', { cliente_token: tok, plantilla_id: 'f30', datos: { mes: 'septiembre' } });
+  assert.equal(r4.status, 200);
+  assert.equal(nSol(), 3);
+});
+
+test('revisión Codex T1-3: si un aviso falla tras guardar, el reintento del mismo intento no duplica y el pedido queda del cliente', async () => {
+  const db = dbPortal();
+  const tok = await activado(db, 'CLI-1', RUT_PEDRO, 'Pedro Sáez');
+  const Notif = require('../logica/notificaciones');
+  const original = Notif.enviarAcuseRecibo;
+  Notif.enviarAcuseRecibo = async () => { throw new Error('aviso caído (prueba)'); };
+  const pedido = { cliente_token: tok, plantilla_id: 'contrato', personas: [{ nombre: 'Juan Pérez', cargo: 'Maestro' }], intento_id: 'int-falla-1' };
+  try {
+    // El servidor HTTP convierte la excepción en un 500; aquí se mira directo.
+    const r1 = await cliente(db, 'clienteCrearPedido', pedido).catch((e) => ({ status: 500, error: e }));
+    assert.notEqual(r1.status, 200, 'el primer envío falló');
+  } finally { Notif.enviarAcuseRecibo = original; }
+  const sols = filas(db, 'SOLICITUDES');
+  assert.equal(sols.length, 1);
+  assert.equal(sols[0].cliente_id, 'CLI-1', 'el vínculo quedó guardado con la solicitud');
+  assert.ok(sols[0].intento_portal, 'y la marca del intento');
+  assert.equal(filas(db, 'PORTAL_TRABAJADORES').filter((t) => t.cliente_id === 'CLI-1').length, 1, 'el trabajador también');
+  const r2 = await cliente(db, 'clienteCrearPedido', pedido);
+  assert.equal(r2.status, 200, JSON.stringify(r2.body));
+  assert.equal(r2.body.data.repetido, true);
+  assert.equal(r2.body.data.solicitud_id, sols[0].solicitud_id);
+  assert.equal(filas(db, 'SOLICITUDES').length, 1, 'sin duplicado');
+});
+
+test('revisión Codex T1 (2.ª ronda): si falla guardar un trabajador, no queda nada a medias y el reintento crea un pedido completo', async () => {
+  for (const enCual of [1, 2]) {
+    const db = dbPortal();
+    const tok = await activado(db, 'CLI-1', RUT_PEDRO, 'Pedro Sáez');
+    const antesTrab = filas(db, 'PORTAL_TRABAJADORES').length;
+    // Falla la inserción del trabajador número `enCual` (simula un error de SQLite).
+    db.exec('CREATE TABLE prueba_cuenta (n INTEGER)'); db.exec('INSERT INTO prueba_cuenta VALUES (0)');
+    db.exec('CREATE TRIGGER prueba_falla BEFORE INSERT ON "PORTAL_TRABAJADORES" BEGIN ' +
+      'UPDATE prueba_cuenta SET n = n + 1; SELECT CASE WHEN (SELECT n FROM prueba_cuenta) >= ' + enCual + " THEN RAISE(ABORT, 'falla de prueba') END; END");
+    const pedido = { cliente_token: tok, plantilla_id: 'contrato', intento_id: 'int-trab-' + enCual,
+      personas: [{ nombre: 'Juan Pérez', cargo: 'Maestro' }, { nombre: 'Ana Rojas', cargo: 'Ayudante' }] };
+    const r1 = await cliente(db, 'clienteCrearPedido', pedido).catch((e) => ({ status: 500, error: e }));
+    assert.notEqual(r1.status, 200, 'falló al guardar el trabajador ' + enCual);
+    assert.equal(filas(db, 'SOLICITUDES').length, 0, 'sin solicitud marcada');
+    assert.equal(filas(db, 'SUBSOLICITUDES').length, 0, 'sin ítems huérfanos');
+    assert.equal(filas(db, 'PORTAL_TRABAJADORES').length, antesTrab, 'sin trabajadores parciales');
+    db.exec('DROP TRIGGER prueba_falla');
+    const r2 = await cliente(db, 'clienteCrearPedido', pedido);
+    assert.equal(r2.status, 200, JSON.stringify(r2.body));
+    assert.notEqual(r2.body.data.repetido, true, 'es el primer pedido que de verdad quedó guardado');
+    assert.equal(filas(db, 'SOLICITUDES').length, 1);
+    const subs = filas(db, 'SUBSOLICITUDES');
+    assert.equal(subs.length, 2);
+    assert.ok(subs.every((x) => x.trabajador_id), 'cada ítem con su trabajador');
+    assert.equal(filas(db, 'PORTAL_TRABAJADORES').length, antesTrab + 2);
+  }
+});

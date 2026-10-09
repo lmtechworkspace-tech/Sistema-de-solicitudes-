@@ -69,6 +69,50 @@ Codex: **H1, H2 y H3 quedaron corregidos**. H4 corregía los fallos en serie per
 - Suite 1725/1725 (`TZ=America/Santiago`); 17 pruebas en el archivo de auditoría.
 - Esta corrección de la 2.ª ronda **no** tuvo una tercera revisión de Codex (límite de dos rondas). Si el dueño quiere, se revisa en una auditoría acotada aparte.
 
+### D-005 · Ecosistema de clientes: Portal, Bandeja y visual (pedido del dueño, 2026-10-08)
+El dueño pidió auditar el ecosistema de la app para clientes (portal del contratista + módulo Portal de clientes) y la Bandeja de trabajo, resolver problemas y proponer mejoras significativas operativas y visuales (app, animaciones, interacciones). Tres auditorías reales de Codex (informes en `.auditoria-codex/2026-10-08T20-58*`, `T21-01*`, `T21-05*`):
+
+| Informe | Defectos | Mejoras |
+|---|---|---|
+| E1 · Portal de clientes, operativo y seguridad | 7 | 3 |
+| E2 · Bandeja de trabajo, operativo | 9 | 2 |
+| E3 · Visual, animaciones e interacciones (con las capturas de `documentacion/claude-design/`) | 9 | 6 |
+
+Plan acordado (Claude implementa; Codex revisa cada tanda):
+- **Tanda 1 — defectos P1:** E1-2 sesión del portal con almacenamiento bloqueado; E1-3 pedido duplicado al reintentar (idempotencia); E1-6/E3-1 errores de carga mostrados como vacío; E2-1 escritura con membresía LECTURA o JEFATURA de otro departamento; E2-2 conversación en solicitudes ajenas; E2-3 el plazo (SLA) de la cola no se pausa esperando al solicitante; E2-4 respuesta pendiente por ítem; E3-2 contraste AA de tokens; E3-3 foco atrapado en diálogos.
+- **Tanda 2 — defectos P2:** E1-4, E1-5, E1-7, E2-5…E2-9, E3-4…E3-9.
+- **Mejoras:** se presentan al dueño priorizadas para que elija (E1-8 membresías en varias empresas y E1-9 permisos ADMIN/COLABORADOR requieren su decisión de negocio).
+- **E1-1 (config apuntando a localhost):** descartado como defecto del repositorio — es el `config.js` local de desarrollo, que nunca se sube; se toma la sugerencia de un control en el empaquetado que rechace direcciones locales.
+- Cruce: la Bandeja tiene un rediseño visual en curso con Claude Design (brief 2). Las mejoras visuales de E3 se presentan al dueño como insumo para decidir.
+
+### D-006 · Tanda 1 implementada por Claude (2026-10-08, sin commit; espera revisión de Codex)
+- **E2-1** `solicitudesBackoffice.vetoFueraDeAlcance_`: membresía LECTURA no escribe (salvo ADM); JEFATURA de cuenta solo escribe en ítems suyos, de su departamento con rol de trabajo o de su equipo; JEFATURA de departamento sí. Se aplica también a `derivarSolicitud` por ítem. D-001 (DEV/ANA cubren a compañeros) se mantiene.
+- **E2-2** `comentarios.js`: el ítem debe ser de la solicitud (400); mensaje de ítem → mismo veto; mensaje general → no ajena para SOLICITANTE y al menos un ítem escribible. `es_interno` solo con true/'true'/1.
+- **E2-3** `cumplimiento.medir` acepta `pausas`/`historial` (tramos S06 vía `pausasEsperandoSolicitante`, común con el reporte) y detiene el reloj en `fecha_terminada` en S08. Cola, detalle y reporte usan el mismo cálculo.
+- **E2-4** `dashboard.respuestaPendienteLectura_` y `escribioSolicitante_` por ítem y solo con comentarios públicos del solicitante.
+- **E1-2** portal: el token vive en memoria de la pestaña (se toma del almacenamiento la primera vez); `localStorage`/`sessionStorage` bloqueados o borrados no cortan la sesión abierta.
+- **E1-3** idempotencia: el teléfono genera `intento_id` por pedido y lo repite en los reintentos; el servidor guarda `SOLICITUDES.intento_portal` = `cliente|contacto|intento|huella` (sha256 del contenido). Mismo intento y contenido → misma solicitud (`repetido: true`); simultáneos → la misma promesa; mismo intento con otro contenido → 400. Sin `intento_id` funciona como antes.
+- **E1-6/E3-1** portal: cada recurso (catálogo, pedidos, trabajadores, documentos) guarda su error; la pantalla muestra «No pudimos cargar…» (`role=alert`) con «Intentar de nuevo», en vez de un vacío.
+- **E3-2** `tokens.css`: `--texto-3` #636C7D claro (5,29:1) / #8590A3 oscuro (5,37:1); nuevos `--sobre-primario` y `--sobre-critico` (blanco en claro, #0F172A en oscuro) → `--sx-sobre-*`, aplicados a 25 reglas con texto blanco fijo sobre acento/rojo. La barra lateral (fondo azul marino fijo) no cambia.
+- **E3-3** `ui-v2.js` `abrirCapa/cerrarCapa` (exportados): activador recordado, `inert` en los hermanos de la capa superior (salvo `aria-live`/status/alert), Tab y Shift+Tab giran, restauración al activador o a su equivalente (id o primer data-*) o al h1; `confirmar` con `peligro` enfoca Cancelar; confirmación sobre drawer deja el drawer inerte. Portal: `MutationObserver` sobre `#capa` hace lo mismo con `#app` (cubre ayuda, visor y formularios). Ojo: `ui-v2.js` también corre en el servidor (PDF con documentoV2, sin `document`): el escucha de Tab va protegido; lo detectó la suite (documento-v2.test.js).
+- **Pruebas:** `backend/test/auditoria-codex-ecosistema.test.js` (E2-1…E2-4), `portal-clientes-pedidos.test.js` (E1-3: repetido, simultáneo, otro contenido, sin intento — detectó y se corrigió un error de separador en la clave). Navegador (Chrome sin ventana, datos ficticios): 14/14 — error de carga y reintento, sesión sin almacenamiento, foco en ayuda/drawer/confirmar, contraste calculado en claro y oscuro.
+
+### D-007 · Revisión de Codex de la Tanda 1 — 1.ª ronda (2026-10-09, informe real `.auditoria-codex/2026-10-09T00-18*`)
+Veredicto: CORREGIDOS E1-2, E2-2, E2-3; PARCIALES E1-3, E1-6, E2-1, E2-4, E3-2, E3-3. Seis hallazgos nuevos, los seis confirmados y corregidos por Claude:
+1. **ANA con LECTURA cambiaba prioridad y reasignaba** → `actualizarPrioridad` y `asignarResponsables_` pasan por `vetoFueraDeAlcance_` (reasignar toda la solicitud valida CADA ítem antes de escribir; el ítem debe ser de esa solicitud). ANA sin esa membresía conserva su autoridad global (RN-008).
+2. **GERENCIA con membresía de trabajo tomaba ítems** → `tomarItem` la veta al inicio, antes de derivar, y revisa el resultado del cambio de estado.
+3. **Marca de idempotencia guardada después de los avisos** → `Solicitudes.crearSolicitud(db, data, opciones)`: `filaSolicitud` (cliente, contacto, intento) va en la MISMA inserción y `alPersistir` (trabajadores) corre antes de esperar avisos. Si el acuse falla, el reintento devuelve la misma solicitud. Sin índice único en SQLite: SIGSO corre en un solo proceso y el mapa en memoria cubre la concurrencia.
+4. **Documentos sin estado de error** → `cargarDocs` usa `recargar('docs')`; la vista muestra el aviso también con la lista anterior.
+5. **En S06 la respuesta del equipo no limpiaba el pendiente** → `respuestaPendienteLectura_` compara el último mensaje público del solicitante con la última respuesta pública del equipo en ese ítem (o general), desde la entrada a S06.
+6. **Contraste y foco** → celda de calor nivel 4 con acento pleno (5,67:1 / 6,88:1); el portal anota el activador en el momento (`focusin`/`click` en captura) y no al abrir la capa.
+Pruebas: 4 nuevas en backend (T1-1, T1-2, T1-3 con acuse que falla, T1-5) y 2 en navegador (formulario con foco inmediato, documentos con recarga fallida): navegador 16/16.
+
+### D-008 · Revisión de Codex de la Tanda 1 — 2.ª y última ronda (2026-10-09, informe real `.auditoria-codex/2026-10-09T00-42*`)
+Veredicto: CORREGIDOS H1, H2, H4, H5 de D-007 y E1-6, E2-1, E2-4, E3-3; PARCIALES H3/E1-3 y H6/E3-2. Dos hallazgos, confirmados y corregidos:
+1. **Atomicidad del pedido** → `crearSolicitud` guarda correlativo, ítems, solicitud, historial y `alPersistir` dentro de `SAVEPOINT crear_solicitud` (sirve con o sin transacción exterior); ante cualquier excepción `ROLLBACK TO` y nada queda marcado. Prueba: un trigger hace fallar el 1.er y luego el 2.º trabajador → sin solicitud, ítems ni trabajadores; al reintentar, un pedido completo.
+2. **Texto blanco fijo en descendientes** → chips activos (ícono, contador), tarjetas de gravedad (strong/small, sin opacidad) y contadores pasan a `--sx-sobre-primario` o a pastilla de superficie; además 8 círculos de paso sobre `--sx-ok` (blanco daba 3,16:1 en oscuro). `--sx-sobre-*` también en `:root`. Medido en navegador: mínimo 4,94:1 en claro y oscuro.
+Cerrada la revisión de la Tanda 1. Queda para la Tanda 2: blanco fijo sobre colores propios de módulo (naranja de Hompy, color de Finanzas, marca de Credenciales), fuera del alcance de esta auditoría.
+
 ## Pendiente
 - (D-003, de Codex) Recuperar el acceso cuando el pase vence con un formulario de edición/respuesta abierto: hoy solo la consulta pide el código otra vez; las demás acciones muestran el mensaje de error.
 - (D-003, de Codex) Ampliar pruebas: caducidad del pase, reinicio, sesión revocada.

@@ -71,8 +71,29 @@ function solicitudAjenaParaSolicitante_(contexto, solicitud, items) {
 // Etapa 2: la JEFATURA de un departamento (su lista en CI_MIEMBROS) actúa
 // sobre todo lo de su departamento aunque no lo tenga asignado; el resto
 // sigue con la regla de arriba (solo lo suyo).
+//
+// Auditoría Codex 2026-10-08 (D-005, E2-1): una sola regla de escritura por ítem.
+//   - JEFATURA del departamento del ítem: sí.
+//   - LECTURA en el departamento del ítem: no, aunque lo tenga asignado («solo mira»).
+//   - Cuenta con rol JEFATURA (global): solo lo de su equipo, lo asignado a ella o un
+//     departamento donde trabaja (REGISTRA/JEFATURA). Antes podía escribir en todo.
+//   - SOLICITANTE: solo lo suyo (regla de arriba). DEV/ANA/ADM: sin cambio (D-001).
+//   - GERENCIA: la vetan los propios handlers (solo lectura).
 function vetoFueraDeAlcance_(db, contexto, subsolicitud, accion) {
-  if (subsolicitud && subsolicitud.depto && Servicios.rolesEnDeptos_(db, contexto)[subsolicitud.depto] === 'JEFATURA') return null;
+  const rolDepto = subsolicitud && subsolicitud.depto ? Servicios.rolesEnDeptos_(db, contexto)[subsolicitud.depto] : '';
+  if (rolDepto === 'JEFATURA') return null;
+  if (rolDepto === 'LECTURA' && !(contexto && contexto.rol === 'ADM')) {
+    return errorForbidden('En ese departamento tu acceso es de solo lectura: no puedes ' + accion + '.');
+  }
+  if (contexto && contexto.rol === 'JEFATURA') {
+    const suyo = correosDe_(contexto).indexOf(normalizarEmail_(subsolicitud && subsolicitud.desarrollador_asignado)) !== -1;
+    if (suyo || Servicios.puedeTrabajar_(rolDepto)) return null;
+    const solicitud = subsolicitud ? buscarSolicitudPorId_(db, subsolicitud.solicitud_id) : null;
+    const equipo = {};
+    Jefatura.obtenerEquipoJefe_(db, contexto.email).forEach((e) => { equipo[e] = true; });
+    if (solicitud && Jefatura.esDelEquipoJefaturaSolicitud_(solicitud, [subsolicitud], equipo)) return null;
+    return errorForbidden('Ese ítem no es de tu equipo ni de tu departamento: no puedes ' + accion + '.');
+  }
   return fueraDeSuPropioTrabajo_(contexto, subsolicitud, accion);
 }
 
@@ -320,9 +341,13 @@ function asignarResponsables_(db, data, contexto) {
 
   // §13.3: si viene subsolicitud_id, el desarrollador se asigna a ESE item.
   if (data.desarrollador_asignado !== undefined && data.subsolicitud_id !== undefined) {
-    if (!buscarSubsolicitud_(db, data.subsolicitud_id)) {
+    const sub = buscarSubsolicitud_(db, data.subsolicitud_id);
+    if (!sub || sub.solicitud_id !== data.solicitud_id) {
       return errorValidacion('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
     }
+    // Revisión Codex Tanda 1 (hallazgo 1): reasignar también pasa por el veto de alcance.
+    const veto = vetoFueraDeAlcance_(db, contexto, sub, 'reasignar');
+    if (veto) return veto;
     actualizarFilaPorId_(db, 'SUBSOLICITUDES', 'subsolicitud_id', data.subsolicitud_id, { desarrollador_asignado: data.desarrollador_asignado });
     return { solicitud_id: data.solicitud_id, subsolicitud_id: data.subsolicitud_id, desarrollador_asignado: data.desarrollador_asignado };
   }
@@ -332,6 +357,11 @@ function asignarResponsables_(db, data, contexto) {
   if (data.analista_asignado !== undefined) {
     if (contexto.rol !== 'ADM') return errorForbidden('Solo Admin puede reasignar el Analista responsable.');
     cambios.analista_asignado = data.analista_asignado;
+  }
+  // Cambia el responsable de toda la solicitud: se valida CADA ítem antes de escribir.
+  for (const sub of obtenerSubsolicitudesDeSolicitud_(db, data.solicitud_id)) {
+    const veto = vetoFueraDeAlcance_(db, contexto, sub, 'reasignar');
+    if (veto) return veto;
   }
   actualizarFilaPorId_(db, 'SOLICITUDES', 'solicitud_id', data.solicitud_id, cambios);
   return Object.assign({ solicitud_id: data.solicitud_id }, cambios);
@@ -363,6 +393,9 @@ function actualizarPrioridad(db, data, contexto) {
 
   const subsolicitud = buscarSubsolicitud_(db, data.subsolicitud_id);
   if (!subsolicitud) return errorValidacion('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
+
+  const vetoPrio = vetoFueraDeAlcance_(db, contexto, subsolicitud, 'cambiar la prioridad');
+  if (vetoPrio) return vetoPrio;
 
   const prioridadAnterior = subsolicitud.prioridad;
   const slaHoras = obtenerSlaHoras_(db, data.prioridad_nueva);
@@ -505,6 +538,11 @@ async function derivarSolicitud(db, data, contexto) {
   for (const id of ids) {
     const plan = planificarDerivacion_(db, id, data.subsolicitud_id, contexto);
     if (plan._validationError || plan._forbidden) return plan;
+    // D-005 (E2-1): derivar también es escribir; misma regla por ítem, antes de mover nada.
+    for (const item of plan.items) {
+      const veto = vetoFueraDeAlcance_(db, contexto, item, 'derivar');
+      if (veto) return veto;
+    }
     planes.push(plan);
   }
 
@@ -540,6 +578,9 @@ async function derivarSolicitud(db, data, contexto) {
  * antes, se avisa en vez de pisarlo.
  */
 function tomarItem(db, data, contexto) {
+  // Revisión Codex Tanda 1 (hallazgo 2): Gerencia es de solo lectura aunque tenga
+  // membresía de trabajo; se veta ANTES de derivar para no dejar cambios a medias.
+  if (contexto && contexto.rol === 'GERENCIA') return errorForbidden('El rol Gerencia es de solo lectura: no puede tomar ítems.');
   const sub = buscarSubsolicitud_(db, data && data.subsolicitud_id);
   if (!sub) return errorValidacion('subsolicitud_id', 'Ítem no encontrado.');
   if (!sub.depto) return errorForbidden('Solo se toman pedidos que llegan a la cola de un departamento.');
@@ -556,7 +597,8 @@ function tomarItem(db, data, contexto) {
   }
   // Etapa 3: quien lo toma lo empieza -- pasa a En curso (S05) si aún no lo estaba.
   if ([ESTADOS.S01, ESTADOS.S02, ESTADOS.S03, ESTADOS.S04].indexOf(sub.estado) !== -1) {
-    actualizarEstado(db, { subsolicitud_id: sub.subsolicitud_id, estado_nuevo: ESTADOS.S05, comentario: '' }, Object.assign({}, contexto, { rol_origen: '' }));
+    const r = actualizarEstado(db, { subsolicitud_id: sub.subsolicitud_id, estado_nuevo: ESTADOS.S05, comentario: '' }, Object.assign({}, contexto, { rol_origen: '' }));
+    if (r && (r._validationError || r._forbidden)) return r;
   }
   return { subsolicitud_id: sub.subsolicitud_id, desarrollador_asignado: yo };
 }
@@ -677,9 +719,12 @@ function getDetalle(db, solicitudId, contexto) {
   // El semaforo de cumplimiento (v2.1 §6) se calcula aqui, no se guarda.
   let feriadosDetalle = [];
   try { feriadosDetalle = Cumplimiento.obtenerFeriados(db); } catch (err) { /* sin CONFIG_FERIADOS se mide sin excluir feriados */ }
+  // D-005 (E2-3): el SLA del detalle descuenta las esperas al solicitante, igual que la cola y el reporte.
+  let historialDetalle = {};
+  try { historialDetalle = Cumplimiento.historialPorItem(leerFilas_(db, 'HISTORIAL_ESTADOS', COLUMNAS.HISTORIAL_ESTADOS).filter((h) => h.solicitud_id === solicitudId)); } catch (err) { historialDetalle = {}; }
 
   const subsolicitudes = obtenerSubsolicitudesDeSolicitud_(db, solicitudId).map((sub) => {
-    const medicionSla = Cumplimiento.medir(sub, { feriados: feriadosDetalle });
+    const medicionSla = Cumplimiento.medir(sub, { feriados: feriadosDetalle, historial: historialDetalle[sub.subsolicitud_id] });
     const copia = Object.assign({}, sub, {
       cumplimiento: Cumplimiento.clasificar(sub),
       situacion_sla: medicionSla ? medicionSla.situacion : null,
@@ -744,5 +789,6 @@ module.exports = {
   actualizarEstado, actualizarPrioridad, comprometerFecha, derivarSolicitud,
   editarContenidoSubsolicitud, getDetalle, tomarItem, recibirItems,
   recalcularEstadoDerivado_, calcularEstadoDerivado_,
-  buscarSolicitudPorId_, buscarSubsolicitud_, fechaHoraCelda_, vetoFueraDeAlcance_
+  buscarSolicitudPorId_, buscarSubsolicitud_, fechaHoraCelda_, vetoFueraDeAlcance_,
+  solicitudAjenaParaSolicitante_, obtenerSubsolicitudesDeSolicitud_
 };

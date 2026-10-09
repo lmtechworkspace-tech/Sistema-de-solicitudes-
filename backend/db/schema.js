@@ -141,7 +141,10 @@ const COLUMNAS = {
     'cc', 'rut_cliente', 'codigo_cliente', 'atencion_directa', 'proyecto_id',
     // Portal de clientes (2026-10-07): el pedido viene de un contratista. El
     // cliente queda ligado a su ficha (CAT_CLIENTES), no como texto libre.
-    'cliente_id', 'origen', 'contacto_id'
+    'cliente_id', 'origen', 'contacto_id',
+    // D-005 (E1-3): identificador del intento de pedido desde el portal + huella del
+    // contenido, para que un reintento con mala señal no cree un pedido duplicado.
+    'intento_portal'
   ],
   SUBSOLICITUDES: [
     'subsolicitud_id', 'solicitud_id', 'numero_item', 'titulo', 'descripcion',

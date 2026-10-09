@@ -155,15 +155,27 @@ function topN_(agrupado, n) {
 // P5: true si el item sigue "esperando informacion" (S06) Y ya existe un
 // comentario publico posterior a la ULTIMA vez que entro a S06 -- el
 // solicitante ya respondio y el gestor todavia no movio el estado.
-function respuestaPendienteLectura_(subsolicitud, historial, comentariosPublicos) {
+// D-005 (E2-4): solo cuenta un mensaje DEL SOLICITANTE (no uno del equipo), en ese ítem
+// o general. La solicitud da los correos del solicitante.
+function respuestaPendienteLectura_(subsolicitud, historial, comentariosPublicos, solicitud) {
   if (subsolicitud.estado !== ESTADOS.S06) return false;
+  const suyos = correosSolicitante_(solicitud);
   const entradasS06 = historial.filter((h) => h.subsolicitud_id === subsolicitud.subsolicitud_id && h.estado_nuevo === ESTADOS.S06);
   if (entradasS06.length === 0) return false;
   const ultimaEntradaS06 = entradasS06.reduce((masReciente, h) => (new Date(h.timestamp) > new Date(masReciente.timestamp) ? h : masReciente));
-  return comentariosPublicos.some((c) =>
-    (c.subsolicitud_id === subsolicitud.subsolicitud_id || !c.subsolicitud_id) &&
-    c.solicitud_id === subsolicitud.solicitud_id &&
-    new Date(c.timestamp) > new Date(ultimaEntradaS06.timestamp));
+  // Revisión Codex Tanda 1 (hallazgo 5): pendiente = el último mensaje público del
+  // solicitante (tras entrar a S06) es más nuevo que la última respuesta pública del
+  // equipo en ESE ítem (o general). Una respuesta en otro ítem no lo atiende.
+  const desde = new Date(ultimaEntradaS06.timestamp).getTime();
+  let ultimoSuyo = 0, ultimoEquipo = 0;
+  comentariosPublicos.forEach((c) => {
+    if (c.solicitud_id !== subsolicitud.solicitud_id) return;
+    if (c.subsolicitud_id && c.subsolicitud_id !== subsolicitud.subsolicitud_id) return;
+    const t = new Date(c.timestamp).getTime();
+    if (!(t > desde)) return;
+    if (!suyos.length || suyos.indexOf(String(c.usuario || '').toLowerCase()) !== -1) { if (t > ultimoSuyo) ultimoSuyo = t; } else if (t > ultimoEquipo) ultimoEquipo = t;
+  });
+  return ultimoSuyo > 0 && ultimoSuyo > ultimoEquipo;
 }
 
 // Minimo (mas urgente) de horas habiles restantes de SLA entre los items
@@ -303,8 +315,10 @@ function calcularKpis_(db, filtros) {
   const medicionPorSub = {};
   const situacionesPorSolicitud = {};
   const itemsPorSolicitud = {};
+  // D-005 (E2-3): el reloj del SLA descuenta las esperas al solicitante (mismo cálculo que el reporte).
+  const historialItem = Cumplimiento.historialPorItem(historial);
   subsolicitudes.forEach((sub) => {
-    const medicion = Cumplimiento.medir(sub, { feriados: feriados });
+    const medicion = Cumplimiento.medir(sub, { feriados: feriados, historial: historialItem[sub.subsolicitud_id] });
     medicionPorSub[sub.subsolicitud_id] = medicion;
     if (!itemsPorSolicitud[sub.solicitud_id]) { itemsPorSolicitud[sub.solicitud_id] = []; situacionesPorSolicitud[sub.solicitud_id] = []; }
     itemsPorSolicitud[sub.solicitud_id].push(sub);
@@ -330,7 +344,7 @@ function calcularKpis_(db, filtros) {
       situacion_sla: situacionSlaDe_(s.solicitud_id),
       solicitante_nombre: s.solicitante_nombre || '', solicitante_email: s.solicitante_email || '',
       texto_busqueda: textoBusquedaSolicitud_(s, titulosPorSolicitud),
-      respuesta_pendiente: itemsDeEstaSolicitud.some((sub) => respuestaPendienteLectura_(sub, historial, comentariosPublicos))
+      respuesta_pendiente: itemsDeEstaSolicitud.some((sub) => respuestaPendienteLectura_(sub, historial, comentariosPublicos, s))
     };
   });
 
@@ -457,14 +471,22 @@ const ESTADOS_POR_REVISAR = [ESTADOS.S01];
 
 // Etapa 3: el solicitante escribió en la conversación DESPUÉS de lo último
 // que hizo el equipo (un mensaje, una nota o un cambio). Por solicitud.
-function escribioSolicitante_(solicitud, comentarios, historial) {
-  const suyos = [String(solicitud.solicitante_email || '').toLowerCase(), String(solicitud.correo_cliente || '').toLowerCase()].filter(Boolean);
+function correosSolicitante_(solicitud) {
+  return solicitud ? [String(solicitud.solicitante_email || '').toLowerCase(), String(solicitud.correo_cliente || '').toLowerCase()].filter(Boolean) : [];
+}
+// D-005 (E2-4): POR ÍTEM. Un movimiento o mensaje del equipo en el ítem B no atiende lo
+// que el solicitante escribió en el ítem A; los mensajes generales cuentan para todos.
+// Una nota interna del equipo no es una respuesta al solicitante.
+function escribioSolicitante_(solicitud, comentarios, historial, subsolicitudId) {
+  const suyos = correosSolicitante_(solicitud);
+  const delItem = (x) => !subsolicitudId || !x.subsolicitud_id || x.subsolicitud_id === subsolicitudId;
+  const interno = (c) => c.es_interno === true || c.es_interno === 'TRUE' || c.es_interno === 1;
   let ultimoSuyo = 0, ultimoEquipo = 0;
-  comentarios.forEach((c) => {
+  comentarios.filter(delItem).forEach((c) => {
     const t = new Date(c.timestamp).getTime();
-    if (suyos.indexOf(String(c.usuario || '').toLowerCase()) !== -1) { if (!(c.es_interno === true || c.es_interno === 'TRUE') && t > ultimoSuyo) ultimoSuyo = t; } else if (t > ultimoEquipo) ultimoEquipo = t;
+    if (suyos.indexOf(String(c.usuario || '').toLowerCase()) !== -1) { if (!interno(c) && t > ultimoSuyo) ultimoSuyo = t; } else if (!interno(c) && t > ultimoEquipo) ultimoEquipo = t;
   });
-  historial.forEach((h) => {
+  historial.filter((h) => !subsolicitudId || h.subsolicitud_id === subsolicitudId).forEach((h) => {
     const u = String(h.usuario || '').toLowerCase();
     if (u && u !== 'sistema' && suyos.indexOf(u) === -1) { const t = new Date(h.timestamp).getTime(); if (t > ultimoEquipo) ultimoEquipo = t; }
   });
@@ -526,9 +548,11 @@ function getCola(db, filtros, contexto) {
   });
 
   const hoy = Utils.claveDia_(new Date(), 'America/Santiago');
+  // D-005 (E2-3): el reloj del SLA descuenta las esperas al solicitante (mismo cálculo que el reporte).
+  const historialItem = Cumplimiento.historialPorItem(historial);
   const items = visibles.map((i) => {
     const s = solicitudes[i.solicitud_id];
-    const medicion = Cumplimiento.medir(i, { feriados: feriados });
+    const medicion = Cumplimiento.medir(i, { feriados: feriados, historial: historialItem[i.subsolicitud_id] });
     const propio = responsableValido_(i.desarrollador_asignado).toLowerCase();
     const asignado = propio || responsableValido_(s.desarrollador_asignado).toLowerCase();
     const mov = ultimoMovimiento[i.subsolicitud_id] || ultimoMovimiento[i.solicitud_id] || i.fecha_creacion || s.fecha_creacion;
@@ -543,8 +567,8 @@ function getCola(db, filtros, contexto) {
       dias_sin_movimiento: Math.floor((Date.now() - new Date(mov).getTime()) / 86400000),
       situacion_sla: medicion ? medicion.situacion : null,
       sla_restante_horas: medicion ? Math.round(medicion.restantes_horas * 10) / 10 : null,
-      respuesta_pendiente: respuestaPendienteLectura_(i, historial, comentariosPublicos) ||
-        (ESTADOS_CERRADOS.indexOf(i.estado) === -1 && escribioSolicitante_(s, comentariosPorSolicitud[i.solicitud_id] || [], historialPorSolicitud[i.solicitud_id] || [])),
+      respuesta_pendiente: respuestaPendienteLectura_(i, historial, comentariosPublicos, s) ||
+        (ESTADOS_CERRADOS.indexOf(i.estado) === -1 && escribioSolicitante_(s, comentariosPorSolicitud[i.solicitud_id] || [], historialPorSolicitud[i.solicitud_id] || [], i.subsolicitud_id)),
       empresa_id: s.empresa_id, empresa_nombre: s.empresa_nombre || s.empresa_id, plataforma_nombre: s.plataforma_nombre || s.plataforma || '',
       solicitante_nombre: s.solicitante_nombre || '', solicitante_email: s.solicitante_email || '',
       es_cliente: s.es_cliente === true || s.es_cliente === 'TRUE', empresa_cliente: s.empresa_cliente || '',

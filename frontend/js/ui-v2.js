@@ -225,6 +225,65 @@ var UIv2 = (function () {
     });
   }
 
+  // Capas modales (D-005, E3-3): la capa de arriba es la única activa. Al abrir se
+  // recuerda quién la abrió y el resto de <body> queda `inert` (ni foco ni lector de
+  // pantalla); Tab y Shift+Tab giran dentro de la capa. Al cerrar se devuelve el foco
+  // al activador o, si un repintado lo reemplazó, a su equivalente (mismo id o data-*).
+  var capas_ = [];
+  var ENFOCABLES_ = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  function enfocables_(raiz) {
+    return Array.prototype.filter.call(raiz.querySelectorAll(ENFOCABLES_), function (n) { return n.getClientRects().length > 0; });
+  }
+  function huella_(n) {
+    if (!n || n === document.body || !n.getAttribute) return null;
+    if (n.id) return '#' + (window.CSS && CSS.escape ? CSS.escape(n.id) : n.id);
+    var a = Array.prototype.find.call(n.attributes, function (x) { return /^data-/.test(x.name) && x.value; });
+    return a ? n.tagName.toLowerCase() + '[' + a.name + '="' + String(a.value).replace(/["\\]/g, '\\$&') + '"]' : null;
+  }
+  function aplicarInert_() {
+    var arriba = capas_.length ? capas_[capas_.length - 1].el : null;
+    Array.prototype.forEach.call(document.body.children, function (n) {
+      // Los avisos (aria-live) siguen audibles aunque haya un diálogo abierto.
+      var debe = !!arriba && n !== arriba && n.tagName !== 'SCRIPT' && !n.matches('[aria-live], [role="status"], [role="alert"]');
+      if (debe && !n.inert) { n.inert = true; n.setAttribute('data-sx-inert', ''); }
+      else if (!debe && n.hasAttribute('data-sx-inert')) { n.inert = false; n.removeAttribute('data-sx-inert'); }
+    });
+  }
+  function abrirCapa(el, enfocar) {
+    var previo = document.activeElement;
+    var capa = { el: el, previo: previo, huella: huella_(previo) };
+    capas_.push(capa);
+    aplicarInert_();
+    var destino = enfocar || enfocables_(el)[0];
+    if (destino) destino.focus();
+    return capa;
+  }
+  function cerrarCapa(capa) {
+    var i = capas_.indexOf(capa);
+    if (i === -1) return;
+    capas_.splice(i, 1);
+    aplicarInert_();
+    if (i !== capas_.length) return; // cerró una capa de abajo: el foco sigue arriba
+    var destino = capa.previo && document.contains(capa.previo) ? capa.previo : null;
+    if (!destino && capa.huella) { try { destino = document.querySelector(capa.huella); } catch (e) { destino = null; } }
+    if (!destino) {
+      destino = document.querySelector('main h1, #vista-shell h1, h1');
+      if (destino && !destino.hasAttribute('tabindex')) destino.setAttribute('tabindex', '-1');
+    }
+    if (destino && destino.focus) { try { destino.focus(); } catch (e) { /* ya no existe */ } }
+  }
+  // ui-v2.js también corre en el servidor (PDF, documentoV2) sin document.
+  if (typeof document !== 'undefined') document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Tab' || !capas_.length) return;
+    var raiz = capas_[capas_.length - 1].el;
+    var lista = enfocables_(raiz);
+    if (!lista.length) { ev.preventDefault(); return; }
+    var primero = lista[0], ultimo = lista[lista.length - 1], activo = document.activeElement;
+    if (!raiz.contains(activo)) { ev.preventDefault(); (ev.shiftKey ? ultimo : primero).focus(); }
+    else if (ev.shiftKey && activo === primero) { ev.preventDefault(); ultimo.focus(); }
+    else if (!ev.shiftKey && activo === ultimo) { ev.preventDefault(); primero.focus(); }
+  }, true);
+
   // Drawer (panel lateral). o: { titulo, subtitulo (html), cuerpo (html), pie (html),
   // cabeceraExtra (html), alCerrar }. Devuelve { el, cerrar, cuerpo(html) }.
   var drawerAbierto_ = null;
@@ -247,7 +306,7 @@ var UIv2 = (function () {
         (o.pie ? '<div class="sx2-drawer__pie">' + o.pie + '</div>' : '') +
       '</aside>';
     document.body.appendChild(el);
-    var previoFoco = document.activeElement;
+    var capa = null;
     var cerrado = false;
 
     function onKey(ev) { if (ev.key === 'Escape') api.cerrar(); }
@@ -269,7 +328,7 @@ var UIv2 = (function () {
           el.classList.add('sx2-drawer--saliendo');
           setTimeout(quitar, 220);
         }
-        if (previoFoco && previoFoco.focus) { try { previoFoco.focus(); } catch (e) { /* elemento ya no existe */ } }
+        cerrarCapa(capa);
       }
     };
     el.addEventListener('click', function (ev) { if (ev.target.closest('.js-sx2-drawer-cerrar')) api.cerrar(); });
@@ -278,8 +337,7 @@ var UIv2 = (function () {
     // Los botones flotantes del shell (campana, interruptor) tapan el pie del drawer.
     document.body.classList.add('sx2-con-drawer');
     animar(el);
-    var primero = el.querySelector('.sx2-drawer__panel button, .sx2-drawer__panel [tabindex]');
-    if (primero) primero.focus();
+    capa = abrirCapa(el, el.querySelector('.sx2-drawer__panel button, .sx2-drawer__panel [tabindex]'));
     return api;
   }
 
@@ -302,11 +360,11 @@ var UIv2 = (function () {
           '</div>' +
         '</div>';
       document.body.appendChild(el);
-      var previo = document.activeElement;
+      var capa = null;
       function fin(v) {
         document.removeEventListener('keydown', onKey, true);
         if (el.parentNode) el.parentNode.removeChild(el);
-        if (previo && previo.focus) { try { previo.focus(); } catch (e) { /* ya no existe */ } }
+        cerrarCapa(capa);
         resolver(v);
       }
       // En captura: que Escape cierre el diálogo y no el drawer de abajo.
@@ -316,7 +374,8 @@ var UIv2 = (function () {
         else if (ev.target.closest('.js-sx2-dlg-no')) fin(false);
       });
       document.addEventListener('keydown', onKey, true);
-      el.querySelector('.js-sx2-dlg-si').focus();
+      // Acción destructiva: el foco parte en Cancelar (Enter no borra por accidente).
+      capa = abrirCapa(el, el.querySelector(o.peligro ? 'button.js-sx2-dlg-no' : '.js-sx2-dlg-si'));
     });
   }
 
@@ -384,7 +443,7 @@ var UIv2 = (function () {
 
   return {
     campo: campo, formulario: formulario, leerBase64: leerBase64,
-    confirmar: confirmar,
+    confirmar: confirmar, abrirCapa: abrirCapa, cerrarCapa: cerrarCapa,
     esc: esc, ico: ico, datos: datos,
     iniciales: iniciales, avatar: avatar, avatares: avatares, persona: persona, precargarFotos: precargarFotos,
     kpi: kpi, barra: barra, anillo: anillo, badge: badge, chip: chip, boton: boton, segmento: segmento,

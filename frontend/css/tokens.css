@@ -43,7 +43,7 @@
   --borde-fuerte: #CBD2DE;
   --texto: #0F172A;
   --texto-2: #5B6474;
-  --texto-3: #8A93A5;
+  --texto-3: #636C7D;            /* D-005 E3-2: 5,3:1 sobre blanco (antes #8A93A5, 3,1:1) */
   --texto-invertido: #FFFFFF;
 
   /* --- Color: semanticos (unica fuente de color "fuerte" de estado) ---- */
@@ -53,6 +53,9 @@
   --alerta-suave: #FCEDD8;
   --critico: #C2362B;
   --critico-suave: #FBE3E1;
+  /* Texto sobre el acento o el rojo (botones, chips activos, números): AA en ambos temas. */
+  --sobre-primario: #FFFFFF;
+  --sobre-critico: #FFFFFF;
   --info: #2563EB;
   --info-suave: #E3ECFD;
 
@@ -186,7 +189,7 @@
     --borde-fuerte: #3B4552;
     --texto: #E7EBF2;
     --texto-2: #93A0B4;
-    --texto-3: #6B7789;
+    --texto-3: #8590A3;
 
     --ok: #34A374;
     --ok-suave: rgba(52, 163, 116, 0.18);
@@ -194,6 +197,8 @@
     --alerta-suave: rgba(224, 138, 46, 0.16);
     --critico: #E25A4E;
     --critico-suave: rgba(226, 90, 78, 0.16);
+    --sobre-primario: #0F172A;
+    --sobre-critico: #0F172A;
     --info: #5B8DEF;
     --info-suave: rgba(91, 141, 239, 0.16);
 
@@ -254,7 +259,7 @@
   --borde-fuerte: #3B4552;
   --texto: #E7EBF2;
   --texto-2: #93A0B4;
-  --texto-3: #6B7789;
+  --texto-3: #8590A3;
 
   --ok: #34A374;
   --ok-suave: rgba(52, 163, 116, 0.18);
@@ -262,6 +267,8 @@
   --alerta-suave: rgba(224, 138, 46, 0.16);
   --critico: #E25A4E;
   --critico-suave: rgba(226, 90, 78, 0.16);
+  --sobre-primario: #0F172A;
+  --sobre-critico: #0F172A;
   --info: #5B8DEF;
   --info-suave: rgba(91, 141, 239, 0.16);
 

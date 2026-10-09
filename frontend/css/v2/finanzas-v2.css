@@ -59,7 +59,7 @@
 .fin2-paso span { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: .75rem; font-weight: 700; background: var(--sx-fondo-2, var(--sx-borde)); }
 .fin2-paso--activo { color: var(--sx-texto); border-color: var(--fin); }
 .fin2-paso--activo span { background: var(--fin); color: #fff; }
-.fin2-paso--hecho span { background: var(--sx-ok, #15803d); color: #fff; }
+.fin2-paso--hecho span { background: var(--sx-ok, #15803d); color: var(--sx-sobre-primario); }
 .fin2-form { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 420px; }
 .fin2-form--sep { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--sx-borde); }
 .fin2-form .fin2-digitos { justify-content: flex-start; }
@@ -358,7 +358,7 @@
 .fin2m-paso::before { content: ''; position: absolute; left: 16px; top: 34px; bottom: 0; width: 2px; background: var(--sx-borde); }
 .fin2m-paso:last-child::before { display: none; }
 .fin2m-paso__num { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: .875rem; background: var(--sx-superficie); border: 2px solid var(--sx-borde-fuerte, var(--sx-borde)); color: var(--sx-texto-2); position: relative; z-index: 1; }
-.fin2m-paso--hecho .fin2m-paso__num { background: var(--sx-ok); border-color: var(--sx-ok); color: #fff; }
+.fin2m-paso--hecho .fin2m-paso__num { background: var(--sx-ok); border-color: var(--sx-ok); color: var(--sx-sobre-primario); }
 .fin2m-paso--hecho::before { background: var(--sx-ok); }
 .fin2m-paso--ahora .fin2m-paso__num { background: var(--fin); border-color: var(--fin); color: #fff; box-shadow: 0 0 0 5px var(--fin-suave); }
 .fin2m-paso--opcional .fin2m-paso__num { border-style: dashed; }

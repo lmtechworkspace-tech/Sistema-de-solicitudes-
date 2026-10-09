@@ -62,9 +62,16 @@
   function dispositivo() { var u = navigator.userAgent || ''; return /iPhone|iPad/.test(u) ? 'iPhone' : (/Android/.test(u) ? 'Android' : (/Windows/.test(u) ? 'Windows' : (/Mac/.test(u) ? 'Mac' : 'Navegador'))); }
 
   // ---------- Sesión y servidor ----------
-  function token() { try { return localStorage.getItem(LLAVE) || sessionStorage.getItem(LLAVE) || ''; } catch (e) { return ''; } }
+  // Auditoría Codex 2026-10-08 (D-005, E1-2): la sesión vive primero en memoria de la
+  // pestaña; cada almacenamiento se usa por separado, para que un navegador que bloquea
+  // uno (o los dos) no deje al contratista entrando sin sesión.
+  var TOKEN_MEM = '';
+  function leerAlm(alm) { try { return window[alm].getItem(LLAVE) || ''; } catch (e) { return ''; } }
+  function token() { if (!TOKEN_MEM) TOKEN_MEM = leerAlm('localStorage') || leerAlm('sessionStorage'); return TOKEN_MEM; }
   function guardarToken(t, recordar) {
-    try { localStorage.removeItem(LLAVE); sessionStorage.removeItem(LLAVE); if (t) (recordar ? localStorage : sessionStorage).setItem(LLAVE, t); } catch (e) { /* sin almacenamiento */ }
+    TOKEN_MEM = t || '';
+    ['localStorage', 'sessionStorage'].forEach(function (alm) { try { window[alm].removeItem(LLAVE); } catch (e) { /* bloqueado */ } });
+    if (t) { try { window[recordar ? 'localStorage' : 'sessionStorage'].setItem(LLAVE, t); } catch (e) { /* queda en memoria */ } }
   }
   // Con tiempo límite: con mala señal en la obra, una subida no puede quedar «Subiendo…»
   // para siempre. Los archivos tienen más margen que el resto.
@@ -87,20 +94,42 @@
   var MS_ARCHIVO = 150000;
 
   // ---------- Estado ----------
-  var S = { dentro: false, vista: 'inicio', perfil: null, cat: null, pedidos: [], trab: [], pedido: null, detalle: null, pedir: null, trabId: null, desde: null, invitacion: null, ocupado: false };
+  var S = { err: {}, dentro: false, vista: 'inicio', perfil: null, cat: null, pedidos: [], trab: [], pedido: null, detalle: null, pedir: null, trabId: null, desde: null, invitacion: null, ocupado: false };
 
   function cargarTodo() {
     return Promise.all([api('clienteSesion'), api('clienteCatalogo'), api('clientePedidos'), api('clienteTrabajadores'), api('clienteDocumentos')]).then(function (r) {
       if (!r[0] || !r[0].ok) { S.dentro = false; return; }
-      S.perfil = r[0].data; S.cat = r[1] && r[1].ok ? r[1].data : { areas: [], documentos: [] };
-      S.pedidos = r[2] && r[2].ok ? r[2].data.pedidos : []; S.trab = r[3] && r[3].ok ? r[3].data.trabajadores : [];
-      S.docs = r[4] && r[4].ok ? r[4].data.documentos : null;
+      S.perfil = r[0].data;
+      // D-005 (E1-6/E3-1): un recurso que falla NO se vuelve lista vacía: se marca con su
+      // error (y se conservan los datos que ya había) para ofrecer «Intentar de nuevo».
+      aplicar('cat', r[1]); aplicar('pedidos', r[2]); aplicar('trab', r[3]); aplicar('docs', r[4]);
       S.dentro = true;
       if (AV.sub) api('clientePushSuscribir', { suscripcion: AV.sub.toJSON(), dispositivo: dispositivo() });
     });
   }
-  function refrescarPedidos() { return api('clientePedidos').then(function (r) { if (r && r.ok) S.pedidos = r.data.pedidos; }); }
-  function refrescarTrab() { return api('clienteTrabajadores').then(function (r) { if (r && r.ok) S.trab = r.data.trabajadores; }); }
+  var RECURSOS = {
+    cat: ['clienteCatalogo', function (d) { S.cat = d; }, 'los servicios que puedes pedir'],
+    pedidos: ['clientePedidos', function (d) { S.pedidos = d.pedidos; }, 'tus pedidos'],
+    trab: ['clienteTrabajadores', function (d) { S.trab = d.trabajadores; }, 'tus trabajadores'],
+    docs: ['clienteDocumentos', function (d) { S.docs = d.documentos; }, 'tus documentos']
+  };
+  function aplicar(clave, r) {
+    if (r && r.ok) { RECURSOS[clave][1](r.data); S.err[clave] = ''; return true; }
+    S.err[clave] = (r && r.message) || 'Sin conexión.';
+    if (clave === 'cat' && !S.cat) S.cat = { areas: [], documentos: [] };
+    if (clave === 'pedidos' && !S.pedidos) S.pedidos = [];
+    if (clave === 'trab' && !S.trab) S.trab = [];
+    return false;
+  }
+  function recargar(clave) { return api(RECURSOS[clave][0]).then(function (r) { return aplicar(clave, r); }); }
+  // Aviso de carga fallida, con reintento (solo ese recurso; no se pierde lo escrito).
+  function fallo(clave) {
+    if (!S.err[clave]) return '';
+    return '<div class="error-caja falla-carga" role="alert"><span>No pudimos cargar ' + RECURSOS[clave][2] + '. ' + esc(S.err[clave]) + '</span>' +
+      '<button type="button" class="btn btn-sec" data-reintentar="' + clave + '">' + ico('reloj') + 'Intentar de nuevo</button></div>';
+  }
+  function refrescarPedidos() { return recargar('pedidos'); }
+  function refrescarTrab() { return recargar('trab'); }
 
   // ---------- Piezas ----------
   var ESTADOS = { TU: ['e-tu', 'Te toca a ti'], ENVIADO: ['e-rec', 'Enviado'], CURSO: ['e-cur', 'Lo estamos haciendo'], LISTO: ['e-ok', 'Listo'], CERRADO: ['e-gris', 'Cerrado'] };
@@ -413,7 +442,8 @@
   // mandó, de todos sus pedidos, por mes, con buscador. Antes había que entrar
   // pedido por pedido.
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  function cargarDocs() { return api('clienteDocumentos').then(function (r) { if (r && r.ok) S.docs = r.data.documentos; }); }
+  // Revisión Codex Tanda 1 (hallazgo 4): misma carga con estado de error que el resto.
+  function cargarDocs() { return recargar('docs'); }
   function sinTildes(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
   function docsFiltrados() {
     var F = S.docFiltro || {}, q = sinTildes(F.q).trim();
@@ -443,10 +473,12 @@
   }
   function documentosVista() {
     var F = S.docFiltro = S.docFiltro || { lado: 'equipo', q: '' };
+    if (!S.docs && S.err.docs) return top('Mis documentos', 'Lo que te entregamos y lo que mandaste', true) + '<main>' + fallo('docs') + '</main>' + nav();
     if (!S.docs) return top('Mis documentos', 'Lo que te entregamos y lo que mandaste', true) + '<main aria-busy="true"><section class="card"><div class="esq esq-linea"></div><div class="esq esq-linea esq-corta"></div></section><section class="card"><div class="esq esq-linea"></div><div class="esq esq-linea esq-corta"></div></section></main>' + nav();
     var nEq = S.docs.filter(function (a) { return a.del_equipo; }).length, nTu = S.docs.length - nEq;
     var t = F.trab ? S.trab.filter(function (x) { return x.trabajador_id === F.trab; })[0] : null;
-    return top('Mis documentos', S.perfil.cliente.razon_social, true) + '<main>' +
+    // Con datos anteriores y una recarga fallida: se muestran, pero con el aviso y el reintento.
+    return top('Mis documentos', S.perfil.cliente.razon_social, true) + '<main>' + fallo('docs') +
       '<div class="segmento" role="tablist"><button type="button" role="tab" data-doc-lado="equipo" aria-selected="' + (F.lado !== 'tu') + '">Te entregamos (' + nEq + ')</button><button type="button" role="tab" data-doc-lado="tu" aria-selected="' + (F.lado === 'tu') + '">Mandaste (' + nTu + ')</button></div>' +
       '<label class="buscar" for="doc-q">' + ico('lupa') + '<input class="inp" id="doc-q" type="search" placeholder="Buscar: Juan, contrato, F30…" value="' + esc(F.q || '') + '" autocomplete="off" aria-label="Buscar un documento"></label>' +
       (t ? '<div class="chips"><button type="button" class="chip chip--quitar" data-doc-trab="">De ' + esc(t.nombre) + ' <span aria-hidden="true">×</span><span class="oculto-visual">Quitar filtro</span></button></div>' : '') +
@@ -499,7 +531,7 @@
     var activos = S.trab.filter(function (t) { return t.estado !== 'FINIQUITADO'; }).length;
     var nombreMes = new Date().toLocaleDateString('es-CL', { month: 'long' });
     var baldosa = function (n, txt, ir, tono) { return '<button type="button" class="stat" data-ir="' + ir + '"' + (tono ? ' data-tono="' + tono + '"' : '') + '><b>' + n + '</b><span>' + txt + '</span></button>'; };
-    return top(saludo() + ', ' + primerNombre(S.perfil.contacto.nombre), S.perfil.cliente.razon_social) + '<main>' +
+    return top(saludo() + ', ' + primerNombre(S.perfil.contacto.nombre), S.perfil.cliente.razon_social) + '<main>' + fallo('pedidos') + fallo('trab') +
       (tuyos.length ? '<section class="card toca"><div class="toca-cab"><span class="latido"></span>Te toca a ti (' + tuyos.length + ')</div><div class="lista">' + tuyos.map(itemPedido).join('') + '</div></section>' : '') +
       tarjetaAvisos() +
       '<section style="display:flex;flex-direction:column;gap:12px"><h2>¿Qué necesitas?</h2>' + areasHtml() + botonMandar() + botonDocumentos() + '</section>' +
@@ -524,7 +556,7 @@
     return plantillasDe(P.area).filter(function (s) { return s.id === P.plantilla; })[0];
   }
   function pedirAreas() {
-    return top('Pedir', 'Elige a qué área', false) + '<main><p class="sub">Toca el área. Si no sabes cuál es, elige «Otra cosa» y cuéntanos con tus palabras.</p>' + areasHtml() + botonMandar() + '</main>' + nav();
+    return top('Pedir', 'Elige a qué área', false) + '<main>' + fallo('cat') + '<p class="sub">Toca el área. Si no sabes cuál es, elige «Otra cosa» y cuéntanos con tus palabras.</p>' + areasHtml() + botonMandar() + '</main>' + nav();
   }
   function pedirServicios() {
     var P = S.pedir, esDoc = P.area === '__doc';
@@ -633,8 +665,9 @@
   // ---------- Pedidos ----------
   function pedidos() {
     var grupos = [['TU', 'Te toca a ti'], ['ENVIADO', 'Enviados'], ['CURSO', 'Los estamos haciendo'], ['LISTO', 'Listos'], ['CERRADO', 'Cerrados']];
+    if (!S.pedidos.length && S.err.pedidos) return top('Mis pedidos', S.perfil.cliente.razon_social, false) + '<main>' + fallo('pedidos') + '</main>' + nav();
     if (!S.pedidos.length) return top('Mis pedidos', S.perfil.cliente.razon_social, false) + '<main><div class="vacio"><span class="vacio__ico">' + ico('chat') + '</span><b>Todavía no has pedido nada</b><span>Toca «Pedir» abajo para hacer tu primer pedido.</span></div></main>' + nav();
-    return top('Mis pedidos', S.perfil.cliente.razon_social, false) + '<main>' + grupos.map(function (g) {
+    return top('Mis pedidos', S.perfil.cliente.razon_social, false) + '<main>' + fallo('pedidos') + grupos.map(function (g) {
       var ps = S.pedidos.filter(function (p) { return p.estado === g[0]; });
       return ps.length ? '<section style="display:flex;flex-direction:column;gap:10px"><h2>' + g[1] + ' (' + ps.length + ')</h2><div class="lista">' + ps.map(itemPedido).join('') + '</div></section>' : '';
     }).join('') + '</main>' + nav();
@@ -738,8 +771,8 @@
     };
     var fini = S.trab.filter(function (t) { return t.estado === 'FINIQUITADO'; });
     return top('Mis trabajadores', activos.length + (activos.length === 1 ? ' en tus obras' : ' en tus obras'), false) + '<main>' +
-      '<p class="sub">Sus datos quedan aquí: no tienes que escribirlos de nuevo para un finiquito, un anexo o una licencia.</p>' +
-      (activos.length ? bloques.map(function (b) { var ts = porObra[b[0]] || []; return ts.length ? '<section style="display:flex;flex-direction:column;gap:10px"><h2>' + ico('obra', 22) + ' ' + esc(b[1]) + ' (' + ts.length + ')</h2><div class="lista">' + ts.map(fila).join('') + '</div></section>' : ''; }).join('')
+      fallo('trab') + '<p class="sub">Sus datos quedan aquí: no tienes que escribirlos de nuevo para un finiquito, un anexo o una licencia.</p>' +
+      (activos.length || S.err.trab ? bloques.map(function (b) { var ts = porObra[b[0]] || []; return ts.length ? '<section style="display:flex;flex-direction:column;gap:10px"><h2>' + ico('obra', 22) + ' ' + esc(b[1]) + ' (' + ts.length + ')</h2><div class="lista">' + ts.map(fila).join('') + '</div></section>' : ''; }).join('')
         : '<div class="vacio"><span class="vacio__ico">' + ico('personas') + '</span><b>Todavía no hay trabajadores</b><span>Se agregan solos cuando pides un contrato, o agrégalos tú.</span></div>') +
       (fini.length ? '<details class="card"><summary style="font-weight:700;cursor:pointer;min-height:32px">Ya no trabajan contigo (' + fini.length + ')</summary><div class="lista">' + fini.map(fila).join('') + '</div></details>' : '') +
       '<button type="button" class="btn btn-main" data-nuevo-contrato>' + ico('mas') + 'Contratar a alguien nuevo</button>' +
@@ -913,7 +946,9 @@
   function crecer(ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 4, 160) + 'px'; }
   function ir(vista, dir) { S.vista = vista; S.dir = dir || S.dir || 'fade'; pintar(); window.scrollTo(0, 0); }
   function nuevoPedir(area, plantilla, elegidos) {
-    S.pedir = { area: area, plantilla: plantilla || (area === '__otra' ? 'otra' : null), paso: 'datos', personas: [{}], elegidos: elegidos || [], obra_id: null, datos: {}, fotos: [], motivo: null, depto: area === '__otra' ? '' : area, error: '' };
+    // D-005 (E1-3): un identificador por pedido; se repite en cada reintento para que
+    // una respuesta perdida por mala señal no cree el pedido dos veces.
+    S.pedir = { intento: idIntento(), area: area, plantilla: plantilla || (area === '__otra' ? 'otra' : null), paso: 'datos', personas: [{}], elegidos: elegidos || [], obra_id: null, datos: {}, fotos: [], motivo: null, depto: area === '__otra' ? '' : area, error: '' };
     if (elegidos && elegidos.length) { var t = S.trab.filter(function (x) { return x.trabajador_id === elegidos[0]; })[0]; if (t && t.obra_id) S.pedir.obra_id = t.obra_id; }
     if (obras().length === 1) S.pedir.obra_id = S.pedir.obra_id || obras()[0].obra_id;
     ir('pedir', 'adelante');
@@ -1017,12 +1052,16 @@
       });
     }, Promise.resolve()).then(function () { return fallas; });
   }
+  function idIntento() {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, ''); } catch (e) { /* sin crypto */ }
+    return Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  }
   function enviarPedido() {
     var P = S.pedir, s = plantillaActual();
     if (S.ocupado) return;
     S.ocupado = true; P.error = ''; P.progreso = 'Enviando el pedido…'; pintar();
     var datos = { plantilla_id: s.id === 'otra' ? 'otra' : s.id, depto: s.id === 'otra' ? (P.depto || (S.cat.areas[0] || {}).clave) : undefined, datos: P.datos, personas: P.personas,
-      trabajadores: P.elegidos, obra_id: P.obra_id || '', motivo: P.motivo || '', texto: P.datos.texto || '', con_archivos: P.fotos.length > 0 };
+      trabajadores: P.elegidos, obra_id: P.obra_id || '', motivo: P.motivo || '', texto: P.datos.texto || '', con_archivos: P.fotos.length > 0, intento_id: P.intento };
     api('clienteCrearPedido', datos).then(function (r) {
       if (!r || !r.ok) { S.ocupado = false; P.progreso = ''; P.error = (r && r.message) || 'No se pudo enviar.'; pintar(); return null; }
       P.resultado = r.data;
@@ -1116,6 +1155,13 @@
       empujarHistoria(); capa.querySelector('textarea').focus(); return;
     }
     if (t.closest('[data-foto-chat]')) { document.getElementById('f-foto-chat').click(); return; }
+    // D-005 (E1-6/E3-1): reintentar solo el recurso que falló, sin perder lo escrito.
+    var rein = t.closest('[data-reintentar]');
+    if (rein) {
+      rein.disabled = true; rein.setAttribute('aria-busy', 'true');
+      recargar(rein.getAttribute('data-reintentar')).then(function () { pintar(); });
+      return;
+    }
     if (t.closest('[data-salir]')) { apagarAvisos().then(function () { return api('clienteSalir'); }).then(function () { guardarToken(''); S.dentro = false; S.perfil = null; pintar(); }); return; }
   });
 
@@ -1239,6 +1285,57 @@
     }
   });
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && capa.innerHTML) cerrarCapa(); });
+
+  // D-005 (E3-3): mientras #capa tiene algo (ayuda, visor, formularios) es un diálogo
+  // de verdad: el resto queda `inert`, el foco entra y Tab no se escapa. Al vaciarse,
+  // el foco vuelve a quien la abrió (o a su equivalente si la pantalla se repintó).
+  // Se observa #capa porque varias rutas la llenan y vacían directamente.
+  var ENFOCABLES = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  var capaPrevio = null, capaHuella = null, capaAbierta = false;
+  function enfocablesCapa() { return [].filter.call(capa.querySelectorAll(ENFOCABLES), function (n) { return n.getClientRects().length > 0; }); }
+  function huella(n) {
+    if (!n || n === document.body || !n.getAttribute) return null;
+    if (n.id) return '#' + n.id;
+    var a = [].find.call(n.attributes, function (x) { return /^data-/.test(x.name) && x.value; });
+    return a ? n.tagName.toLowerCase() + '[' + a.name + '="' + String(a.value).replace(/["\\]/g, '\\$&') + '"]' : null;
+  }
+  // Revisión Codex Tanda 1 (hallazgo 6): algunos formularios enfocan su campo apenas
+  // abren, antes de que el observador corra; por eso el activador se anota en el
+  // momento (último foco o toque fuera de la capa), no al abrir.
+  var ultimoFuera = null;
+  function anotarFuera(ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest(ENFOCABLES) || ev.target : null;
+    if (t && t !== document.body && !capa.contains(t)) ultimoFuera = t;
+  }
+  document.addEventListener('focusin', anotarFuera, true);
+  document.addEventListener('click', anotarFuera, true);
+  function vigilarCapa() {
+    var abierta = !!capa.firstElementChild;
+    if (abierta && !capaAbierta) {
+      capaAbierta = true;
+      var a = document.activeElement;
+      capaPrevio = a && a !== document.body && !capa.contains(a) ? a : ultimoFuera; capaHuella = huella(capaPrevio);
+      app.inert = true;
+    } else if (!abierta && capaAbierta) {
+      capaAbierta = false; app.inert = false;
+      var destino = capaPrevio && document.contains(capaPrevio) ? capaPrevio : null;
+      if (!destino && capaHuella) { try { destino = app.querySelector(capaHuella); } catch (e) { destino = null; } }
+      if (!destino) { destino = app.querySelector('h1, h2'); if (destino && !destino.hasAttribute('tabindex')) destino.setAttribute('tabindex', '-1'); }
+      if (destino) { try { destino.focus({ preventScroll: true }); } catch (e) { /* ya no está */ } }
+      capaPrevio = capaHuella = null;
+    }
+    // Abrir (o repintar el visor) puede dejar el foco fuera: se lleva al primer control.
+    if (abierta && !capa.contains(document.activeElement)) { var l = enfocablesCapa(); if (l[0]) l[0].focus(); }
+  }
+  if (window.MutationObserver) new MutationObserver(vigilarCapa).observe(capa, { childList: true });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Tab' || !capa.firstElementChild) return;
+    var l = enfocablesCapa(); if (!l.length) { ev.preventDefault(); return; }
+    var a = document.activeElement, primero = l[0], ultimo = l[l.length - 1];
+    if (!capa.contains(a)) { ev.preventDefault(); (ev.shiftKey ? ultimo : primero).focus(); }
+    else if (ev.shiftKey && a === primero) { ev.preventDefault(); ultimo.focus(); }
+    else if (!ev.shiftKey && a === ultimo) { ev.preventDefault(); primero.focus(); }
+  }, true);
 
   // Mientras se escribe: la clave solo acepta números y llena sus casillas, el RUT se
   // ordena con puntos y guion, y el cuadro del chat crece con el texto.

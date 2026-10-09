@@ -103,12 +103,41 @@ function medir(subsolicitud, opciones) {
   let objetivo = subsolicitud.sla_objetivo_horas;
   if (objetivo === '' || objetivo === undefined || objetivo === null) return null;
   objetivo = Number(objetivo);
-  const transcurridas = Utils.horasHabilesEntre(subsolicitud.fecha_creacion, opts.ahora || new Date(), { feriados: opts.feriados });
+  // Auditoría Codex 2026-10-08 (D-005, E2-3): mismo reloj que el reporte. Las esperas
+  // al solicitante (S06, opts.pausas o calculadas desde opts.historial) no cuentan, y
+  // con el ítem Terminado (S08) el reloj se detiene en la fecha en que se terminó.
+  const ahora = opts.ahora || new Date();
+  const fin = subsolicitud.estado === ESTADOS.S08 && subsolicitud.fecha_terminada ? subsolicitud.fecha_terminada : ahora;
+  const pausas = opts.pausas || (opts.historial ? pausasEsperandoSolicitante(opts.historial, ahora) : []);
+  const transcurridas = Utils.horasHabilesEntre(subsolicitud.fecha_creacion, fin, { feriados: opts.feriados, pausas: pausas });
   const ratio = transcurridas / objetivo;
   return {
     objetivo_horas: objetivo, transcurridas_horas: transcurridas, restantes_horas: objetivo - transcurridas,
     ratio: ratio, situacion: ratio > 1 ? 'FUERA_DE_PLAZO' : (ratio >= SLA_UMBRAL_RIESGO ? 'EN_RIESGO' : 'EN_PLAZO')
   };
+}
+
+/**
+ * Tramos «Esperando respuesta» (S06) de UN ítem, desde su historial de estados:
+ * [{inicio, fin}]. Si sigue esperando, el tramo corre hasta `ahora`. Es el cálculo
+ * común de la cola, el detalle y el reporte (antes solo el reporte lo descontaba).
+ */
+function pausasEsperandoSolicitante(historialDelItem, ahora) {
+  const hs = (historialDelItem || []).slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const pausas = [];
+  let desde = null;
+  hs.forEach((h) => {
+    if (h.estado_nuevo === ESTADOS.S06 && !desde) desde = h.timestamp;
+    else if (desde && h.estado_nuevo !== ESTADOS.S06) { pausas.push({ inicio: desde, fin: h.timestamp }); desde = null; }
+  });
+  if (desde) pausas.push({ inicio: desde, fin: new Date(ahora || new Date()).toISOString() });
+  return pausas;
+}
+/** Historial agrupado por ítem (una lectura por consulta): { subsolicitud_id: [filas] }. */
+function historialPorItem(filasHistorial) {
+  const por = {};
+  (filasHistorial || []).forEach((h) => { (por[h.subsolicitud_id] = por[h.subsolicitud_id] || []).push(h); });
+  return por;
 }
 
 /** Atajo: 'FUERA_DE_PLAZO' | 'EN_RIESGO' | 'EN_PLAZO' | null (no aplica). */
@@ -136,6 +165,6 @@ function obtenerFeriados(db) {
 }
 
 module.exports = {
-  clasificar, medir, situacion, peorSituacion, obtenerFeriados,
+  clasificar, medir, situacion, peorSituacion, obtenerFeriados, pausasEsperandoSolicitante, historialPorItem,
   SLA_UMBRAL_RIESGO, CUMPLIMIENTO_ETIQUETA
 };

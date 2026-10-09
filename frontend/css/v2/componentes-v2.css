@@ -154,10 +154,10 @@
   background: var(--sx-superficie-2); font: var(--sx-t-etiqueta); line-height: 1.25rem; text-align: center;
 }
 .sx2-chip[aria-pressed="true"] {
-  background: var(--sx-tono, var(--sx-primario)); border-color: var(--sx-tono, var(--sx-primario)); color: #fff;
+  background: var(--sx-tono, var(--sx-primario)); border-color: var(--sx-tono, var(--sx-primario)); color: var(--sx-sobre-primario);
 }
-.sx2-chip[aria-pressed="true"] .sigso-ico { color: #fff; }
-.sx2-chip[aria-pressed="true"] .sx2-chip__n { background: rgba(255, 255, 255, 0.25); color: #fff; }
+.sx2-chip[aria-pressed="true"] .sigso-ico { color: var(--sx-sobre-primario); }
+.sx2-chip[aria-pressed="true"] .sx2-chip__n { background: var(--sx-superficie); color: var(--sx-texto); }
 .sx2-chip:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
 
 /* Botones ------------------------------------------------------------------- */
@@ -173,13 +173,13 @@
 .sx2-boton:active { transform: scale(0.97); }
 .sx2-boton:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
 .sx2-boton:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
-.sx2-boton--primario { background: var(--sx-primario); color: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12); }
+.sx2-boton--primario { background: var(--sx-primario); color: var(--sx-sobre-primario); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12); }
 .sx2-boton--primario:hover { background: var(--sx-primario-intenso); box-shadow: 0 4px 12px color-mix(in srgb, var(--sx-primario) 35%, transparent); }
 .sx2-boton--secundario { background: var(--sx-superficie); color: var(--sx-texto); border-color: var(--sx-borde); }
 .sx2-boton--secundario:hover { border-color: var(--sx-borde-fuerte); background: var(--sx-superficie-hover); }
 .sx2-boton--fantasma { background: transparent; color: var(--sx-texto-2); }
 .sx2-boton--fantasma:hover { background: var(--sx-superficie-2); color: var(--sx-texto); }
-.sx2-boton--peligro { background: var(--sx-critico); color: #fff; }
+.sx2-boton--peligro { background: var(--sx-critico); color: var(--sx-sobre-critico); }
 .sx2-boton--peligro:hover { background: color-mix(in srgb, var(--sx-critico) 85%, #000); }
 .sx2-boton--texto-peligro { background: transparent; color: var(--sx-critico); }
 .sx2-boton--texto-peligro:hover { background: var(--sx-critico-suave); }

@@ -68,7 +68,7 @@
 .av2-cfg__h { font: 800 2rem/1 var(--fuente); color: var(--sx-texto); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .av2-dias { display: flex; gap: 4px; flex-wrap: wrap; }
 .av2-dias > span, .av2-dias label span { display: inline-grid; place-items: center; min-width: 38px; height: 28px; padding: 0 6px; border-radius: 8px; background: var(--sx-superficie-2); color: var(--sx-texto-3); font: 600 .75rem/1 var(--fuente); }
-.av2-dias > span.av2-dia--on, .av2-dias input:checked + span { background: var(--sx-primario); color: #fff; }
+.av2-dias > span.av2-dia--on, .av2-dias input:checked + span { background: var(--sx-primario); color: var(--sx-sobre-primario); }
 .av2-dias--form label { cursor: pointer; }
 .av2-dias--form input { position: absolute; opacity: 0; pointer-events: none; }
 .av2-dias--form input:focus-visible + span { box-shadow: var(--sx-anillo-foco); }

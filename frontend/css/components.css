@@ -558,7 +558,7 @@
 .sigso-hito--hecho { color: var(--p4); }
 .sigso-hito--hecho .sigso-hito__n { background: var(--p4); color: #fff; }
 .sigso-hito--actual { color: var(--primario); }
-.sigso-hito--actual .sigso-hito__n { background: var(--primario); color: #fff; }
+.sigso-hito--actual .sigso-hito__n { background: var(--primario); color: var(--sobre-primario); }
 
 .sigso-hito__union {
   flex: 0 0 1.1rem;
@@ -3748,7 +3748,7 @@
 }
 .sigso-py-gantt-hoy-pill {
   position: absolute; top: 0; transform: translateX(-50%); z-index: 3; pointer-events: none;
-  background: var(--primario); color: #fff; font-size: 0.6rem; font-weight: 700; line-height: 1;
+  background: var(--primario); color: var(--sobre-primario); font-size: 0.6rem; font-weight: 700; line-height: 1;
   padding: 2px 5px; border-radius: 0 0 var(--radio-sm) var(--radio-sm); letter-spacing: 0.02em;
 }
 .sigso-py-cron-barra { position: absolute; top: 18%; height: 64%; border-radius: var(--radio-md); min-width: 3px; display: flex; align-items: center; overflow: hidden; box-shadow: inset 0 0 0 1px color-mix(in srgb, black 8%, transparent); }
@@ -3803,7 +3803,7 @@
 .sigso-py-gantt-critica-chip {
   display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: var(--radio-full);
   font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
-  color: #fff; background: var(--critico); vertical-align: middle;
+  color: var(--sobre-critico); background: var(--critico); vertical-align: middle;
 }
 
 /* v16 ("Planificación con aspecto de dashboard"): leyenda de colores bajo
@@ -4053,7 +4053,7 @@
   color: var(--critico); padding: 7px 12px; border-radius: var(--radio-sm); transition: background .12s, border-color .12s, color .12s;
 }
 .sigso-py-reg-eliminar:hover { background: var(--critico-suave); border-color: color-mix(in srgb, var(--critico) 30%, transparent); }
-.sigso-py-reg-eliminar.is-armado { background: var(--critico); color: #fff; font-weight: 600; border-color: var(--critico); }
+.sigso-py-reg-eliminar.is-armado { background: var(--critico); color: var(--sobre-critico); font-weight: 600; border-color: var(--critico); }
 .sigso-py-reg-eliminar:disabled { opacity: .6; cursor: default; }
 .sigso-py-reg-tramos { margin: var(--esp-2) 0; }
 .sigso-py-reg-tramos__cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--esp-1); font-size: var(--texto-xs); color: var(--texto-2); text-transform: uppercase; letter-spacing: 0.03em; }
@@ -4534,7 +4534,7 @@
   white-space: nowrap; transition: background .15s, color .15s;
 }
 .sgc-subnav-accesos .sigso-tab:hover { background: var(--superficie-2); color: var(--texto); }
-.sgc-subnav-accesos .sigso-tab.sigso-tab--activo { background: var(--primario); color: #fff; }
+.sgc-subnav-accesos .sigso-tab.sigso-tab--activo { background: var(--primario); color: var(--sobre-primario); }
 
 /* v10.0 Fase 2: tablero de KPIs sobre el listado de Documentos -- lo
    primero que se ve al entrar a Calidad, para que se sienta un puesto de
@@ -5088,7 +5088,7 @@
 }
 .sigso-nav2__item--activo .sigso-nav2__badge,
 .sigso-nav2__directo--activo .sigso-nav2__badge {
-  background: var(--primario); color: #fff;
+  background: var(--primario); color: var(--sobre-primario);
 }
 
 /* --- Migas de pan -------------------------------------------------------- */

@@ -14,7 +14,7 @@ const Comentarios = require('../logica/comentarios');
 
 function dbConSchema() {
   const db = abrirDb_();
-  ['SOLICITUDES', 'COMENTARIOS'].forEach((h) => sembrarTabla_(db, h, COLUMNAS[h], []));
+  ['SOLICITUDES', 'SUBSOLICITUDES', 'COMENTARIOS'].forEach((h) => sembrarTabla_(db, h, COLUMNAS[h], []));
   return db;
 }
 function seedSolicitud(db) {

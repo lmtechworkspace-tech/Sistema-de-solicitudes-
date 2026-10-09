@@ -11,6 +11,9 @@
  * mantener. Lo único propio de v2 son la escala (radios, sombras, tipografía,
  * espaciado) y el movimiento.
  */
+/* Texto sobre acento/estado: también fuera de .sx2 (componentes que se pintan sueltos). */
+:root { --sx-sobre-primario: var(--sobre-primario, #fff); --sx-sobre-critico: var(--sobre-critico, #fff); }
+
 .sx2 {
   /* Superficies ---------------------------------------------------------- */
   --sx-fondo: color-mix(in srgb, var(--primario) 3%, var(--fondo-pagina));
@@ -30,6 +33,8 @@
   --sx-primario: var(--primario);
   --sx-primario-intenso: var(--primario-intenso);
   --sx-primario-suave: var(--primario-suave);
+  --sx-sobre-primario: var(--sobre-primario, #fff);
+  --sx-sobre-critico: var(--sobre-critico, #fff);
   --sx-ok: var(--ok);
   --sx-ok-suave: var(--ok-suave);
   --sx-info: var(--info);

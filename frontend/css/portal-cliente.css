@@ -535,3 +535,7 @@ button.doc:active { transform: scale(.98); }
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition: none !important; }
   .latido::after { display: none; }
 }
+
+/* D-005 (E1-6/E3-1): aviso de carga fallida con «Intentar de nuevo» (botón de 54 px). */
+.falla-carga { display: flex; flex-direction: column; gap: 10px; animation: none; }
+.falla-carga .btn { min-height: 54px; align-self: flex-start; }

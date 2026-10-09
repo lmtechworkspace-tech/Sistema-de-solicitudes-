@@ -22,9 +22,9 @@
   background: var(--sx-superficie-2); color: var(--sx-texto-3); font-weight: 700;
 }
 #modulo-nueva_solicitud.ns2 .sigso-stepper__paso--actual { border-color: var(--sx-primario); color: var(--sx-primario); background: var(--sx-primario-suave); }
-#modulo-nueva_solicitud.ns2 .sigso-stepper__paso--actual .sigso-stepper__numero { background: var(--sx-primario); color: #fff; }
+#modulo-nueva_solicitud.ns2 .sigso-stepper__paso--actual .sigso-stepper__numero { background: var(--sx-primario); color: var(--sx-sobre-primario); }
 #modulo-nueva_solicitud.ns2 .sigso-stepper__paso--hecho { color: var(--sx-ok); }
-#modulo-nueva_solicitud.ns2 .sigso-stepper__paso--hecho .sigso-stepper__numero { background: var(--sx-ok); color: #fff; }
+#modulo-nueva_solicitud.ns2 .sigso-stepper__paso--hecho .sigso-stepper__numero { background: var(--sx-ok); color: var(--sx-sobre-primario); }
 #modulo-nueva_solicitud.ns2 .sigso-stepper__linea { flex: 1; height: 2px; min-width: 16px; background: var(--sx-borde-suave); border-radius: 2px; }
 #modulo-nueva_solicitud.ns2 .sigso-stepper__progreso { display: none; }
 #modulo-nueva_solicitud.ns2 .plataforma-autosave { max-width: var(--ns2-ancho); margin: 0 auto var(--sx-e-2); color: var(--sx-texto-3); font: var(--sx-t-chico); }
@@ -76,8 +76,9 @@
   transition: background var(--sx-dur) var(--sx-curva), border-color var(--sx-dur) var(--sx-curva), color var(--sx-dur) var(--sx-curva);
 }
 #modulo-nueva_solicitud.ns2 .sigso-chip:hover { border-color: var(--sx-primario); color: var(--sx-texto); }
-#modulo-nueva_solicitud.ns2 .sigso-chip--activo { background: var(--sx-primario); border-color: var(--sx-primario); color: #fff; }
-#modulo-nueva_solicitud.ns2 .sigso-chip--activo .sigso-badge { background: rgba(255, 255, 255, 0.22); color: #fff; }
+#modulo-nueva_solicitud.ns2 .sigso-chip--activo { background: var(--sx-primario); border-color: var(--sx-primario); color: var(--sx-sobre-primario); }
+/* D-005: el contador va como «pastilla» de superficie (contraste máximo en ambos temas). */
+#modulo-nueva_solicitud.ns2 .sigso-chip--activo .sigso-badge { background: var(--sx-superficie); color: var(--sx-texto); }
 #modulo-nueva_solicitud.ns2 .sigso-chip:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
 
 /* Gravedad: 4 tarjetas de un toque */
@@ -89,7 +90,7 @@
 #modulo-nueva_solicitud.ns2 .sigso-chip--gravedad strong { font: 700 0.8125rem/1.2 var(--fuente); color: var(--sx-texto); }
 #modulo-nueva_solicitud.ns2 .sigso-chip--gravedad small { font: 400 0.75rem/1.3 var(--fuente); color: var(--sx-texto-3); }
 #modulo-nueva_solicitud.ns2 .sigso-chip--gravedad.sigso-chip--activo strong,
-#modulo-nueva_solicitud.ns2 .sigso-chip--gravedad.sigso-chip--activo small { color: #fff; }
+#modulo-nueva_solicitud.ns2 .sigso-chip--gravedad.sigso-chip--activo small { color: var(--sx-sobre-primario); opacity: 1; }
 .sigso-chips--gravedad { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .sigso-chip--gravedad { flex-direction: column; align-items: flex-start; text-align: left; white-space: normal; }
 .sigso-chip--gravedad small { display: block; font-size: .75rem; opacity: .8; }
@@ -101,7 +102,7 @@
   font: 600 0.875rem/1 var(--fuente); cursor: pointer; text-decoration: none;
   transition: background var(--sx-dur) var(--sx-curva), box-shadow var(--sx-dur) var(--sx-curva), transform var(--sx-dur-rapida) var(--sx-curva);
 }
-#modulo-nueva_solicitud.ns2 .sigso-boton { background: var(--sx-primario); color: #fff; border: 1px solid transparent; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12); }
+#modulo-nueva_solicitud.ns2 .sigso-boton { background: var(--sx-primario); color: var(--sx-sobre-primario); border: 1px solid transparent; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12); }
 #modulo-nueva_solicitud.ns2 .sigso-boton:hover { background: var(--sx-primario-intenso); box-shadow: 0 4px 12px color-mix(in srgb, var(--sx-primario) 35%, transparent); }
 #modulo-nueva_solicitud.ns2 .sigso-boton--secundario { background: var(--sx-superficie); color: var(--sx-texto); border: 1px solid var(--sx-borde); }
 #modulo-nueva_solicitud.ns2 .sigso-boton--secundario:hover { border-color: var(--sx-borde-fuerte); background: var(--sx-superficie-hover); }

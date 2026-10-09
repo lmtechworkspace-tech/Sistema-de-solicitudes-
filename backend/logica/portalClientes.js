@@ -386,7 +386,33 @@ function catalogo(db, data, ctx) {
 
 function lineas_(pares) { return pares.filter((p) => p[1] !== undefined && String(p[1]).trim() !== '').map((p) => p[0] + ': ' + String(p[1]).trim()).join('\n'); }
 
+// D-005 (E1-3): el mismo intento de pedido (intento_id que genera el teléfono y repite en
+// los reintentos) devuelve SIEMPRE la misma solicitud. En curso: el segundo espera al
+// primero (mapa en memoria). Terminado: se busca en SOLICITUDES.intento_portal. Mismo
+// intento con otro contenido: se rechaza.
+const intentosEnCurso_ = new Map();
 async function crearPedido(db, data, ctx, meta) {
+  const intento = String((data && data.intento_id) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+  if (!intento) return crearPedidoReal_(db, data, ctx, meta);
+  const copia = Object.assign({}, data); delete copia.intento_id; delete copia.cliente_token;
+  const huella = require('node:crypto').createHash('sha256').update(JSON.stringify(copia)).digest('hex').slice(0, 24);
+  const clave = ctx.cliente_id + '|' + ctx.contacto_id + '|' + intento;
+  const previa = leer_(db, 'SOLICITUDES').find((x) => x.cliente_id === ctx.cliente_id && String(x.intento_portal || '').startsWith(clave + '|'));
+  if (previa) {
+    if (String(previa.intento_portal).slice(clave.length + 1) !== huella) return errorValidacion('intento_id', 'Ese pedido ya se envió con otros datos. Vuelve a empezar el pedido.');
+    const items = leer_(db, 'SUBSOLICITUDES').filter((x) => x.solicitud_id === previa.solicitud_id);
+    return { solicitud_id: previa.solicitud_id, items: items.length, primer_item: previa.solicitud_id + '-01', repetido: true };
+  }
+  if (intentosEnCurso_.has(clave)) {
+    const enCurso = intentosEnCurso_.get(clave);
+    if (enCurso.huella !== huella) return errorValidacion('intento_id', 'Ese pedido ya se está enviando con otros datos.');
+    return enCurso.promesa;
+  }
+  const promesa = crearPedidoReal_(db, data, ctx, meta, clave + '|' + huella);
+  intentosEnCurso_.set(clave, { huella, promesa });
+  try { return await promesa; } finally { intentosEnCurso_.delete(clave); }
+}
+async function crearPedidoReal_(db, data, ctx, meta, intentoPortal) {
   const Solicitudes = require('./solicitudes');
   const esDoc = String(data.plantilla_id || '').indexOf('doc_') === 0;
   let depto = '', p = null;
@@ -443,6 +469,20 @@ async function crearPedido(db, data, ctx, meta) {
   }
   if (txt_(data.texto) && p.tipo !== 'libre' && p.tipo !== 'campos') items.forEach((it) => { it.descripcion += '\nNota: ' + txt_(data.texto, 1000); });
 
+  // Los trabajadores nuevos quedan en «Mis trabajadores» con el contrato en trámite.
+  const vincularTrabajadores_ = (solicitudId) => {
+    for (let i = 0; i < items.length; i++) {
+      const subId = solicitudId + '-' + ('0' + (i + 1)).slice(-2);
+      let trabId = items[i].trabajador_id || '';
+      if (items[i].persona) {
+        const x = items[i].persona;
+        const t = guardarTrabajador_(db, ctx.cliente_id, { nombre: x.nombre, rut: x.rut, cargo: x.cargo, obra_id: obra ? obra.obra_id : '', fecha_inicio: x.fecha_inicio,
+          sueldo: x.sueldo, afp: x.afp, salud: x.salud, estado: 'TRAMITE' }, 'contacto:' + ctx.contacto_id);
+        if (t && t.trabajador_id) { trabId = t.trabajador_id; nuevos.push(t.nombre); }
+      }
+      if (trabId) actualizarFilaPorId_(db, 'SUBSOLICITUDES', 'subsolicitud_id', subId, { trabajador_id: trabId });
+    }
+  };
   const r = await Solicitudes.crearSolicitud(db, {
     empresa_id: EMPRESA_PORTAL, asociada_plataforma: false,
     solicitante_nombre: c.nombre, solicitante_cargo: c.cargo || 'Contratista',
@@ -451,21 +491,13 @@ async function crearPedido(db, data, ctx, meta) {
     contacto_cliente: c.nombre, telefono_cliente: c.telefono || perfil.telefono || '',
     observaciones_generales: 'Pedido desde el portal de clientes.',
     subsolicitudes: items.map((it) => ({ titulo: it.titulo.slice(0, 200), descripcion: it.descripcion, depto, servicio_id: srv ? srv.servicio_id : '', destinatario }))
+  }, {
+    // Revisión Codex Tanda 1 (hallazgo 3): vínculo con el cliente, marca del intento y
+    // trabajadores se guardan junto con la solicitud, antes de esperar los avisos.
+    filaSolicitud: { cliente_id: ctx.cliente_id, origen: 'PORTAL', contacto_id: ctx.contacto_id, intento_portal: intentoPortal || '' },
+    alPersistir: (solicitudId) => vincularTrabajadores_(solicitudId)
   });
   if (!r || !r.solicitud_id) return r;
-  actualizarFilaPorId_(db, 'SOLICITUDES', 'solicitud_id', r.solicitud_id, { cliente_id: ctx.cliente_id, origen: 'PORTAL', contacto_id: ctx.contacto_id });
-  // Los trabajadores nuevos quedan en «Mis trabajadores» con el contrato en trámite.
-  for (let i = 0; i < items.length; i++) {
-    const subId = r.solicitud_id + '-' + ('0' + (i + 1)).slice(-2);
-    let trabId = items[i].trabajador_id || '';
-    if (items[i].persona) {
-      const x = items[i].persona;
-      const t = guardarTrabajador_(db, ctx.cliente_id, { nombre: x.nombre, rut: x.rut, cargo: x.cargo, obra_id: obra ? obra.obra_id : '', fecha_inicio: x.fecha_inicio,
-        sueldo: x.sueldo, afp: x.afp, salud: x.salud, estado: 'TRAMITE' }, 'contacto:' + ctx.contacto_id);
-      if (t && t.trabajador_id) { trabId = t.trabajador_id; nuevos.push(t.nombre); }
-    }
-    if (trabId) actualizarFilaPorId_(db, 'SUBSOLICITUDES', 'subsolicitud_id', subId, { trabajador_id: trabId });
-  }
   registrar_(db, { cliente_id: ctx.cliente_id, contacto_id: ctx.contacto_id, actor: 'contacto', accion: esDoc ? 'DOCUMENTO' : 'PEDIDO',
     detalle: r.solicitud_id + ' · ' + p.nombre + (items.length > 1 ? ' (' + items.length + ')' : ''), ip: (meta && meta.ip) || '' });
   const fichaEnc = destinatario ? (DirectorioPersonas.fichas(db, [destinatario])[destinatario] || {}) : {};

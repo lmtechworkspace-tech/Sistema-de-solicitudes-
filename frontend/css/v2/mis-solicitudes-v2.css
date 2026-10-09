@@ -38,9 +38,9 @@
   background: var(--sx-superficie); font-weight: 700; font-size: .6875rem;
 }
 .ms2-hitos li.is-hecho { background: var(--sx-ok-suave); color: var(--sx-ok); }
-.ms2-hitos li.is-hecho > span { background: var(--sx-ok); color: #fff; }
+.ms2-hitos li.is-hecho > span { background: var(--sx-ok); color: var(--sx-sobre-primario); }
 .ms2-hitos li.is-actual { background: var(--sx-primario-suave); color: var(--sx-primario); font-weight: 700; }
-.ms2-hitos li.is-actual > span { background: var(--sx-primario); color: #fff; }
+.ms2-hitos li.is-actual > span { background: var(--sx-primario); color: var(--sx-sobre-primario); }
 .ms2-aviso {
   display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 14px; border-radius: var(--sx-radio);
   background: var(--sx-tono-suave); color: var(--sx-tono); font: 600 0.8125rem/1.35 var(--fuente);

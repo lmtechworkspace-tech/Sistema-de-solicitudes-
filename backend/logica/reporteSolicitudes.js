@@ -81,14 +81,9 @@ function pedidos_(db) {
     const tomado = hs.find((h) => h.estado_anterior === 'S01' && h.estado_nuevo && h.estado_nuevo !== 'S01' && FINALES.indexOf(h.estado_nuevo) === -1);
     const resuelto = hs.find((h) => RESUELTOS.indexOf(h.estado_nuevo) !== -1);
     // Tramos "Esperando respuesta" (S06): el reloj del equipo se detiene.
-    const pausas = [];
-    let desde = null;
-    hs.forEach((h) => {
-      if (h.estado_nuevo === 'S06' && !desde) desde = h.timestamp;
-      else if (desde && h.estado_nuevo !== 'S06') { pausas.push({ inicio: desde, fin: h.timestamp }); desde = null; }
-    });
     // Sigue esperando al solicitante: la pausa corre hasta hoy (el corte la recorta).
-    if (desde) pausas.push({ inicio: desde, fin: new Date().toISOString() });
+    // D-005 (E2-3): el mismo cálculo que la cola y el detalle (Cumplimiento).
+    const pausas = require('./cumplimiento').pausasEsperandoSolicitante(hs, new Date());
     const tsResuelto = resuelto ? resuelto.timestamp : (RESUELTOS.indexOf(s.estado) !== -1 && s.fecha_terminada ? s.fecha_terminada : '');
     const plazo = s.sla_objetivo_horas === '' || s.sla_objetivo_horas === null || s.sla_objetivo_horas === undefined ? null : Number(s.sla_objetivo_horas);
     const hResolver = tsResuelto ? horas(llega, tsResuelto, pausas) : null;

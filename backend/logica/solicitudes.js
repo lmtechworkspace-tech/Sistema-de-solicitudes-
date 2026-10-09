@@ -268,7 +268,7 @@ function destinatariosDe_(db, items) {
   return personas;
 }
 
-async function crearSolicitud(db, data) {
+async function crearSolicitud(db, data, opciones) {
   const errores = validarSolicitud_(data);
   // Etapa 4: un servicio puede exigir el cliente (p. ej. "Certificado F30").
   (Array.isArray(data.subsolicitudes) ? data.subsolicitudes : []).forEach((item, idx) => {
@@ -299,105 +299,122 @@ async function crearSolicitud(db, data) {
   }
   const estadoInicial = atencion ? ESTADOS.S09 : ESTADOS.S01;
 
-  const solicitudId = Correlativo.generarId(db, data.empresa_id);
-  const timestamp = new Date().toISOString();
+  // Revisión Codex Tanda 1, 2.ª ronda: correlativo, ítems, solicitud, historial y lo que
+  // pide quien llama (alPersistir) se guardan TODO o NADA, antes de cualquier aviso. Con
+  // SAVEPOINT sirve igual si quien llama ya abrió una transacción.
+  const persistir_ = () => {
+    const solicitudId = Correlativo.generarId(db, data.empresa_id);
+    const timestamp = new Date().toISOString();
 
-  const subsolicitudesGuardadas = data.subsolicitudes.map((item, idx) => {
-    const subId = solicitudId + '-' + ('0' + (idx + 1)).slice(-2);
-    const depto = item.depto ? Servicios.departamento_(item.depto) : null;
-    let prioridad, slaHoras, responsable, areaId, servicio = null;
-    if (depto) {
-      // Etapa 2: llega a la COLA del departamento, sin asignar -- la jefatura
-      // reparte o alguien del equipo lo toma. La prioridad y el plazo los
-      // fija el servicio (urgente = al menos P2 y el plazo de P2 si es menor).
-      const c = Servicios.condicionesDelServicio_(db, item.servicio_id, !!item.urgente || !!data.es_cliente, (p) => obtenerSlaHoras_(db, p));
-      servicio = c.servicio && c.servicio.depto === depto.clave ? c.servicio : null;
-      prioridad = c.prioridad;
-      slaHoras = c.sla;
-      // Pedido a una persona en particular: queda a su nombre desde el inicio
-      // (ya validado arriba que es del equipo). Si no, a la cola sin asignar.
-      responsable = String(item.destinatario || '').trim().toLowerCase();
-      areaId = '';
-    } else {
-      const esUrgentePorTipo = !!data.es_cliente || tipoEsUrgente_(db, item.tipo);
-      prioridad = derivarPrioridad_(item.impacto, esUrgentePorTipo);
-      slaHoras = obtenerSlaHoras_(db, prioridad);
-      areaId = item.area || data.area || '';
-      responsable = resolverResponsable_(db, areaId);
-    }
+    const subsolicitudesGuardadas = data.subsolicitudes.map((item, idx) => {
+      const subId = solicitudId + '-' + ('0' + (idx + 1)).slice(-2);
+      const depto = item.depto ? Servicios.departamento_(item.depto) : null;
+      let prioridad, slaHoras, responsable, areaId, servicio = null;
+      if (depto) {
+        // Etapa 2: llega a la COLA del departamento, sin asignar -- la jefatura
+        // reparte o alguien del equipo lo toma. La prioridad y el plazo los
+        // fija el servicio (urgente = al menos P2 y el plazo de P2 si es menor).
+        const c = Servicios.condicionesDelServicio_(db, item.servicio_id, !!item.urgente || !!data.es_cliente, (p) => obtenerSlaHoras_(db, p));
+        servicio = c.servicio && c.servicio.depto === depto.clave ? c.servicio : null;
+        prioridad = c.prioridad;
+        slaHoras = c.sla;
+        // Pedido a una persona en particular: queda a su nombre desde el inicio
+        // (ya validado arriba que es del equipo). Si no, a la cola sin asignar.
+        responsable = String(item.destinatario || '').trim().toLowerCase();
+        areaId = '';
+      } else {
+        const esUrgentePorTipo = !!data.es_cliente || tipoEsUrgente_(db, item.tipo);
+        prioridad = derivarPrioridad_(item.impacto, esUrgentePorTipo);
+        slaHoras = obtenerSlaHoras_(db, prioridad);
+        areaId = item.area || data.area || '';
+        responsable = resolverResponsable_(db, areaId);
+      }
 
-    agregarFila_(db, 'SUBSOLICITUDES', {
-      subsolicitud_id: subId, solicitud_id: solicitudId, numero_item: idx + 1,
-      titulo: item.titulo, descripcion: item.descripcion,
-      contexto: item.contexto || '', resultado_esperado: item.resultado_esperado || '',
-      impacto: item.impacto || '', prioridad: prioridad, estado: estadoInicial,
-      url_modulo: item.url_modulo || '', usuario_prueba: item.usuario_prueba || '',
-      ref_credencial: item.ref_credencial || '', centro_costos: item.centro_costos || '',
-      url_video: item.url_video || '', observaciones: item.observaciones || '',
-      sla_objetivo_horas: slaHoras, estimacion_horas: item.estimacion_horas || '', horas_reales: '',
-      fecha_creacion: timestamp, urls_adicionales: JSON.stringify(item.urls_adicionales || []),
-      tipo: item.tipo || '', tipo_nombre: resolverNombreCatalogo_(db, 'CAT_TIPOS', 'tipo_id', item.tipo),
-      modulo: item.modulo || '', modulo_nombre: resolverNombreCatalogo_(db, 'CAT_MODULOS', 'modulo_id', item.modulo),
-      frecuencia: item.frecuencia || '', personas_afectadas: item.personas_afectadas || '',
-      imagen_descripciones: JSON.stringify(item.imagen_descripciones || []),
-      fecha_propuesta: data.fecha_propuesta || '', fecha_comprometida: '', fecha_terminada: '', comprometida_por: '',
-      desarrollador_asignado: responsable, area: areaId,
-      area_nombre: depto ? depto.nombre : resolverNombreCatalogo_(db, 'CAT_AREAS', 'area_id', areaId),
-      depto: depto ? depto.clave : '', depto_nombre: depto ? depto.nombre : '',
-      servicio_id: servicio ? servicio.servicio_id : '', servicio_nombre: servicio ? servicio.nombre : (depto ? 'Otro pedido' : ''),
-      atencion_resuelto_por: atencion ? atencion.resuelto_por : '',
-      atencion_fecha_resolucion: atencion ? atencion.fecha_resolucion : '',
-      atencion_detalle: atencion ? atencion.detalle : ''
+      agregarFila_(db, 'SUBSOLICITUDES', {
+        subsolicitud_id: subId, solicitud_id: solicitudId, numero_item: idx + 1,
+        titulo: item.titulo, descripcion: item.descripcion,
+        contexto: item.contexto || '', resultado_esperado: item.resultado_esperado || '',
+        impacto: item.impacto || '', prioridad: prioridad, estado: estadoInicial,
+        url_modulo: item.url_modulo || '', usuario_prueba: item.usuario_prueba || '',
+        ref_credencial: item.ref_credencial || '', centro_costos: item.centro_costos || '',
+        url_video: item.url_video || '', observaciones: item.observaciones || '',
+        sla_objetivo_horas: slaHoras, estimacion_horas: item.estimacion_horas || '', horas_reales: '',
+        fecha_creacion: timestamp, urls_adicionales: JSON.stringify(item.urls_adicionales || []),
+        tipo: item.tipo || '', tipo_nombre: resolverNombreCatalogo_(db, 'CAT_TIPOS', 'tipo_id', item.tipo),
+        modulo: item.modulo || '', modulo_nombre: resolverNombreCatalogo_(db, 'CAT_MODULOS', 'modulo_id', item.modulo),
+        frecuencia: item.frecuencia || '', personas_afectadas: item.personas_afectadas || '',
+        imagen_descripciones: JSON.stringify(item.imagen_descripciones || []),
+        fecha_propuesta: data.fecha_propuesta || '', fecha_comprometida: '', fecha_terminada: '', comprometida_por: '',
+        desarrollador_asignado: responsable, area: areaId,
+        area_nombre: depto ? depto.nombre : resolverNombreCatalogo_(db, 'CAT_AREAS', 'area_id', areaId),
+        depto: depto ? depto.clave : '', depto_nombre: depto ? depto.nombre : '',
+        servicio_id: servicio ? servicio.servicio_id : '', servicio_nombre: servicio ? servicio.nombre : (depto ? 'Otro pedido' : ''),
+        atencion_resuelto_por: atencion ? atencion.resuelto_por : '',
+        atencion_fecha_resolucion: atencion ? atencion.fecha_resolucion : '',
+        atencion_detalle: atencion ? atencion.detalle : ''
+      });
+
+      return { subsolicitud_id: subId, prioridad: prioridad, responsable: responsable, depto: depto ? depto.clave : '', titulo: item.titulo };
     });
 
-    return { subsolicitud_id: subId, prioridad: prioridad, responsable: responsable, depto: depto ? depto.clave : '', titulo: item.titulo };
-  });
+    const primerItem = data.subsolicitudes[0] || {};
+    const prioridadDerivada = prioridadMasCritica_(subsolicitudesGuardadas.map((s) => s.prioridad));
+    const estimacionTotalHoras = data.subsolicitudes.reduce((acc, item) => acc + (Number(item.estimacion_horas) || 0), 0);
+    const resumenWhatsapp = generarResumenWhatsapp_(solicitudId, data, prioridadDerivada);
 
-  const primerItem = data.subsolicitudes[0] || {};
-  const prioridadDerivada = prioridadMasCritica_(subsolicitudesGuardadas.map((s) => s.prioridad));
-  const estimacionTotalHoras = data.subsolicitudes.reduce((acc, item) => acc + (Number(item.estimacion_horas) || 0), 0);
-  const resumenWhatsapp = generarResumenWhatsapp_(solicitudId, data, prioridadDerivada);
+    agregarFila_(db, 'SOLICITUDES', {
+      solicitud_id: solicitudId, empresa_id: data.empresa_id,
+      empresa_nombre: resolverNombreCatalogo_(db, 'CAT_EMPRESAS', 'empresa_id', data.empresa_id),
+      plataforma: data.plataforma, plataforma_nombre: resolverNombreCatalogo_(db, 'CAT_PLATAFORMAS', 'plataforma_id', data.plataforma),
+      modulo: primerItem.modulo || '', modulo_nombre: resolverNombreCatalogo_(db, 'CAT_MODULOS', 'modulo_id', primerItem.modulo),
+      tipo: primerItem.tipo || '', tipo_nombre: resolverNombreCatalogo_(db, 'CAT_TIPOS', 'tipo_id', primerItem.tipo),
+      solicitante_nombre: data.solicitante_nombre, solicitante_cargo: data.solicitante_cargo,
+      solicitante_email: data.solicitante_email, es_cliente: !!data.es_cliente,
+      empresa_cliente: data.empresa_cliente || '', cliente_mandante: data.cliente_mandante || '',
+      cliente_obra: data.cliente_obra || '', contacto_cliente: data.contacto_cliente || '',
+      correo_cliente: data.correo_cliente || '', telefono_cliente: data.telefono_cliente || '',
+      urgencia_cliente: data.urgencia_cliente || '', estado_derivado: estadoInicial,
+      prioridad_derivada: prioridadDerivada, orden_atencion: '',
+      doc_estado: '', doc_reintentos: 0, url_doc: '', url_pdf: '', version_documento: 0, url_pdf_historial: '',
+      dedup_hash: dedupHash, estimacion_total_horas: estimacionTotalHoras, horas_reales: '',
+      observaciones_generales: data.observaciones_generales || '', resumen_whatsapp: resumenWhatsapp,
+      fecha_creacion: timestamp, creado_por: data.solicitante_email, cc: data.cc || '',
+      rut_cliente: data.rut_cliente || '', codigo_cliente: data.codigo_cliente || '',
+      atencion_directa: !!atencion,
+      // Fase H item 3 (Camino B, 2026-09-23): opcional -- cuando la solicitud
+      // nace DENTRO de un proyecto (ej. un RDI creado desde Proyectos), este
+      // es el único lugar donde se guarda ese vínculo. No confundir con el
+      // uso histórico de esta misma columna en proyectos.js (una solicitud
+      // que se CONVIRTIÓ en proyecto): ambos casos conviven en la misma
+      // columna porque nunca se consultan sin filtrar también por `tipo`.
+      proyecto_id: data.proyecto_id || '',
+      // D-005 revisión Tanda 1: columnas extra de quien llama (p. ej. el portal: cliente,
+      // contacto e intento) en la MISMA inserción, no después de esperar avisos.
+      ...((opciones && opciones.filaSolicitud) || {})
+    });
 
-  agregarFila_(db, 'SOLICITUDES', {
-    solicitud_id: solicitudId, empresa_id: data.empresa_id,
-    empresa_nombre: resolverNombreCatalogo_(db, 'CAT_EMPRESAS', 'empresa_id', data.empresa_id),
-    plataforma: data.plataforma, plataforma_nombre: resolverNombreCatalogo_(db, 'CAT_PLATAFORMAS', 'plataforma_id', data.plataforma),
-    modulo: primerItem.modulo || '', modulo_nombre: resolverNombreCatalogo_(db, 'CAT_MODULOS', 'modulo_id', primerItem.modulo),
-    tipo: primerItem.tipo || '', tipo_nombre: resolverNombreCatalogo_(db, 'CAT_TIPOS', 'tipo_id', primerItem.tipo),
-    solicitante_nombre: data.solicitante_nombre, solicitante_cargo: data.solicitante_cargo,
-    solicitante_email: data.solicitante_email, es_cliente: !!data.es_cliente,
-    empresa_cliente: data.empresa_cliente || '', cliente_mandante: data.cliente_mandante || '',
-    cliente_obra: data.cliente_obra || '', contacto_cliente: data.contacto_cliente || '',
-    correo_cliente: data.correo_cliente || '', telefono_cliente: data.telefono_cliente || '',
-    urgencia_cliente: data.urgencia_cliente || '', estado_derivado: estadoInicial,
-    prioridad_derivada: prioridadDerivada, orden_atencion: '',
-    doc_estado: '', doc_reintentos: 0, url_doc: '', url_pdf: '', version_documento: 0, url_pdf_historial: '',
-    dedup_hash: dedupHash, estimacion_total_horas: estimacionTotalHoras, horas_reales: '',
-    observaciones_generales: data.observaciones_generales || '', resumen_whatsapp: resumenWhatsapp,
-    fecha_creacion: timestamp, creado_por: data.solicitante_email, cc: data.cc || '',
-    rut_cliente: data.rut_cliente || '', codigo_cliente: data.codigo_cliente || '',
-    atencion_directa: !!atencion,
-    // Fase H item 3 (Camino B, 2026-09-23): opcional -- cuando la solicitud
-    // nace DENTRO de un proyecto (ej. un RDI creado desde Proyectos), este
-    // es el único lugar donde se guarda ese vínculo. No confundir con el
-    // uso histórico de esta misma columna en proyectos.js (una solicitud
-    // que se CONVIRTIÓ en proyecto): ambos casos conviven en la misma
-    // columna porque nunca se consultan sin filtrar también por `tipo`.
-    proyecto_id: data.proyecto_id || ''
-  });
+    // UNA sola entrada de historial, honesta -- en atencion directa NO se
+    // fabrica la cadena S01->...->S09 (nunca ocurrio).
+    agregarFila_(db, 'HISTORIAL_ESTADOS', {
+      historial_id: crypto.randomUUID(), solicitud_id: solicitudId, subsolicitud_id: '',
+      estado_anterior: '', estado_nuevo: estadoInicial,
+      usuario: atencion ? data.solicitante_email : 'sistema',
+      comentario: atencion
+        ? 'Atencion directa: resuelto por ' + atencion.resuelto_por + ' el ' +
+          String(atencion.fecha_resolucion).replace('T', ' ') + '. ' + atencion.detalle
+        : 'Solicitud creada por el formulario publico.',
+      timestamp: timestamp
+    });
 
-  // UNA sola entrada de historial, honesta -- en atencion directa NO se
-  // fabrica la cadena S01->...->S09 (nunca ocurrio).
-  agregarFila_(db, 'HISTORIAL_ESTADOS', {
-    historial_id: crypto.randomUUID(), solicitud_id: solicitudId, subsolicitud_id: '',
-    estado_anterior: '', estado_nuevo: estadoInicial,
-    usuario: atencion ? data.solicitante_email : 'sistema',
-    comentario: atencion
-      ? 'Atencion directa: resuelto por ' + atencion.resuelto_por + ' el ' +
-        String(atencion.fecha_resolucion).replace('T', ' ') + '. ' + atencion.detalle
-      : 'Solicitud creada por el formulario publico.',
-    timestamp: timestamp
-  });
+    // Lo que quien llama debe dejar guardado ANTES de los avisos (síncrono): si un aviso
+    // falla o el proceso se corta, el pedido ya quedó completo y reconocible.
+    if (opciones && typeof opciones.alPersistir === 'function') opciones.alPersistir(solicitudId);
+    return { solicitudId, timestamp, subsolicitudesGuardadas, primerItem, prioridadDerivada, estimacionTotalHoras, resumenWhatsapp };
+  };
+  db.exec('SAVEPOINT crear_solicitud');
+  let guardado;
+  try { guardado = persistir_(); db.exec('RELEASE crear_solicitud'); } catch (err) { db.exec('ROLLBACK TO crear_solicitud'); db.exec('RELEASE crear_solicitud'); throw err; }
+  const { solicitudId, timestamp, subsolicitudesGuardadas, primerItem, prioridadDerivada, estimacionTotalHoras, resumenWhatsapp } = guardado;
 
   await Notificaciones.enviarAcuseRecibo(db, {
     solicitud_id: solicitudId, solicitante_nombre: data.solicitante_nombre,

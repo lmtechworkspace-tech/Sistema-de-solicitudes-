@@ -193,9 +193,9 @@
 .mj2-etapa::before { content: ''; position: absolute; left: 15px; top: 34px; bottom: 4px; width: 2px; background: var(--sx-borde-suave); }
 .mj2-etapa:last-child::before { display: none; }
 .mj2-etapa__num { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--sx-superficie-2); color: var(--sx-texto-3); font: 700 .8125rem/1 var(--fuente); border: 2px solid var(--sx-borde); }
-.mj2-etapa--hecha .mj2-etapa__num { background: var(--sx-ok); border-color: var(--sx-ok); color: #fff; }
+.mj2-etapa--hecha .mj2-etapa__num { background: var(--sx-ok); border-color: var(--sx-ok); color: var(--sx-sobre-primario); }
 .mj2-etapa--hecha::before { background: var(--sx-ok); opacity: .5; }
-.mj2-etapa--actual .mj2-etapa__num { background: var(--sx-primario); border-color: var(--sx-primario); color: #fff; box-shadow: 0 0 0 4px var(--sx-primario-suave); }
+.mj2-etapa--actual .mj2-etapa__num { background: var(--sx-primario); border-color: var(--sx-primario); color: var(--sx-sobre-primario); box-shadow: 0 0 0 4px var(--sx-primario-suave); }
 .mj2-etapa__cuerpo { flex: 1; min-width: 0; padding-top: 5px; }
 .mj2-etapa__cuerpo h3 { margin: 0 0 4px; font: 700 .9375rem/1.3 var(--fuente); color: var(--sx-texto); }
 .mj2-etapa__cuerpo p { margin: 4px 0; font: var(--sx-t-cuerpo); color: var(--sx-texto-2); }
@@ -239,7 +239,7 @@
 .fc2-escala label { cursor: pointer; }
 .fc2-escala input { position: absolute; opacity: 0; pointer-events: none; }
 .fc2-escala span { display: inline-grid; place-items: center; width: 34px; height: 30px; border-radius: 8px; background: var(--sx-superficie-2); color: var(--sx-texto-2); font: 700 .8125rem/1 var(--fuente); border: 1px solid var(--sx-borde-suave); }
-.fc2-escala input:checked + span { background: var(--sx-primario); border-color: var(--sx-primario); color: #fff; }
+.fc2-escala input:checked + span { background: var(--sx-primario); border-color: var(--sx-primario); color: var(--sx-sobre-primario); }
 .fc2-escala input:focus-visible + span { box-shadow: var(--sx-anillo-foco); }
 .fc2-cap { display: flex; flex-direction: column; gap: 6px; }
 .fc2-cap--prog { border-left: 4px solid var(--sx-info); }

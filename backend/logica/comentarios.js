@@ -10,7 +10,7 @@
 const crypto = require('node:crypto');
 const { agregarFila_ } = require('../db/sqliteRepo');
 const { errorValidacion, errorForbidden } = require('./errores');
-const { buscarSolicitudPorId_ } = require('./solicitudesBackoffice');
+const BO = require('./solicitudesBackoffice');
 const Notificaciones = require('./notificaciones');
 
 function agregarComentario(db, data, contexto) {
@@ -19,7 +19,24 @@ function agregarComentario(db, data, contexto) {
   }
   if (!data.solicitud_id) return errorValidacion('solicitud_id', 'Falta indicar la solicitud.');
   if (!data.texto || String(data.texto).trim() === '') return errorValidacion('texto', 'El comentario no puede estar vacio.');
-  if (!buscarSolicitudPorId_(db, data.solicitud_id)) return errorValidacion('solicitud_id', 'No existe una solicitud con ese numero.');
+  const solicitud = BO.buscarSolicitudPorId_(db, data.solicitud_id);
+  if (!solicitud) return errorValidacion('solicitud_id', 'No existe una solicitud con ese numero.');
+  // Auditoría Codex 2026-10-08 (D-005, E2-2): escribir en la conversación es escribir.
+  // Mensaje de un ítem → ese ítem debe ser de esta solicitud y poder escribirse en él.
+  // Mensaje general → poder escribir en al menos un ítem de la solicitud.
+  const items = BO.obtenerSubsolicitudesDeSolicitud_(db, data.solicitud_id);
+  if (data.subsolicitud_id) {
+    const item = items.find((i) => i.subsolicitud_id === data.subsolicitud_id);
+    if (!item) return errorValidacion('subsolicitud_id', 'Ese ítem no es de esta solicitud.');
+    const veto = BO.vetoFueraDeAlcance_(db, contexto, item, 'escribir en la conversación');
+    if (veto) return veto;
+  } else {
+    const ajena = BO.solicitudAjenaParaSolicitante_(contexto, solicitud, items);
+    if (ajena) return ajena;
+    const vetos = items.map((i) => BO.vetoFueraDeAlcance_(db, contexto, i, 'escribir en la conversación'));
+    if (items.length && vetos.every(Boolean)) return vetos[0];
+  }
+
 
   const comentario = {
     comentario_id: crypto.randomUUID(),
@@ -27,7 +44,8 @@ function agregarComentario(db, data, contexto) {
     subsolicitud_id: data.subsolicitud_id || '',
     usuario: contexto.email,
     texto: data.texto,
-    es_interno: !!data.es_interno,
+    // Solo true de verdad (un 'false' en texto no debe volverse nota interna, ni al revés).
+    es_interno: data.es_interno === true || data.es_interno === 'true' || data.es_interno === 1,
     timestamp: new Date().toISOString()
   };
   agregarFila_(db, 'COMENTARIOS', comentario);
