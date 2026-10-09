@@ -553,3 +553,24 @@ button.doc:active { transform: scale(.98); }
 .miniaturas { gap: 12px; }
 .miniatura { width: 96px; height: 96px; }
 .miniatura__x { top: 0; right: 0; width: var(--pc-tacto); height: var(--pc-tacto); border-radius: 0 12px 0 12px; background: radial-gradient(circle at 60% 40%, rgba(10, 15, 25, .78) 0 15px, transparent 16px); }
+
+/* Mejora A (D-012): inicio con 24 px entre bloques; sombra solo en lo que te toca; servicios
+   de una sola área como filas de 72 px; cabecera más compacta con el sello de SIGSO discreto. */
+.m-inicio { gap: 24px; }
+.m-inicio .card:not(.toca) { box-shadow: none; }
+.m-inicio .bloque { display: flex; flex-direction: column; gap: 12px; }
+.m-inicio .bloque > h2 { margin: 0; }
+.item--servicio { min-height: 72px; }
+.top { padding: 10px 16px 14px; gap: 6px; }
+.sello { opacity: .75; font-size: 12px; }
+
+/* Mejora B (D-012): lo que le toca al contratista, arriba del pedido. */
+.te-toca { border: 2px solid var(--orange); gap: 12px; }
+.te-toca h2 { margin: 0; font-size: 20px; line-height: 1.25; }
+.te-toca p { margin: 0; font-size: 17px; }
+.te-toca .sub { display: block; margin-top: 4px; font-size: 15px; }
+.te-toca__et { align-self: flex-start; padding: 3px 10px; border-radius: 999px; background: var(--orange-soft); color: var(--orange); font-size: 13px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+.te-toca .btn-main, .te-toca .btn-ok { min-height: var(--pc-tacto-principal, 54px); }
+.camino__resumen { margin: 12px 0 0; font-weight: 700; }
+.item-sub--foco { outline: 3px solid var(--orange); outline-offset: 4px; border-radius: 12px; transition: outline-color .6s; }
+@media (prefers-reduced-motion: reduce) { .item-sub--foco { transition: none; } }

@@ -51,6 +51,19 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function inicial(n) { return String(n || '?').trim().split(/\s+/).slice(0, 2).map(function (x) { return x.charAt(0); }).join('').toUpperCase(); }
   function primerNombre(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+  // Mejora B (D-012): «Para hoy», «Para mañana», «Para el jueves 15» (y el mes si no es este).
+  // Solo para fechas que el equipo COMPROMETIÓ; un plazo normal del servicio no es una promesa.
+  function paraCuando(v) {
+    var m = /^(d{4})-(d{2})-(d{2})/.exec(String(v || ''));
+    if (!m) return '';
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])), h = new Date(); h.setHours(0, 0, 0, 0);
+    var dias = Math.round((d - h) / 864e5);
+    if (dias === 0) return 'Para hoy';
+    if (dias === 1) return 'Para mañana';
+    var dia = d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric' }).replace(',', '');
+    var mes = d.getMonth() !== h.getMonth() || d.getFullYear() !== h.getFullYear() ? ' de ' + d.toLocaleDateString('es-CL', { month: 'long' }) : '';
+    return (dias < 0 ? 'Era para el ' : 'Para el ') + dia + mes;
+  }
   function fecha(v, conHora) {
     if (!v) return '';
     var s = String(v);
@@ -174,6 +187,13 @@
     });
     as.push('<button type="button" class="area" data-area="__otra"><span class="area__ico">' + ico('globo') + '</span>Otra cosa<small>Escríbenos con tus palabras</small></button>');
     return '<div class="areas">' + as.join('') + '</div>';
+  }
+  // Mejora A (D-012): con UNA sola área contratada, sus servicios van directo como filas
+  // (un toque menos que entrar al área), con «Otra cosa» al final.
+  function serviciosFilas(a) {
+    return '<div class="lista servicios">' + a.servicios.map(function (s) {
+      return '<button type="button" class="item item--servicio" data-serv-area="' + esc(a.clave) + '" data-serv="' + esc(s.id) + '"><span class="ico" data-tono="' + (TONO_AREA[a.clave] || '') + '">' + ico(s.tipo === 'nuevos' || s.tipo === 'elegir' ? 'personas' : 'doc') + '</span><span class="grow"><b>' + esc(s.nombre) + '</b>' + (s.ayuda ? '<span class="sub">' + esc(s.ayuda) + '</span>' : '') + '</span><span class="flecha">' + ico('flecha') + '</span></button>';
+    }).join('') + '<button type="button" class="item item--servicio" data-serv-area="' + esc(a.clave) + '" data-serv="otra"><span class="ico">' + ico('globo') + '</span><span class="grow"><b>Otra cosa</b><span class="sub">Escríbenos con tus palabras</span></span><span class="flecha">' + ico('flecha') + '</span></button></div>';
   }
   function errorHtml(m) { return m ? '<p class="error-caja" role="alert">' + esc(m) + '</p>' : ''; }
   // La clave se ve como 6 casillas (como en el banco); el input real va encima, invisible.
@@ -572,16 +592,21 @@
     var activos = S.trab.filter(function (t) { return t.estado !== 'FINIQUITADO'; }).length;
     var nombreMes = new Date().toLocaleDateString('es-CL', { month: 'long' });
     var baldosa = function (n, txt, ir, tono) { return '<button type="button" class="stat" data-ir="' + ir + '"' + (tono ? ' data-tono="' + tono + '"' : '') + '><b>' + n + '</b><span>' + txt + '</span></button>'; };
-    return top(saludo() + ', ' + primerNombre(S.perfil.contacto.nombre), S.perfil.cliente.razon_social) + '<main>' + fallo('pedidos') + fallo('trab') +
-      (tuyos.length ? '<section class="card toca"><div class="toca-cab"><span class="latido"></span>Te toca a ti (' + tuyos.length + ')</div><div class="lista">' + tuyos.map(itemPedido).join('') + '</div></section>' : '') +
-      tarjetaAvisos() +
-      '<section style="display:flex;flex-direction:column;gap:12px"><h2>¿Qué necesitas?</h2>' + areasHtml() + botonMandar() + botonDocumentos() + '</section>' +
+    // Mejora A (D-012): pendiente → pedir/mandar → documentos → resumen; los avisos e
+    // instalar la app quedan al final (y siempre en «Mi empresa»).
+    var areas = (S.cat || {}).areas || [];
+    return top(saludo() + ', ' + primerNombre(S.perfil.contacto.nombre), S.perfil.cliente.razon_social) + '<main class="m-inicio">' + fallo('pedidos') + fallo('trab') +
+      (tuyos.length ? '<section class="card toca"><div class="toca-cab"><span class="latido"></span>Te toca a ti' + (tuyos.length > 1 ? ' (' + tuyos.length + ')' : '') + '</div><div class="lista">' + itemPedido(tuyos[0]) + '</div>' +
+        (tuyos.length > 1 ? '<button type="button" class="btn btn-sec btn-chico" data-ir="pedidos">Ver los ' + tuyos.length + ' que esperan tu respuesta</button>' : '') + '</section>' : '') +
+      '<section class="bloque"><h2>¿Qué necesitas?</h2>' + fallo('cat') + (areas.length === 1 ? serviciosFilas(areas[0]) : areasHtml()) + botonMandar() + '</section>' +
+      '<section class="bloque">' + botonDocumentos() + '</section>' +
       '<section class="card"><div class="mes-cab"><h3>Este mes</h3><small>' + esc(nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)) + '</small></div><div class="stats">' +
         baldosa(delMes.length, delMes.length === 1 ? 'pedido hecho' : 'pedidos hechos', 'pedidos', 'gris') +
         baldosa(listosMes, listosMes === 1 ? 'listo' : 'listos', 'pedidos', 'ok') +
         baldosa(curso, 'en curso', 'pedidos', 'info') +
         (tuyos.length ? baldosa(tuyos.length, tuyos.length === 1 ? 'espera tu respuesta' : 'esperan tu respuesta', 'pedidos', '') : baldosa(activos, activos === 1 ? 'trabajador en tus obras' : 'trabajadores en tus obras', 'trabajadores', 'gris')) +
         '</div><button type="button" class="btn btn-sec btn-chico" data-ir="pedidos">Ver todos mis pedidos</button></section>' +
+      tarjetaAvisos() +
     '</main>' + nav();
   }
 
@@ -738,12 +763,12 @@
     }).join('') + '</ol>';
     var teToca = [nRevisar ? (subs.length > 1 ? nRevisar + ' de ' + subs.length + ' listos para que los revises' : 'Está listo: revísalo y confirma') : '',
       nPregunta ? (nPregunta === 1 ? 'Esperamos tu respuesta a una pregunta' : 'Esperamos tu respuesta a ' + nPregunta + ' preguntas') : ''].filter(Boolean);
-    if (teToca.length) b += '<p class="camino__toca">' + ico('alerta') + '<span>' + esc(teToca.join(' · ')) + '</span></p>';
+    if (teToca.length) b += '<p class="sub camino__resumen">' + esc(teToca.join(' · ')) + '</p>';
     var multi = d.subsolicitudes.length > 1;
     var items = d.subsolicitudes.map(function (it) {
       var est = it.estado_cliente;
-      var nota = it.estado === 'S06' ? 'Te preguntaron: ' + (it.pregunta_pendiente || 'revisa la conversación') : (it.estado === 'S08' ? 'Está listo. ¿Quedó bien?' : (EST_ITEM[est] || '') + (it.fecha_comprometida && est === 'CURSO' ? ' · para el ' + fecha(String(it.fecha_comprometida).slice(0, 10)) : ''));
-      return '<div class="item-sub"><b>' + esc(multi ? it.titulo.split(' · ').slice(1).join(' · ') || it.titulo : it.titulo) + '</b>' + chip(est) + '<span class="sub">' + esc(nota) + (it.responsable_nombre && est !== 'ENVIADO' ? ' · ' + esc(it.responsable_nombre) : '') + '</span>' +
+      var nota = it.estado === 'S06' ? 'Te preguntaron: ' + (it.pregunta_pendiente || 'revisa la conversación') : (it.estado === 'S08' ? 'Está listo. ¿Quedó bien?' : (EST_ITEM[est] || '') + (est === 'CURSO' ? ' · ' + (it.fecha_comprometida ? paraCuando(it.fecha_comprometida) : 'Aún no tenemos una fecha') : ''));
+      return '<div class="item-sub" id="it-' + esc(it.subsolicitud_id) + '"><b>' + esc(multi ? it.titulo.split(' · ').slice(1).join(' · ') || it.titulo : it.titulo) + '</b>' + chip(est) + '<span class="sub">' + esc(nota) + (it.responsable_nombre && est !== 'ENVIADO' ? ' · ' + esc(it.responsable_nombre) : '') + '</span>' +
         archivosItemHtml(it.archivos || []) +
         (it.estado === 'S08' ? '<div class="fila" style="flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ok btn-chico" data-confirmar="' + esc(it.subsolicitud_id) + '">' + ico('check') + 'Sí, quedó bien</button><button type="button" class="btn btn-sec btn-chico" data-algo-mal="' + esc(it.subsolicitud_id) + '" style="width:auto">Algo está mal</button></div>' : '') +
       '</div>';
@@ -770,7 +795,24 @@
         (ev.texto ? '<span style="white-space:pre-wrap">' + esc(ev.texto) + '</span>' : '') + '<small class="hora">' + esc(horaDe(m.timestamp) || fecha(m.timestamp, true)) + '</small></div></div>';
     }).join('');
     var abierto = d.subsolicitudes.some(function (it) { return ['S09', 'S10', 'S11'].indexOf(it.estado) === -1; });
-    return top(p.titulo, d.solicitud_id, true) + '<main>' +
+    // Mejora B (D-012): arriba, lo que le toca hacer al contratista (la pregunta pendiente o lo
+    // que debe revisar), con UNA acción principal. El camino queda debajo, como contexto.
+    var pend = d.subsolicitudes.filter(function (it) { return it.estado === 'S06'; }), rev = d.subsolicitudes.filter(function (it) { return it.estado === 'S08'; });
+    var tit = function (it) { return multi ? (it.titulo.split(' · ').slice(1).join(' · ') || it.titulo) : it.titulo; };
+    var mas = pend.length + rev.length - 1;
+    var tarjeta = pend.length
+      ? '<section class="card te-toca"><span class="te-toca__et">Te toca a ti</span><h2>Te hicieron una pregunta</h2>' +
+        '<p>' + esc(pend[0].pregunta_pendiente || 'Revisa la conversación y responde.') + (multi ? ' <span class="sub">Sobre «' + esc(tit(pend[0])) + '»</span>' : '') + '</p>' +
+        (abierto ? '<button type="button" class="btn btn-main" data-ir-chat>' + ico('chat') + 'Responder</button>' : '') + '</section>'
+      : (rev.length
+        ? '<section class="card te-toca"><span class="te-toca__et">Te toca a ti</span><h2>' + (multi ? '«' + esc(tit(rev[0])) + '» está listo' : 'Está listo') + ': revísalo</h2>' +
+          '<p>' + (rev[0].responsable_nombre ? 'Lo hizo ' + esc(rev[0].responsable_nombre) + '. ' : '') + 'Mira lo que te mandamos y dinos si quedó bien.</p>' +
+          ((rev[0].archivos || []).length ? '<button type="button" class="btn btn-sec btn-chico" data-ir-item="' + esc(rev[0].subsolicitud_id) + '">' + ico('doc') + 'Ver lo que te mandamos</button>' : '') +
+          '<div class="fila" style="flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ok" data-confirmar="' + esc(rev[0].subsolicitud_id) + '">' + ico('check') + 'Sí, quedó bien</button>' +
+          '<button type="button" class="btn btn-sec btn-chico" data-algo-mal="' + esc(rev[0].subsolicitud_id) + '" style="width:auto">Algo está mal</button></div></section>'
+        : '');
+    if (tarjeta && mas > 0) tarjeta = tarjeta.replace('</section>', '<p class="sub">Y ' + (mas === 1 ? 'una cosa más' : mas + ' cosas más') + ' abajo.</p></section>');
+    return top(p.titulo, d.solicitud_id, true) + '<main>' + tarjeta +
       '<section class="card">' + chip(p.estado) + b + '</section>' +
       '<section class="card"><h3>' + (multi ? 'Cada parte de tu pedido' : 'Tu pedido') + '</h3>' + items + '</section>' +
       '<section style="display:flex;flex-direction:column;gap:10px"><h2>Conversación</h2>' + (chat ? '<div class="chat">' + chat + '</div>' : '<p class="sub">Aquí aparece lo que te escriban. Puedes escribir cuando quieras.</p>') + '</section>' +
@@ -1131,6 +1173,9 @@
     if (t.closest('[data-ir-entrar]')) { S.invitacion = null; history.replaceState(null, '', location.pathname); pintar(); return; }
     if (t.closest('[data-atras]')) { volver(); return; }
     if ((b = t.closest('[data-ir]'))) { var v = b.getAttribute('data-ir'); if (v === 'pedir') S.pedir = null; capa.innerHTML = ''; capaHist = false; ir(v); if (v === 'pedidos' || v === 'inicio') refrescarPedidos().then(function () { if (S.vista === v) pintar(); }); return; }
+    if (t.closest('[data-ir-chat]')) { var cm = document.getElementById('c-msg'); if (cm) { cm.scrollIntoView({ block: 'center', behavior: suave() }); cm.focus({ preventScroll: true }); } return; }
+    if ((b = t.closest('[data-ir-item]'))) { var ii = document.getElementById('it-' + b.getAttribute('data-ir-item')); if (ii) { ii.scrollIntoView({ block: 'start', behavior: suave() }); ii.classList.add('item-sub--foco'); setTimeout(function () { ii.classList.remove('item-sub--foco'); }, 1600); } return; }
+    if ((b = t.closest('[data-serv]'))) { nuevoPedir(b.getAttribute('data-serv-area'), b.getAttribute('data-serv')); return; }
     if ((b = t.closest('[data-area]'))) { nuevoPedir(b.getAttribute('data-area')); return; }
     if ((b = t.closest('[data-plantilla]'))) { S.pedir.plantilla = b.getAttribute('data-plantilla'); S.pedir.paso = 'datos'; S.pedir.personas = [{}]; S.pedir.datos = {}; S.pedir.error = ''; S.dir = 'adelante'; pintar(); window.scrollTo(0, 0); return; }
     if ((b = t.closest('[data-trab]'))) { S.trabId = b.getAttribute('data-trab'); ir('trab', 'adelante'); return; }

@@ -53,6 +53,7 @@
   // Etapa 4: cómo se ve la cola (tabla densa por defecto) y el reporte.
   f.densidad = 'tabla';
   try { f.densidad = localStorage.getItem('sigso_bj2_densidad') || 'tabla'; } catch (e) { /* sin storage */ }
+  try { f.origen = localStorage.getItem('sigso_bj2_origen') || ''; } catch (e) { f.origen = ''; }
   var rep_ = { datos: null, depto: null, periodo: '', cargando: false, error: '' };
   var colaElegida_ = false;
   try { var guardada = localStorage.getItem('sigso_bj2_cola'); f.cola = guardada || ''; colaElegida_ = guardada !== null; } catch (e) { /* sin storage */ }
@@ -114,6 +115,35 @@
   function antiguedad(i) {
     var d = Math.floor((Date.now() - new Date(i.fecha_creacion).getTime()) / 86400000);
     return isNaN(d) ? '' : (d <= 0 ? 'hoy' : d + ' d');
+  }
+  // Mejora C (D-012): «Plazo» en vez de «Antigüedad». Lo que importa al priorizar es cuándo
+  // vence lo prometido (o que no hay promesa / responsable / se espera al cliente).
+  function diaCorto(v) {
+    var m = /^(d{4})-(d{2})-(d{2})/.exec(String(v || '')), d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v);
+    if (isNaN(d)) return '';
+    var h = new Date(); h.setHours(0, 0, 0, 0); d.setHours(0, 0, 0, 0);
+    var n = Math.round((d - h) / 864e5);
+    if (n === 0) return 'hoy';
+    if (n === 1) return 'mañana';
+    if (n === -1) return 'ayer';
+    return d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric' }).replace('.', '').replace(',', '') + (Math.abs(n) > 6 ? ' ' + d.toLocaleDateString('es-CL', { month: 'short' }).replace('.', '') : '');
+  }
+  function plazoInfo(i) {
+    if (!abierto(i)) return i.estado === 'S08' ? { t: 'Por validar', c: 'ok', k: 7 } : { t: '—', c: '', k: 9 };
+    if (i.estado === 'S06') return { t: 'Espera al cliente', c: 'espera', k: 6 };
+    if (!i.asignado) return { t: 'Sin asignar', c: 'alerta', k: 2 };
+    if (!i.fecha_comprometida) return { t: 'Sin fecha', c: 'alerta', k: 3 };
+    var d = diaCorto(i.fecha_comprometida);
+    if (vencida(i)) return { t: 'Venció ' + d, c: 'critico', k: 0 };
+    return { t: d === 'hoy' ? 'Hoy' : (d === 'mañana' ? 'Mañana' : d), c: d === 'hoy' ? 'alerta' : '', k: 1, ts: new Date(i.vence_compromiso || i.fecha_comprometida).getTime() };
+  }
+  function plazoCelda(i) {
+    var p = plazoInfo(i), sla = abierto(i) && i.estado !== 'S06' ? (i.situacion_sla === 'FUERA_DE_PLAZO' ? 'SLA vencido' : (i.situacion_sla === 'EN_RIESGO' ? 'SLA por vencer' : '')) : '';
+    return '<span class="bj2-plazo' + (p.c ? ' bj2-plazo--' + p.c : '') + '" title="Llegó ' + U.esc(antiguedad(i) === 'hoy' ? 'hoy' : 'hace ' + antiguedad(i)) + '">' + U.esc(p.t) + '</span>' + (sla ? '<small class="bj2-plazo__sla">' + sla + '</small>' : '');
+  }
+  // El plazo más apremiante de una solicitud (la fila agrupada).
+  function peorPlazo(items) {
+    return items.slice().sort(function (a, b) { var x = plazoInfo(a), y = plazoInfo(b); return (x.k - y.k) || ((x.ts || 0) - (y.ts || 0)); })[0];
   }
   function horasTxt(h) {
     if (h === null || h === undefined) return '—';
@@ -194,12 +224,27 @@
     { id: 'por_validar', etiqueta: 'Por validar', icono: 'check', tono: 'ok', unidad: 'terminados, esperan al solicitante', f: function (i) { return i.estado === 'S08'; } },
     { id: 'todos', etiqueta: 'Todos', f: function () { return true; } }
   ];
+  // Mejora C (D-012): de dónde viene el pedido. Clientes = contratistas (portal o cliente
+  // declarado); Internos = pedidos a un departamento; Soporte = plataformas (sin departamento).
+  // Filtro, contadores y tabla usan la MISMA población.
+  var ORIGENES = [['', 'Todo'], ['clientes', 'Clientes'], ['internos', 'Internos'], ['soporte', 'Soporte']];
+  function origenDe(i) { return i.origen === 'PORTAL' || i.es_cliente || i.empresa_cliente ? 'clientes' : (i.depto ? 'internos' : 'soporte'); }
+  function poblacion() { return f.origen ? datos_.items.filter(function (i) { return origenDe(i) === f.origen; }) : datos_.items; }
+  function segOrigen() {
+    var n = { clientes: {}, internos: {}, soporte: {} }, total = {};
+    datos_.items.forEach(function (i) { if (!abierto(i)) return; n[origenDe(i)][i.solicitud_id] = true; total[i.solicitud_id] = true; });
+    var cuenta = function (o) { return Object.keys(o ? n[o] : total).length; };
+    if (ORIGENES.slice(1).filter(function (o) { return cuenta(o[0]); }).length < 2 && !f.origen) return '';
+    return '<div class="sx2-segmento bj2-origen" role="group" aria-label="De dónde viene">' + ORIGENES.map(function (o) {
+      return '<button type="button" class="sx2-segmento__op js-bj2-origen' + (f.origen === o[0] ? ' is-activo' : '') + '" data-id="' + o[0] + '" aria-pressed="' + (f.origen === o[0]) + '">' + o[1] + ' <span class="bj2-origen__n">' + cuenta(o[0]) + '</span></button>';
+    }).join('') + '</div>';
+  }
   function kpiDe(id) { return KPIS.filter(function (k) { return k.id === id; })[0] || KPIS[0]; }
 
   function filtrados() {
     var q = f.texto.toLowerCase();
     var k = kpiDe(f.kpi);
-    var lista = datos_.items.filter(function (i) {
+    var lista = poblacion().filter(function (i) {
       if (!k.f(i)) return false;
       if (f.empresa && i.empresa_id !== f.empresa) return false;
       if (f.prioridad && i.prioridad !== f.prioridad) return false;
@@ -251,7 +296,7 @@
   function kpis() {
     // 2026-10-07 (dueño): cuentan SOLICITUDES, como la tabla; debajo, cuántos ítems son si no es lo mismo.
     return '<div class="sx2-fila-kpis sx2-fila-kpis--6">' + KPIS.filter(function (k) { return k.id !== 'todos'; }).map(function (k, i) {
-      var its = datos_.items.filter(k.f), sols = {};
+      var its = poblacion().filter(k.f), sols = {};
       its.forEach(function (x) { sols[x.solicitud_id] = true; });
       var v = Object.keys(sols).length;
       var unidad = its.length !== v ? its.length + ' ítems · ' + k.unidad.replace(/ítems /, '') : k.unidad;
@@ -279,7 +324,7 @@
   function banda() {
     // 2026-10-07 (dueño): cuenta SOLICITUDES, como la tabla; si son más ítems, lo dice al lado.
     return '<div class="bj2-banda sx2-entra" role="group" aria-label="Filtrar la cola">' + KPIS.filter(function (k) { return k.id !== 'todos'; }).map(function (k) {
-      var its = datos_.items.filter(k.f), sols = {};
+      var its = poblacion().filter(k.f), sols = {};
       its.forEach(function (x) { sols[x.solicitud_id] = true; });
       var v = Object.keys(sols).length;
       return '<button type="button" class="bj2-banda__op sx2-tono-' + (v || k.id === 'abiertos' ? k.tono : 'neutro') + (f.kpi === k.id ? ' is-activo' : '') + '" data-filtro="' + k.id + '" aria-pressed="' + (f.kpi === k.id) + '" title="' + U.esc(v + (v === 1 ? ' solicitud' : ' solicitudes') + (its.length !== v ? ' (' + its.length + ' ítems)' : '') + ': ' + k.unidad) + '">' +
@@ -290,7 +335,7 @@
   // "Ponerse al día": aparece solo si hay un rezago real de ítems sin triar.
   function bannerRezago() {
     if (datos_.solo_lectura) return '';
-    var viejos = datos_.items.filter(function (i) { return abierto(i) && i.estado === 'S01' && (Date.now() - new Date(i.fecha_creacion)) / 86400000 > 14; });
+    var viejos = poblacion().filter(function (i) { return abierto(i) && i.estado === 'S01' && (Date.now() - new Date(i.fecha_creacion)) / 86400000 > 14; });
     if (viejos.length < 3) return '';
     var masViejo = Math.max.apply(null, viejos.map(function (i) { return Math.floor((Date.now() - new Date(i.fecha_creacion)) / 86400000); }));
     return '<button type="button" class="bj2-rezago-chip js-bj2-rezago" title="' + viejos.length + ' ítems llevan más de 2 semanas sin que nadie los tome; el más antiguo tiene ' + masViejo + ' días. Revísalos de a varios: recíbelos, asígnalos o ciérralos con su motivo.">' +
@@ -300,7 +345,7 @@
   // 2026-10-07 (dueño): lo que ya recibí y sigue sin fecha (quien pidió no sabe cuándo estará).
   function bannerSinFecha() {
     if (datos_.solo_lectura || f.kpi === 'sin_fecha') return '';
-    var n = datos_.items.filter(function (i) { return abierto(i) && i.estado !== 'S01' && !i.fecha_comprometida && i.asignado === datos_.mi_email; }).length;
+    var n = poblacion().filter(function (i) { return abierto(i) && i.estado !== 'S01' && !i.fecha_comprometida && i.asignado === datos_.mi_email; }).length;
     if (!n) return '';
     return '<button type="button" class="bj2-rezago-chip bj2-sinfecha-chip js-bj2-ver-sinfecha" title="Ya los recibiste, pero quien pidió no sabe para cuándo estarán. Ábrelos y dales fecha.">' +
       U.ico('calendario', 14) + '<b>' + n + (n === 1 ? ' ítem tuyo sin fecha' : ' ítems tuyos sin fecha') + '</b><span>Darles fecha</span></button>';
@@ -309,7 +354,7 @@
   function barraFiltros() {
     var empresas = {};
     datos_.items.forEach(function (i) { empresas[i.empresa_id] = i.empresa_nombre || i.empresa_id; });
-    return '<div class="sx2-barra-filtros bj2-filtros">' +
+    return segOrigen() + '<div class="sx2-barra-filtros bj2-filtros">' +
       '<label class="sx2-buscar">' + U.ico('lupa', 16) + '<input class="sx2-input js-bj2-buscar" type="search" placeholder="Buscar por título, N°, solicitante, empresa…" value="' + U.esc(f.texto) + '"></label>' +
       '<select class="sx2-select js-bj2-empresa" aria-label="Empresa"><option value="">Todas las empresas</option>' + Object.keys(empresas).sort().map(function (e) {
         return '<option value="' + U.esc(e) + '"' + (f.empresa === e ? ' selected' : '') + '>' + U.esc(empresas[e]) + '</option>';
@@ -534,7 +579,7 @@
     var buscando = !!f.texto;
     return '<div class="bj2-tabla-caja"><table class="bj2-tabla bj2-tabla--sol"><thead><tr>' +
       '<th class="bj2-tc-check"><span class="sx2-oculto-visual">Abrir o seleccionar</span></th><th class="bj2-tc-sem"><span class="sx2-oculto-visual">Plazo</span></th>' +
-      '<th class="bj2-tc-n">N°</th><th>Pedido</th><th>Pide · ' + (f.cola ? 'servicio' : 'a quién') + '</th><th>Responsable</th><th class="bj2-tc-av">Avance</th><th class="bj2-tc-num" title="Desde que llegó">Antig.</th><th class="bj2-tc-acc">Sigue</th>' +
+      '<th class="bj2-tc-n">N°</th><th>Pedido</th><th>Pide · ' + (f.cola ? 'servicio' : 'a quién') + '</th><th>Responsable</th><th class="bj2-tc-av">Avance</th><th class="bj2-tc-plazo" title="Cuándo vence lo prometido">Plazo</th><th class="bj2-tc-acc">Sigue</th>' +
       '</tr></thead><tbody>' + grupos.map(function (g) {
         var todos = itemsDeSolicitud(g.id);
         var multi = todos.length > 1;
@@ -557,7 +602,7 @@
             '<td>' + (lista.length === 1 ? '<span class="bj2-tc-quien">' + U.avatar(lista[0], 'xs') + '<span class="bj2-tc-cortar" title="' + U.esc(lista[0].nombre) + '">' + U.esc(nombreCorto(lista[0].nombre)) + '</span></span>'
               : (lista.length ? '<span class="bj2-tc-quien">' + U.avatares(lista, 3) + '<span class="bj2-tc-cortar">' + lista.length + ' personas</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>')) + '</td>' +
             '<td class="bj2-tc-av" title="' + U.esc(resumen) + '">' + barraAvance(todos) + '<small class="bj2-avance__txt">' + listos(todos) + ' de ' + todos.length + ' listos</small></td>' +
-            '<td class="bj2-tc-num">' + antiguedad(todos.slice().sort(function (a, b) { return new Date(a.fecha_creacion) - new Date(b.fecha_creacion); })[0]) + '</td>' +
+            '<td class="bj2-tc-plazo">' + plazoCelda(peorPlazo(todos)) + '</td>' +
             '<td class="bj2-tc-acc">' + siguienteSolicitud(g, todos) + '</td></tr>' +
           (abierta ? todos.map(function (it, k) {
             return filaItemDeSolicitud(it, g.items.indexOf(it) !== -1, { ultimo: k === todos.length - 1, mismo: lista.length === 1 ? todos[0].asignado || '' : null });
@@ -580,7 +625,7 @@
       '<td title="' + U.esc((i.solicitante_nombre || i.solicitante_email || '') + (donde ? ' · ' + donde : '')) + '"><span class="bj2-pide2"><b class="bj2-pide">' + U.esc(i.solicitante_nombre || i.solicitante_email || '') + '</b>' + (donde ? '<small>' + U.esc(donde) + '</small>' : '') + '</span></td>' +
       '<td>' + (persona ? '<span class="bj2-tc-quien">' + U.avatar(persona, 'xs') + '<span class="bj2-tc-cortar" title="' + U.esc(persona.nombre) + '">' + U.esc(nombreCorto(persona.nombre)) + '</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>') + '</td>' +
       '<td class="bj2-tc-av">' + barraAvance(todos) + '<small class="bj2-avance__txt' + (notaPaso(i).falta ? ' bj2-avance__txt--falta' : '') + '">' + U.esc(notaPaso(i).t) + '</small></td>' +
-      '<td class="bj2-tc-num">' + antiguedad(i) + '</td>' +
+      '<td class="bj2-tc-plazo">' + plazoCelda(i) + '</td>' +
       '<td class="bj2-tc-acc">' + siguienteSolicitud({ id: i.solicitud_id, items: [i] }, todos) + '</td></tr>';
   }
   // Un ítem dentro de una solicitud desplegada: «Ítem n de N», su camino y su botón.
@@ -625,7 +670,7 @@
     if (f.agrupar) return tablaSolicitudes(visibles);
     return '<div class="bj2-tabla-caja"><table class="bj2-tabla"><thead><tr>' +
       '<th class="bj2-tc-check"><span class="sx2-oculto-visual">Seleccionar</span></th><th class="bj2-tc-sem"><span class="sx2-oculto-visual">Plazo</span></th>' +
-      '<th>N°</th><th>Pedido</th><th>Pide · ' + (f.cola ? 'servicio' : 'a quién') + '</th><th>Responsable</th><th>Estado</th><th class="bj2-tc-num" title="Desde que llegó">Antig.</th><th class="bj2-tc-comp">Compromiso</th><th class="bj2-tc-acc"><span class="sx2-oculto-visual">Acciones</span></th>' +
+      '<th>N°</th><th>Pedido</th><th>Pide · ' + (f.cola ? 'servicio' : 'a quién') + '</th><th>Responsable</th><th>Estado</th><th class="bj2-tc-plazo" title="Cuándo vence lo prometido">Plazo</th><th class="bj2-tc-acc"><span class="sx2-oculto-visual">Acciones</span></th>' +
       '</tr></thead><tbody>' + (f.agrupar ? agrupar(visibles) : visibles.map(function (i) { return { id: i.solicitud_id, i: i, items: [i], suelto: true }; })).map(function (g) {
         var multi = !g.suelto && g.i.cantidad_items > 1;
         // La fila de la solicitud usa las mismas columnas (una celda a lo ancho desordenaba los anchos):
@@ -653,8 +698,7 @@
           '<td title="' + U.esc((i.solicitante_nombre || i.solicitante_email || '') + (donde ? ' · ' + donde : '')) + '"><span class="bj2-tc-cortar"><b class="bj2-pide">' + U.esc(i.solicitante_nombre || i.solicitante_email || '') + '</b>' + (donde ? '<small class="sx2-tenue">· ' + U.esc(donde) + '</small>' : '') + '</span></td>' +
           '<td>' + (persona ? '<span class="bj2-tc-quien">' + U.avatar(persona, 'xs') + '<span class="bj2-tc-cortar">' + U.esc(persona.nombre) + '</span></span>' : '<span class="bj2-sin">' + U.ico('persona', 13) + 'Sin asignar</span>') + '</td>' +
           '<td>' + badgeEstado(i) + '</td>' +
-          '<td class="bj2-tc-num">' + antiguedad(i) + '</td>' +
-          '<td class="bj2-tc-comp">' + (i.fecha_comprometida ? '<span' + (vencida(i) ? ' class="bj2-tarde" title="Fecha comprometida vencida"' : '') + '>' + fechaCorta(i.fecha_comprometida) + '</span>' : '<span class="sx2-tenue">—</span>') + '</td>' +
+          '<td class="bj2-tc-plazo">' + plazoCelda(i) + '</td>' +
           '<td class="bj2-tc-acc">' + (datos_.solo_lectura ? '' : (i.puede_tomar
             ? U.boton({ texto: 'Tomar', sm: true, variante: 'primario', clase: 'js-bj2-tomar', datos: { id: i.subsolicitud_id }, titulo: 'Queda a tu nombre' })
             : (i.estado === 'S01' && (!i.depto || i.puede_asignar || i.asignado === datos_.mi_email) ? U.boton({ texto: 'Recibir', sm: true, variante: 'primario', clase: 'js-bj2-recibir', datos: { id: i.subsolicitud_id } }) : ''))) + '</td>' +
@@ -670,7 +714,7 @@
   }
   function tablero() {
     var q = f.texto.toLowerCase();
-    var base = datos_.items.filter(function (i) {
+    var base = poblacion().filter(function (i) {
       if (CERRADOS.indexOf(i.estado) !== -1 || i.estado === 'S08') return false;
       if (f.empresa && i.empresa_id !== f.empresa) return false;
       if (f.prioridad && i.prioridad !== f.prioridad) return false;
@@ -679,7 +723,7 @@
     });
     var COLS = [['NUEVA', 'Nueva', 'info'], ['EN_CURSO', 'En curso', 'hito'], ['ESPERANDO', 'Esperando respuesta', 'alerta']];
     var MAX = 40;
-    var resueltas = datos_.items.filter(function (i) { return i.estado === 'S08'; }).length;
+    var resueltas = poblacion().filter(function (i) { return i.estado === 'S08'; }).length;
     return (resueltas ? '<p class="bj2-resueltas">' + U.ico('check', 14) + '<span><b>' + resueltas + (resueltas === 1 ? ' resuelta espera' : ' resueltas esperan') + '</b> que quien pidió confirme (si no responde, se cierra sola a los 5 días hábiles). Ya no están en tu lista de trabajo.</span>' +
         U.boton({ texto: 'Ver por validar', sm: true, variante: 'fantasma', clase: 'js-bj2-ver-validar' }) + '</p>' : '') +
       '<div class="bj2-tablero">' + COLS.map(function (c) {
@@ -695,7 +739,7 @@
           // 2026-10-07 (dueño): los ítems de una misma solicitud en la misma columna van en UNA tarjeta.
           if (g.length > 1) {
             return '<li class="bj2-tarj bj2-tarj--grupo js-bj2-abrir-sol" data-sol="' + U.esc(i.solicitud_id) + '" tabindex="0" title="Abrir la solicitud completa">' +
-              '<span class="bj2-tarj__cab">' + semaforoPeor(g) + '<span class="bj2-id">' + U.esc(i.solicitud_id) + '</span><span class="bj2-tarj__cuenta">' + g.length + ' de ' + i.cantidad_items + ' ítems</span><span class="sx2-tenue bj2-tarj__edad">' + antiguedad(i) + '</span></span>' +
+              '<span class="bj2-tarj__cab">' + semaforoPeor(g) + '<span class="bj2-id">' + U.esc(i.solicitud_id) + '</span><span class="bj2-tarj__cuenta">' + g.length + ' de ' + i.cantidad_items + ' ítems</span><span class="bj2-tarj__edad">' + plazoCelda(peorPlazo(g)) + '</span></span>' +
               '<span class="bj2-tarj__its">' + g.map(function (x) {
                 return '<button type="button" class="bj2-tarj__it js-bj2-rep-abrir" data-sol="' + U.esc(x.solicitud_id) + '" data-sub="' + U.esc(x.subsolicitud_id) + '"><span class="bj2-tarj__n">' + x.numero_item + '</span><span class="bj2-tarj__it-tit">' + U.esc(x.titulo || '(sin título)') + '</span></button>';
               }).join('') + '</span>' +
@@ -705,7 +749,7 @@
             '</li>';
           }
           return '<li class="bj2-tarj" data-bj2-item="' + U.esc(i.subsolicitud_id) + '" data-sol="' + U.esc(i.solicitud_id) + '" tabindex="0">' +
-            '<span class="bj2-tarj__cab">' + semaforo(i) + '<span class="bj2-id">' + U.esc(i.solicitud_id) + '</span>' + (i.cantidad_items > 1 ? '<span class="bj2-tarj__cuenta">Ítem ' + i.numero_item + ' de ' + i.cantidad_items + '</span>' : '') + '<span class="sx2-tenue bj2-tarj__edad">' + antiguedad(i) + '</span></span>' +
+            '<span class="bj2-tarj__cab">' + semaforo(i) + '<span class="bj2-id">' + U.esc(i.solicitud_id) + '</span>' + (i.cantidad_items > 1 ? '<span class="bj2-tarj__cuenta">Ítem ' + i.numero_item + ' de ' + i.cantidad_items + '</span>' : '') + '<span class="bj2-tarj__edad">' + plazoCelda(i) + '</span></span>' +
             '<strong class="bj2-tarj__tit">' + U.esc(i.titulo || '(sin título)') + '</strong>' +
             '<span class="sx2-tenue bj2-tarj__meta">' + U.esc(i.solicitante_nombre || '') + (i.servicio_nombre ? ' · ' + U.esc(i.servicio_nombre) : '') + '</span>' +
             '<span class="bj2-tarj__pie">' + (persona ? U.avatar(persona, 'xs') + '<span class="sx2-cortar">' + U.esc(persona.nombre) + '</span>' : '<span class="bj2-sin">' + U.ico('persona', 12) + 'Sin asignar</span>') +
@@ -987,6 +1031,41 @@
 
   // Ejecuta una acción ítem por ítem (el backend valida cada uno), muestra el
   // avance y al final resume qué no se pudo y por qué.
+  // Mejora C (D-012): fechas rápidas bajo cada campo de fecha de la Bandeja (Hoy, Mañana y la
+  // sugerida, que es el valor con que se abrió el campo). Respetan el mínimo del campo.
+  function claveLocal(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function ponerRapidas(inp) {
+    if (inp.hasAttribute('data-rapidas-ok')) return;
+    inp.setAttribute('data-rapidas-ok', '');
+    var hoy = new Date(), man = new Date(); man.setDate(man.getDate() + 1);
+    var ops = [['Hoy', claveLocal(hoy)], ['Mañana', claveLocal(man)]];
+    var sug = inp.defaultValue;
+    if (sug && sug !== ops[0][1] && sug !== ops[1][1]) ops.push(['Sugerida (' + diaCorto(sug) + ')', sug]);
+    var min = inp.getAttribute('min') || '';
+    var caja = document.createElement('div');
+    caja.className = 'bj2-rapidas'; caja.setAttribute('role', 'group'); caja.setAttribute('aria-label', 'Fechas rápidas');
+    caja.innerHTML = ops.filter(function (o) { return !min || o[1] >= min; }).map(function (o) {
+      return '<button type="button" class="bj2-rapida js-bj2-rapida" data-fecha="' + o[1] + '">' + U.esc(o[0]) + '</button>';
+    }).join('');
+    inp.insertAdjacentElement('afterend', caja);
+  }
+  function enriquecerFechas(raiz) { [].forEach.call((raiz || document).querySelectorAll('input[type=date][data-rapidas]:not([data-rapidas-ok])'), ponerRapidas); }
+  var fechasPend_ = false;
+  if (window.MutationObserver) new MutationObserver(function () {
+    if (fechasPend_) return; // una sola pasada por cuadro, por muchos cambios que haya
+    fechasPend_ = true;
+    requestAnimationFrame(function () { fechasPend_ = false; enriquecerFechas(document); });
+  }).observe(document.body, { childList: true, subtree: true });
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('.js-bj2-rapida');
+    if (!b) return;
+    var inp = b.parentNode.previousElementSibling;
+    if (!inp || inp.type !== 'date') return;
+    inp.value = b.getAttribute('data-fecha');
+    inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true }));
+    [].forEach.call(b.parentNode.children, function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+  });
+
   // D-005 E3-4: el menú «Más» se salía recortado por la tarjeta del ítem (overflow:hidden).
   // Al abrirse, su lista pasa a position:fixed junto al botón (arriba o abajo según el
   // espacio, con alto máximo y scroll). Flechas recorren las opciones; Escape cierra solo
@@ -1227,7 +1306,7 @@
       var nuevos = lista.filter(function (i) { return i.estado === 'S01'; });
       if (!nuevos.length) { PY.aviso('Ninguno de los seleccionados está en "' + estadoTxt('S01') + '".', 'error'); return; }
       formDrawer({ titulo: 'Recibir ' + nuevos.length + (nuevos.length === 1 ? ' ítem' : ' ítems') + ' y dar fecha', boton: 'Recibir y avisar',
-        campos: PY.campo('¿Para cuándo estarán?', '<input class="sx2-input" type="date" name="fecha" min="' + hoyIso() + '" value="' + fechaSugerida(nuevos[0]) + '">',
+        campos: PY.campo('¿Para cuándo estarán?', '<input class="sx2-input" type="date" data-rapidas name="fecha" min="' + hoyIso() + '" value="' + fechaSugerida(nuevos[0]) + '">',
           'La misma fecha para todos (después puedes cambiar la de cada uno). A cada solicitante le llega un aviso.' + (nuevos.length < lista.length ? ' Los que ya no están nuevos se omiten.' : '')),
         validar: function (x) { return x.fecha ? '' : 'Elige la fecha.'; },
         aplicar: function (x) {
@@ -1257,7 +1336,7 @@
       var conFecha = lista.filter(function (i) { return i.fecha_comprometida; }).length;
       formDrawer({ titulo: 'Fecha comprometida para ' + n, boton: 'Comprometer',
         subtitulo: conFecha ? conFecha + ' ya tenían fecha: cambiarla exige un motivo.' : 'Queda como compromiso visible para el solicitante.',
-        campos: PY.campo('Fecha', '<input class="sx2-input" type="date" name="fecha" min="' + PY.hoyClave() + '">') +
+        campos: PY.campo('Fecha', '<input class="sx2-input" type="date" data-rapidas name="fecha" min="' + PY.hoyClave() + '">') +
           (conFecha ? PY.campo('Motivo del cambio', '<textarea class="sx2-input" name="motivo" maxlength="500" placeholder="Mínimo 20 caracteres"></textarea>') : ''),
         validar: function (x) { return !x.fecha ? 'Elige la fecha.' : (conFecha && (x.motivo || '').length < 20 ? 'El motivo del cambio debe tener al menos 20 caracteres.' : ''); },
         aplicar: function (x) { ejecutarLote(lista, function (i) { return api('comprometerFecha', { subsolicitud_id: i.subsolicitud_id, fecha_comprometida: x.fecha, motivo: x.motivo || '' }); }, 'Fecha comprometida'); } });
@@ -1321,7 +1400,7 @@
         return '<button type="button" class="sx2-tabs__op js-bj2-tab" role="tab" data-tab="' + t[0] + '" aria-selected="' + (t[0] === pestana ? 'true' : 'false') + '">' + t[1] + '</button>';
       }).join('') + '</div>';
       var cuerpo = pestana === 'ficha' ? ficha(s) : (pestana === 'actividad' ? actividad() : (pestana === 'archivos' ? archivos() :
-        itemsHtml(subs) + '<section class="bj2-det-conv" id="bj2-conv"><h3 class="sx2-seccion-drawer__titulo">' + U.ico('comentario', 15) + (subs.length > 1 ? ' Conversación general con ' : ' Conversación con ') + U.esc(s.solicitante_nombre || 'quien pidió') + '</h3>' +
+        proximoPaso(subs) + itemsHtml(subs) + '<section class="bj2-det-conv" id="bj2-conv"><h3 class="sx2-seccion-drawer__titulo">' + U.ico('comentario', 15) + (subs.length > 1 ? ' Conversación general con ' : ' Conversación con ') + U.esc(s.solicitante_nombre || 'quien pidió') + '</h3>' +
           (subs.length > 1 ? '<p class="bj2-conv__ayuda">Lo de toda la solicitud. Para algo de un ítem, escribe dentro de ese ítem: así la respuesta queda junto a él.</p>' : '') +
           conversacionHtml(s, subs.length > 1 ? msjsDe('') : conversacion_(), {}) + '</section>'));
       d.cuerpo(avisoCorreo(s) + tabsHtml + cuerpo);
@@ -1409,6 +1488,25 @@
       '</div>';
     }
 
+    // Mejora C (D-012): arriba del detalle, el paso que sigue (y de qué ítem), con un botón que
+    // abre ese ítem en esa acción. Lo que espera a otro se dice, sin botón.
+    function proximoPaso(subs) {
+      if (soloLectura()) return '';
+      var abiertos = subs.filter(function (it) { return ['S08', 'S09', 'S10', 'S11'].indexOf(it.estado) === -1; });
+      var t = function (it) { return subs.length > 1 ? ' · ' + it.numero_item + '. ' + it.titulo : ''; };
+      var cuando = function (it) { return it.fecha_comprometida ? 'Prometido para ' + diaCorto(it.fecha_comprometida) : 'Sin fecha prometida'; };
+      var paso = null, x;
+      if ((x = abiertos.filter(function (it) { return it.estado === 'S01'; })[0])) paso = { it: x, txt: 'Recibirlo y darle fecha', acc: '' };
+      else if ((x = abiertos.filter(function (it) { return it.estado !== 'S06' && !it.fecha_comprometida; })[0])) paso = { it: x, txt: 'Darle fecha', acc: 'fecha' };
+      else if ((x = abiertos.filter(function (it) { return ['S02', 'S03', 'S04'].indexOf(it.estado) !== -1; })[0])) paso = { it: x, txt: 'Empezarlo', acc: '' };
+      else if ((x = abiertos.filter(function (it) { return ['S05', 'S07'].indexOf(it.estado) !== -1; })[0])) paso = { it: x, txt: 'Resolverlo', acc: 'resolver' };
+      if (!paso) {
+        var espera = abiertos.some(function (it) { return it.estado === 'S06'; }) ? 'Espera la respuesta del cliente' : (subs.some(function (it) { return it.estado === 'S08'; }) ? 'Espera que el cliente confirme' : '');
+        return espera ? '<div class="bj2-prox bj2-prox--espera"><span class="bj2-prox__et">Próximo paso</span><b>' + U.esc(espera) + '</b></div>' : '';
+      }
+      return '<div class="bj2-prox"><span class="bj2-prox__et">Próximo paso</span><span class="bj2-prox__txt"><b>' + U.esc(paso.txt) + '</b>' + U.esc(t(paso.it)) + '<small>' + U.esc(cuando(paso.it)) + '</small></span>' +
+        U.boton({ texto: 'Ir', icono: 'derecha', sm: true, variante: 'primario', clase: 'js-bj2-ir-paso', datos: { id: paso.it.subsolicitud_id, acc: paso.acc } }) + '</div>';
+    }
     function dato(et, v) { return v ? '<dt>' + U.esc(et) + '</dt><dd>' + v + '</dd>' : ''; }
     // D-005 E3-9: un contratista sin correo queda con una dirección técnica «@portal.invalid»:
     // no es un contacto. Ni se muestra ni se enlaza; quien escribió se nombra por el pedido.
@@ -1511,7 +1609,7 @@
       var todos = !soloLectura() && nuevos.length > 1
         ? '<div class="bj2-todos">' + (abiertoAcc.__todos
             ? '<form class="sx2-form js-bj2-form-todos" novalidate><strong>Recibir ' + nuevos.length + ' ítems y dar fecha</strong>' +
-                nuevos.map(function (it) { return PY.campo(it.numero_item + '. ' + it.titulo, '<input class="sx2-input" type="date" name="f_' + U.esc(it.subsolicitud_id) + '" min="' + hoyIso() + '" value="' + fechaSugerida(it) + '">'); }).join('') +
+                nuevos.map(function (it) { return PY.campo(it.numero_item + '. ' + it.titulo, '<input class="sx2-input" type="date" data-rapidas name="f_' + U.esc(it.subsolicitud_id) + '" min="' + hoyIso() + '" value="' + fechaSugerida(it) + '">'); }).join('') +
                 '<p class="sx2-tenue" style="margin:0;font-size:.8125rem">A ' + U.esc((detalle.solicitud || {}).solicitante_nombre || 'quien pidió') + ' le llega un solo aviso con la fecha de cada ítem.</p>' +
                 '<p class="sx2-campo__error js-bj2-item-error" hidden></p>' +
                 '<div class="sx2-flex" style="justify-content:flex-end;gap:6px">' + U.boton({ texto: 'Cancelar', sm: true, clase: 'js-bj2-todos' }) + U.boton({ texto: 'Recibir y avisar', icono: 'check', sm: true, variante: 'primario', tipo: 'submit' }) + '</div></form>'
@@ -1522,7 +1620,7 @@
       if (!todos && !soloLectura() && sinFecha.length > 1) {
         todos = '<div class="bj2-todos bj2-todos--fecha">' + (abiertoAcc.__fechas
             ? '<form class="sx2-form js-bj2-form-fechas" novalidate><strong>Dar fecha a ' + sinFecha.length + ' ítems</strong>' +
-                sinFecha.map(function (it) { return PY.campo(it.numero_item + '. ' + it.titulo, '<input class="sx2-input" type="date" name="f_' + U.esc(it.subsolicitud_id) + '" min="' + hoyIso() + '" value="' + fechaSugerida(it) + '">'); }).join('') +
+                sinFecha.map(function (it) { return PY.campo(it.numero_item + '. ' + it.titulo, '<input class="sx2-input" type="date" data-rapidas name="f_' + U.esc(it.subsolicitud_id) + '" min="' + hoyIso() + '" value="' + fechaSugerida(it) + '">'); }).join('') +
                 '<p class="sx2-campo__error js-bj2-item-error" hidden></p>' +
                 '<div class="sx2-flex" style="justify-content:flex-end;gap:6px">' + U.boton({ texto: 'Cancelar', sm: true, clase: 'js-bj2-fechas' }) + U.boton({ texto: 'Guardar fechas', icono: 'check', sm: true, variante: 'primario', tipo: 'submit' }) + '</div></form>'
             : '<span>' + U.ico('calendario', 15) + '<b>' + sinFecha.length + ' ítems sin fecha</b>: quien pidió no sabe para cuándo estarán.</span>' + U.boton({ texto: 'Dar fecha a los ' + sinFecha.length, icono: 'calendario', sm: true, variante: 'primario', clase: 'js-bj2-fechas' })) +
@@ -1649,7 +1747,7 @@
     function formItem(it, acc, trans) {
       var id = it.subsolicitud_id, campos = '', boton = 'Aplicar';
       if (acc === 'recibir') {
-        campos = PY.campo('¿Para cuándo estará?', '<input class="sx2-input" type="date" name="fecha" min="' + hoyIso() + '" value="' + fechaSugerida(it) + '">',
+        campos = PY.campo('¿Para cuándo estará?', '<input class="sx2-input" type="date" data-rapidas name="fecha" min="' + hoyIso() + '" value="' + fechaSugerida(it) + '">',
           'A ' + ((detalle.solicitud || {}).solicitante_nombre || 'quien pidió') + ' le llega un aviso: que lo recibiste y para cuándo estará. Si nadie lo tenía, queda a tu nombre.');
         boton = 'Recibir y avisar';
       } else if (acc === 'resolver') {
@@ -1676,7 +1774,7 @@
           PY.campo('Comentario', '<textarea class="sx2-input" name="comentario" maxlength="1000" placeholder="El solicitante lo ve en su historial"></textarea>');
         boton = 'Cambiar estado';
       } else if (acc === 'fecha') {
-        campos = PY.campo('Fecha comprometida', '<input class="sx2-input" type="date" name="fecha_comprometida" value="' + (it.fecha_comprometida ? String(it.fecha_comprometida).slice(0, 10) : '') + '">') +
+        campos = PY.campo('Fecha comprometida', '<input class="sx2-input" type="date" data-rapidas name="fecha_comprometida" value="' + (it.fecha_comprometida ? String(it.fecha_comprometida).slice(0, 10) : '') + '">') +
           (it.fecha_comprometida ? PY.campo('Motivo del cambio', '<textarea class="sx2-input" name="motivo" maxlength="500" placeholder="Mínimo 20 caracteres"></textarea>') : '');
         boton = it.fecha_comprometida ? 'Recomprometer' : 'Comprometer';
       } else if (acc === 'prioridad') {
@@ -1865,6 +1963,15 @@
         if (conv) { conv.scrollIntoView({ block: 'start', behavior: U.reducirMovimiento() ? 'auto' : 'smooth' }); var ta = conv.querySelector('textarea'); if (ta) setTimeout(function () { ta.focus(); }, U.reducirMovimiento() ? 0 : 250); }
         return;
       }
+      if ((b = t.closest('.js-bj2-ir-paso'))) {
+        var idP = b.getAttribute('data-id');
+        expandido = expandido || {}; expandido[idP] = true;
+        if (b.getAttribute('data-acc')) abiertoAcc[idP] = b.getAttribute('data-acc');
+        pintarDetalle();
+        var art2 = d.el.querySelector('[data-bj2-det="' + idP + '"]');
+        if (art2) { art2.scrollIntoView({ block: 'start', behavior: U.reducirMovimiento() ? 'auto' : 'smooth' }); var foco = art2.querySelector('input[type=date]') || art2.querySelector('.sx2-boton--primario') || art2.querySelector('textarea'); if (foco) foco.focus({ preventScroll: true }); }
+        return;
+      }
       if ((b = t.closest('.js-bj2-acc'))) { var id = b.getAttribute('data-id'); abiertoAcc[id] = abiertoAcc[id] === b.getAttribute('data-acc') ? '' : b.getAttribute('data-acc'); pintarDetalle(); return; }
       if ((b = t.closest('.js-bj2-acc-cerrar'))) { abiertoAcc[b.getAttribute('data-id')] = ''; pintarDetalle(); return; }
       if ((b = t.closest('.js-bj2-paso'))) {
@@ -1985,6 +2092,7 @@
       return;
     }
     if ((b = t.closest('.js-bj2-vista'))) { f.vista = b.getAttribute('data-id'); pintar(); if (f.vista === 'reportes' && !rep_.datos) cargarReporte(); return; }
+    if ((b = t.closest('.js-bj2-origen'))) { f.origen = b.getAttribute('data-id'); try { localStorage.setItem('sigso_bj2_origen', f.origen); } catch (e) { /* sin storage */ } mostrar_ = POR_PAGINA; pintar(true); return; }
     if ((b = t.closest('.js-bj2-densidad'))) { f.densidad = b.getAttribute('data-id'); try { localStorage.setItem('sigso_bj2_densidad', f.densidad); } catch (e) { /* sin storage */ } pintar(true); return; }
     if ((b = t.closest('.js-bj2-rep-excel'))) { excelReporte(b); return; }
     if ((b = t.closest('.js-bj2-rep-abrir'))) { abrirDetalle(b.getAttribute('data-sol'), b.getAttribute('data-sub')); return; }

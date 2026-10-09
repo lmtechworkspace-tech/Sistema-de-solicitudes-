@@ -700,3 +700,33 @@ button.bj2-it__cab:focus-visible { outline: 2px solid var(--sx-primario); outlin
   .bj2-fila { grid-template-columns: 22px 34px minmax(0, 1fr); }
   .bj2-fila__acc { grid-column: 3; grid-row: auto; justify-content: flex-start; }
 }
+
+/* Mejora C (D-012): de dónde viene (Todo/Clientes/Internos/Soporte) y «Plazo» en vez de «Antig.». */
+.bj2-origen { margin: 0 0 var(--sx-e-3); flex-wrap: wrap; }
+.bj2-origen__n { min-width: 1.4em; padding: 1px 6px; border-radius: 999px; background: var(--sx-superficie); color: var(--sx-texto-2); font: 600 .6875rem/1.4 var(--fuente); font-variant-numeric: tabular-nums; text-align: center; }
+.sx2-segmento__op[aria-pressed="true"] .bj2-origen__n { background: var(--sx-primario-suave); color: var(--sx-primario); }
+.bj2-tabla .bj2-tc-plazo { width: 128px; max-width: none !important; white-space: nowrap; }
+.bj2-plazo { display: inline-block; font: 600 .8125rem/1.25 var(--fuente); color: var(--sx-texto); font-variant-numeric: tabular-nums; }
+.bj2-plazo--critico { color: var(--sx-critico); }
+.bj2-plazo--alerta { color: var(--sx-alerta); }
+.bj2-plazo--espera { color: var(--sx-info); }
+.bj2-plazo--ok { color: var(--sx-ok); }
+.bj2-plazo__sla { display: block; font: 500 .6875rem/1.3 var(--fuente); color: var(--sx-texto-3); }
+.bj2-tarj__edad .bj2-plazo { font-size: .75rem; }
+
+/* Mejora C (D-012): próximo paso arriba del detalle y fechas rápidas. */
+.bj2-prox { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 var(--sx-e-4); padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--sx-primario) 30%, var(--sx-borde)); border-radius: var(--sx-radio); background: var(--sx-primario-suave); }
+.bj2-prox--espera { background: var(--sx-superficie-2); border-color: var(--sx-borde); }
+.bj2-prox__et { font: 700 .6875rem/1 var(--fuente); letter-spacing: .04em; text-transform: uppercase; color: var(--sx-primario); }
+.bj2-prox--espera .bj2-prox__et { color: var(--sx-texto-2); }
+.bj2-prox__txt { flex: 1 1 14rem; min-width: 0; font: .875rem/1.4 var(--fuente); color: var(--sx-texto); overflow-wrap: anywhere; }
+.bj2-prox__txt small { display: block; font-size: .75rem; color: var(--sx-texto-2); }
+.bj2-rapidas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.bj2-rapida { height: 30px; padding: 0 10px; border: 1px solid var(--sx-borde); border-radius: 999px; background: var(--sx-superficie); font: 500 .8125rem/1 var(--fuente); color: var(--sx-texto); cursor: pointer; }
+.bj2-rapida:hover { border-color: var(--sx-primario); }
+.bj2-rapida[aria-pressed="true"] { background: var(--sx-primario); border-color: var(--sx-primario); color: var(--sx-sobre-primario); }
+.bj2-rapida:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+/* La columna «Plazo» reemplaza a «Antig.» (58 px): necesita lugar para «Espera al cliente». */
+.bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th.bj2-tc-plazo { width: 112px; }
+.bj2-tabla td.bj2-tc-plazo { overflow: visible; white-space: normal; }
+.bj2-tabla:not(.bj2-tabla--rep):not(.bj2-tabla--sol) th.bj2-tc-plazo { width: 112px; }
