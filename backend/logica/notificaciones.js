@@ -733,7 +733,10 @@ async function avisarCompromisoFecha(db, solicitud, subsolicitud, fechaCompromet
     '\n- Fecha comprometida de entrega: ' + String(fechaComprometida).replace('T', ' ') + '\n\n' +
     'Le avisaremos cuando el trabajo esté terminado para su validación.' +
     pieCorreo_();
-  return enviarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: solicitud.solicitante_email, evento: 'COMPROMISO_FECHA', asunto, cuerpo });
+  // D-005 E2-5: el aviso es de ESE ítem y ESA fecha (la categoría se reconoce por el prefijo):
+  // otro ítem o un nuevo compromiso se avisan; reintentar el mismo no se duplica (RN-026).
+  const evento = 'COMPROMISO_FECHA:' + subsolicitud.subsolicitud_id + ':' + String(fechaComprometida);
+  return enviarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: solicitud.solicitante_email, evento, asunto, cuerpo });
 }
 
 // derivadas: array de { solicitud_id, ... } ya escritas (aplicarDerivacion_).

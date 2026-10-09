@@ -309,8 +309,10 @@
 
 /* Drawer (panel lateral) ------------------------------------------------------ */
 .sx2-drawer { position: fixed; inset: 0; z-index: 70; }
+/* D-005: tampoco el aviso «Tu agenda de hoy» (z-index 1150) tapa el pie ni los menús del panel. */
 body.sx2-con-drawer #sigso-notif-campana,
-body.sx2-con-drawer #py2-interruptor { visibility: hidden; }
+body.sx2-con-drawer #py2-interruptor,
+body.sx2-con-drawer .ag-aviso { visibility: hidden; }
 .sx2-drawer__telon {
   position: absolute; inset: 0;
   background: color-mix(in srgb, #0F172A 28%, transparent);

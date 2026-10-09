@@ -101,6 +101,18 @@ function instanteLocal_(claveDia, hora, minuto, tz) {
   return new Date(resultado);
 }
 
+// D-005 E2-8: un compromiso de DÍA (sin hora) vence al fin de la jornada (18:00 de Chile),
+// no a la medianoche UTC (las 21:00 del día anterior en Santiago). Con hora: tal cual.
+const HORA_FIN_JORNADA_ = 18;
+function venceCompromiso_(valor, tz) {
+  if (valor === null || valor === undefined || valor === '') return null;
+  const s = valor instanceof Date ? valor.toISOString() : String(valor).trim();
+  const m = RE_DIA_ETIQUETA_.exec(s);
+  if (m) return instanteLocal_(m[1], HORA_FIN_JORNADA_, 0, tz || 'America/Santiago');
+  const f = new Date(s.replace(' ', 'T'));
+  return isNaN(f.getTime()) ? null : f;
+}
+
 function diaSemanaClave_(claveDia) {
   const partes = claveDia.split('-').map(Number);
   return new Date(Date.UTC(partes[0], partes[1] - 1, partes[2])).getUTCDay(); // 0=domingo .. 6=sabado
@@ -230,7 +242,7 @@ function restarDiasHabiles_(desde, dias, opciones) {
 
 module.exports = {
   horasHabilesEntre,
-  claveDia_, claveDiaCampo_,
+  claveDia_, claveDiaCampo_, venceCompromiso_,
   sumarDiasHabiles_, restarDiasHabiles_, esDiaHabil_, siguienteDiaClave_, anteriorDiaClave_, diaSemanaClave_,
   // Expuestos para los tests de memoizacion (mismo motivo que en el .gs).
   formateadorOffset_, formateadorDia_, offsetMinutos_, instanteLocal_

@@ -510,10 +510,13 @@ function getCola(db, filtros, contexto) {
   const rol = contexto ? contexto.rol : '';
   const email = String((contexto && contexto.email) || '').toLowerCase();
   const soloMios = filtros.solo_mios === true || filtros.solo_mios === 'true';
-  const verBandeja = (rol === 'ADM' && !soloMios) ? String(filtros.verBandeja || '').toLowerCase() : email;
+  // D-005 E2-6: Gerencia LEE todo (cola completa y la de cada departamento), sin escribir nada.
+  const leeTodo = rol === 'ADM' || rol === 'GERENCIA';
+  const verBandeja = (leeTodo && !soloMios) ? String(filtros.verBandeja || '').toLowerCase() : email;
   // Etapa 2: la cola de un DEPARTAMENTO (filtros.depto) la ve quien está en
   // su lista (CI_MIEMBROS) o ADM; trae todo lo del área, asignado o no.
   const rolesDepto = Servicios.rolesEnDeptos_(db, contexto);
+  if (rol === 'GERENCIA') Servicios.departamentos_().forEach((d) => { rolesDepto[d.clave] = 'LECTURA'; });
   const deptoVista = soloMios ? '' : String(filtros.depto || '').toUpperCase();
   if (deptoVista && !rolesDepto[deptoVista]) return { _forbidden: true, message: 'No estás en la lista de ese departamento.' };
   const feriados = Cumplimiento.obtenerFeriados(db);
@@ -563,6 +566,9 @@ function getCola(db, filtros, contexto) {
       estado: i.estado, prioridad: i.prioridad, estado_solicitud: s.estado_derivado,
       asignado: asignado, asignado_nombre: asignado ? (nombrePorEmail[asignado] || asignado) : '', asignado_heredado: !propio && !!asignado,
       fecha_creacion: i.fecha_creacion || s.fecha_creacion, fecha_comprometida: i.fecha_comprometida || '',
+      // Revisión Codex Tanda 2: el instante en que vence (18:00 de Chile si es de día), para que
+      // la Bandeja no dependa de la zona horaria del navegador.
+      vence_compromiso: (() => { const v = require('./utils').venceCompromiso_(i.fecha_comprometida); return v ? v.toISOString() : ''; })(),
       fecha_propuesta: i.fecha_propuesta || '',
       dias_sin_movimiento: Math.floor((Date.now() - new Date(mov).getTime()) / 86400000),
       situacion_sla: medicion ? medicion.situacion : null,

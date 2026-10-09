@@ -26,6 +26,14 @@ jobs:
     steps:
       - name: Descargar el repositorio
         uses: actions/checkout@v4
+      # D-005 (E1-1): si alguna vez se sube el config.js de desarrollo, el sitio público
+      # (y el portal de los contratistas) apuntaría a la máquina de cada visitante. Se frena aquí.
+      - name: Verificar que el frontend no apunte a una dirección local
+        run: |
+          if grep -nE "(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])" frontend/js/config.js; then
+            echo "::error file=frontend/js/config.js::config.js apunta a una dirección local; no se publica."
+            exit 1
+          fi
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
       - name: Empaquetar solo frontend/ como sitio estatico

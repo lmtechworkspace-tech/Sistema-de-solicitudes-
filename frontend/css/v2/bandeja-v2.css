@@ -672,3 +672,31 @@ button.bj2-it__cab:focus-visible { outline: 2px solid var(--sx-primario); outlin
 .bj2-foto-mini { flex: none; object-fit: cover; border-radius: 8px; border: 1px solid var(--sx-borde-suave); background: var(--sx-fondo); }
 .bj2-docs .bj2-foto-mini { width: 44px; height: 44px; }
 .bj2-archivo .bj2-foto-mini { width: 56px; height: 56px; }
+
+/* D-005 E2-9: resultado de un lote, ítem por ítem. */
+.bj2-lote-res { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.bj2-lote-res li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio); background: var(--sx-superficie); font: .875rem/1.45 var(--fuente); color: var(--sx-texto); }
+.bj2-lote-res__ico { flex: none; color: var(--sx-critico); margin-top: 2px; }
+
+/* D-005 E3-6: la fila de la Lista no superpone ni corta lo esencial. El título usa hasta
+   dos líneas; los metadatos bajan de línea en vez de pisarse; y las columnas se pliegan
+   según el ancho REAL de la lista (con el panel lateral abierto o cerrado), no del viewport. */
+.bj2-lista { container-type: inline-size; }
+.bj2-fila__titulo { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: normal; }
+.bj2-fila__meta { flex-wrap: wrap; row-gap: 4px; }
+.bj2-fila__meta > .sx2-cortar { flex: 1 1 14rem; }
+.bj2-fila__meta > .sx2-badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@container (max-width: 1100px) {
+  .bj2-fila { grid-template-columns: 22px 34px minmax(0, 1fr) 210px 140px auto; }
+  .bj2-fila__fecha { display: none; }
+}
+@container (max-width: 760px) {
+  .bj2-fila { grid-template-columns: 22px 34px minmax(0, 1fr) auto; row-gap: 6px; }
+  .bj2-fila__estado { grid-column: 3; flex-direction: row; flex-wrap: wrap; }
+  .bj2-fila__quien { grid-column: 3; }
+  .bj2-fila__acc { grid-column: 4; grid-row: 1; }
+}
+@container (max-width: 480px) {
+  .bj2-fila { grid-template-columns: 22px 34px minmax(0, 1fr); }
+  .bj2-fila__acc { grid-column: 3; grid-row: auto; justify-content: flex-start; }
+}

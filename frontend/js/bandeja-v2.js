@@ -96,7 +96,12 @@
   function abierto(i) { return CERRADOS.indexOf(i.estado) === -1 && i.estado !== 'S08'; }
   function vencida(i) {
     if (!i.fecha_comprometida || !abierto(i)) return false;
-    var t = new Date(String(i.fecha_comprometida).replace(' ', 'T')).getTime();
+    // D-005 E2-8: una fecha de DÍA (sin hora) vence al fin de la jornada (18:00), no a la
+    // medianoche UTC (que en Chile es el día anterior); con hora, tal cual.
+    // El servidor ya calcula el instante (en hora de Chile): no depende de la zona del navegador.
+    if (i.vence_compromiso) { var tv = new Date(i.vence_compromiso).getTime(); return !isNaN(tv) && tv < Date.now(); }
+    var v = String(i.fecha_comprometida), dia = /^(\d{4})-(\d{2})-(\d{2})(?:$|T00:00(?::00(?:\.0+)?)?(?:Z|[+-]00:?00)?$)/.exec(v);
+    var t = dia ? new Date(Number(dia[1]), Number(dia[2]) - 1, Number(dia[3]), 18, 0, 0).getTime() : new Date(v.replace(' ', 'T')).getTime();
     return !isNaN(t) && t < Date.now();
   }
   function fechaCorta(v) { return v ? PY.fecha(v, true) : ''; }
@@ -393,7 +398,7 @@
       (datos_.solo_lectura ? '<span></span>' : '<label class="bj2-check" title="Seleccionar"><input type="checkbox" class="js-bj2-sel"' + (marcado ? ' checked' : '') + ' aria-label="Seleccionar ' + U.esc(i.titulo) + '"></label>') +
       '<span class="bj2-prio">' + U.esc(i.prioridad || '—') + '</span>' +
       '<span class="sx2-apilado bj2-fila__cuerpo">' +
-        '<strong class="sx2-cortar">' + U.esc(i.titulo || '(sin título)') + '</strong>' +
+        '<strong class="bj2-fila__titulo" title="' + U.esc(i.titulo || '') + '">' + U.esc(i.titulo || '(sin título)') + '</strong>' +
         '<span class="sx2-flex bj2-fila__meta">' +
           '<span class="bj2-id">' + (f.agrupar && i.cantidad_items > 1 ? U.esc(nItem(i)) : U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? ' · ítem ' + i.numero_item + '/' + i.cantidad_items : '')) + '</span>' +
           '<span class="sx2-cortar">' + (i.solicitante_nombre ? '<b class="bj2-pide">' + U.esc(i.solicitante_nombre) + '</b> · ' : '') + (i.depto && !f.cola ? U.esc(i.depto_nombre) + ' · ' : '') + (i.servicio_nombre ? U.esc(i.servicio_nombre) : U.esc(i.empresa_nombre || '') + (i.tipo_nombre ? ' · ' + U.esc(i.tipo_nombre) : '')) + '</span>' +
@@ -982,20 +987,92 @@
 
   // Ejecuta una acción ítem por ítem (el backend valida cada uno), muestra el
   // avance y al final resume qué no se pudo y por qué.
+  // D-005 E3-4: el menú «Más» se salía recortado por la tarjeta del ítem (overflow:hidden).
+  // Al abrirse, su lista pasa a position:fixed junto al botón (arriba o abajo según el
+  // espacio, con alto máximo y scroll). Flechas recorren las opciones; Escape cierra solo
+  // el menú y devuelve el foco a «Más»; desplazar la página lo cierra.
+  function ubicarMenu(det) {
+    var lista = det.querySelector('.bj2-menu__lista'), sum = det.querySelector('summary');
+    if (!lista || !sum) return;
+    var r = sum.getBoundingClientRect(), alto = window.innerHeight, ancho = window.innerWidth;
+    lista.style.position = 'fixed'; lista.style.bottom = 'auto'; lista.style.maxHeight = ''; lista.style.overflowY = 'auto';
+    var abajo = alto - r.bottom - 8, arriba = r.top - 8, h = lista.offsetHeight, w = lista.offsetWidth;
+    var haciaAbajo = h <= abajo || abajo >= arriba;
+    lista.style.maxHeight = Math.max(120, (haciaAbajo ? abajo : arriba) - 8) + 'px';
+    h = Math.min(h, parseFloat(lista.style.maxHeight));
+    var top = haciaAbajo ? r.bottom + 4 : r.top - 4 - h, left = Math.min(Math.max(8, r.left), ancho - w - 8);
+    lista.style.top = top + 'px'; lista.style.left = left + 'px';
+    // Si un ancestro con transform cambia la referencia de «fixed», se corrige midiendo.
+    var real = lista.getBoundingClientRect();
+    lista.style.top = (top + (top - real.top)) + 'px'; lista.style.left = (left + (left - real.left)) + 'px';
+  }
+  function soltarMenu(det) { var l = det.querySelector('.bj2-menu__lista'); if (l) ['position', 'top', 'left', 'bottom', 'maxHeight', 'overflowY'].forEach(function (k) { l.style[k] = ''; }); }
+  document.addEventListener('toggle', function (ev) {
+    var det = ev.target;
+    if (!det || !det.classList || !det.classList.contains('bj2-menu')) return;
+    if (det.open) { ubicarMenu(det); var op = det.querySelector('.bj2-menu__op'); if (op && det.contains(document.activeElement)) op.focus(); }
+    else soltarMenu(det);
+  }, true);
+  document.addEventListener('scroll', function (ev) {
+    [].forEach.call(document.querySelectorAll('details.bj2-menu[open]'), function (d) { if (!d.contains(ev.target)) d.open = false; });
+  }, true);
+  window.addEventListener('resize', function () { [].forEach.call(document.querySelectorAll('details.bj2-menu[open]'), function (d) { d.open = false; }); });
+  document.addEventListener('keydown', function (ev) {
+    var det = ev.target && ev.target.closest ? ev.target.closest('details.bj2-menu[open]') : null;
+    if (!det) return;
+    var ops = [].slice.call(det.querySelectorAll('.bj2-menu__op')), i = ops.indexOf(document.activeElement);
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); det.open = false; det.querySelector('summary').focus(); }
+    else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (ops.length) ops[(i + (ev.key === 'ArrowDown' ? 1 : -1) + ops.length) % ops.length].focus();
+    }
+  }, true);
+
+  // D-005 E2-9: el resultado de un lote queda a la vista ítem por ítem (no un aviso que
+  // corta a los 3); los que fallaron siguen marcados y se reintentan solos, sin repetir
+  // los que ya salieron bien.
   function ejecutarLote(lista, accion, titulo) {
     var hechos = 0, fallas = [];
+    var previa = sel_;
     PY.aviso(titulo + ': 0 de ' + lista.length + '…');
     return lista.reduce(function (p, i) {
       return p.then(function () {
-        return accion(i).then(function (r) {
-          if (r && r.ok) hechos++; else fallas.push(i.solicitud_id + (i.cantidad_items > 1 ? '-' + i.numero_item : '') + ': ' + ((r && r.message) || 'error'));
-        });
+        return Promise.resolve().then(function () { return accion(i); }).then(function (r) {
+          if (r && r.ok) hechos++; else fallas.push({ i: i, motivo: (r && r.message) || 'Error desconocido.' });
+        }, function (e) { fallas.push({ i: i, motivo: (e && e.message) || 'Sin conexión.' }); });
       });
     }, Promise.resolve()).then(function () {
       sel_ = {};
-      if (fallas.length) PY.aviso(hechos + ' listos · ' + fallas.length + ' no se pudieron: ' + fallas.slice(0, 3).join(' | ') + (fallas.length > 3 ? '…' : ''), 'error');
-      else PY.aviso(titulo + ': ' + hechos + (hechos === 1 ? ' ítem listo.' : ' ítems listos.'), 'exito');
+      fallas.forEach(function (f) {
+        if (f.i.subsolicitud_id) { sel_[f.i.subsolicitud_id] = true; return; }
+        // Lote agrupado por solicitud: vuelven a quedar marcados sus ítems que lo estaban.
+        Object.keys(previa).forEach(function (k) {
+          var it = (datos_.items || []).filter(function (x) { return x.subsolicitud_id === k; })[0];
+          if (it && it.solicitud_id === f.i.solicitud_id) sel_[k] = true;
+        });
+      });
+      if (!fallas.length) PY.aviso(titulo + ': ' + hechos + (hechos === 1 ? ' ítem listo.' : ' ítems listos.'), 'exito');
+      else resultadoLote(titulo, hechos, fallas, accion);
       avisarCambio();
+    });
+  }
+  function resultadoLote(titulo, hechos, fallas, accion) {
+    var nombre = function (i) { return i.subsolicitud_id || i.solicitud_id; };
+    // El aviso «… 0 de N…» del avance ya no dice la verdad y tapaba «Reintentar».
+    [].forEach.call(document.querySelectorAll('.sigso-aviso__texto'), function (t) { if (t.textContent.indexOf(titulo + ':') === 0) { var a = t.closest('.sigso-aviso'); if (a) a.remove(); } });
+    var d = U.drawer({
+      titulo: titulo + ': ' + fallas.length + ' no se pudieron',
+      subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">' + hechos + (hechos === 1 ? ' salió bien' : ' salieron bien') + '. Los que fallaron siguen marcados.</span>',
+      cuerpo: '<ul class="bj2-lote-res" role="list">' + fallas.map(function (f) {
+        return '<li><span class="bj2-lote-res__ico" aria-hidden="true">' + U.ico('alerta', 15) + '</span><span><b>' + U.esc(nombre(f.i)) + '</b>' +
+          (f.i.titulo ? ' · ' + U.esc(f.i.titulo) : '') + '<br><span class="sx2-tenue">' + U.esc(f.motivo) + '</span></span></li>';
+      }).join('') + '</ul>',
+      pie: U.boton({ texto: 'Cerrar', clase: 'js-sx2-drawer-cerrar' }) + U.boton({ texto: 'Reintentar los ' + fallas.length, variante: 'primario', icono: 'reloj', clase: 'js-bj2-lote-reintentar' })
+    });
+    d.el.addEventListener('click', function (ev) {
+      if (!ev.target.closest('.js-bj2-lote-reintentar')) return;
+      d.cerrar(true);
+      ejecutarLote(fallas.map(function (f) { return f.i; }), accion, titulo);
     });
   }
 
@@ -1333,6 +1410,11 @@
     }
 
     function dato(et, v) { return v ? '<dt>' + U.esc(et) + '</dt><dd>' + v + '</dd>' : ''; }
+    // D-005 E3-9: un contratista sin correo queda con una dirección técnica «@portal.invalid»:
+    // no es un contacto. Ni se muestra ni se enlaza; quien escribió se nombra por el pedido.
+    function correoReal(e) { e = String(e || '').trim(); return /\.invalid$/i.test(e) ? '' : e; }
+    function delSolicitante(u) { var s = detalle.solicitud || {}; u = String(u || '').toLowerCase(); return !!u && [s.solicitante_email, s.correo_cliente].some(function (x) { return String(x || '').toLowerCase() === u; }); }
+    function quien(u) { var s = detalle.solicitud || {}; return delSolicitante(u) ? PY.persona(correoReal(u), s.solicitante_nombre || 'Cliente') : PY.persona(u); }
     function ficha(s) {
       return '<section class="sx2-seccion-drawer"><h3 class="sx2-seccion-drawer__titulo">Solicitud</h3><dl class="sx2-dato">' +
           dato('Ingresada', U.esc(PY.fecha(s.fecha_creacion, true))) + dato('Empresa', U.esc(s.empresa_nombre || s.empresa_id)) +
@@ -1340,12 +1422,12 @@
           dato('Tipo', U.esc(s.tipo_nombre || s.tipo)) + dato('Urgencia reportada', U.esc(s.urgencia_cliente)) +
         '</dl></section>' +
         '<section class="sx2-seccion-drawer"><h3 class="sx2-seccion-drawer__titulo">Quién la pide</h3>' +
-          U.persona(PY.persona(s.solicitante_email, s.solicitante_nombre), 'lg') +
-          '<dl class="sx2-dato" style="margin-top:10px">' + dato('Cargo', U.esc(s.solicitante_cargo)) + dato('Correo', '<a class="sx2-enlace" href="mailto:' + U.esc(s.solicitante_email) + '">' + U.esc(s.solicitante_email) + '</a>') + dato('Con copia', U.esc(s.cc)) + '</dl>' +
+          U.persona(PY.persona(correoReal(s.solicitante_email), s.solicitante_nombre), 'lg') +
+          '<dl class="sx2-dato" style="margin-top:10px">' + dato('Cargo', U.esc(s.solicitante_cargo)) + (correoReal(s.solicitante_email) ? dato('Correo', '<a class="sx2-enlace" href="mailto:' + U.esc(s.solicitante_email) + '">' + U.esc(s.solicitante_email) + '</a>') : dato('Canal', s.origen === 'PORTAL' ? 'App del contratista (sin correo): responde por la conversación' + (s.telefono_cliente ? ' · ' + U.esc(s.telefono_cliente) : '') : 'Sin correo')) + dato('Con copia', U.esc(s.cc)) + '</dl>' +
         '</section>' +
         ((s.es_cliente === true || s.es_cliente === 'TRUE') ? '<section class="sx2-seccion-drawer"><h3 class="sx2-seccion-drawer__titulo">Cliente</h3><dl class="sx2-dato">' +
           dato('Cliente', U.esc(s.empresa_cliente)) + dato('Mandante', U.esc(s.cliente_mandante)) + dato('Obra', U.esc(s.cliente_obra)) +
-          dato('Contacto', U.esc([s.contacto_cliente, s.correo_cliente, s.telefono_cliente].filter(Boolean).join(' · '))) + dato('RUT', U.esc(s.rut_cliente)) +
+          dato('Contacto', U.esc([s.contacto_cliente, correoReal(s.correo_cliente), s.telefono_cliente].filter(Boolean).join(' · '))) + dato('RUT', U.esc(s.rut_cliente)) +
         '</dl></section>' : '') +
         (s.observaciones_generales ? '<section class="sx2-seccion-drawer"><h3 class="sx2-seccion-drawer__titulo">Observaciones</h3><p class="sx2-py-descripcion">' + U.esc(s.observaciones_generales) + '</p></section>' : '');
     }
@@ -1725,7 +1807,7 @@
       (detalle.historial_prioridad || []).forEach(function (h) { ev.push({ ts: h.timestamp, tipo: 'prioridad', usuario: h.usuario, txt: 'Prioridad ' + (h.prioridad_anterior || '—') + ' → ' + h.prioridad_nueva, nota: h.justificacion, sub: h.subsolicitud_id }); });
       (detalle.historial_compromiso || []).forEach(function (h) { ev.push({ ts: h.timestamp, tipo: 'compromiso', usuario: h.usuario, txt: (h.fecha_anterior ? 'Fecha ' + PY.fecha(h.fecha_anterior, true) + ' → ' : 'Comprometió para el ') + PY.fecha(h.fecha_nueva, true), nota: h.motivo, sub: h.subsolicitud_id }); });
       (detalle.historial_asignacion || []).forEach(function (h) { ev.push({ ts: h.timestamp, tipo: 'asignacion', usuario: h.usuario, txt: 'Asignó a ' + PY.persona(h.responsable_nuevo).nombre, nota: h.motivo, sub: h.subsolicitud_id }); });
-      (detalle.comentarios || []).forEach(function (c) { var interno = c.es_interno === true || c.es_interno === 'TRUE'; ev.push({ ts: c.timestamp, tipo: interno ? 'interno' : 'comentario', usuario: c.usuario, txt: interno ? 'Nota interna' : 'Escribió al solicitante', nota: c.texto, sub: c.subsolicitud_id }); });
+      (detalle.comentarios || []).forEach(function (c) { var interno = c.es_interno === true || c.es_interno === 'TRUE'; ev.push({ ts: c.timestamp, tipo: interno ? 'interno' : 'comentario', usuario: c.usuario, txt: interno ? 'Nota interna' : (delSolicitante(c.usuario) ? 'Escribió (solicitante)' : 'Respondió al solicitante'), nota: c.texto, sub: c.subsolicitud_id }); });
       ev.sort(function (a, b) { return new Date(b.ts) - new Date(a.ts); });
       var nItem = {};
       (detalle.subsolicitudes || []).forEach(function (s) { nItem[s.subsolicitud_id] = s.numero_item; });
@@ -1739,7 +1821,7 @@
           '<div class="sx2-entre"><small class="bj2-destino__ayuda"><span class="bj2-destino__si-interno">Solo la ve el equipo.</span><span class="bj2-destino__si-solicitante">Le llega por correo y la ve en Mis solicitudes.</span></small>' +
           '<button type="submit" class="sx2-boton sx2-boton--primario sx2-boton--sm">' + U.ico('derecha', 14) + '<span class="bj2-destino__si-interno">Guardar nota</span><span class="bj2-destino__si-solicitante">Enviar al solicitante</span></button></div></form>') +
         (ev.length ? '<ul class="sx2-lista" style="gap:0">' + ev.map(function (e) {
-          var p = PY.persona(e.usuario), t = TIPO_ACT[e.tipo];
+          var p = quien(e.usuario), t = TIPO_ACT[e.tipo];
           return '<li class="sx2-py-sala-ev">' + U.avatar(p, 'sm') +
             '<div class="sx2-apilado" style="gap:2px;flex:1;min-width:0"><span class="sx2-flex" style="gap:6px;flex-wrap:wrap"><strong style="font-size:.8125rem">' + U.esc(p.nombre) + '</strong>' +
               '<span class="bj2-act-ico sx2-tono-' + t.tono + '">' + U.ico(t.icono, 11) + '</span><span style="font-size:.8125rem">' + U.esc(e.txt) + '</span>' +
@@ -1780,7 +1862,7 @@
       }
       if ((b = t.closest('.js-bj2-responder'))) {
         var conv = (b.getAttribute('data-id') && d.el.querySelector('#bj2-conv-' + b.getAttribute('data-id'))) || d.el.querySelector('#bj2-conv');
-        if (conv) { conv.scrollIntoView({ block: 'start', behavior: 'smooth' }); var ta = conv.querySelector('textarea'); if (ta) setTimeout(function () { ta.focus(); }, 250); }
+        if (conv) { conv.scrollIntoView({ block: 'start', behavior: U.reducirMovimiento() ? 'auto' : 'smooth' }); var ta = conv.querySelector('textarea'); if (ta) setTimeout(function () { ta.focus(); }, U.reducirMovimiento() ? 0 : 250); }
         return;
       }
       if ((b = t.closest('.js-bj2-acc'))) { var id = b.getAttribute('data-id'); abiertoAcc[id] = abiertoAcc[id] === b.getAttribute('data-acc') ? '' : b.getAttribute('data-acc'); pintarDetalle(); return; }
@@ -1840,7 +1922,7 @@
       var form = (multi && b.closest('.bj2-it') && b.closest('.bj2-it').querySelector('.js-bj2-comentar')) || d.el.querySelector('.js-bj2-comentar[data-destino="solicitante"]');
       if (!form) return;
       form.texto.value = 'Hola, no tengo acceso al enlace de Drive' + (multi && !form.getAttribute('data-sub') ? ' del ítem ' + b.getAttribute('data-n') : '') + '. ¿Puedes subir el archivo en SIGSO? En Mis solicitudes abre esta solicitud y usa «Adjuntar archivos», junto a la conversación. O compártelo como «Cualquier persona con el enlace». Gracias.';
-      form.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      form.scrollIntoView({ block: 'center', behavior: U.reducirMovimiento() ? 'auto' : 'smooth' });
       form.texto.focus();
     });
     d.el.addEventListener('change', function (ev) {
@@ -1909,7 +1991,7 @@
     if ((b = t.closest('.sx2-kpi[data-filtro], .bj2-banda__op[data-filtro]'))) { f.kpi = b.getAttribute('data-filtro'); f.vista = 'cola'; mostrar_ = POR_PAGINA; pintar(true); return; }
     if (t.closest('.js-bj2-todos')) { f.kpi = f.kpi === 'todos' ? 'abiertos' : 'todos'; pintar(true); return; }
     if (t.closest('.js-bj2-ver-validar')) { f.kpi = 'por_validar'; f.densidad = 'tabla'; try { localStorage.setItem('sigso_bj2_densidad', 'tabla'); } catch (e) { /* sin storage */ } mostrar_ = POR_PAGINA; pintar(true); return; }
-    if (t.closest('.js-bj2-rezago')) { f.kpi = 'por_revisar'; f.orden = 'antiguedad'; f.texto = ''; mostrar_ = POR_PAGINA; pintar(true); var l = raiz.querySelector('.bj2-lista'); if (l) l.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+    if (t.closest('.js-bj2-rezago')) { f.kpi = 'por_revisar'; f.orden = 'antiguedad'; f.texto = ''; mostrar_ = POR_PAGINA; pintar(true); var l = raiz.querySelector('.bj2-lista'); if (l) l.scrollIntoView({ block: 'start', behavior: U.reducirMovimiento() ? 'auto' : 'smooth' }); return; }
     if (t.closest('.js-bj2-ver-sinfecha')) { f.kpi = 'sin_fecha'; mostrar_ = POR_PAGINA; pintar(true); return; }
     if (t.closest('.js-bj2-mas')) { mostrar_ += POR_PAGINA; pintar(true); return; }
     if ((b = t.closest('.js-bj2-excel'))) { exportarExcel(b); return; }

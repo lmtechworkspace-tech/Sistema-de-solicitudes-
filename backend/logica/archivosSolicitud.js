@@ -108,6 +108,9 @@ async function subirArchivo(db, data, opciones) {
 
 // El cuerpo común: valida tipo, tamaño y límites, sube a R2 y registra. `subidoPor`
 // lo fija SIEMPRE quien llama desde el servidor (nunca viene del pedido).
+// D-005 E1-5: subidas en curso (un solo proceso Node). Cuentan para el tope desde ANTES de
+// esperar al almacenamiento, así dos subidas simultáneas no toman el mismo último cupo.
+const enCurso_ = [];
 async function guardarArchivo_(db, data, subidoPor, conversacion) {
 
   let bytes;
@@ -124,15 +127,20 @@ async function guardarArchivo_(db, data, subidoPor, conversacion) {
   const delEquipo = String(subidoPor || '').indexOf('equipo:') === 0;
   const archivos = leerFilas_(db, 'ARCHIVOS', COLUMNAS.ARCHIVOS).filter((a) => a.solicitud_id === data.solicitud_id && categoriaDeMime_(a.tipo_mime) === tipo.categoria &&
     (!conversacion || esDelEquipo_(a) === delEquipo));
-  if (data.subsolicitud_id && archivos.filter((a) => a.subsolicitud_id === data.subsolicitud_id).length >= tope.item[tipo.categoria]) {
+  const pendientes = enCurso_.filter((r) => r.solicitud_id === data.solicitud_id && r.categoria === tipo.categoria && (!conversacion || r.delEquipo === delEquipo));
+  if (data.subsolicitud_id && archivos.filter((a) => a.subsolicitud_id === data.subsolicitud_id).length + pendientes.filter((r) => r.subsolicitud_id === data.subsolicitud_id).length >= tope.item[tipo.categoria]) {
     return errorValidacion('archivo', 'Se alcanzó el máximo de ' + tope.item[tipo.categoria] + ' archivos de tipo ' + tipo.categoria + ' para este ítem.');
   }
-  if (archivos.length >= tope.solicitud[tipo.categoria]) {
+  if (archivos.length + pendientes.length >= tope.solicitud[tipo.categoria]) {
     return errorValidacion('archivo', 'Se alcanzó el máximo de ' + tope.solicitud[tipo.categoria] + ' archivos de tipo ' + tipo.categoria + ' para esta solicitud.');
   }
 
   const archivoId = crypto.randomUUID();
-  const subida = await Almacenamiento.subirArchivo_(claveR2_(data.solicitud_id, archivoId), bytes.toString('base64'), tipo.mime);
+  const reserva = { solicitud_id: data.solicitud_id, subsolicitud_id: data.subsolicitud_id || '', categoria: tipo.categoria, delEquipo };
+  enCurso_.push(reserva);
+  let subida;
+  try { subida = await Almacenamiento.subirArchivo_(claveR2_(data.solicitud_id, archivoId), bytes.toString('base64'), tipo.mime); }
+  finally { enCurso_.splice(enCurso_.indexOf(reserva), 1); }
   if (!subida.ok) return errorValidacion('archivo', subida.message);
 
   const llave = crypto.randomBytes(24).toString('base64url');

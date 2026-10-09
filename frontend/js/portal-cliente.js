@@ -67,6 +67,8 @@
   // uno (o los dos) no deje al contratista entrando sin sesión.
   var TOKEN_MEM = '';
   function leerAlm(alm) { try { return window[alm].getItem(LLAVE) || ''; } catch (e) { return ''; } }
+  // D-005 E3-8: con «reducir movimiento» del teléfono, el desplazamiento es inmediato.
+  function suave() { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'; } catch (e) { return 'auto'; } }
   function token() { if (!TOKEN_MEM) TOKEN_MEM = leerAlm('localStorage') || leerAlm('sessionStorage'); return TOKEN_MEM; }
   function guardarToken(t, recordar) {
     TOKEN_MEM = t || '';
@@ -83,7 +85,7 @@
       .then(function (r) { return r.json(); })
       .then(function (r) {
         clearTimeout(reloj);
-        if (r && !r.ok && /sesi[oó]n termin[oó]/i.test(r.message || '')) { guardarToken(''); S.dentro = false; pintar(); }
+        if (r && !r.ok && /sesi[oó]n termin[oó]/i.test(r.message || '')) salirLocal();
         return r;
       })
       .catch(function () {
@@ -204,14 +206,46 @@
   var MAX_MINI = 1.5 * 1024 * 1024;
   function esImagen(t) { return /^image\//.test(t || ''); }
   function esPdf(t) { return t === 'application/pdf'; }
+  // D-005 E1-7: los archivos abiertos ocupan memoria del teléfono. Se guardan hasta
+  // ARCH_TOPE (se suelta el más antiguo, nunca el que está abierto en el visor) y se
+  // borran todos al salir o al vencer la sesión; lo que llegue tarde de una sesión
+  // anterior (ARCH_GEN distinto) se descarta.
+  var ARCH_TOPE = 40 * 1024 * 1024, ARCH_GEN = 0, ARCH_ORDEN = [];
+  function olvidarArchivo(id) {
+    var x = ARCH_LISTO[id]; if (x) { try { URL.revokeObjectURL(x.url); } catch (e) { /* ya no estaba */ } }
+    delete ARCH_LISTO[id]; delete ARCH[id];
+    ARCH_ORDEN = ARCH_ORDEN.filter(function (i) { return i !== id; });
+  }
+  function enVisor(id) { var v = capa.querySelector('.visor'); return !!(v && v.getAttribute('data-visor') === id); }
+  function recordarArchivo(id, x) {
+    ARCH_LISTO[id] = x;
+    ARCH_ORDEN = ARCH_ORDEN.filter(function (i) { return i !== id; }).concat(id);
+    var total = function () { return ARCH_ORDEN.reduce(function (n, i) { return n + ((ARCH_LISTO[i] && ARCH_LISTO[i].blob.size) || 0); }, 0); };
+    while (total() > ARCH_TOPE) {
+      var viejo = ARCH_ORDEN.filter(function (i) { return i !== id && !enVisor(i); })[0];
+      if (!viejo) break;
+      olvidarArchivo(viejo);
+    }
+  }
+  // Revisión Codex Tanda 2: al salir o vencer la sesión no queda NADA privado a la vista ni
+  // en memoria: se cierra cualquier capa (visor, formularios) y se olvidan los datos.
+  function salirLocal() {
+    guardarToken(''); limpiarArchivos();
+    capa.classList.remove('cerrando'); capa.innerHTML = ''; capaHist = false;
+    S.dentro = false; S.perfil = null; S.detalle = null; S.docs = null; S.pedidos = []; S.trab = []; S.cat = null; S.err = {};
+    pintar();
+  }
+  function limpiarArchivos() { ARCH_GEN++; Object.keys(ARCH_LISTO).forEach(olvidarArchivo); ARCH = {}; ARCH_ORDEN = []; colaMini = Promise.resolve(); }
   function traerArchivo(id, miniatura) {
     if (ARCH[id]) return ARCH[id];
+    var gen = ARCH_GEN;
     ARCH[id] = api('clienteArchivo', { archivo_id: id, miniatura: !!miniatura }, MS_ARCHIVO).then(function (r) {
+      if (gen !== ARCH_GEN) throw new Error('La sesión cambió.');
       if (!r || !r.ok) { delete ARCH[id]; throw new Error((r && r.message) || 'No se pudo abrir el archivo.'); }
       var bin = atob(r.data.contenido_base64), bytes = new Uint8Array(bin.length);
       for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       var blob = new Blob([bytes], { type: r.data.tipo_mime || 'application/octet-stream' });
-      ARCH_LISTO[id] = { url: URL.createObjectURL(blob), blob: blob, tipo: r.data.tipo_mime || '', nombre: r.data.nombre || 'archivo', miniatura: !!miniatura };
+      recordarArchivo(id, { url: URL.createObjectURL(blob), blob: blob, tipo: r.data.tipo_mime || '', nombre: r.data.nombre || 'archivo', miniatura: !!miniatura });
       return ARCH_LISTO[id];
     });
     return ARCH[id];
@@ -263,14 +297,18 @@
   }
   // Cada página del PDF como imagen, al ancho de la pantalla (hasta 40 páginas).
   function pintarPdf(cont, x) {
+    var gen = ARCH_GEN, doc = null;
+    var vigente = function () { return cont.isConnected && gen === ARCH_GEN; };
     return Promise.all([cargarPdfJs(), x.blob.arrayBuffer()]).then(function (r) {
       return r[0].getDocument({ data: new Uint8Array(r[1]), isEvalSupported: false }).promise;
     }).then(function (pdf) {
+      doc = pdf;
+      if (!vigente()) { try { pdf.destroy(); } catch (e) { /* ya cerrado */ } return; }
       cont.innerHTML = '<p class="visor__nota">' + pdf.numPages + (pdf.numPages === 1 ? ' página' : ' páginas') + (pdf.numPages > 40 ? ' (se muestran las primeras 40; guárdalo para ver el resto)' : '') + '</p>';
       var ancho = Math.min(cont.clientWidth || 360, 900), dpr = Math.min(window.devicePixelRatio || 1, 2), cadena = Promise.resolve();
       for (var n = 1; n <= Math.min(pdf.numPages, 40); n++) (function (n) {
         cadena = cadena.then(function () {
-          if (!cont.isConnected) return;
+          if (!vigente()) return;
           return pdf.getPage(n).then(function (pg) {
             var vp0 = pg.getViewport({ scale: 1 }), vp = pg.getViewport({ scale: (ancho / vp0.width) * dpr });
             var c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height); c.className = 'visor__pagina';
@@ -280,7 +318,10 @@
           });
         });
       })(n);
-      return cadena;
+      // Las páginas ya quedaron dibujadas en los canvas: el documento (y su worker) se libera
+      // SIEMPRE al terminar, bien o con error, esté o no abierto el visor (memoria del teléfono).
+      var liberar = function () { if (doc) { try { doc.destroy(); } catch (e) { /* ya cerrado */ } doc = null; } };
+      return cadena.then(liberar, function (e) { liberar(); throw e; });
     });
   }
   function visorSinVista(cont, x, motivo) {
@@ -683,12 +724,21 @@
         '<section class="card"><div class="esq esq-linea"></div><div class="esq esq-linea esq-corta"></div></section></main>' + nav();
     }
     var p = S.pedidos.filter(function (x) { return x.solicitud_id === d.solicitud_id; })[0] || { titulo: d.solicitud_id, estado: 'ENVIADO' };
-    // El camino: Enviado → Haciéndolo → Listo. Listo y Cerrado completan los tres.
-    var paso = p.estado === 'ENVIADO' ? 1 : (p.estado === 'LISTO' || p.estado === 'CERRADO' ? 4 : 2);
-    var b = '<ol class="camino' + (paso === 4 ? ' todo' : '') + '">' + ['Enviado', 'Haciéndolo', 'Listo'].map(function (t, k) {
+    // El camino: Enviado → Haciéndolo → Listo. D-005 E3-5: se arma con el estado de cada
+    // ítem (no con el resumen, que junta «te preguntaron» con «está listo»): terminado
+    // (S08) es trabajo listo por revisar, no «Haciéndolo»; confirmado (S09) completa.
+    var subs = d.subsolicitudes || [], ests = subs.map(function (it) { return it.estado; });
+    var vivos = ests.filter(function (e) { return e !== 'S10' && e !== 'S11'; });
+    var nRevisar = ests.filter(function (e) { return e === 'S08'; }).length, nPregunta = ests.filter(function (e) { return e === 'S06'; }).length;
+    var todoListo = vivos.length && vivos.every(function (e) { return e === 'S08' || e === 'S09'; });
+    var paso = !vivos.length || (todoListo && !nRevisar) ? 4 : (todoListo ? 3 : (vivos.every(function (e) { return e === 'S01'; }) ? 1 : 2));
+    var b = '<ol class="camino' + (paso === 4 ? ' todo' : '') + '">' + ['Enviado', 'Haciéndolo', !vivos.length ? 'Cerrado' : 'Listo'].map(function (t, k) {
       var n = k + 1, cl = n < paso ? 'hecho' : (n === paso ? 'actual' : '');
       return '<li' + (cl ? ' class="' + cl + '"' : '') + (n === paso ? ' aria-current="step"' : '') + '><span class="bola">' + (n < paso ? ico('check') : n) + '</span>' + t + '</li>';
     }).join('') + '</ol>';
+    var teToca = [nRevisar ? (subs.length > 1 ? nRevisar + ' de ' + subs.length + ' listos para que los revises' : 'Está listo: revísalo y confirma') : '',
+      nPregunta ? (nPregunta === 1 ? 'Esperamos tu respuesta a una pregunta' : 'Esperamos tu respuesta a ' + nPregunta + ' preguntas') : ''].filter(Boolean);
+    if (teToca.length) b += '<p class="camino__toca">' + ico('alerta') + '<span>' + esc(teToca.join(' · ')) + '</span></p>';
     var multi = d.subsolicitudes.length > 1;
     var items = d.subsolicitudes.map(function (it) {
       var est = it.estado_cliente;
@@ -977,7 +1027,7 @@
       if (S.pedido !== id || S.vista !== 'pedido' || !r || !r.ok) return;
       S.detalle = r.data; pintar();
       if (alTerminar) {
-        var u = app.querySelectorAll('.chat .msg'); if (u.length) u[u.length - 1].scrollIntoView({ block: 'center', behavior: 'smooth' });
+        var u = app.querySelectorAll('.chat .msg'); if (u.length) u[u.length - 1].scrollIntoView({ block: 'center', behavior: suave() });
       }
     });
   }
@@ -1162,7 +1212,7 @@
       recargar(rein.getAttribute('data-reintentar')).then(function () { pintar(); });
       return;
     }
-    if (t.closest('[data-salir]')) { apagarAvisos().then(function () { return api('clienteSalir'); }).then(function () { guardarToken(''); S.dentro = false; S.perfil = null; pintar(); }); return; }
+    if (t.closest('[data-salir]')) { apagarAvisos().then(function () { return api('clienteSalir'); }).then(salirLocal); return; }
   });
 
   document.addEventListener('submit', function (ev) {
@@ -1201,7 +1251,7 @@
       if (!chat) { var cab = [].filter.call(app.querySelectorAll('main h2'), function (h) { return h.textContent === 'Conversación'; })[0]; if (cab) { var vacio = cab.nextElementSibling; chat = document.createElement('div'); chat.className = 'chat'; if (vacio && vacio.tagName === 'P') vacio.replaceWith(chat); else cab.after(chat); } }
       var fila = document.createElement('div'); fila.className = 'msg mio-fila nueva';
       fila.innerHTML = '<div class="burbuja mio enviando"><span style="white-space:pre-wrap">' + esc(txt) + '</span><small class="hora">Enviando…</small></div>';
-      if (chat) { chat.appendChild(fila); fila.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      if (chat) { chat.appendChild(fila); fila.scrollIntoView({ block: 'center', behavior: suave() }); }
       ta.value = ''; crecer(ta); vibrar(15);
       api('clienteMensaje', { solicitud_id: S.pedido, texto: txt }).then(function (r) {
         boton.disabled = false;
@@ -1271,7 +1321,7 @@
           fila = document.createElement('div'); fila.className = 'msg mio-fila nueva';
           fila.innerHTML = '<div class="burbuja mio enviando con-archivo">' + buenos.map(function (x) { return x.vista ? '<span class="mini mini--grande"><img src="' + x.vista + '" alt=""></span>' : '<span class="doc"><span class="doc__tipo">' + ico('doc') + '</span><span class="grow">' + esc(x.nombre) + '</span></span>'; }).join('') +
             '<small class="hora">Subiendo…</small></div>';
-          chatEl.appendChild(fila); fila.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          chatEl.appendChild(fila); fila.scrollIntoView({ block: 'center', behavior: suave() });
         } else toast('Subiendo…');
         subirArchivos(S.pedido, subId, buenos, function (i, n) { if (fila && n > 1) fila.querySelector('.hora').textContent = 'Subiendo ' + i + ' de ' + n + '…'; }).then(function (fallas) {
           var subidos = buenos.filter(function (x) { return !fallas.some(function (m) { return m.indexOf(x.nombre + ':') === 0; }); });

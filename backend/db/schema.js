@@ -183,7 +183,9 @@ const COLUMNAS = {
   // Backoffice de Solicitudes (actualizarPrioridad/comprometerFecha/derivarSolicitud).
   HISTORIAL_PRIORIDAD: [
     'historial_id', 'subsolicitud_id', 'solicitud_id',
-    'prioridad_anterior', 'prioridad_nueva', 'justificacion', 'usuario', 'timestamp'
+    'prioridad_anterior', 'prioridad_nueva', 'justificacion', 'usuario', 'timestamp',
+    // D-005 (revisión Tanda 2): el plazo vigente antes y después, para reportes históricos.
+    'sla_anterior_horas', 'sla_nuevo_horas'
   ],
   HISTORIAL_COMPROMISO: [
     'historial_id', 'subsolicitud_id', 'solicitud_id',
@@ -191,7 +193,10 @@ const COLUMNAS = {
   ],
   HISTORIAL_ASIGNACION: [
     'historial_id', 'subsolicitud_id', 'solicitud_id',
-    'responsable_anterior', 'responsable_nuevo', 'motivo', 'usuario', 'timestamp'
+    'responsable_anterior', 'responsable_nuevo', 'motivo', 'usuario', 'timestamp',
+    // D-005 (revisión Tanda 2): JSON { subsolicitud_id: responsable anterior } de los ítems que
+    // cambiaron de manos (vacío = solo la cabecera). Filas antiguas sin él: toda la solicitud.
+    'detalle_items'
   ],
   CONFIG_FERIADOS: ['fecha', 'nombre', 'anio'],
   ARCHIVOS: [

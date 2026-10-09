@@ -284,3 +284,27 @@ test('revisión Codex T1 (2.ª ronda): si falla guardar un trabajador, no queda 
     assert.equal(filas(db, 'PORTAL_TRABAJADORES').length, antesTrab + 2);
   }
 });
+
+test('D-005 E1-4: el mismo RUT dos veces se rechaza sin escribir; un RUT que ya está en «Mis trabajadores» usa su ficha', async () => {
+  const db = dbPortal();
+  const tok = await activado(db, 'CLI-1', RUT_PEDRO, 'Pedro Sáez');
+  let r = await cliente(db, 'clienteCrearPedido', { cliente_token: tok, plantilla_id: 'contrato',
+    personas: [{ nombre: 'Juan Pérez', rut: '12.345.678-5' }, { nombre: 'Juan P.', rut: '123456785' }] });
+  assert.equal(r.status, 400, JSON.stringify(r.body));
+  assert.match(r.body.message || JSON.stringify(r.body), /dos veces/);
+  assert.equal(filas(db, 'SOLICITUDES').length, 0);
+  // Ya trabajó con ellos (finiquitado, con su AFP anotada) y vuelve.
+  r = await cliente(db, 'clienteGuardarTrabajador', { cliente_token: tok, nombre: 'Juan Pérez', rut: '12.345.678-5', cargo: 'Maestro', afp: 'Modelo', estado: 'FINIQUITADO' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const ficha = r.body.data.trabajador_id || (r.body.data.trabajador && r.body.data.trabajador.trabajador_id);
+  r = await cliente(db, 'clienteCrearPedido', { cliente_token: tok, plantilla_id: 'contrato', personas: [{ nombre: 'Juan Pérez', rut: '12.345.678-5', cargo: 'Capataz' }] });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const ts = filas(db, 'PORTAL_TRABAJADORES').filter((t) => t.cliente_id === 'CLI-1');
+  assert.equal(ts.length, 1, 'no se duplica la persona');
+  assert.equal(ts[0].estado, 'TRAMITE', 'vuelve a quedar en trámite');
+  assert.equal(ts[0].cargo, 'Capataz');
+  assert.equal(ts[0].afp, 'Modelo', 'no se borra lo que ya tenía');
+  if (ficha) assert.equal(ts[0].trabajador_id, ficha);
+  const sub = filas(db, 'SUBSOLICITUDES').find((s) => s.solicitud_id === r.body.data.solicitud_id);
+  assert.equal(sub.trabajador_id, ts[0].trabajador_id, 'el ítem queda ligado a su ficha');
+});

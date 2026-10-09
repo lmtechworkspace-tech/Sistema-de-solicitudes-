@@ -85,7 +85,8 @@ test('resolver sin haber recibido ni dado fecha completa lo que faltó (el caso 
   assert.deepEqual(r.completado, ['recepcion', 'fecha']);
   const it = item(db, sol + '-03');
   assert.equal(it.estado, 'S08');
-  assert.equal(it.fecha_comprometida, new Date().toISOString().slice(0, 10));
+  // D-005 E2-8: el día de CHILE (entre las 21:00 y las 24:00 el día UTC ya es mañana).
+  assert.equal(it.fecha_comprometida, require('../logica/utils').claveDia_(new Date(), 'America/Santiago'));
   assert.equal(it.comprometida_por, LEO);
   const h = filas(db, 'HISTORIAL_ESTADOS').filter((x) => x.subsolicitud_id === sol + '-03').pop();
   assert.match(h.comentario, /Se completó al resolver \(mismo día\): recibido, fecha comprometida hoy/);

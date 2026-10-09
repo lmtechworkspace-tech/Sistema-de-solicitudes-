@@ -441,8 +441,13 @@ async function crearPedidoReal_(db, data, ctx, meta, intentoPortal) {
     const personas = (Array.isArray(data.personas) ? data.personas : []).filter((x) => x && txt_(x.nombre));
     if (!personas.length) return errorValidacion('personas', 'Agrega al menos una persona con su nombre.');
     if (personas.length > 20) return errorValidacion('personas', 'Hasta 20 personas por pedido.');
+    // D-005 E1-4: todo se valida ANTES de crear nada; el mismo RUT dos veces en un pedido se rechaza.
+    const vistos = {};
     for (const x of personas) {
       if (x.rut && !rutValido_(x.rut)) return errorValidacion('personas', 'El RUT de ' + txt_(x.nombre, 60) + ' no es válido. Revísalo.');
+      const r = x.rut ? rutNorm_(x.rut) : '';
+      if (r && vistos[r]) return errorValidacion('personas', 'El RUT ' + rutBonito_(x.rut) + ' está dos veces en este pedido.');
+      if (r) vistos[r] = true;
     }
     personas.forEach((x) => {
       const obraNombre = obra ? obra.nombre : '';
@@ -476,9 +481,17 @@ async function crearPedidoReal_(db, data, ctx, meta, intentoPortal) {
       let trabId = items[i].trabajador_id || '';
       if (items[i].persona) {
         const x = items[i].persona;
-        const t = guardarTrabajador_(db, ctx.cliente_id, { nombre: x.nombre, rut: x.rut, cargo: x.cargo, obra_id: obra ? obra.obra_id : '', fecha_inicio: x.fecha_inicio,
-          sueldo: x.sueldo, afp: x.afp, salud: x.salud, estado: 'TRAMITE' }, 'contacto:' + ctx.contacto_id);
-        if (t && t.trabajador_id) { trabId = t.trabajador_id; nuevos.push(t.nombre); }
+        // Ya está en «Mis trabajadores» (p. ej. vuelve a trabajar): se usa su ficha, sin
+        // borrar lo que ya tenía; si estaba finiquitado, vuelve a «en trámite».
+        const r = x.rut ? rutNorm_(x.rut) : '';
+        const ya = r ? misTrab.find((t) => t.rut === r) : null;
+        const dato = (k) => txt_(x[k]) ? x[k] : (ya ? ya[k] : '');
+        const t = guardarTrabajador_(db, ctx.cliente_id, { trabajador_id: ya ? ya.trabajador_id : '', nombre: x.nombre, rut: x.rut, cargo: dato('cargo'),
+          obra_id: obra ? obra.obra_id : (ya ? ya.obra_id : ''), fecha_inicio: dato('fecha_inicio'), fecha_termino: ya && ya.estado !== 'FINIQUITADO' ? ya.fecha_termino : '',
+          sueldo: dato('sueldo'), afp: dato('afp'), salud: dato('salud'), estado: ya && ya.estado === 'ACTIVO' ? 'ACTIVO' : 'TRAMITE' }, 'contacto:' + ctx.contacto_id);
+        // Un error aquí deshace TODO el pedido (SAVEPOINT de crearSolicitud): nunca éxito sin su trabajador.
+        if (!t || !t.trabajador_id) throw new Error('No se pudo registrar a ' + txt_(x.nombre, 60) + ': ' + ((t && t.message) || 'error'));
+        trabId = t.trabajador_id; nuevos.push(t.nombre);
       }
       if (trabId) actualizarFilaPorId_(db, 'SUBSOLICITUDES', 'subsolicitud_id', subId, { trabajador_id: trabId });
     }

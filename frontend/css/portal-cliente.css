@@ -539,3 +539,17 @@ button.doc:active { transform: scale(.98); }
 /* D-005 (E1-6/E3-1): aviso de carga fallida con «Intentar de nuevo» (botón de 54 px). */
 .falla-carga { display: flex; flex-direction: column; gap: 10px; animation: none; }
 .falla-carga .btn { min-height: 54px; align-self: flex-start; }
+
+/* D-005 E3-5: lo que le toca al contratista, bajo el camino. */
+.camino__toca { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--orange-soft); color: var(--ink); font-size: 15px; font-weight: 700; line-height: 1.35; }
+.camino__toca svg { flex: none; width: 20px; height: 20px; color: var(--orange); margin-top: 1px; }
+
+/* D-005 E3-7: objetivos táctiles del brief (obra, guantes): 48 px los secundarios,
+   54 px los principales (.btn ya los tiene). La × de quitar foto se ve de 30 px pero
+   el toque abarca 48 × 48. */
+:root { --pc-tacto: 48px; --pc-tacto-principal: 54px; }
+.btn-chico, .chip-sel, .quitar, .chip--quitar, .segmento button { min-height: var(--pc-tacto); }
+.visor__btn { width: var(--pc-tacto); height: var(--pc-tacto); }
+.miniaturas { gap: 12px; }
+.miniatura { width: 96px; height: 96px; }
+.miniatura__x { top: 0; right: 0; width: var(--pc-tacto); height: var(--pc-tacto); border-radius: 0 12px 0 12px; background: radial-gradient(circle at 60% 40%, rgba(10, 15, 25, .78) 0 15px, transparent 16px); }

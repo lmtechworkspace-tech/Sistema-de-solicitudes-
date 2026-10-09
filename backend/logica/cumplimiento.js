@@ -47,7 +47,7 @@ function clasificarCerrada_(subsolicitud) {
   // Cierre directo sin pasar por Terminada (consulta tecnica, RN-201): no
   // hubo reloj de desarrollador que evaluar, no se le atribuye atraso.
   if (!subsolicitud.fecha_terminada) return 'CERRADA_A_TIEMPO';
-  const aTiempo = new Date(subsolicitud.fecha_terminada) <= new Date(subsolicitud.fecha_comprometida);
+  const aTiempo = new Date(subsolicitud.fecha_terminada) <= Utils.venceCompromiso_(subsolicitud.fecha_comprometida);
   return aTiempo ? 'CERRADA_A_TIEMPO' : 'CERRADA_CON_ATRASO';
 }
 
@@ -71,9 +71,9 @@ function clasificar(subsolicitud, ahora) {
     diasEsperando = subsolicitud.fecha_terminada
       ? redondear1Decimal_(Utils.horasHabilesEntre(subsolicitud.fecha_terminada, momento) / CUMPLIMIENTO_HORAS_JORNADA)
       : 0;
-  } else if (momento > new Date(subsolicitud.fecha_comprometida)) {
+  } else if (momento > Utils.venceCompromiso_(subsolicitud.fecha_comprometida)) {
     codigo = 'ATRASADA_DESARROLLADOR';
-  } else if (Utils.horasHabilesEntre(momento, subsolicitud.fecha_comprometida) < CUMPLIMIENTO_HORAS_JORNADA) {
+  } else if (Utils.horasHabilesEntre(momento, Utils.venceCompromiso_(subsolicitud.fecha_comprometida)) < CUMPLIMIENTO_HORAS_JORNADA) {
     codigo = 'EN_RIESGO';
   } else {
     codigo = 'EN_PLAZO';

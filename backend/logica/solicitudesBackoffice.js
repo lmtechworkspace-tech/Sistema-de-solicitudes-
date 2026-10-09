@@ -223,7 +223,8 @@ function actualizarEstado(db, data, contexto, opciones) {
   if (data.estado_nuevo === ESTADOS.S08 && !opts.sistemaAutomatico) {
     if (estadoActual === ESTADOS.S01) completado.push('recepcion');
     if (!subsolicitud.fecha_comprometida) {
-      cambiosSubsolicitud.fecha_comprometida = timestamp.slice(0, 10);
+      // D-005 E2-8: el día de CHILE (después de las 21:00 el día UTC ya es mañana).
+      cambiosSubsolicitud.fecha_comprometida = require('./utils').claveDia_(new Date(timestamp), 'America/Santiago');
       cambiosSubsolicitud.comprometida_por = contexto.email || '';
       completado.push('fecha');
     }
@@ -349,6 +350,11 @@ function asignarResponsables_(db, data, contexto) {
     const veto = vetoFueraDeAlcance_(db, contexto, sub, 'reasignar');
     if (veto) return veto;
     actualizarFilaPorId_(db, 'SUBSOLICITUDES', 'subsolicitud_id', data.subsolicitud_id, { desarrollador_asignado: data.desarrollador_asignado });
+    agregarFila_(db, 'HISTORIAL_ASIGNACION', {
+      historial_id: crypto.randomUUID(), solicitud_id: data.solicitud_id, subsolicitud_id: data.subsolicitud_id,
+      responsable_anterior: sub.desarrollador_asignado || '', responsable_nuevo: data.desarrollador_asignado, motivo: 'Reasignado',
+      usuario: contexto.email, timestamp: new Date().toISOString(), detalle_items: JSON.stringify({ [data.subsolicitud_id]: sub.desarrollador_asignado || '' })
+    });
     return { solicitud_id: data.solicitud_id, subsolicitud_id: data.subsolicitud_id, desarrollador_asignado: data.desarrollador_asignado };
   }
 
@@ -363,7 +369,16 @@ function asignarResponsables_(db, data, contexto) {
     const veto = vetoFueraDeAlcance_(db, contexto, sub, 'reasignar');
     if (veto) return veto;
   }
+  const cabecera = buscarSolicitudPorId_(db, data.solicitud_id) || {};
   actualizarFilaPorId_(db, 'SOLICITUDES', 'solicitud_id', data.solicitud_id, cambios);
+  if (cambios.desarrollador_asignado !== undefined) {
+    // Solo la cabecera: ningún ítem cambia de manos (detalle_items vacío).
+    agregarFila_(db, 'HISTORIAL_ASIGNACION', {
+      historial_id: crypto.randomUUID(), solicitud_id: data.solicitud_id, subsolicitud_id: '',
+      responsable_anterior: cabecera.desarrollador_asignado || '', responsable_nuevo: cambios.desarrollador_asignado, motivo: 'Responsable de la solicitud',
+      usuario: contexto.email, timestamp: new Date().toISOString(), detalle_items: '{}'
+    });
+  }
   return Object.assign({ solicitud_id: data.solicitud_id }, cambios);
 }
 
@@ -406,7 +421,8 @@ function actualizarPrioridad(db, data, contexto) {
   agregarFila_(db, 'HISTORIAL_PRIORIDAD', {
     historial_id: crypto.randomUUID(), subsolicitud_id: data.subsolicitud_id, solicitud_id: subsolicitud.solicitud_id,
     prioridad_anterior: prioridadAnterior, prioridad_nueva: data.prioridad_nueva,
-    justificacion: data.justificacion, usuario: contexto.email, timestamp: timestamp
+    justificacion: data.justificacion, usuario: contexto.email, timestamp: timestamp,
+    sla_anterior_horas: subsolicitud.sla_objetivo_horas === undefined ? '' : subsolicitud.sla_objetivo_horas, sla_nuevo_horas: slaHoras === undefined ? '' : slaHoras
   });
 
   const prioridadDerivada = recalcularPrioridadDerivada_(db, subsolicitud.solicitud_id);
@@ -509,7 +525,8 @@ function aplicarDerivacion_(db, plan, responsableNuevo, motivo, contexto, timest
   agregarFila_(db, 'HISTORIAL_ASIGNACION', {
     historial_id: crypto.randomUUID(), solicitud_id: solicitudId, subsolicitud_id: subsolicitudId || '',
     responsable_anterior: anterior, responsable_nuevo: responsableNuevo, motivo: motivo,
-    usuario: contexto.email, timestamp: timestamp
+    usuario: contexto.email, timestamp: timestamp,
+    detalle_items: JSON.stringify(Object.fromEntries(items.map((it) => [it.subsolicitud_id, it.desarrollador_asignado || ''])))
   });
 
   return {
