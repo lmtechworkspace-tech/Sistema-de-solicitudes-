@@ -382,6 +382,7 @@
         '<option value="movimiento"' + (f.orden === 'movimiento' ? ' selected' : '') + '>Más tiempo sin movimiento</option>' +
         '<option value="prioridad"' + (f.orden === 'prioridad' ? ' selected' : '') + '>Por prioridad</option>' +
         '<option value="recientes"' + (f.orden === 'recientes' ? ' selected' : '') + '>Más recientes</option></select>' +
+      U.boton({ texto: 'Atajos', icono: 'rayo', sm: true, variante: 'fantasma', clase: 'js-bj2-atajos', titulo: 'Atajos de teclado (?)' }) +
     '</div>';
   }
 
@@ -1512,16 +1513,16 @@
       var t = function (it) { return subs.length > 1 ? ' · ' + it.numero_item + '. ' + it.titulo : ''; };
       var cuando = function (it) { return it.fecha_comprometida ? 'Prometido para ' + diaCorto(it.fecha_comprometida) : 'Sin fecha prometida'; };
       var paso = null, x;
-      if ((x = abiertos.filter(function (it) { return it.estado === 'S01'; })[0])) paso = { it: x, txt: 'Recibirlo y darle fecha', acc: 'recibir' };
-      else if ((x = abiertos.filter(function (it) { return it.estado !== 'S06' && !it.fecha_comprometida; })[0])) paso = { it: x, txt: 'Darle fecha', acc: 'fecha' };
-      else if ((x = abiertos.filter(function (it) { return ['S02', 'S03', 'S04'].indexOf(it.estado) !== -1; })[0])) paso = { it: x, txt: 'Empezarlo', acc: '' };
-      else if ((x = abiertos.filter(function (it) { return ['S05', 'S07'].indexOf(it.estado) !== -1; })[0])) paso = { it: x, txt: 'Resolverlo', acc: 'resolver' };
+      if ((x = abiertos.filter(function (it) { return it.estado === 'S01'; })[0])) paso = { it: x, txt: 'Recibirlo y darle fecha', acc: 'recibir', foco: 'input[type=date]' };
+      else if ((x = abiertos.filter(function (it) { return it.estado !== 'S06' && !it.fecha_comprometida; })[0])) paso = { it: x, txt: 'Darle fecha', acc: 'fecha', foco: 'input[type=date]' };
+      else if ((x = abiertos.filter(function (it) { return ['S02', 'S03', 'S04'].indexOf(it.estado) !== -1; })[0])) paso = { it: x, txt: 'Empezarlo', acc: '', foco: '.js-bj2-paso[data-estado=S05]' };
+      else if ((x = abiertos.filter(function (it) { return ['S05', 'S07'].indexOf(it.estado) !== -1; })[0])) paso = { it: x, txt: 'Resolverlo', acc: 'resolver', foco: 'textarea' };
       if (!paso) {
         var espera = abiertos.some(function (it) { return it.estado === 'S06'; }) ? 'Espera la respuesta del cliente' : (subs.some(function (it) { return it.estado === 'S08'; }) ? 'Espera que el cliente confirme' : '');
         return espera ? '<div class="bj2-prox bj2-prox--espera"><span class="bj2-prox__et">Próximo paso</span><b>' + U.esc(espera) + '</b></div>' : '';
       }
       return '<div class="bj2-prox"><span class="bj2-prox__et">Próximo paso</span><span class="bj2-prox__txt"><b>' + U.esc(paso.txt) + '</b>' + U.esc(t(paso.it)) + '<small>' + U.esc(cuando(paso.it)) + '</small></span>' +
-        U.boton({ texto: 'Ir', icono: 'derecha', sm: true, variante: 'primario', clase: 'js-bj2-ir-paso', datos: { id: paso.it.subsolicitud_id, acc: paso.acc } }) + '</div>';
+        U.boton({ texto: 'Ir', icono: 'derecha', sm: true, variante: 'primario', clase: 'js-bj2-ir-paso', datos: { id: paso.it.subsolicitud_id, acc: paso.acc, foco: paso.foco } }) + '</div>';
     }
     function dato(et, v) { return v ? '<dt>' + U.esc(et) + '</dt><dd>' + v + '</dd>' : ''; }
     // D-005 E3-9: un contratista sin correo queda con una dirección técnica «@portal.invalid»:
@@ -1982,10 +1983,11 @@
       if ((b = t.closest('.js-bj2-ir-paso'))) {
         var idP = b.getAttribute('data-id');
         expandido = expandido || {}; expandido[idP] = true;
-        if (b.getAttribute('data-acc')) abiertoAcc[idP] = b.getAttribute('data-acc');
+        // D-014: SIEMPRE la acción del próximo paso (sin acción = se cierra el formulario que hubiera).
+        abiertoAcc[idP] = b.getAttribute('data-acc') || '';
         pintarDetalle();
         var art2 = d.el.querySelector('[data-bj2-det="' + idP + '"]');
-        if (art2) { art2.scrollIntoView({ block: 'start', behavior: U.reducirMovimiento() ? 'auto' : 'smooth' }); var foco = art2.querySelector('input[type=date]') || art2.querySelector('.sx2-boton--primario') || art2.querySelector('textarea'); if (foco) foco.focus({ preventScroll: true }); }
+        if (art2) { art2.scrollIntoView({ block: 'start', behavior: U.reducirMovimiento() ? 'auto' : 'smooth' }); var sel = b.getAttribute('data-foco'), foco = (sel && art2.querySelector(sel)) || art2.querySelector('.sx2-boton--primario'); if (foco) foco.focus({ preventScroll: true }); }
         return;
       }
       if ((b = t.closest('.js-bj2-acc'))) { var id = b.getAttribute('data-id'); abiertoAcc[id] = abiertoAcc[id] === b.getAttribute('data-acc') ? '' : b.getAttribute('data-acc'); pintarDetalle(); return; }
@@ -2099,9 +2101,14 @@
     if (t.closest('.js-bj2-servicios')) { abrirServicios(f.cola); return; }
     if ((b = t.closest('.js-bj2-tomar'))) {
       ev.stopPropagation();
-      b.disabled = true;
+      if (b.disabled) return;
+      // Mejora D (D-014): respuesta inmediata — la fila queda «Guardando…» y el botón no se
+      // puede volver a pulsar; tomar no es optimista (lo confirma el servidor).
+      var htmlTomar = b.innerHTML, filaTomar = b.closest('[data-bj2-item], tr');
+      b.disabled = true; b.setAttribute('aria-busy', 'true'); b.innerHTML = 'Guardando…';
+      if (filaTomar) filaTomar.classList.add('bj2-guardando');
       api('tomarItemSolicitud', { subsolicitud_id: b.getAttribute('data-id') }).then(function (r) {
-        if (!r || !r.ok) { b.disabled = false; PY.aviso((r && r.message) || 'No se pudo tomar.', 'error'); avisarCambio(); return; }
+        if (!r || !r.ok) { b.disabled = false; b.removeAttribute('aria-busy'); b.innerHTML = htmlTomar; if (filaTomar) filaTomar.classList.remove('bj2-guardando'); PY.aviso((r && r.message) || 'No se pudo tomar.', 'error'); avisarCambio(); return; }
         PY.aviso('Es tuyo: quedó a tu nombre y el solicitante ve que ya lo recibieron.', 'exito');
         avisarCambio();
       });
@@ -2129,6 +2136,7 @@
     if ((b = t.closest('.js-bj2-pauta'))) { imprimirPauta(f.verBandeja, b); return; }
     if (t.closest('.js-bj2-limpiar')) { sel_ = {}; actualizarSeleccion(); return; }
     if ((b = t.closest('.js-bj2-lote'))) { lote(b.getAttribute('data-accion')); return; }
+    if (t.closest('.js-bj2-atajos')) { ayudaAtajos(); return; }
     if ((b = t.closest('.js-bj2-abrir-sol'))) { abrirDetalle(b.getAttribute('data-sol')); return; }
     if (t.closest('.bj2-check')) return; // el checkbox se maneja en 'change'
     if ((b = t.closest('.js-bj2-expandir'))) {
@@ -2197,6 +2205,94 @@
       if ((ev.key === 'ArrowRight') !== !!expandidas_[sid2]) { ev.preventDefault(); expandidas_[sid2] = ev.key === 'ArrowRight'; pintar(true); var tr = document.querySelector('#bandeja-v2 tr.bj2-tr-sol[data-sol="' + sid2 + '"]'); if (tr) tr.focus(); }
     }
   });
+  // Mejora D (D-014): atajos de teclado de la Bandeja. Solo cuando la Bandeja está a la vista,
+  // nunca mientras se escribe ni con un panel, diálogo o menú abierto. Cada atajo hace lo
+  // MISMO que su botón (mismos permisos del servidor; en solo lectura no hay acciones).
+  var ATAJOS = [
+    ['j  ·  ↓', 'Fila siguiente'], ['k  ·  ↑', 'Fila anterior'], ['Enter', 'Abrir la fila'],
+    ['x', 'Marcar o desmarcar la fila'], ['Shift + clic', 'Marcar un rango de filas'],
+    ['r', 'Recibir o tomar la fila'], ['d', 'Dar fecha'], ['a', 'Asignar'], ['e', 'Cambiar estado'],
+    ['/', 'Buscar'], ['?', 'Ver estos atajos']
+  ];
+  function filasNav() {
+    var r = document.getElementById('bandeja-v2');
+    if (!r) return [];
+    return [].filter.call(r.querySelectorAll('[data-bj2-item][tabindex], tr.bj2-tr-sol[tabindex], tr.js-bj2-abrir-sol[tabindex], .bj2-tarj[tabindex]'), function (e) { return e.getClientRects().length > 0; });
+  }
+  function filaActual() {
+    var a = document.activeElement;
+    return a && a.closest ? a.closest('[data-bj2-item][tabindex], tr.bj2-tr-sol[tabindex], tr.js-bj2-abrir-sol[tabindex], .bj2-tarj[tabindex]') : null;
+  }
+  function ayudaAtajos() {
+    U.drawer({ titulo: 'Atajos de teclado', cuerpo: '<dl class="bj2-atajos">' + ATAJOS.map(function (a) {
+      return '<dt><kbd>' + U.esc(a[0]) + '</kbd></dt><dd>' + U.esc(a[1]) + '</dd>';
+    }).join('') + '</dl><p class="sx2-tenue" style="font-size:.8125rem">No funcionan mientras escribes en un campo ni con un panel abierto.</p>' });
+  }
+  // Acción de lote sobre lo marcado o, si no hay nada marcado, sobre la fila con foco.
+  function loteAtajo(accion) {
+    if (datos_.solo_lectura) { PY.aviso('Tu acceso a esta bandeja es de solo lectura.', 'info'); return; }
+    if (!Object.keys(sel_).length) {
+      var fila = filaActual(), id = fila && fila.getAttribute('data-bj2-item');
+      if (!id) { PY.aviso('Marca filas con «x» o ponte sobre una fila de ítem.', 'info'); return; }
+      sel_ = {}; sel_[id] = true; actualizarSeleccion();
+    }
+    lote(accion);
+  }
+  var ultimaMarcada_ = null;
+  document.addEventListener('click', function (ev) {
+    // Shift + clic en una casilla: marca (o desmarca) todo el tramo desde la última tocada.
+    var cb = ev.target && ev.target.classList && ev.target.classList.contains('js-bj2-sel') ? ev.target : null;
+    if (!cb) return;
+    var fila = cb.closest('[data-bj2-item]');
+    if (!fila) return;
+    var id = fila.getAttribute('data-bj2-item');
+    if (ev.shiftKey && ultimaMarcada_ && ultimaMarcada_ !== id) {
+      var ids = filasNav().map(function (f) { return f.getAttribute('data-bj2-item'); }).filter(Boolean);
+      var i1 = ids.indexOf(ultimaMarcada_), i2 = ids.indexOf(id);
+      if (i1 !== -1 && i2 !== -1) {
+        var marcar = cb.checked;
+        ids.slice(Math.min(i1, i2), Math.max(i1, i2) + 1).forEach(function (x) { if (marcar) sel_[x] = true; else delete sel_[x]; });
+        setTimeout(function () { actualizarSeleccion(); }, 0);
+      }
+    }
+    ultimaMarcada_ = id;
+  }, true);
+  document.addEventListener('keydown', function (ev) {
+    var raiz = document.getElementById('bandeja-v2');
+    if (!raiz || !raiz.getClientRects().length || !datos_ || f.vista !== 'cola') return;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    var t = ev.target;
+    if (t && t.closest && t.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')) return;
+    if (document.querySelector('.sx2-drawer, .sx2-dialogo, details.bj2-menu[open]')) return;
+    var k = ev.key, fila = filaActual(), filas;
+    var mover = function (paso) {
+      filas = filasNav();
+      if (!filas.length) return;
+      var i = fila ? filas.indexOf(fila) : -1;
+      var sig = filas[Math.max(0, Math.min(filas.length - 1, i === -1 ? 0 : i + paso))];
+      sig.focus({ preventScroll: true });
+      sig.scrollIntoView({ block: 'nearest', behavior: U.reducirMovimiento() ? 'auto' : 'smooth' });
+    };
+    if (k === 'j' || (k === 'ArrowDown' && fila)) { ev.preventDefault(); mover(1); return; }
+    if (k === 'k' || (k === 'ArrowUp' && fila)) { ev.preventDefault(); mover(-1); return; }
+    if (k === '/') { var bus = raiz.querySelector('.js-bj2-buscar'); if (bus) { ev.preventDefault(); bus.focus(); } return; }
+    if (k === '?') { ev.preventDefault(); ayudaAtajos(); return; }
+    if (k === 'x' && fila) {
+      var cb = fila.querySelector('.js-bj2-sel');
+      if (cb) { ev.preventDefault(); cb.click(); fila.focus({ preventScroll: true }); }
+      return;
+    }
+    if (k === 'r' && fila) {
+      if (datos_.solo_lectura) return;
+      var acc = fila.querySelector('.js-bj2-tomar, .js-bj2-recibir, .js-bj2-recibir-sol');
+      if (acc && !acc.disabled) { ev.preventDefault(); acc.click(); }
+      return;
+    }
+    if (k === 'd') { ev.preventDefault(); loteAtajo('fecha'); return; }
+    if (k === 'a') { ev.preventDefault(); loteAtajo('asignar'); return; }
+    if (k === 'e') { ev.preventDefault(); loteAtajo('estado'); return; }
+  });
+
   // La tabla densa no cabe en pantallas angostas: al cruzar los 900 px se repinta con la vista que corresponde.
   var angosta_ = window.innerWidth < 900;
   window.addEventListener('resize', function () {

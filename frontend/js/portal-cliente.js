@@ -289,7 +289,7 @@
       var id = img.getAttribute('data-vista');
       if (ARCH_LISTO[id]) { img.src = ARCH_LISTO[id].url; return; }
       colaMini = colaMini.then(function () { return traerArchivo(id, true); }).then(function (x) {
-        [].forEach.call(app.querySelectorAll('img[data-vista="' + id + '"]'), function (i2) { i2.src = x.url; });
+        [].forEach.call(app.querySelectorAll('img[data-vista="' + id + '"]'), function (i2) { i2.src = x.url; var mm = i2.closest('.mini'); if (mm) mm.classList.add('mini--lista'); });
       }, function () {
         [].forEach.call(app.querySelectorAll('img[data-vista="' + id + '"]'), function (i2) { var m = i2.closest('.mini'); if (m) m.classList.add('mini--sin'); });
       });
@@ -807,6 +807,8 @@
         (ev.texto ? '<span style="white-space:pre-wrap">' + esc(ev.texto) + '</span>' : '') + '<small class="hora">' + esc(horaDe(m.timestamp) || fecha(m.timestamp, true)) + '</small></div></div>';
     }).join('');
     var abierto = d.subsolicitudes.some(function (it) { return ['S09', 'S10', 'S11'].indexOf(it.estado) === -1; });
+    // El destino de la respuesta es de ESTE pedido y de una pregunta que sigue abierta.
+    if (S.responder && (S.responder.pedido !== d.solicitud_id || !d.subsolicitudes.some(function (it) { return it.subsolicitud_id === S.responder.sub && it.estado === 'S06'; }))) S.responder = null;
     // Mejora B (D-012): arriba, lo que le toca hacer al contratista (la pregunta pendiente o lo
     // que debe revisar), con UNA acción principal. El camino queda debajo, como contexto.
     var pend = d.subsolicitudes.filter(function (it) { return it.estado === 'S06'; }), rev = d.subsolicitudes.filter(function (it) { return it.estado === 'S08'; });
@@ -815,7 +817,7 @@
     var tarjeta = pend.length
       ? '<section class="card te-toca"><span class="te-toca__et">Te toca a ti</span><h2>Te hicieron una pregunta</h2>' +
         '<p>' + esc(pend[0].pregunta_pendiente || 'Revisa la conversación y responde.') + (multi ? ' <span class="sub">Sobre «' + esc(tit(pend[0])) + '»</span>' : '') + '</p>' +
-        (abierto ? '<button type="button" class="btn btn-main" data-ir-chat>' + ico('chat') + 'Responder</button>' : '') + '</section>'
+        (abierto ? '<button type="button" class="btn btn-main" data-ir-chat data-sub="' + esc(pend[0].subsolicitud_id) + '" data-sub-titulo="' + esc(tit(pend[0])) + '">' + ico('chat') + 'Responder</button>' : '') + '</section>'
       : (rev.length
         ? '<section class="card te-toca"><span class="te-toca__et">Te toca a ti</span><h2>' + (multi ? '«' + esc(tit(rev[0])) + '» está listo' : 'Está listo') + ': revísalo</h2>' +
           '<p>' + (rev[0].responsable_nombre ? 'Lo hizo ' + esc(rev[0].responsable_nombre) + '. ' : '') + 'Mira lo que te mandamos y dinos si quedó bien.</p>' +
@@ -828,6 +830,8 @@
       '<section class="card">' + chip(p.estado) + b + '</section>' +
       '<section class="card"><h3>' + (multi ? 'Cada parte de tu pedido' : 'Tu pedido') + '</h3>' + items + '</section>' +
       '<section style="display:flex;flex-direction:column;gap:10px"><h2>Conversación</h2>' + (chat ? '<div class="chat">' + chat + '</div>' : '<p class="sub">Aquí aparece lo que te escriban. Puedes escribir cuando quieras.</p>') + '</section>' +
+      // D-014 (revisión Codex): si se responde una pregunta concreta, el mensaje va a ESE ítem.
+      (abierto && S.responder ? '<p class="responde-a" role="status"><span>Respondes sobre «' + esc(S.responder.titulo) + '»</span><button type="button" class="quitar" data-responder-quitar>Escribir en general</button></p>' : '') +
       (abierto ? '<form class="composer" id="f-chat" novalidate><button type="button" class="redondo" data-foto-chat aria-label="Mandar foto o archivo">' + ico('camara') + '</button><input type="file" id="f-foto-chat" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple class="oculto-visual" tabindex="-1">' +
         '<textarea class="inp" id="c-msg" rows="1" placeholder="Escribe aquí…" aria-label="Mensaje"></textarea><button type="submit" class="redondo enviar" aria-label="Enviar">' + ico('enviar') + '</button></form>' : '') +
     '</main>' + nav();
@@ -1185,7 +1189,21 @@
     if (t.closest('[data-ir-entrar]')) { S.invitacion = null; history.replaceState(null, '', location.pathname); pintar(); return; }
     if (t.closest('[data-atras]')) { volver(); return; }
     if ((b = t.closest('[data-ir]'))) { var v = b.getAttribute('data-ir'); if (v === 'pedir') S.pedir = null; capa.innerHTML = ''; capaHist = false; ir(v); if (v === 'pedidos' || v === 'inicio') refrescarPedidos().then(function () { if (S.vista === v) pintar(); }); return; }
-    if (t.closest('[data-ir-chat]')) { var cm = document.getElementById('c-msg'); if (cm) { cm.scrollIntoView({ block: 'center', behavior: suave() }); cm.focus({ preventScroll: true }); } return; }
+    if ((b = t.closest('[data-ir-chat]'))) {
+      // D-014: la respuesta queda dirigida al ítem de la pregunta (se ve sobre el cuadro y se puede quitar).
+      S.responder = b.getAttribute('data-sub') ? { pedido: S.pedido, sub: b.getAttribute('data-sub'), titulo: b.getAttribute('data-sub-titulo') || '' } : null;
+      var borrador = (document.getElementById('c-msg') || {}).value || '';
+      pintar();
+      var cm = document.getElementById('c-msg');
+      if (cm) { cm.value = borrador; cm.scrollIntoView({ block: 'center', behavior: suave() }); cm.focus({ preventScroll: true }); }
+      return;
+    }
+    if (t.closest('[data-responder-quitar]')) {
+      var borr = (document.getElementById('c-msg') || {}).value || '';
+      S.responder = null; pintar();
+      var cm2 = document.getElementById('c-msg'); if (cm2) { cm2.value = borr; cm2.focus(); }
+      return;
+    }
     if ((b = t.closest('[data-ir-item]'))) { var ii = document.getElementById('it-' + b.getAttribute('data-ir-item')); if (ii) { ii.scrollIntoView({ block: 'start', behavior: suave() }); ii.classList.add('item-sub--foco'); setTimeout(function () { ii.classList.remove('item-sub--foco'); }, 1600); } return; }
     if ((b = t.closest('[data-serv]'))) { nuevoPedir(b.getAttribute('data-serv-area'), b.getAttribute('data-serv')); return; }
     if ((b = t.closest('[data-area]'))) { nuevoPedir(b.getAttribute('data-area')); return; }
@@ -1310,8 +1328,10 @@
       fila.innerHTML = '<div class="burbuja mio enviando"><span style="white-space:pre-wrap">' + esc(txt) + '</span><small class="hora">Enviando…</small></div>';
       if (chat) { chat.appendChild(fila); fila.scrollIntoView({ block: 'center', behavior: suave() }); }
       ta.value = ''; crecer(ta); vibrar(15);
-      api('clienteMensaje', { solicitud_id: S.pedido, texto: txt }).then(function (r) {
+      var destino = S.responder && S.responder.pedido === S.pedido ? S.responder.sub : '';
+      api('clienteMensaje', { solicitud_id: S.pedido, texto: txt, subsolicitud_id: destino }).then(function (r) {
         boton.disabled = false;
+        if (r && r.ok && destino && S.responder && S.responder.sub === destino) S.responder = null;
         if (!r || !r.ok) {
           var bb = fila.querySelector('.burbuja'); bb.classList.add('fallo'); bb.querySelector('.hora').textContent = 'No se envió';
           var ta3 = document.getElementById('c-msg'); if (ta3 && !ta3.value) { ta3.value = txt; crecer(ta3); }
@@ -1476,6 +1496,8 @@
     else if (S.vista === 'inicio' || S.vista === 'pedidos') refrescarPedidos().then(function () { if ((S.vista === 'inicio' || S.vista === 'pedidos') && !escribiendo()) pintar(); });
   }
   document.addEventListener('visibilitychange', novedades);
+  // Mejora G (D-014): con la app en segundo plano se pausan los brillos de carga.
+  document.addEventListener('visibilitychange', function () { document.documentElement.classList.toggle('app-oculta', document.visibilityState !== 'visible'); });
   setInterval(function () { if (S.vista === 'pedido') novedades(); }, 30000);
 
   // ---------- Arranque ----------

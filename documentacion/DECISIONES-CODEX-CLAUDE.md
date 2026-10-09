@@ -167,6 +167,17 @@ Veredicto: A CUMPLE; B y C PARCIALES. Cuatro defectos, confirmados y corregidos 
 Pruebas en navegador con el navegador en **Asia/Tokyo**: Bandeja 23/23 («Plazo» y «Hoy» con el día de Chile, «Ir» en S01 abre «Recibir», foco del filtro) y portal 24/24 (fecha prometida en palabras: «Para el miércoles 14»).
 Lección (también en la memoria del proyecto): código con barras invertidas NUNCA se escribe a través de `node -e` en bash; usar Edit/Write.
 
+Corrección de fechas subida a main (dueño, 2026-10-09): commit `a2edf7c`.
+
+### D-014 · Revisión 2.ª de A-C cerrada + mejoras D y G (2026-10-09, sin commit; espera revisión de Codex)
+**2.ª y última ronda de Codex sobre A-C** (`.auditoria-codex/2026-10-09T01-51*`): A CUMPLE; B y C PARCIALES por dos defectos, corregidos:
+1. «Responder» de la tarjeta «Te toca» mandaba el mensaje a la conversación general y el servidor retomaba TODOS los ítems en S06 → la tarjeta guarda el destino (`S.responder` = ítem de la pregunta), el cuadro muestra «Respondes sobre «…»» con «Escribir en general» para quitarlo, `clienteMensaje` va con `subsolicitud_id`, y el destino se limpia al enviar, al cambiar de pedido o si esa pregunta ya no está abierta. Prueba en navegador: dos preguntas S06, responder la primera → solo esa pasa a S05.
+2. «Ir» a «Empezar» conservaba el formulario de otra acción → `abiertoAcc[id]` se fija SIEMPRE con la acción del próximo paso (vacía = se cierra el formulario) y cada paso declara qué enfocar (`data-foco`: la fecha para recibir/dar fecha, el botón «Empezar» `.js-bj2-paso[data-estado=S05]`, el texto para resolver).
+
+**Mejora D (E3-13) — teclado y respuesta inmediata en la Bandeja** (`bandeja-v2.js`): j/k (y ↓/↑ sobre una fila) recorren filas; Enter abre (ya existía); x marca; Shift+clic marca un rango; r = Recibir/Tomar de la fila; d/a/e = Fecha/Asignar/Estado sobre lo marcado o, si no hay nada marcado, sobre la fila con foco (mismas acciones de lote, mismos permisos; en solo lectura avisa y no hace nada); / = buscar; ? = ayuda con la lista (también botón «Atajos»). Inactivo al escribir en un campo, con panel, diálogo o menú abierto, o con Ctrl/Alt/Cmd. «Tomar» muestra «Guardando…», atenúa la fila y bloquea el doble clic; NO es optimista (lo confirma el servidor y se revierte si falla). No se ofrece «Deshacer» (no hay operación de servidor que lo respalde).
+**Mejora G (E3-15) — movimiento unificado** (`portal-cliente.css`, `bandeja-v2.css`): portal con feedback 120 ms, navegación 180 ms, hoja 240 ms, salida 160 ms, curva de entrada `cubic-bezier(.16,1,.3,1)` y de salida `cubic-bezier(.4,0,1,1)`; escalonado total ≤ 120 ms (8 × 15 ms); la cabecera ya no anima padding/alto/fuente; el latido de «Te toca» late 2 veces (no infinito) y el paso actual del camino tiene aro fijo (sin `box-shadow` animado); el brillo de las miniaturas se apaga al cargar la foto (`.mini--lista`/`:has(img[src])`) o al fallar, y los brillos se pausan con la app en segundo plano. Bandeja: escalonado ≤ 120 ms y panel 240 ms (sale en 160 ms). Los gestos de celebración (confirmar) se mantienen: informan.
+**Pruebas en navegador** (datos ficticios): Bandeja 29/29 (j/k, x, Shift+clic, ?, /, d, escalonado) y portal 26/26 (respuesta dirigida, aro fijo), sin fallas.
+
 ## Pendiente
 - (D-003, de Codex) Recuperar el acceso cuando el pase vence con un formulario de edición/respuesta abierto: hoy solo la consulta pide el código otra vez; las demás acciones muestran el mensaje de error.
 - (D-003, de Codex) Ampliar pruebas: caducidad del pase, reinicio, sesión revocada.

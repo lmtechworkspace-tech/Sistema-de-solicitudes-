@@ -730,3 +730,21 @@ button.bj2-it__cab:focus-visible { outline: 2px solid var(--sx-primario); outlin
 .bj2-tabla.bj2-tabla--sol:not(.bj2-tabla--rep) thead th.bj2-tc-plazo { width: 112px; }
 .bj2-tabla td.bj2-tc-plazo { overflow: visible; white-space: normal; }
 .bj2-tabla:not(.bj2-tabla--rep):not(.bj2-tabla--sol) th.bj2-tc-plazo { width: 112px; }
+
+/* Mejora D (D-014): atajos de teclado y «Guardando…» inmediato. */
+.bj2-atajos { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; margin: 0 0 var(--sx-e-4); align-items: center; }
+.bj2-atajos dt { margin: 0; }
+.bj2-atajos dd { margin: 0; font: .875rem/1.4 var(--fuente); color: var(--sx-texto); }
+.bj2-atajos kbd { display: inline-block; min-width: 2.2em; padding: 3px 8px; border: 1px solid var(--sx-borde); border-bottom-width: 2px; border-radius: 6px; background: var(--sx-superficie-2); font: 600 .8125rem/1.2 var(--fuente-mono, ui-monospace, monospace); color: var(--sx-texto); text-align: center; white-space: nowrap; }
+.bj2-guardando { opacity: .65; pointer-events: none; }
+.bj2-guardando [aria-busy="true"] { cursor: progress; }
+[data-bj2-item]:focus-visible, tr.bj2-tr-sol:focus-visible, tr.js-bj2-abrir-sol:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: -2px; }
+
+/* Mejora G (D-014): en la Bandeja el escalonado de entrada suma 120 ms como máximo (antes
+   hasta 12 × 45 ms) y dura lo de una navegación; la cola aparece usable al instante. */
+#bandeja-v2 .sx2-entra, #bandeja-v2 .sx2-entra-escala {
+  animation-duration: var(--sx-dur);
+  animation-delay: calc(min(var(--i, 0), 8) * 15ms);
+}
+.bj2-drawer .sx2-drawer__panel { animation-duration: 240ms; }
+.bj2-drawer.sx2-drawer--saliendo .sx2-drawer__panel { animation-duration: 160ms; }
