@@ -17,9 +17,10 @@
         pasos: [
           { titulo: 'La pantalla de Mi trabajo', img: 'inicio',
             texto: ['Abre **Mi trabajo** en la barra.'],
-            marcas: [{ n: 1, t: 'Mis tareas, Mis horas, No planificado y [[Nueva tarea]].' }, { n: 2, t: 'Los totales: para hoy (atrasadas y las que vencen hoy), esta semana, bloqueadas y por confirmar. Toca uno para ver solo eso; otro toque lo quita.' },
-              { n: 3, t: '**Tu próximo paso**: la tarea que conviene mover primero, con su botón.' }, { n: 4, t: '**Para hoy**: lo atrasado y lo que vence hoy. Debajo vienen **Esta semana** y, plegado, **Más adelante y sin fecha**.' }, { n: 5, t: '[[Nueva tarea]].' }] },
-          { titulo: 'Cómo se lee una tarea', texto: ['Cada tarea dice su **estado** en palabras (Por empezar, En curso, Bloqueada, En revisión) y el **plazo** con el color del punto: rojo si está atrasada, naranjo si vence pronto, azul si va a tiempo. A la derecha, cuándo vence y cuánto avance lleva.'] }
+            marcas: [{ n: 1, t: 'Mis tareas, Mis horas, No planificado y [[Nueva tarea]].' }, { n: 2, t: 'Los totales: para hoy (con cuántas están atrasadas), esta semana, bloqueadas y por confirmar. Toca uno para ver solo eso; otro toque lo quita.' },
+              { n: 3, t: '**Vencen hoy**: empieza por aquí.' }, { n: 4, t: '**Atrasadas**, de la más antigua a la más nueva. Debajo vienen **Esperan que confirmes la fecha**, **Esta semana** y, plegado, **Más adelante y sin fecha**.' }, { n: 5, t: '[[Nueva tarea]].' }] },
+          { titulo: 'Cómo se lee una tarea', texto: ['Cada tarea ocupa dos líneas: el **título** y, debajo, el proyecto, el **estado** en palabras (Por empezar, En curso 30 %, Bloqueada…) y la prioridad si es alta. El **color del punto** es el plazo: rojo si está atrasada, naranjo si vence pronto, azul si va a tiempo. A la derecha, cuándo vence.',
+            'Cada grupo muestra las primeras 6 tareas; toca **Ver las…** para ver el resto.'] }
         ] },
       { id: 'estado', titulo: 'Cambia el estado con un botón', ruta: '#/mi_trabajo',
         intro: ['No hace falta abrir nada para lo más común: cada tarea trae el botón de su siguiente paso.'],
@@ -27,7 +28,7 @@
           { titulo: 'El botón de cada tarea', img: 'fila',
             texto: [[ '[[Empezar]] cuando la tomas: pasa a **En curso**.', '[[Terminar]] cuando la terminas: SIGSO te pregunta si es así y la cierra (o la manda a revisión, si la pide).', '[[Destrabar]] cuando una tarea bloqueada puede seguir.' ],
               'El menú ((2)) tiene lo demás: **Contar cómo va**, **Me bloqueé**, **Solo anotar horas** y **Ver detalle**.'],
-            marcas: [{ n: 1, t: 'El botón del siguiente paso (Empezar, Terminar o Destrabar).' }, { n: 2, t: 'Más opciones.' }, { n: 3, t: 'El proyecto: te lleva a tus tareas en ese proyecto.' }],
+            marcas: [{ n: 1, t: 'El botón del siguiente paso (Empezar, Terminar o Destrabar).' }, { n: 2, t: 'Más opciones.' }, { n: 3, t: 'El proyecto: te lleva a tus tareas en ese proyecto.' }, { n: 4, t: 'Ver el resto del grupo.' }],
             consejo: ['Si te bloqueas, avísalo apenas pase con **Me bloqueé**: tu jefatura o el líder del proyecto lo ve y puede ayudarte a destrabarlo.'] }
         ] },
       { id: 'tareas', titulo: 'Crea y actualiza tus tareas', ruta: '#/mi_trabajo',

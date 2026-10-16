@@ -13,7 +13,7 @@ SigsoManual.indice([
   { id: 'bandeja', archivo: 'solicitudes', grupo: 'Solicitudes', titulo: 'Bandeja de trabajo', icono: 'bandeja', color: 'var(--mod-bandeja)', modulos: ['bandeja'],
     resumen: 'Atender solicitudes: tomar pedidos de la cola, conversar, comprometer fecha y resolver.' },
   { id: 'mi-trabajo', archivo: 'mi-espacio', grupo: 'Mi espacio', titulo: 'Mi trabajo', icono: 'tareas', color: 'var(--mod-mi-trabajo)', modulos: ['mi_trabajo'],
-    resumen: 'Por dónde empezar, cambiar el estado con un botón, contar cómo va paso a paso y registrar tus horas.' },
+    resumen: 'Lo que vence hoy y lo atrasado primero, cambiar el estado con un botón, contar cómo va paso a paso y registrar tus horas.' },
   { id: 'proyectos', archivo: 'proyectos', grupo: 'Mi espacio', titulo: 'Proyectos', icono: 'capas', color: 'var(--mod-proyectos)', modulos: ['proyectos'],
     resumen: 'Tus tareas dentro de un proyecto, cambiar su estado (también arrastrando), sumar colaboradores y pasar tareas a otra persona.' },
   { id: 'novedades', archivo: 'mi-espacio', grupo: 'Mi espacio', titulo: 'Novedades', icono: 'periodico', color: 'var(--mod-novedades)', modulos: ['novedades'],
@@ -36,4 +36,4 @@ SigsoManual.indice([
     resumen: 'Calendario, reporte de salida a terreno con su dinero, Estudio TikTok, marcas colaboradoras y reporte del mes.' },
   { id: 'finanzas', archivo: 'finanzas', grupo: 'Finanzas', titulo: 'Finanzas (la bóveda)', icono: 'candado', color: 'var(--mod-finanzas)', modulos: ['finanzas'],
     resumen: 'Abrir la bóveda, el mes paso a paso, cartolas y detalle del banco, revisar movimientos, tablero, cobranza, presupuesto y cierre.' }
-], '2026-10-16a');
+], '2026-10-16b');

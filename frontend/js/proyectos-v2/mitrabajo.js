@@ -141,7 +141,7 @@
     }
     var r = RAPIDA[a.estado];
     return '<span class="sx2-flex sx2-py-mt-acciones">' +
-      (r ? U.boton({ texto: r.texto, icono: r.icono, sm: true, variante: a.estado === 'EN_CURSO' ? 'primario' : 'secundario', clase: 'js-py2m-rapida', datos: { id: a.actividad_id, accion: r.accion } })
+      (r ? U.boton({ texto: r.texto, icono: r.icono, sm: true, variante: 'secundario', clase: 'js-py2m-rapida', datos: { id: a.actividad_id, accion: r.accion } })
          : '<span class="sx2-tenue" style="font-size:.75rem">Esperando revisión</span>') +
       U.boton({ soloIcono: true, icono: 'menu', sm: true, variante: 'fantasma', titulo: 'Más opciones', clase: 'js-py2m-mas', datos: { id: a.actividad_id } }) +
     '</span>';
@@ -154,50 +154,60 @@
     return '<button type="button" class="sx2-py-ref" data-py2-proyecto="' + U.esc(a.proyecto_id) + '" title="Ver tus tareas en este proyecto">' + U.ico('carpeta', 12) + '<span class="sx2-cortar">' + U.esc(a.proyecto_nombre) + '</span></button>';
   }
 
-  function fila(a, i) {
+  // Fila compacta (rediseño 16-10-2026, tras verla con 62 tareas reales): el
+  // título y UNA línea de datos en texto simple, sin pastillas apiladas. El
+  // color del punto es el plazo; a la derecha, cuándo vence y el botón.
+  function cuandoCorto(dd) {
+    if (dd === null) return 'Sin fecha';
+    if (dd < 0) return 'Venció hace ' + (-dd) + ' d';
+    if (dd === 0) return 'Vence hoy';
+    if (dd === 1) return 'Mañana';
+    return 'En ' + dd + ' días';
+  }
+  function fila(a) {
     var tono = PY.tonoTarea(a);
-    var av = Number(a.avance_pct) || 0;
+    var av = Math.round(Number(a.avance_pct) || 0);
     var confirmar = porConfirmar(a);
-    return '<li class="sx2-py-mt-fila sx2-tono-' + tono + ' sx2-entra" style="--i:' + Math.min(i, 12) + '" data-py2-mt="' + U.esc(a.actividad_id) + '" tabindex="0">' +
+    var meta = [];
+    meta.push(a.personal
+      ? '<span class="sx2-py-mt-meta__proy">' + U.ico('persona', 11) + '<span class="sx2-cortar">' + U.esc(a.proyecto_texto || 'Personal') + '</span></span>'
+      : '<button type="button" class="sx2-py-mt-meta__proy sx2-py-mt-meta__proy--enlace" data-py2-proyecto="' + U.esc(a.proyecto_id) + '" title="Ver tus tareas en ' + U.esc(a.proyecto_nombre) + '">' + U.ico('carpeta', 11) + '<span class="sx2-cortar">' + U.esc(a.proyecto_nombre) + '</span></button>');
+    if (!confirmar) meta.push(U.esc(ESTADO_TXT[a.estado] || a.estado) + (av && a.estado !== 'NO_INICIADA' ? ' ' + av + '%' : ''));
+    if (a.soy_responsable === false) meta.push('<span class="sx2-py-mt-meta__colab">Colaboras</span>');
+    if (a.prioridad === 'P1' || a.prioridad === 'P2') meta.push('<span class="sx2-py-mt-meta__prio sx2-tono-' + (a.prioridad === 'P1' ? 'critico' : 'alerta') + '">' + a.prioridad + '</span>');
+    if (a.recurrencia && a.recurrencia !== 'NINGUNA') meta.push(a.recurrencia === 'SEMANAL' ? '↻ semanal' : '↻ mensual');
+    if (a.origen === 'EMERGENTE') meta.push('No planificado');
+    if (a.estado === 'BLOQUEADA' && a.bloqueo_motivo) meta.push('<span class="sx2-py-mt-meta__bloqueo">' + U.ico('candado', 11) + U.esc(a.bloqueo_motivo) + '</span>');
+    return '<li class="sx2-py-mt-fila sx2-tono-' + tono + '" data-py2-mt="' + U.esc(a.actividad_id) + '" tabindex="0" title="' + U.esc(a.titulo) + '">' +
       '<span class="sx2-py-punto"></span>' +
-      '<span class="sx2-apilado" style="gap:4px;min-width:0;flex:1">' +
+      '<span class="sx2-py-mt-cuerpo">' +
         '<strong class="sx2-cortar">' + U.esc(a.titulo) + '</strong>' +
-        '<span class="sx2-flex" style="gap:6px;flex-wrap:wrap">' + chipOrigen(a) +
-          (confirmar ? '' : U.badge(ESTADO_TXT[a.estado] || a.estado, 'neutro', true)) +
-          (a.soy_responsable === false ? U.badge('Colaboras', 'info', true) : '') +
-          (a.origen === 'EMERGENTE' ? U.badge('No planificado', 'neutro', true) : '') +
-          (a.recurrencia && a.recurrencia !== 'NINGUNA' ? U.badge(a.recurrencia === 'SEMANAL' ? '↻ semanal' : '↻ mensual', 'neutro', true) : '') +
-          (a.prioridad === 'P1' || a.prioridad === 'P2' ? U.badge(a.prioridad, a.prioridad === 'P1' ? 'critico' : 'alerta', true) : '') +
-        '</span>' +
-        (a.estado === 'BLOQUEADA' && a.bloqueo_motivo ? '<span class="sx2-py-mt-bloqueo">' + U.ico('candado', 12) + U.esc(a.bloqueo_motivo) + '</span>' : '') +
+        '<span class="sx2-py-mt-meta">' + meta.join('<span class="sx2-py-mt-meta__sep" aria-hidden="true">·</span>') + '</span>' +
       '</span>' +
-      '<span class="sx2-py-mt-cuando' + (a._dd !== null && a._dd < 0 ? ' sx2-delta--mal' : '') + '">' +
-        (confirmar ? 'Te proponen el ' + PY.fecha(a.fecha_propuesta) : U.esc(cuando(a._dd))) +
-        (confirmar || a.estado === 'NO_INICIADA' ? '' : '<span class="sx2-py-mt-avance">' + U.barra(av, tono) + '<small>' + Math.round(av) + '%</small></span>') + '</span>' +
+      '<span class="sx2-py-mt-cuando' + (!confirmar && a._dd !== null && a._dd < 0 ? ' sx2-delta--mal' : '') + '">' +
+        (confirmar ? 'Propuesta: ' + PY.fecha(a.fecha_propuesta) : U.esc(cuandoCorto(a._dd))) + '</span>' +
       botonesFila(a) +
     '</li>';
   }
 
-  // "Tu próximo paso": la tarea que conviene mover primero, con su botón.
-  function proximoPaso(g) {
-    // Lo atrasado o que vence hoy manda; después, confirmar fechas; después, la semana.
-    var a = g.paraHoy[0] || g.confirmar[0] || g.semana[0];
-    if (!a) return '';
-    var motivo = porConfirmar(a) ? 'Confirma la fecha que te proponen' :
-      (a._dd !== null && a._dd < 0 ? 'Está atrasada: empieza por aquí' : (a._dd === 0 ? 'Vence hoy' : 'Es lo próximo que vence'));
-    return '<section class="sx2-card sx2-py-mt-proximo sx2-tono-' + (porConfirmar(a) ? 'info' : PY.tonoTarea(a)) + ' sx2-entra" style="--i:1">' +
-      '<span class="sx2-py-mt-proximo__et">' + U.ico('diana', 14) + 'Tu próximo paso</span>' +
-      '<ul class="sx2-py-mt-lista">' + fila(a, 0).replace('sx2-py-mt-fila', 'sx2-py-mt-fila sx2-py-mt-fila--proximo') + '</ul>' +
-      '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(motivo) + '.</span>' +
-    '</section>';
-  }
-
-  function tarjetaGrupo(titulo, icono, tono, lista, i, vacio) {
+  // Un grupo muestra hasta TOPE tareas; el resto con "Ver todas" (con 29
+  // atrasadas la pantalla se volvía una pared). El grupo abierto se recuerda
+  // mientras la persona esté en la página.
+  var TOPE = 6;
+  var expandidos_ = {};
+  function tarjetaGrupo(titulo, icono, tono, lista, i, vacio, id, ayuda) {
     if (!lista.length && !vacio) return '';
-    return '<section class="sx2-card sx2-entra" style="--i:' + i + '">' +
+    id = id || titulo;
+    var todas = expandidos_[id] || lista.length <= TOPE + 2;
+    var visibles = todas ? lista : lista.slice(0, TOPE);
+    return '<section class="sx2-card sx2-py-mt-grupo sx2-entra" style="--i:' + i + '">' +
       '<div class="sx2-card__cab"><h2 class="sx2-card__titulo"><span class="sx2-py-mt-ico sx2-tono-' + tono + '">' + U.ico(icono, 15) + '</span>' + U.esc(titulo) +
-        ' <span class="sx2-card__sub">' + lista.length + '</span></h2></div>' +
-      (lista.length ? '<ul class="sx2-py-mt-lista">' + lista.map(fila).join('') + '</ul>' : U.vacio({ icono: 'check', texto: vacio })) +
+        ' <span class="sx2-card__sub">' + lista.length + '</span></h2>' +
+        (ayuda ? '<span class="sx2-tenue sx2-py-mt-grupo__ayuda">' + U.esc(ayuda) + '</span>' : '') + '</div>' +
+      (lista.length ? '<ul class="sx2-py-mt-lista">' + visibles.map(fila).join('') + '</ul>' +
+        (lista.length > visibles.length ? '<button type="button" class="sx2-py-mt-ver js-py2m-ver" data-id="' + U.esc(id) + '">' + U.ico('abajo', 14) + 'Ver las ' + lista.length + '</button>'
+          : (expandidos_[id] && lista.length > TOPE + 2 ? '<button type="button" class="sx2-py-mt-ver js-py2m-ver" data-id="' + U.esc(id) + '">' + U.ico('arriba', 14) + 'Mostrar menos</button>' : ''))
+        : U.vacio({ icono: 'check', texto: vacio })) +
     '</section>';
   }
 
@@ -253,10 +263,14 @@
       cuerpo = tarjetaGrupo('Esperan que confirmes la fecha', 'calendario', 'primario', lista, 2, 'Nada por confirmar.');
     } else {
       var luego = g.despues.concat(g.sinFecha);
-      cuerpo = (!soloGrupo && !f.proyecto && !f.filtro ? proximoPaso(g) : '') +
-        (!soloGrupo ? tarjetaGrupo('Esperan que confirmes la fecha', 'check', 'info', g.confirmar, 2) : '') +
-        ((!soloGrupo || soloGrupo === 'hoy') ? tarjetaGrupo('Para hoy', 'alerta', g.atrasadas.length ? 'critico' : 'alerta', g.paraHoy, 2, soloGrupo ? 'Nada atrasado ni que venza hoy. ¡Bien!' : '') : '') +
-        ((!soloGrupo || soloGrupo === 'semana') ? tarjetaGrupo('Esta semana', 'calendario', 'primario', g.semana, 3, soloGrupo ? 'Nada vence en los próximos 7 días.' : '') : '') +
+      // Orden = por dónde empezar: lo que vence hoy, lo atrasado (de la más
+      // antigua), confirmar fechas y la semana.
+      var hoyVacio = soloGrupo === 'hoy' && !g.paraHoy.length;
+      cuerpo = ((!soloGrupo || soloGrupo === 'hoy') ? tarjetaGrupo('Vencen hoy', 'diana', 'alerta', g.hoy, 2, '', 'hoy') : '') +
+        ((!soloGrupo || soloGrupo === 'hoy') ? tarjetaGrupo('Atrasadas', 'alerta', 'critico', g.atrasadas, 2, hoyVacio ? 'Nada atrasado ni que venza hoy. ¡Bien!' : '', 'atrasadas',
+          g.atrasadas.length > TOPE ? 'Las más antiguas primero. Si la fecha ya no corresponde, ábrela y cámbiala en Editar (pide un motivo).' : '') : '') +
+        (!soloGrupo ? tarjetaGrupo('Esperan que confirmes la fecha', 'check', 'info', g.confirmar, 2, '', 'confirmar') : '') +
+        ((!soloGrupo || soloGrupo === 'semana') ? tarjetaGrupo('Esta semana', 'calendario', 'primario', g.semana, 3, soloGrupo ? 'Nada vence en los próximos 7 días.' : '', 'semana') : '') +
         (!f.filtro && !f.proyecto ? tarjetaSolicitudes(d, 4) : '') +
         // Lo de más adelante no compite por atención: plegado.
         (!soloGrupo && luego.length ? '<details class="sx2-card sx2-py-mt-hechas sx2-entra" style="--i:5"><summary>' + U.ico('reloj', 15) + 'Más adelante y sin fecha <span class="sx2-card__sub">' + luego.length + '</span></summary>' +
@@ -279,16 +293,23 @@
     }
 
     var ents = d.entregables.filter(function (e) { return !f.proyecto || e.proyecto_id === f.proyecto; });
-    var entHtml = ents.length ? '<ul class="sx2-py-entregables">' + ents.map(function (e) {
+    // Entregables en lista compacta (una tarjeta grande por entregable llenaba
+    // la columna con 32): los 5 más urgentes y "Ver todos".
+    var entVisibles = expandidos_.entregables ? ents : ents.slice(0, 5);
+    var entHtml = ents.length ? '<ul class="sx2-py-mt-ents">' + entVisibles.map(function (e) {
       var dd = diffDias(clave(e.fecha_comprometida), hoy);
       var tono = e.estado === 'OBSERVADO' ? 'alerta' : (dd !== null && dd < 0 ? 'critico' : (e.estado === 'ENTREGADO' ? 'primario' : 'neutro'));
-      return '<li class="sx2-py-entregable sx2-tono-' + tono + '">' +
-        '<strong class="sx2-py-entregable__nombre">' + U.esc(e.nombre) + '</strong>' +
-        '<div class="sx2-py-entregable__meta"><button type="button" class="sx2-py-ref" data-py2-proyecto="' + U.esc(e.proyecto_id) + '" data-seccion="archivos">' + U.ico('carpeta', 12) + '<span class="sx2-cortar">' + U.esc(e.proyecto_nombre) + '</span></button>' +
-          '<span class="' + (dd !== null && dd < 0 ? 'sx2-delta--mal' : 'sx2-tenue') + '">' + U.esc(cuando(dd)) + '</span></div>' +
-        (e.estado === 'OBSERVADO' ? U.badge('Observado: corregir', 'alerta') : (e.estado === 'ENTREGADO' ? U.badge('Esperando revisión', 'primario') : '')) +
-      '</li>';
-    }).join('') + '</ul>' : U.vacio({ icono: 'bandera', texto: 'Sin entregables pendientes.' });
+      return '<li class="sx2-tono-' + tono + '"><button type="button" class="sx2-py-mt-ent" data-py2-proyecto="' + U.esc(e.proyecto_id) + '" data-seccion="archivos" title="' + U.esc(e.nombre + ' · ' + e.proyecto_nombre) + '">' +
+        '<span class="sx2-py-punto"></span>' +
+        '<span class="sx2-py-mt-cuerpo"><strong class="sx2-cortar">' + U.esc(e.nombre) + '</strong>' +
+          '<span class="sx2-py-mt-meta"><span class="sx2-cortar">' + U.esc(e.proyecto_nombre) + '</span>' +
+          (e.estado === 'OBSERVADO' ? '<span class="sx2-py-mt-meta__sep">·</span><span class="sx2-py-mt-meta__prio sx2-tono-alerta">Corregir</span>' : (e.estado === 'ENTREGADO' ? '<span class="sx2-py-mt-meta__sep">·</span>En revisión' : '')) + '</span></span>' +
+        '<span class="sx2-py-mt-cuando' + (dd !== null && dd < 0 ? ' sx2-delta--mal' : '') + '">' + U.esc(cuandoCorto(dd)) + '</span>' +
+      '</button></li>';
+    }).join('') + '</ul>' +
+      (ents.length > 5 ? '<button type="button" class="sx2-py-mt-ver js-py2m-ver" data-id="entregables">' + U.ico(expandidos_.entregables ? 'arriba' : 'abajo', 14) + (expandidos_.entregables ? 'Mostrar menos' : 'Ver los ' + ents.length) + '</button>' : '')
+      : U.vacio({ icono: 'bandera', texto: 'Sin entregables pendientes.' });
+    var entAtr = ents.filter(function (e) { var dd = diffDias(clave(e.fecha_comprometida), hoy); return dd !== null && dd < 0; }).length;
 
     // Dónde está mi carga: tareas abiertas por proyecto (y personales).
     var porProy = {};
@@ -309,7 +330,7 @@
       '<div class="sx2-col-8 sx2-apilado">' + cuerpo + '</div>' +
       '<div class="sx2-col-4 sx2-col--apila sx2-apilado">' +
         U.card({ titulo: 'Dónde está mi carga', icono: 'capas', sub: 'tareas abiertas', i: 3, cuerpo: carga }) +
-        U.card({ titulo: 'Mis entregables', icono: 'bandera', sub: String(ents.length), i: 4, cuerpo: entHtml }) +
+        U.card({ titulo: 'Mis entregables', icono: 'bandera', sub: ents.length + (entAtr ? ' · ' + entAtr + ' vencidos' : ''), i: 4, cuerpo: entHtml }) +
       '</div>' +
     '</div>';
   }
@@ -429,7 +450,7 @@
     if (nSol) resumen = (abiertas.length ? resumen.replace(/\.$/, '') + ' · ' : 'Sin tareas abiertas · ') + nSol + (nSol === 1 ? ' ítem de solicitud' : ' ítems de solicitudes') + ' a tu cargo.';
 
     var cabecera = '<header class="sx2-cabecera sx2-entra">' +
-      '<div class="sx2-flex" style="gap:16px;align-items:center;min-width:0">' + U.avatar(yo, 'xl') +
+      '<div class="sx2-flex" style="gap:16px;align-items:center;min-width:0">' + U.avatar(yo, 'lg') +
         '<div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">' + U.esc(host_.migas) + '</span>' +
           '<h1>' + saludo + (yo.nombre && yo.nombre !== yo.email ? ', ' + U.esc(String(yo.nombre).split(' ')[0]) : '') + '</h1>' +
           '<span class="sx2-tenue" style="font-size:.875rem">' + U.esc(resumen) + '</span>' +
@@ -445,13 +466,18 @@
     if (f.modo === 'horas') return cabecera + vistaHoras(d, hoy);
 
     // Cuatro indicadores como mucho; cada uno filtra la lista (otro clic lo quita).
-    var kpis = '<div class="sx2-fila-kpis sx2-py-mt-kpis">' +
-      U.kpi({ i: 0, icono: 'alerta', tono: g.atrasadas.length ? 'critico' : 'alerta', etiqueta: 'Para hoy', valor: g.paraHoy.length, unidad: g.atrasadas.length ? g.atrasadas.length + (g.atrasadas.length === 1 ? ' atrasada' : ' atrasadas') : 'vencen hoy', filtro: 'hoy', activo: f.filtro === 'hoy' }) +
-      U.kpi({ i: 1, icono: 'calendario', tono: 'primario', etiqueta: 'Esta semana', valor: g.semana.length, unidad: 'vencen en 7 días', filtro: 'semana', activo: f.filtro === 'semana' }) +
-      U.kpi({ i: 2, icono: 'candado', tono: 'hito', etiqueta: 'Bloqueadas', valor: bloqueadas, unidad: 'esperan algo', filtro: 'bloqueadas', activo: f.filtro === 'bloqueadas' }) +
-      (confirmar
-        ? U.kpi({ i: 3, icono: 'check', tono: 'info', etiqueta: 'Por confirmar', valor: confirmar, unidad: 'fechas propuestas', filtro: 'confirmar', activo: f.filtro === 'confirmar' })
-        : (nSol ? U.kpi({ i: 3, icono: 'bandeja', tono: 'hito', etiqueta: 'Solicitudes', valor: nSol, unidad: 'ítems a tu cargo', filtro: 'solicitudes', activo: f.filtro === 'solicitudes' }) : '')) +
+    // Franja delgada de indicadores (antes, tarjetas grandes que empujaban la
+    // lista hacia abajo). Cada uno filtra; otro toque lo quita.
+    function stat(id, icono, tono, n, texto, sub) {
+      return '<button type="button" class="sx2-py-mt-stat sx2-tono-' + tono + ' js-py2m-stat" data-filtro="' + id + '" aria-pressed="' + (f.filtro === id ? 'true' : 'false') + '">' +
+        '<span class="sx2-py-mt-stat__ico">' + U.ico(icono, 15) + '</span><strong>' + n + '</strong><span>' + U.esc(texto) + (sub ? ' <small>' + U.esc(sub) + '</small>' : '') + '</span></button>';
+    }
+    var kpis = '<div class="sx2-py-mt-stats sx2-entra" style="--i:1" role="group" aria-label="Filtrar tus tareas">' +
+      stat('hoy', 'alerta', g.atrasadas.length ? 'critico' : 'alerta', g.paraHoy.length, 'para hoy', g.atrasadas.length ? '(' + g.atrasadas.length + ' atrasadas)' : '') +
+      stat('semana', 'calendario', 'primario', g.semana.length, 'esta semana') +
+      stat('bloqueadas', 'candado', 'hito', bloqueadas, bloqueadas === 1 ? 'bloqueada' : 'bloqueadas') +
+      (confirmar ? stat('confirmar', 'check', 'info', confirmar, 'por confirmar') : '') +
+      (nSol ? stat('solicitudes', 'bandeja', 'hito', nSol, 'de solicitudes') : '') +
     '</div>';
     // Filtros activos a la vista, con su forma de quitarlos.
     var activos = [];
@@ -673,7 +699,8 @@
       }
       if (t.closest('.js-py2m-nueva')) { abrirNueva(d, false); return; }
       if (t.closest('.js-py2m-emergente')) { abrirNueva(d, true); return; }
-      if ((b = t.closest('.sx2-kpi[data-filtro]'))) { var k = b.getAttribute('data-filtro'); f.filtro = (k === 'todas' || f.filtro === k) ? '' : k; host_.pintar({ sinAnimacion: true }); return; }
+      if ((b = t.closest('.js-py2m-ver'))) { var gid = b.getAttribute('data-id'); expandidos_[gid] = !expandidos_[gid]; host_.pintar({ sinAnimacion: true }); return; }
+      if ((b = t.closest('.js-py2m-stat, .sx2-kpi[data-filtro]'))) { var k = b.getAttribute('data-filtro'); f.filtro = (k === 'todas' || f.filtro === k) ? '' : k; host_.pintar({ sinAnimacion: true }); return; }
       if (t.closest('.js-py2m-bandeja')) { if (window.SigsoShell) SigsoShell.irAModulo('bandeja'); return; }
       if (t.closest('.js-py2m-todas-sol')) { f.filtro = 'solicitudes'; host_.pintar({ sinAnimacion: true }); window.scrollTo(0, 0); return; }
       if ((b = t.closest('.js-py2m-proy'))) { var id = b.getAttribute('data-id'); f.proyecto = f.proyecto === id ? '' : id; host_.pintar({ sinAnimacion: true }); return; }
