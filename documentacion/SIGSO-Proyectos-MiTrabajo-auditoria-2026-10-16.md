@@ -136,3 +136,24 @@ para lo frecuente; el detalle sigue ahí, pero no estorba.
 - Probado en base DEMO local: colaboradora cierra tarea ajena; responsable
   pasa 3 tareas en lote; colaborador agregado desde Editar; "Terminadas esta
   semana" aparece.
+
+## 7. Etapa 2 — hecha (sin commit)
+- **Panel "Actualizar tarea" en pasos:** 1) ¿qué pasó? con botones grandes
+  (Avancé, La terminé, Me bloqueé/Me destrabé, Solo anotar horas) y un enlace
+  "Sin cambios por ahora"; 2) solo lo que pide esa respuesta (avance o motivo);
+  3) horas y nota opcionales. El botón Guardar se activa al elegir y dice lo que
+  hará ("Marcar terminada", "Avisar bloqueo"…). Sin opción preseleccionada.
+- **Fila de Mi trabajo con un botón de estado directo:** Empezar → Terminar
+  (pide confirmar) → Destrabar; menú ⋯ con Contar cómo va, Me bloqueé (abre el
+  panel con esa respuesta elegida), Solo anotar horas y Ver detalle.
+- **Foco:** tarjeta "Tu próximo paso"; grupo "Para hoy" (atrasadas + vencen
+  hoy); "Más adelante y sin fecha" plegado; 4 indicadores (Para hoy, Esta
+  semana, Bloqueadas, Por confirmar/Solicitudes); "No planificado" en segundo plano.
+- **Un vocabulario:** la fila muestra el ESTADO en texto (Por empezar, En curso,
+  Bloqueada, En revisión) y el PLAZO en el color del punto y en "Vence hoy /
+  Venció hace…".
+- **Más rápido:** abrir otra tarea del mismo proyecto reutiliza lo cargado
+  por 45 s (se olvida al guardar o recargar Mi trabajo).
+- Corrección: a quien solo colabora ya no se le pide "Confirmar fecha" (el
+  backend solo deja confirmar al responsable).
+- Probado en base DEMO local (escritorio y celular 375 px).

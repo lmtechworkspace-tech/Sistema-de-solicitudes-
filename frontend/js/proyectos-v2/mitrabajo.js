@@ -65,11 +65,15 @@
     return 'En ' + dd + ' días';
   }
   function abierta(a) { return a.estado !== 'TERMINADA' && a.estado !== 'CANCELADA'; }
-  function porConfirmar(a) { return !!a.fecha_propuesta && !a.confirmada_en && abierta(a); }
+  // Solo quien responde por la tarea confirma la fecha (Actividades.confirmar):
+  // a quien colabora no se le pide.
+  function porConfirmar(a) { return !!a.fecha_propuesta && !a.confirmada_en && abierta(a) && a.soy_responsable !== false; }
   function grupoDe(a) { return a.personal ? PERSONAL : a.proyecto_id; }
   function nombreGrupo(a) { return a.personal ? 'Personales' : a.proyecto_nombre; }
 
   function cargar() {
+    // Lo que cambió en Mi trabajo invalida los proyectos guardados para abrir tareas rápido.
+    if (PY.olvidarProyectoCacheado) PY.olvidarProyectoCacheado();
     return Promise.all([
       PY.api('listarMisTareasProyectos', { incluir_personales: true }),
       PY.api('listarMiBitacoraProyectos', { incluir_personales: true }),
@@ -100,20 +104,47 @@
   }
 
   // --- Lista ------------------------------------------------------------------------
+  // Etapa 2 de la auditoría (16-10-2026): "Para hoy" junta lo atrasado y lo que
+  // vence hoy; lo de más adelante queda plegado. Un solo vocabulario: el ESTADO
+  // (qué hago) va en texto y el PLAZO (a tiempo / atrasada) en el color del punto.
   function grupos(tareas, hoy) {
     // Una fecha por confirmar todavía no es un compromiso: va a su propio
     // grupo y no cuenta como atrasada (mismo criterio que el Inicio).
-    var g = { confirmar: [], atrasadas: [], semana: [], despues: [], sinFecha: [] };
+    var g = { confirmar: [], atrasadas: [], hoy: [], semana: [], despues: [], sinFecha: [] };
     tareas.forEach(function (a) {
       var dd = diffDias(clave(a.fecha_compromiso || a.fecha_propuesta), hoy);
       a._dd = dd;
       if (porConfirmar(a)) g.confirmar.push(a);
       else if (a.semaforo === 'atrasada' || (dd !== null && dd < 0)) g.atrasadas.push(a);
       else if (dd === null) g.sinFecha.push(a);
+      else if (dd === 0) g.hoy.push(a);
       else if (dd <= 7) g.semana.push(a);
       else g.despues.push(a);
     });
+    g.paraHoy = g.atrasadas.concat(g.hoy);
     return g;
+  }
+
+  var ESTADO_TXT = { NO_INICIADA: 'Por empezar', EN_CURSO: 'En curso', BLOQUEADA: 'Bloqueada', EN_REVISION: 'En revisión', TERMINADA: 'Terminada', CANCELADA: 'Cancelada' };
+  // El siguiente paso natural de la tarea, en un solo botón.
+  var RAPIDA = {
+    NO_INICIADA: { accion: 'avance', texto: 'Empezar', icono: 'derecha' },
+    EN_CURSO: { accion: 'listo', texto: 'Terminar', icono: 'check' },
+    BLOQUEADA: { accion: 'desbloqueo', texto: 'Destrabar', icono: 'llave' }
+  };
+  function botonesFila(a) {
+    if (porConfirmar(a)) {
+      return '<span class="sx2-flex sx2-py-mt-acciones">' +
+        U.boton({ texto: 'Otra fecha', sm: true, clase: 'js-py2m-otra', datos: { id: a.actividad_id } }) +
+        U.boton({ texto: 'Confirmar', icono: 'check', sm: true, variante: 'primario', clase: 'js-py2m-confirmar', datos: { id: a.actividad_id } }) +
+      '</span>';
+    }
+    var r = RAPIDA[a.estado];
+    return '<span class="sx2-flex sx2-py-mt-acciones">' +
+      (r ? U.boton({ texto: r.texto, icono: r.icono, sm: true, variante: a.estado === 'EN_CURSO' ? 'primario' : 'secundario', clase: 'js-py2m-rapida', datos: { id: a.actividad_id, accion: r.accion } })
+         : '<span class="sx2-tenue" style="font-size:.75rem">Esperando revisión</span>') +
+      U.boton({ soloIcono: true, icono: 'menu', sm: true, variante: 'fantasma', titulo: 'Más opciones', clase: 'js-py2m-mas', datos: { id: a.actividad_id } }) +
+    '</span>';
   }
 
   function chipOrigen(a) {
@@ -132,7 +163,7 @@
       '<span class="sx2-apilado" style="gap:4px;min-width:0;flex:1">' +
         '<strong class="sx2-cortar">' + U.esc(a.titulo) + '</strong>' +
         '<span class="sx2-flex" style="gap:6px;flex-wrap:wrap">' + chipOrigen(a) +
-          U.badge(a.semaforo_etiqueta || a.estado, tono) +
+          (confirmar ? '' : U.badge(ESTADO_TXT[a.estado] || a.estado, 'neutro', true)) +
           (a.soy_responsable === false ? U.badge('Colaboras', 'info', true) : '') +
           (a.origen === 'EMERGENTE' ? U.badge('No planificado', 'neutro', true) : '') +
           (a.recurrencia && a.recurrencia !== 'NINGUNA' ? U.badge(a.recurrencia === 'SEMANAL' ? '↻ semanal' : '↻ mensual', 'neutro', true) : '') +
@@ -142,14 +173,22 @@
       '</span>' +
       '<span class="sx2-py-mt-cuando' + (a._dd !== null && a._dd < 0 ? ' sx2-delta--mal' : '') + '">' +
         (confirmar ? 'Te proponen el ' + PY.fecha(a.fecha_propuesta) : U.esc(cuando(a._dd))) +
-        (confirmar ? '' : '<span class="sx2-py-mt-avance">' + U.barra(av, tono) + '<small>' + Math.round(av) + '%</small></span>') + '</span>' +
-      (confirmar
-        ? '<span class="sx2-flex" style="gap:6px;flex:none">' +
-            U.boton({ texto: 'Otra fecha', sm: true, clase: 'js-py2m-otra', datos: { id: a.actividad_id } }) +
-            U.boton({ texto: 'Confirmar', icono: 'check', sm: true, variante: 'primario', clase: 'js-py2m-confirmar', datos: { id: a.actividad_id } }) +
-          '</span>'
-        : U.boton({ texto: 'Actualizar', icono: 'tendencia', sm: true, variante: 'primario', clase: 'js-py2m-actualizar', datos: { id: a.actividad_id } })) +
+        (confirmar || a.estado === 'NO_INICIADA' ? '' : '<span class="sx2-py-mt-avance">' + U.barra(av, tono) + '<small>' + Math.round(av) + '%</small></span>') + '</span>' +
+      botonesFila(a) +
     '</li>';
+  }
+
+  // "Tu próximo paso": la tarea que conviene mover primero, con su botón.
+  function proximoPaso(g) {
+    var a = g.confirmar[0] || g.paraHoy[0] || g.semana[0];
+    if (!a) return '';
+    var motivo = porConfirmar(a) ? 'Confirma la fecha que te proponen' :
+      (a._dd !== null && a._dd < 0 ? 'Está atrasada: empieza por aquí' : (a._dd === 0 ? 'Vence hoy' : 'Es lo próximo que vence'));
+    return '<section class="sx2-card sx2-py-mt-proximo sx2-tono-' + (porConfirmar(a) ? 'info' : PY.tonoTarea(a)) + ' sx2-entra" style="--i:1">' +
+      '<span class="sx2-py-mt-proximo__et">' + U.ico('diana', 14) + 'Tu próximo paso</span>' +
+      '<ul class="sx2-py-mt-lista">' + fila(a, 0).replace('sx2-py-mt-fila', 'sx2-py-mt-fila sx2-py-mt-fila--proximo') + '</ul>' +
+      '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(motivo) + '.</span>' +
+    '</section>';
   }
 
   function tarjetaGrupo(titulo, icono, tono, lista, i, vacio) {
@@ -200,7 +239,7 @@
   function vistaLista(d, hoy) {
     var lista = filtrar(d);
     var g = grupos(lista, hoy);
-    var soloGrupo = f.filtro === 'atrasadas' ? 'atrasadas' : (f.filtro === 'semana' ? 'semana' : '');
+    var soloGrupo = f.filtro === 'hoy' ? 'hoy' : (f.filtro === 'semana' ? 'semana' : '');
     var confirmar = f.filtro === 'confirmar';
     var cuerpo;
     if (f.filtro === 'solicitudes') {
@@ -212,11 +251,15 @@
     } else if (confirmar) {
       cuerpo = tarjetaGrupo('Esperan que confirmes la fecha', 'calendario', 'primario', lista, 2, 'Nada por confirmar.');
     } else {
-      cuerpo = (!soloGrupo ? tarjetaGrupo('Esperan que confirmes la fecha', 'check', 'info', g.confirmar, 2) : '') +
-        ((!soloGrupo || soloGrupo === 'atrasadas') ? tarjetaGrupo('Atrasadas', 'alerta', 'critico', g.atrasadas, 2, soloGrupo ? 'Nada atrasado. ¡Bien!' : '') : '') +
+      var luego = g.despues.concat(g.sinFecha);
+      cuerpo = (!soloGrupo && !f.proyecto && !f.filtro ? proximoPaso(g) : '') +
+        (!soloGrupo ? tarjetaGrupo('Esperan que confirmes la fecha', 'check', 'info', g.confirmar, 2) : '') +
+        ((!soloGrupo || soloGrupo === 'hoy') ? tarjetaGrupo('Para hoy', 'alerta', g.atrasadas.length ? 'critico' : 'alerta', g.paraHoy, 2, soloGrupo ? 'Nada atrasado ni que venza hoy. ¡Bien!' : '') : '') +
         ((!soloGrupo || soloGrupo === 'semana') ? tarjetaGrupo('Esta semana', 'calendario', 'primario', g.semana, 3, soloGrupo ? 'Nada vence en los próximos 7 días.' : '') : '') +
         (!f.filtro && !f.proyecto ? tarjetaSolicitudes(d, 4) : '') +
-        (!soloGrupo ? tarjetaGrupo('Más adelante', 'reloj', 'info', g.despues, 4) + tarjetaGrupo('Sin fecha', 'estado', 'neutro', g.sinFecha, 5) : '');
+        // Lo de más adelante no compite por atención: plegado.
+        (!soloGrupo && luego.length ? '<details class="sx2-card sx2-py-mt-hechas sx2-entra" style="--i:5"><summary>' + U.ico('reloj', 15) + 'Más adelante y sin fecha <span class="sx2-card__sub">' + luego.length + '</span></summary>' +
+          '<ul class="sx2-py-mt-lista">' + luego.map(fila).join('') + '</ul></details>' : '');
     }
 
     // Terminadas en los últimos 7 días: se archivan solas, pero se pueden ver.
@@ -392,7 +435,7 @@
         '</div></div>' +
       '<div class="sx2-cabecera__acciones">' +
         U.segmento([{ id: 'lista', texto: 'Mis tareas', icono: 'tareas' }, { id: 'horas', texto: 'Mis horas', icono: 'reloj' }], f.modo, 'js-py2m-modo') +
-        U.boton({ texto: 'No planificado', icono: 'rayo', clase: 'js-py2m-emergente', titulo: 'Anotar algo que surgió y te tomó tiempo' }) +
+        U.boton({ texto: 'No planificado', icono: 'rayo', variante: 'fantasma', clase: 'js-py2m-emergente', titulo: 'Anotar algo que surgió y te tomó tiempo' }) +
         U.boton({ texto: 'Nueva tarea', icono: 'nueva', variante: 'primario', clase: 'js-py2m-nueva' }) +
       '</div>' +
     '</header>';
@@ -400,22 +443,20 @@
     if (d.error) return cabecera + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: d.error }) });
     if (f.modo === 'horas') return cabecera + vistaHoras(d, hoy);
 
-    var kpis = '<div class="sx2-fila-kpis">' +
-      U.kpi({ i: 0, icono: 'tareas', tono: 'primario', etiqueta: 'Abiertas', valor: abiertas.length, unidad: nPers ? nPers + ' personales' : 'de proyectos', filtro: 'todas', activo: !f.filtro }) +
-      U.kpi({ i: 1, icono: 'alerta', tono: 'critico', etiqueta: 'Atrasadas', valor: g.atrasadas.length, unidad: 'atender primero', filtro: 'atrasadas', activo: f.filtro === 'atrasadas' }) +
-      U.kpi({ i: 2, icono: 'calendario', tono: 'alerta', etiqueta: 'Esta semana', valor: g.semana.length, unidad: 'vencen en 7 días', filtro: 'semana', activo: f.filtro === 'semana' }) +
-      U.kpi({ i: 3, icono: 'candado', tono: 'hito', etiqueta: 'Bloqueadas', valor: bloqueadas, unidad: 'esperan algo', filtro: 'bloqueadas', activo: f.filtro === 'bloqueadas' }) +
+    // Cuatro indicadores como mucho; cada uno filtra la lista (otro clic lo quita).
+    var kpis = '<div class="sx2-fila-kpis sx2-py-mt-kpis">' +
+      U.kpi({ i: 0, icono: 'alerta', tono: g.atrasadas.length ? 'critico' : 'alerta', etiqueta: 'Para hoy', valor: g.paraHoy.length, unidad: g.atrasadas.length ? g.atrasadas.length + (g.atrasadas.length === 1 ? ' atrasada' : ' atrasadas') : 'vencen hoy', filtro: 'hoy', activo: f.filtro === 'hoy' }) +
+      U.kpi({ i: 1, icono: 'calendario', tono: 'primario', etiqueta: 'Esta semana', valor: g.semana.length, unidad: 'vencen en 7 días', filtro: 'semana', activo: f.filtro === 'semana' }) +
+      U.kpi({ i: 2, icono: 'candado', tono: 'hito', etiqueta: 'Bloqueadas', valor: bloqueadas, unidad: 'esperan algo', filtro: 'bloqueadas', activo: f.filtro === 'bloqueadas' }) +
       (confirmar
-        ? U.kpi({ i: 4, icono: 'check', tono: 'info', etiqueta: 'Por confirmar', valor: confirmar, unidad: 'fechas propuestas', filtro: 'confirmar', activo: f.filtro === 'confirmar' })
-        : U.kpi({ i: 4, icono: 'bandera', tono: 'ok', etiqueta: 'Entregables', valor: d.entregables.length, unidad: 'pendientes' })) +
-      (nSol ? U.kpi({ i: 5, icono: 'bandeja', tono: 'hito', etiqueta: 'Solicitudes', valor: nSol, unidad: 'ítems a tu cargo', filtro: 'solicitudes', activo: f.filtro === 'solicitudes' }) : '') +
+        ? U.kpi({ i: 3, icono: 'check', tono: 'info', etiqueta: 'Por confirmar', valor: confirmar, unidad: 'fechas propuestas', filtro: 'confirmar', activo: f.filtro === 'confirmar' })
+        : (nSol ? U.kpi({ i: 3, icono: 'bandeja', tono: 'hito', etiqueta: 'Solicitudes', valor: nSol, unidad: 'ítems a tu cargo', filtro: 'solicitudes', activo: f.filtro === 'solicitudes' }) : '')) +
     '</div>';
-    var ids = Object.keys(frentes);
-    var chips = ids.length > 1 ? '<div class="sx2-chips sx2-entra" style="--i:1">' + U.chip({ texto: 'Todo', activo: !f.proyecto, clase: 'js-py2m-proy', datos: { id: '' } }) +
-      ids.map(function (id) {
-        return U.chip({ texto: frentes[id], icono: id === PERSONAL ? 'persona' : 'carpeta', activo: f.proyecto === id, clase: 'js-py2m-proy', datos: { id: id },
-          n: abiertas.filter(function (a) { return grupoDe(a) === id; }).length });
-      }).join('') + '</div>' : '';
+    // Filtros activos a la vista, con su forma de quitarlos.
+    var activos = [];
+    if (f.proyecto) activos.push(U.chip({ texto: (frentes[f.proyecto] || 'Proyecto') + '  ✕', icono: f.proyecto === PERSONAL ? 'persona' : 'carpeta', activo: true, clase: 'js-py2m-proy', datos: { id: f.proyecto }, titulo: 'Quitar este filtro' }));
+    if (f.filtro) activos.push(U.chip({ texto: 'Ver todo', icono: 'equis', clase: 'js-py2m-todo' }));
+    var chips = activos.length ? '<div class="sx2-chips sx2-entra" style="--i:1">' + activos.join('') + '</div>' : '';
     return cabecera + kpis + chips + vistaLista(d, hoy);
   }
 
@@ -545,11 +586,84 @@
     });
   }
 
+  // Botón directo de la fila: Empezar / Terminar / Destrabar, sin abrir el panel.
+  // "Terminar" pregunta antes (cerrar una tarea no se deshace desde aquí).
+  function accionRapida(a, accion, boton) {
+    if (!a) return;
+    var paso = accion === 'listo'
+      ? U.confirmar({ titulo: '¿La terminaste?', texto: '"' + a.titulo + '" quedará como terminada hoy.', boton: 'Sí, terminada' })
+      : Promise.resolve(true);
+    paso.then(function (si) {
+      if (!si) return;
+      boton.disabled = true;
+      PY.api('actualizarTareaProyecto', { proyecto_id: a.personal ? '' : a.proyecto_id, actividad_id: a.actividad_id, accion: accion }).then(function (r) {
+        boton.disabled = false;
+        if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo actualizar.', 'error'); return; }
+        PY.aviso(accion === 'listo' ? (r.data && r.data.actividad && r.data.actividad.estado === 'EN_REVISION' ? 'Enviada a revisión.' : '¡Tarea terminada!')
+          : (accion === 'avance' ? 'Tarea en curso.' : 'Tarea destrabada.'), 'exito');
+        host_.recargar();
+      });
+    });
+  }
+
+  // Menú ⋯ de la fila. Va al <body> (fijo) para que ninguna tarjeta lo recorte.
+  var menuFila_ = null;
+  function cerrarMenuFila() {
+    if (!menuFila_) return;
+    menuFila_.remove();
+    menuFila_ = null;
+    document.removeEventListener('click', fueraMenuFila, true);
+    document.removeEventListener('keydown', escMenuFila, true);
+    window.removeEventListener('scroll', cerrarMenuFila, true);
+  }
+  function fueraMenuFila(ev) { if (menuFila_ && !menuFila_.contains(ev.target)) cerrarMenuFila(); }
+  function escMenuFila(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); cerrarMenuFila(); } }
+  function abrirMenuFila(boton, a) {
+    cerrarMenuFila();
+    if (!a) return;
+    function item(id, icono, texto, sub) {
+      return '<button type="button" class="sx2-menu__item" data-py2m-menu="' + id + '" role="menuitem">' + U.ico(icono, 16) +
+        '<span>' + U.esc(texto) + (sub ? '<small>' + U.esc(sub) + '</small>' : '') + '</span></button>';
+    }
+    var r = boton.getBoundingClientRect();
+    var capa = document.createElement('div');
+    capa.className = 'sx2 sx2-py-mt-menu';
+    capa.style.top = Math.round(r.bottom + 6) + 'px';
+    capa.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + 'px';
+    capa.innerHTML = '<div class="sx2-menu" role="menu">' +
+      item('actualizar', 'tendencia', 'Contar cómo va', 'Avance, horas o una nota') +
+      (a.estado !== 'BLOQUEADA' && a.estado !== 'EN_REVISION' ? item('bloqueo', 'candado', 'Me bloqueé', 'Avisa qué te impide seguir') : '') +
+      item('horas', 'reloj', 'Solo anotar horas') +
+      '<span class="sx2-menu__sep"></span>' +
+      item('detalle', 'ojo', 'Ver detalle') +
+    '</div>';
+    document.body.appendChild(capa);
+    menuFila_ = capa;
+    capa.addEventListener('click', function (ev) {
+      var it = ev.target.closest('[data-py2m-menu]');
+      if (!it) return;
+      var id = it.getAttribute('data-py2m-menu');
+      cerrarMenuFila();
+      if (id === 'detalle') abrir(a);
+      else abrir(a, { actualizar: true, accion: id === 'actualizar' ? '' : id });
+    });
+    setTimeout(function () {
+      document.addEventListener('click', fueraMenuFila, true);
+      document.addEventListener('keydown', escMenuFila, true);
+      window.addEventListener('scroll', cerrarMenuFila, true);
+    }, 0);
+    var primero = capa.querySelector('button');
+    if (primero) primero.focus();
+  }
+
   function alMontar(raiz, d, host) {
     host_ = host || hostProyectos;
     dibujar(raiz, d);
     raiz.addEventListener('click', function (ev) {
       var t = ev.target, b;
+      if ((b = t.closest('.js-py2m-rapida'))) { ev.stopPropagation(); accionRapida(tarea(d, b.getAttribute('data-id')), b.getAttribute('data-accion'), b); return; }
+      if ((b = t.closest('.js-py2m-mas'))) { ev.stopPropagation(); abrirMenuFila(b, tarea(d, b.getAttribute('data-id'))); return; }
+      if (t.closest('.js-py2m-todo')) { f.filtro = ''; host_.pintar({ sinAnimacion: true }); return; }
       if ((b = t.closest('.js-py2m-modo'))) {
         f.modo = b.getAttribute('data-id');
         try { localStorage.setItem('sigso_py2_modo_mitrabajo', f.modo); } catch (e) { /* sin storage */ }

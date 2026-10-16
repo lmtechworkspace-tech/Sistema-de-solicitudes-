@@ -15,13 +15,18 @@
   var PY = window.PYv2;
   var U = UIv2;
 
+  // "Actualizar tarea" paso a paso (auditoría 16-10-2026, Etapa 2): primero
+  // UNA pregunta con botones grandes; después, solo lo que esa respuesta pide.
+  // 'horas' no cambia el estado (al backend va sin acción).
   var ACCIONES = [
-    { id: 'avance', texto: 'Avancé', icono: 'tendencia', tono: 'info' },
-    { id: 'sin_cambio', texto: 'Sin cambios', icono: 'estado', tono: 'neutro' },
-    { id: 'bloqueo', texto: 'Me bloqueé', icono: 'candado', tono: 'critico' },
-    { id: 'desbloqueo', texto: 'Me destrabé', icono: 'llave', tono: 'ok' },
-    { id: 'listo', texto: 'La terminé', icono: 'check', tono: 'ok' }
+    { id: 'avance', texto: 'Avancé', sub: 'Indica cuánto lleva', icono: 'tendencia', tono: 'info', boton: 'Guardar avance' },
+    { id: 'listo', texto: 'La terminé', sub: 'Queda cerrada', icono: 'check', tono: 'ok', boton: 'Marcar terminada' },
+    { id: 'bloqueo', texto: 'Me bloqueé', sub: 'Algo me impide seguir', icono: 'candado', tono: 'critico', boton: 'Avisar bloqueo' },
+    { id: 'desbloqueo', texto: 'Me destrabé', sub: 'Vuelve a estar en curso', icono: 'llave', tono: 'ok', boton: 'Volver a en curso' },
+    { id: 'horas', texto: 'Solo anotar horas', sub: 'Sin cambiar el estado', icono: 'reloj', tono: 'neutro', boton: 'Guardar horas' },
+    { id: 'sin_cambio', texto: 'Sin cambios por ahora', boton: 'Guardar' }
   ];
+  function accionPorId(id) { return ACCIONES.filter(function (x) { return x.id === id; })[0]; }
   var PRIORIDAD = { P1: 'P1 · Crítica', P2: 'P2 · Alta', P3: 'P3 · Media', P4: 'P4 · Baja', P5: 'P5' };
 
   function trabajaLa(a) {
@@ -200,25 +205,58 @@
       return true;
     });
     var avanceActual = Number(a.avance_pct) || 0;
+    function paso(n, titulo, cuerpo, clase, oculto) {
+      return '<section class="sx2-py-paso ' + clase + '"' + (oculto ? ' hidden' : '') + '>' +
+        '<h3 class="sx2-py-paso__titulo"><span class="sx2-py-paso__n js-py2p-n">' + n + '</span><span class="js-py2p-paso-et">' + titulo + '</span></h3>' + cuerpo + '</section>';
+    }
+    var grandes = acciones.filter(function (x) { return x.sub; });
     return '<form class="sx2-form js-py2p-form-act" novalidate>' +
       (porEquipo ? '<div class="sx2-py-aviso sx2-tono-info">' + U.ico('equipo', 16) + '<span>La tarea está a nombre de <strong>' + U.esc(PY.persona(a.responsable_email, a.responsable_nombre).nombre) + '</strong>. Como parte del equipo puedes actualizarla; queda registrado que fuiste tú.</span></div>' : '') +
       (puedeAvance
-        ? '<div class="sx2-campo"><span class="sx2-campo__et">¿Qué pasó con la tarea?</span><div class="sx2-chips">' +
-            acciones.map(function (x) { return U.chip({ texto: x.texto, icono: x.icono, tono: x.tono, clase: 'js-py2p-accion', datos: { accion: x.id } }); }).join('') +
-            U.chip({ texto: 'Solo registrar horas', icono: 'reloj', clase: 'js-py2p-accion', datos: { accion: '' }, activo: true }) +
-          '</div></div>'
+        ? paso(1, '¿Qué pasó con la tarea?',
+            '<div class="sx2-py-opciones">' + grandes.map(function (x) {
+              return '<button type="button" class="sx2-py-opcion sx2-tono-' + x.tono + ' js-py2p-accion" data-accion="' + x.id + '" aria-pressed="false">' +
+                '<span class="sx2-py-opcion__ico">' + U.ico(x.icono, 18) + '</span><span class="sx2-apilado" style="gap:2px;min-width:0"><strong>' + U.esc(x.texto) + '</strong><small>' + U.esc(x.sub) + '</small></span></button>';
+            }).join('') + '</div>' +
+            '<button type="button" class="sx2-enlace sx2-py-sin-cambio js-py2p-accion" data-accion="sin_cambio" aria-pressed="false">Sin cambios por ahora (la revisé y sigue igual)</button>',
+            'js-py2p-paso1')
         : '<div class="sx2-py-aviso sx2-tono-info">' + U.ico('info', 16) + '<span>' + (PY.esTerminal(a) ? 'La tarea está cerrada: puedes registrar horas de un día anterior.' : 'Como no trabajas esta tarea, puedes registrar el día pero no cambiar su avance.') + '</span></div>') +
-      '<div class="sx2-campo js-py2p-avance" hidden><span class="sx2-campo__et">Avance de la tarea <strong class="js-py2p-avance-txt">' + avanceActual + '%</strong></span>' +
-        '<input type="range" class="sx2-py-rango" name="avance_pct" min="0" max="100" step="5" value="' + avanceActual + '" aria-label="Avance de la tarea"></div>' +
-      '<label class="sx2-campo js-py2p-motivo" hidden><span class="sx2-campo__et">Motivo del bloqueo</span><textarea class="sx2-input" name="bloqueo_motivo" maxlength="500" placeholder="¿Qué te impide avanzar y quién lo puede destrabar?"></textarea></label>' +
-      '<div class="sx2-form__fila">' +
-        PY.campo('Día', '<input class="sx2-input" type="date" name="dia" value="' + (opts.dia || hoy) + '" max="' + hoy + '">') +
-        PY.campo('Horas trabajadas ese día', '<input class="sx2-input" type="number" name="horas" min="0" max="24" step="0.5" placeholder="Opcional">') +
-      '</div>' +
-      '<p class="sx2-campo__ayuda js-py2p-ya" hidden>Ese día ya tiene un registro: lo que cambies aquí lo corrige.</p>' +
-      PY.campo('Nota', '<textarea class="sx2-input" name="nota" maxlength="2000" placeholder="Qué hiciste, qué falta, algo que el equipo deba saber…"></textarea>') +
+      paso(2, 'Cuéntanos un poco más',
+        '<div class="sx2-campo js-py2p-avance" hidden><span class="sx2-campo__et">¿Cuánto lleva? <strong class="js-py2p-avance-txt">' + avanceActual + '%</strong></span>' +
+          '<input type="range" class="sx2-py-rango" name="avance_pct" min="0" max="100" step="5" value="' + avanceActual + '" aria-label="Avance de la tarea"></div>' +
+        '<label class="sx2-campo js-py2p-motivo" hidden><span class="sx2-campo__et">¿Qué te impide seguir y quién lo puede destrabar?</span><textarea class="sx2-input" name="bloqueo_motivo" maxlength="500" placeholder="Ej: falta la firma del cliente; lo ve Gerencia"></textarea></label>',
+        'js-py2p-paso2', true) +
+      paso(3, 'Horas y nota <small class="sx2-tenue">(opcional)</small>',
+        '<div class="sx2-form__fila">' +
+          '<label class="sx2-campo"><span class="sx2-campo__et js-py2p-dia-et">Día</span><input class="sx2-input" type="date" name="dia" value="' + (opts.dia || hoy) + '" max="' + hoy + '"></label>' +
+          PY.campo('Horas trabajadas ese día', '<input class="sx2-input" type="number" name="horas" min="0" max="24" step="0.5" placeholder="Ej: 1.5">') +
+        '</div>' +
+        '<p class="sx2-campo__ayuda js-py2p-ya" hidden>Ese día ya tiene un registro: lo que cambies aquí lo corrige.</p>' +
+        PY.campo('Nota', '<textarea class="sx2-input" name="nota" maxlength="2000" placeholder="Qué hiciste, qué falta, algo que el equipo deba saber…"></textarea>'),
+        'js-py2p-paso3', puedeAvance) +
       '<p class="sx2-campo__error js-py2p-error" hidden></p>' +
     '</form>';
+  }
+  // Muestra lo que pide la respuesta elegida y renumera los pasos visibles.
+  function elegirAccion(raiz, id) {
+    var x = accionPorId(id) || accionPorId('horas');
+    raiz.querySelectorAll('.js-py2p-accion').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-accion') === id ? 'true' : 'false'); });
+    var p2 = raiz.querySelector('.js-py2p-paso2'), p3 = raiz.querySelector('.js-py2p-paso3');
+    raiz.querySelector('.js-py2p-avance').hidden = id !== 'avance';
+    raiz.querySelector('.js-py2p-motivo').hidden = id !== 'bloqueo';
+    p2.hidden = id !== 'avance' && id !== 'bloqueo';
+    p3.hidden = false;
+    var soloHoras = id === 'horas';
+    p3.querySelector('.js-py2p-paso-et').innerHTML = soloHoras ? '¿Cuántas horas y qué día?' : 'Horas y nota <small class="sx2-tenue">(opcional)</small>';
+    p3.querySelector('.js-py2p-dia-et').textContent = id === 'listo' ? 'Día en que la terminaste' : 'Día';
+    var n = 1;
+    raiz.querySelectorAll('.sx2-py-paso').forEach(function (s) { if (!s.hidden) s.querySelector('.js-py2p-n').textContent = n++; });
+    var g = raiz.querySelector('.js-py2p-guardar-act');
+    if (g) { g.disabled = false; g.lastChild.textContent = x.boton; }
+    var e = raiz.querySelector('.js-py2p-error');
+    if (e) e.hidden = true;
+    var foco = id === 'avance' ? raiz.querySelector('[name="avance_pct"]') : (id === 'bloqueo' ? raiz.querySelector('[name="bloqueo_motivo"]') : (soloHoras ? raiz.querySelector('[name="horas"]') : null));
+    if (foco) foco.focus();
   }
 
   // "Depende de" (auditoría 2026-09-29, etapa 4): una tarea puede depender de
@@ -344,12 +382,18 @@
       d.cuerpo(formActualizar(ctx, a, opts));
       pie.hidden = false;
       pie.innerHTML = U.boton({ texto: 'Volver', icono: 'izquierda', clase: 'js-py2p-volver' }) +
-        U.boton({ texto: 'Guardar', icono: 'check', variante: 'primario', clase: 'js-py2p-guardar-act' });
+        U.boton({ texto: 'Guardar', icono: 'check', variante: 'primario', clase: 'js-py2p-guardar-act', deshabilitado: true });
       var rango = d.el.querySelector('.sx2-py-rango');
       if (rango) rango.addEventListener('input', function () { d.el.querySelector('.js-py2p-avance-txt').textContent = rango.value + '%'; });
       var form = d.el.querySelector('.js-py2p-form-act');
       rellenarDia(form, ctx, a);
       form.querySelector('[name="dia"]').addEventListener('change', function () { rellenarDia(form, ctx, a); });
+      // Sin derecho a cambiar el estado, solo queda anotar horas: se salta la pregunta.
+      // opts.accion: la respuesta ya elegida desde la fila (p. ej. "Me bloqueé").
+      var puede = !!form.querySelector('.js-py2p-paso1');
+      var pre = opts.accion && form.querySelector('.js-py2p-accion[data-accion="' + opts.accion + '"]') ? opts.accion : '';
+      if (!puede) elegirAccion(d.el, 'horas');
+      else if (pre) elegirAccion(d.el, pre);
     }
     function pintarEditar() {
       modo = 'editar';
@@ -374,7 +418,9 @@
     function guardarActualizar(btn) {
       var form = d.el.querySelector('.js-py2p-form-act');
       var sel = d.el.querySelector('.js-py2p-accion[aria-pressed="true"]');
-      var accion = sel ? sel.getAttribute('data-accion') : '';
+      var elegida = sel ? sel.getAttribute('data-accion') : (form.querySelector('.js-py2p-paso1') ? '' : 'horas');
+      if (!elegida) { error('Elige qué pasó con la tarea.'); return; }
+      var accion = elegida === 'horas' ? '' : elegida;
       var datos = { proyecto_id: ctx.proyecto ? ctx.proyecto.proyecto_id : '', actividad_id: a.actividad_id, accion: accion,
         dia: form.dia.value, horas: form.horas.value, nota: form.nota.value.trim() };
       if (accion === 'avance') datos.avance_pct = form.avance_pct.value;
@@ -382,7 +428,7 @@
         datos.bloqueo_motivo = form.bloqueo_motivo.value.trim();
         if (!datos.bloqueo_motivo) { error('Indica el motivo del bloqueo.'); return; }
       }
-      if (!accion && datos.horas === '') { error('Elige qué pasó con la tarea o registra las horas del día.'); return; }
+      if (!accion && datos.horas === '') { error('Indica cuántas horas trabajaste ese día.'); return; }
       btn.disabled = true;
       PY.api('actualizarTareaProyecto', datos).then(function (r) {
         btn.disabled = false;
@@ -479,15 +525,7 @@
       }
       if (t.closest('.js-py2p-volver')) { pintarVer(); return; }
       var ac = t.closest('.js-py2p-accion');
-      if (ac) {
-        d.el.querySelectorAll('.js-py2p-accion').forEach(function (b) { b.setAttribute('aria-pressed', b === ac ? 'true' : 'false'); });
-        var acc = ac.getAttribute('data-accion');
-        d.el.querySelector('.js-py2p-avance').hidden = acc !== 'avance';
-        d.el.querySelector('.js-py2p-motivo').hidden = acc !== 'bloqueo';
-        var e = d.el.querySelector('.js-py2p-error');
-        if (e) e.hidden = true;
-        return;
-      }
+      if (ac) { elegirAccion(d.el, ac.getAttribute('data-accion')); return; }
       var g = t.closest('.js-py2p-guardar-act');
       if (g) { guardarActualizar(g); return; }
       var ge = t.closest('.js-py2p-guardar-edit');
@@ -584,16 +622,27 @@
 
   // Abre el panel de una tarea de CUALQUIER proyecto sin salir de la vista
   // actual (Mi trabajo, Calendario): carga ese proyecto por detrás.
+  // Abrir varias tareas del mismo proyecto seguidas no vuelve a cargarlo
+  // (Etapa 2): se reutiliza por 45 s y se olvida al guardar cualquier cambio.
+  var cacheProy_ = {};
+  var VIDA_CACHE_MS = 45000;
+  function olvidarProyecto(id) { if (id) delete cacheProy_[id]; else cacheProy_ = {}; }
   function abrirTareaDeProyecto(proyectoId, actividadId, opts) {
     opts = opts || {};
     var datos = { proyecto_id: proyectoId };
-    PY.aviso('Abriendo la tarea…');
-    return Promise.all([
-      PY.api('getDetalleCompletoProyecto', datos),
-      PY.api('listarBitacoraProyecto', datos),
-      PY.cargarMiPerfil()
-    ]).then(function (r) {
-      if (!r[0] || !r[0].ok) { PY.aviso((r[0] && r[0].message) || 'No se pudo abrir la tarea.', 'error'); return null; }
+    var c = cacheProy_[proyectoId];
+    if (!c || Date.now() - c.t > VIDA_CACHE_MS) {
+      PY.aviso('Abriendo la tarea…');
+      c = cacheProy_[proyectoId] = { t: Date.now(), promesa: Promise.all([
+        PY.api('getDetalleCompletoProyecto', datos),
+        PY.api('listarBitacoraProyecto', datos),
+        PY.cargarMiPerfil()
+      ]) };
+    }
+    var alGuardar = opts.alGuardar;
+    opts = Object.assign({}, opts, { alGuardar: function () { olvidarProyecto(proyectoId); if (alGuardar) alGuardar(); else PY.recargarProyecto(); } });
+    return c.promesa.then(function (r) {
+      if (!r[0] || !r[0].ok) { olvidarProyecto(proyectoId); PY.aviso((r[0] && r[0].message) || 'No se pudo abrir la tarea.', 'error'); return null; }
       var ctx = {
         detalle: r[0].data.detalle, proyecto: r[0].data.detalle.proyecto, tareas: r[0].data.tareas || [],
         sala: r[0].data.sala || [], bitacora: (r[1] && r[1].ok) ? (r[1].data || []) : [], rendimiento: null
@@ -615,5 +664,6 @@
   PY.colaboradoresMarcados = colaboradoresMarcados;
   PY.sincronizarColaboradores = sincronizarColaboradores;
   PY.abrirTareaDeProyecto = abrirTareaDeProyecto;
+  PY.olvidarProyectoCacheado = olvidarProyecto;
   PY.abrirTareaPersonal = abrirTareaPersonal;
 })();
