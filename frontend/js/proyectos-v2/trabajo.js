@@ -276,7 +276,8 @@
           (propias.length ? propias.map(function (a) {
             var p = plan[a.actividad_id] || {};
             var avance = valorOrden(a, p, 'avance');
-            var d = PY.diasHasta(a.fecha_compromiso);
+            var fk = a.fecha_compromiso || a.fecha_propuesta;
+            var d = PY.diasHasta(fk);
             var h = hitosPorId[a.hito_id];
             return '<article class="sx2-py-kcard' + (puedeMover(ctx, a) ? ' sx2-py-kcard--movible" draggable="true' : '') + '" data-py2-tarea="' + U.esc(a.actividad_id) + '" tabindex="0">' +
               '<div class="sx2-entre">' + U.badge(a.semaforo_etiqueta || a.estado, PY.tonoTarea(a)) +
@@ -285,7 +286,7 @@
               (h ? '<span class="sx2-py-kcard__hito">' + U.ico('bandera', 11) + U.esc(h.nombre) + '</span>' : '') +
               (a.estado !== 'NO_INICIADA' ? U.barra(avance, PY.tonoTarea(a)) : '') +
               '<div class="sx2-entre">' + U.avatar(PY.persona(a.responsable_email, a.responsable_nombre), 'sm') +
-                '<span class="sx2-py-kcard__fecha' + (d !== null && d < 0 && a.estado !== 'TERMINADA' ? ' sx2-py-kcard__fecha--vencida' : '') + '">' + U.ico('calendario', 12) + PY.fecha(a.fecha_compromiso) + '</span>' +
+                '<span class="sx2-py-kcard__fecha' + (d !== null && d < 0 && a.estado !== 'TERMINADA' ? ' sx2-py-kcard__fecha--vencida' : '') + '"' + (!a.fecha_compromiso && a.fecha_propuesta ? ' title="Fecha propuesta, sin confirmar"' : '') + '>' + U.ico('calendario', 12) + PY.fecha(fk) + (!a.fecha_compromiso && a.fecha_propuesta ? ' (prop.)' : '') + '</span>' +
               '</div>' +
             '</article>';
           }).join('') : '<p class="sx2-py-kanban__vacia">Sin tareas</p>') +

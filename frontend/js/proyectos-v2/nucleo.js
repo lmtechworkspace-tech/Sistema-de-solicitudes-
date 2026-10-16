@@ -97,11 +97,18 @@
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
   }
+  // Días de CALENDARIO entre hoy (Chile) y la fecha: 0 = hoy. Antes restaba
+  // horas, y desde el mediodía algo que vencía hoy salía "venció hace 1 día".
   function diasHasta(valor) {
     if (!valor) return null;
-    var d = new Date(valor);
-    if (isNaN(d.getTime())) return null;
-    return Math.round((d.getTime() - Date.now()) / 86400000);
+    var k = String(valor).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) {
+      var d = new Date(valor);
+      if (isNaN(d.getTime())) return null;
+      k = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+    }
+    var a = k.split('-').map(Number), b = hoyClave().split('-').map(Number);
+    return Math.round((Date.UTC(a[0], a[1] - 1, a[2]) - Date.UTC(b[0], b[1] - 1, b[2])) / 86400000);
   }
   // { email, nombre, cargo } con el Directorio de Personas si ya resolvió.
   function persona(email, nombreRespaldo) {
@@ -262,6 +269,7 @@
     if (!c) return;
     estado.vista = 'portafolio';
     estado.proyectoId = null;
+    estado.desdeMiTrabajo = false;
     estado.datos = null;
     var turno = ++estado.turno;
     if (!silencioso || !estado.portafolio) {
@@ -332,6 +340,10 @@
     estado.vista = 'proyecto';
     estado.proyectoId = id;
     if (!mismo) { estado.seccion = opciones.seccion || 'resumen'; estado.datos = null; }
+    else if (opciones.seccion && PYv2.seccionExiste(opciones.seccion)) estado.seccion = opciones.seccion;
+    // Puente Mi trabajo ↔ Proyectos (Etapa 4): quien llega desde Mi trabajo ve
+    // cómo volver. Se olvida al ir al portafolio.
+    estado.desdeMiTrabajo = !!opciones.desdeMiTrabajo || (mismo && estado.desdeMiTrabajo);
     var turno = ++estado.turno;
     if (!opciones.silencioso || !mismo) {
       c.innerHTML = '<div class="sx2-pagina">' + U.esqueleto('kpis', 6) + U.esqueleto('tarjetas', 3) + '</div>';
@@ -438,6 +450,13 @@
 
   function pintarProyecto_() {
     var d = estado.datos, p = d.detalle.proyecto;
+    // Mis tareas abiertas aquí (responsable o colaborador): el atajo a ellas.
+    var yo = miEmail_;
+    var mias = d.tareas.filter(function (a) {
+      if (a.estado === 'TERMINADA' || a.estado === 'CANCELADA') return false;
+      if (String(a.responsable_email || '').toLowerCase() === yo) return true;
+      return (a.colaboradores || []).some(function (x) { return String(x.email || '').toLowerCase() === yo; });
+    }).length;
     var c = ctx();
     var sec = PYv2.secciones[estado.seccion];
     var cuerpo = sec ? sec.pintar(c) : seccionPendiente_();
@@ -455,7 +474,9 @@
         '<div class="sx2-flex" style="gap:16px;align-items:center;min-width:0">' +
           U.anillo(avance === null || avance === undefined ? 0 : avance, { tam: 64, grosor: 7, tono: TONO_SALUD[d.detalle.salud] || 'primario' }) +
           '<div class="sx2-cabecera__txt">' +
-            '<span class="sx2-cabecera__migas"><button type="button" class="js-py2-portafolio">' + U.ico('izquierda', 12) + ' Proyectos</button>' +
+            '<span class="sx2-cabecera__migas">' +
+              (estado.desdeMiTrabajo ? '<button type="button" class="js-py2-mitrabajo">' + U.ico('izquierda', 12) + ' Mi trabajo</button><span aria-hidden="true">·</span>' : '') +
+              '<button type="button" class="js-py2-portafolio">' + (estado.desdeMiTrabajo ? '' : U.ico('izquierda', 12) + ' ') + 'Proyectos</button>' +
               (p.codigo ? U.ico('derecha', 12) + '<span class="sx2-cortar">' + U.esc(p.codigo) + '</span>' : '') + '</span>' +
             '<h1 class="sx2-cortar">' + U.esc(p.nombre) + '</h1>' +
             '<span class="sx2-flex" style="flex-wrap:wrap">' +
@@ -466,6 +487,7 @@
           '</div>' +
         '</div>' +
         '<div class="sx2-cabecera__acciones">' +
+          (mias ? U.boton({ texto: 'Tus tareas aquí · ' + mias, icono: 'persona', variante: 'primario', clase: 'js-py2-mias', titulo: 'Ver solo las tareas donde eres responsable o colaboras' }) : '') +
           (PYv2.accionesCabecera ? PYv2.accionesCabecera(c) : '') +
           U.boton({ texto: 'Excel', icono: 'tabla', clase: 'js-py2-excel' }) +
           U.boton({ texto: 'PDF', icono: 'documento', clase: 'js-py2-pdf' }) +
@@ -520,6 +542,8 @@
       var t = ev.target;
       if (PYv2.clicAcciones && PYv2.clicAcciones(t, ev)) return;
       if (t.closest('.js-py2-portafolio')) { cargarPortafolio(); return; }
+      if (t.closest('.js-py2-mias')) { PYv2.misTareasTrabajo = true; irSeccion('trabajo'); return; }
+      if (t.closest('.js-py2-mitrabajo')) { irAItem('mi-trabajo'); return; }
       var s = t.closest('.js-py2-seccion');
       if (s) { irSeccion(s.getAttribute('data-id')); return; }
       if (t.closest('.js-py2-excel')) { descargar('descargarLibroProyecto', 'xlsx'); return; }

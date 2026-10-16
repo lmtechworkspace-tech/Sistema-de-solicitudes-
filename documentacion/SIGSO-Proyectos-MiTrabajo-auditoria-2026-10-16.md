@@ -176,3 +176,19 @@ para lo frecuente; el detalle sigue ahí, pero no estorba.
   Descripción; "Control del plan" (fechas plan/real, desviación, datos) queda
   plegado y recuerda si la persona lo dejó abierto.
 - Probado en base DEMO local como colaboradora.
+
+## 9. Etapa 4 — hecha (sin commit)
+- **Mi trabajo → proyecto:** el nombre del proyecto en una tarea abre ese
+  proyecto en **Trabajo** con "Mis tareas" puesto (antes abría el Resumen).
+- **Proyecto → Mi trabajo:** si llegaste desde Mi trabajo, las migas muestran
+  "‹ Mi trabajo · Proyectos"; además, botón **"Tus tareas aquí · N"** en la
+  cabecera de cualquier sección del proyecto.
+- "Tu próximo paso" prioriza lo atrasado o que vence hoy antes que confirmar fechas.
+- Corrección previa encontrada al probar: `PY.diasHasta` restaba horas y desde
+  el mediodía lo que vencía hoy aparecía como "venció hace 1 día" (tarjetas del
+  Kanban en rojo, portafolio, resumen, hitos). Ahora cuenta días de calendario
+  de Chile. El Kanban muestra la fecha propuesta "(prop.)" si falta confirmarla.
+- **Manuales:** "Mi trabajo" reescrito (lectura del día, botón de estado, pasos
+  de Actualizar, tareas de proyectos) con 3 capturas nuevas; manual nuevo
+  **"Proyectos"** (encontrar tus tareas, panel, colaboradores, Kanban, pasar
+  tareas) con 6 capturas. Todo con la empresa DEMO (Sofía Lagos, ficticia).

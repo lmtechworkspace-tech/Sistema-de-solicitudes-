@@ -35,7 +35,7 @@
     migas: 'Proyectos',
     pintar: function (o) { PY.pintar(o); },
     recargar: function () { PY.recargarVista(); },
-    abrirProyecto: function (id, seccion) { PY.abrirProyecto(id, { seccion: seccion || undefined }); }
+    abrirProyecto: function (id, seccion) { PY.abrirProyecto(id, { seccion: seccion || undefined, desdeMiTrabajo: true }); }
   };
   var host_ = hostProyectos;
 
@@ -151,7 +151,7 @@
     if (a.personal) {
       return '<span class="sx2-py-ref sx2-py-ref--personal">' + U.ico('persona', 12) + '<span class="sx2-cortar">' + U.esc(a.proyecto_texto || 'Personal') + '</span></span>';
     }
-    return '<button type="button" class="sx2-py-ref" data-py2-proyecto="' + U.esc(a.proyecto_id) + '" title="Abrir el proyecto">' + U.ico('carpeta', 12) + '<span class="sx2-cortar">' + U.esc(a.proyecto_nombre) + '</span></button>';
+    return '<button type="button" class="sx2-py-ref" data-py2-proyecto="' + U.esc(a.proyecto_id) + '" title="Ver tus tareas en este proyecto">' + U.ico('carpeta', 12) + '<span class="sx2-cortar">' + U.esc(a.proyecto_nombre) + '</span></button>';
   }
 
   function fila(a, i) {
@@ -180,7 +180,8 @@
 
   // "Tu próximo paso": la tarea que conviene mover primero, con su botón.
   function proximoPaso(g) {
-    var a = g.confirmar[0] || g.paraHoy[0] || g.semana[0];
+    // Lo atrasado o que vence hoy manda; después, confirmar fechas; después, la semana.
+    var a = g.paraHoy[0] || g.confirmar[0] || g.semana[0];
     if (!a) return '';
     var motivo = porConfirmar(a) ? 'Confirma la fecha que te proponen' :
       (a._dd !== null && a._dd < 0 ? 'Está atrasada: empieza por aquí' : (a._dd === 0 ? 'Vence hoy' : 'Es lo próximo que vence'));
@@ -678,7 +679,11 @@
       if ((b = t.closest('.js-py2m-proy'))) { var id = b.getAttribute('data-id'); f.proyecto = f.proyecto === id ? '' : id; host_.pintar({ sinAnimacion: true }); return; }
       if ((b = t.closest('[data-py2-proyecto]'))) {
         ev.stopPropagation();
-        host_.abrirProyecto(b.getAttribute('data-py2-proyecto'), b.getAttribute('data-seccion'));
+        // Puente (Etapa 4): el chip de una tarea lleva a "Mis tareas" de ese
+        // proyecto, no a su Resumen; un entregable, a Archivos.
+        var secc = b.getAttribute('data-seccion');
+        if (!secc) { PY.misTareasTrabajo = true; secc = 'trabajo'; }
+        host_.abrirProyecto(b.getAttribute('data-py2-proyecto'), secc);
         return;
       }
       if ((b = t.closest('.js-py2m-confirmar'))) {
@@ -748,7 +753,7 @@
     abrirProyecto: function (id, seccion) {
       if (!window.SigsoShell || !SigsoShell.tieneModulo('proyectos')) { PY.aviso('No tienes acceso al módulo Proyectos.', 'error'); return; }
       SigsoShell.irAModulo('proyectos');
-      if (window.SigsoProyectosV2 && SigsoProyectosV2.activo()) PY.abrirProyecto(id, { seccion: seccion || undefined });
+      if (window.SigsoProyectosV2 && SigsoProyectosV2.activo()) PY.abrirProyecto(id, { seccion: seccion || undefined, desdeMiTrabajo: true });
     }
   };
   function pintarModulo(o) {
