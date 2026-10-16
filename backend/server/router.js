@@ -377,6 +377,7 @@ const ACCIONES = {
   gestionarHitoProyecto: (db, data, contexto) => Proyectos.gestionarHito(db, data, contexto),
   crearTareaProyecto: (db, data, contexto) => Proyectos.crearTarea(db, data, contexto),
   editarTareaProyecto: (db, data, contexto) => Proyectos.editarTarea(db, data, contexto),
+  reasignarTareasProyecto: (db, data, contexto) => Proyectos.reasignarTareas(db, data, contexto),
   listarTareasProyecto: (db, data, contexto) => Proyectos.listarTareas(db, data, contexto),
   listarBitacoraProyecto: (db, data, contexto) => Proyectos.listarBitacora(db, data, contexto),
   listarSalaProyecto: (db, data, contexto) => Proyectos.listarSala(db, data, contexto),

@@ -299,7 +299,9 @@ test('editarTarea: reasignar a alguien que NO es integrante del proyecto se rech
   assert.equal(r._validationError, true, 'reasignar a alguien fuera del proyecto debe rechazarse');
 });
 
-test('editarTarea: reasignar a un integrante SI resetea estado/confirmacion/avance y deja traza en la bitacora', () => {
+// Decisión del dueño 16-10-2026: reasignar dentro del proyecto es un TRASPASO
+// -- se conservan estado, avance y fecha comprometida (antes se reiniciaba).
+test('editarTarea: reasignar a un integrante CONSERVA estado/confirmacion/avance y deja traza en la bitacora', () => {
   const db = db_();
   const proyecto = armarProyectoConMarcelo(db);
   Proyectos.gestionarIntegrante(db, { proyecto_id: proyecto.proyecto_id, usuario_email: 'otro@rld.cl', rol_proyecto: 'COLABORADOR' }, CTX_LEO);
@@ -316,10 +318,10 @@ test('editarTarea: reasignar a un integrante SI resetea estado/confirmacion/avan
   }, CTX_LEO);
   assert.equal(reasignada._validationError, undefined, JSON.stringify(reasignada));
   assert.equal(reasignada.responsable_email, 'otro@rld.cl');
-  assert.equal(reasignada.estado, 'NO_INICIADA', 'el nuevo responsable no hereda el EN_CURSO de otra persona');
-  assert.equal(reasignada.confirmada_en, '', 'el nuevo responsable no hereda una confirmacion que nunca dio');
-  assert.equal(reasignada.avance_pct, '', 'el nuevo responsable no hereda el avance de otra persona');
-  assert.equal(reasignada.fecha_compromiso, '', 'vuelve a fecha_propuesta hasta que el nuevo responsable confirme');
+  assert.equal(reasignada.estado, 'EN_CURSO', 'el traspaso conserva el estado');
+  assert.ok(reasignada.confirmada_en, 'el traspaso conserva la confirmacion');
+  assert.equal(Number(reasignada.avance_pct), 60, 'el traspaso conserva el avance');
+  assert.equal(String(reasignada.fecha_compromiso).slice(0, 10), '2026-08-20', 'el traspaso conserva la fecha comprometida');
 
   const bitacora = filas(db, 'ACTIVIDADES_BITACORA').filter((b) => b.actividad_id === tarea.actividad_id);
   assert.ok(bitacora.some((b) => b.tipo === 'REASIGNACION'), 'la reasignacion desde el proyecto tiene que quedar en la bitacora, igual que Actividades.reasignar');

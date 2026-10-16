@@ -45,6 +45,28 @@
   ];
   var PRIORIDAD_TONO = { P1: 'critico', P2: 'alerta', P3: 'info', P4: 'neutro', P5: 'neutro' };
 
+  // Selección múltiple para "Pasar a…" (auditoría 16-10-2026). El líder
+  // puede pasar cualquier tarea abierta; cada persona, las que tiene a su nombre.
+  var sel = {};
+  function seleccionable(ctx, a) {
+    if (PY.esTerminal(a)) return false;
+    return !!ctx.detalle.puede_gestionar || String(a.responsable_email || '').toLowerCase() === PY.miEmail();
+  }
+  function seleccionadas(ctx) {
+    return ctx.tareas.filter(function (a) { return sel[a.actividad_id] && seleccionable(ctx, a); });
+  }
+
+  // Los filtros son de UN proyecto: al abrir otro se parte de cero (antes un
+  // hito o una persona del proyecto anterior dejaba la lista vacía).
+  var proyectoVisto_ = null;
+  function reiniciarSiCambioProyecto(ctx) {
+    var id = ctx.proyecto && ctx.proyecto.proyecto_id;
+    if (id === proyectoVisto_) return;
+    proyectoVisto_ = id;
+    f.estado = 'todas'; f.responsable = ''; f.hito = ''; f.texto = '';
+    sel = {};
+  }
+
   // Misma clasificación que las métricas del Resumen (PY.metricas).
   function clase(a, plan) {
     if (a.estado === 'TERMINADA') return 'completadas';
@@ -132,6 +154,23 @@
     }
     return 0;
   }
+  // Barra de selección: siempre visible en la tabla si hay algo que se pueda
+  // pasar, para que se descubra sin explicación.
+  function barraSeleccion(ctx, visibles) {
+    var marcables = visibles.filter(function (a) { return seleccionable(ctx, a); });
+    if (!marcables.length) return '';
+    var n = seleccionadas(ctx).length;
+    return '<div class="sx2-py-seleccion' + (n ? ' sx2-py-seleccion--activa' : '') + ' sx2-entra" style="--i:1" role="region" aria-label="Tareas seleccionadas">' +
+      (n
+        ? '<strong>' + n + (n === 1 ? ' tarea seleccionada' : ' tareas seleccionadas') + '</strong>' +
+          '<span style="flex:1"></span>' +
+          U.boton({ texto: 'Quitar selección', sm: true, variante: 'fantasma', clase: 'js-py2t-sel-limpiar' }) +
+          U.boton({ texto: 'Pasar a…', icono: 'equipo', sm: true, variante: 'primario', clase: 'js-py2t-pasar' })
+        : '<span class="sx2-tenue">' + U.ico('equipo', 14) + ' Marca tareas en la tabla para pasarlas a otra persona del equipo' +
+          (ctx.detalle.puede_gestionar ? '' : ' (puedes pasar las que están a tu nombre)') + '.</span>') +
+    '</div>';
+  }
+
   function tabla(tareas, plan, ctx) {
     if (!tareas.length) return vacioFiltros();
     var hitosPorId = {};
@@ -141,7 +180,12 @@
       var va = valorOrden(a, plan[a.actividad_id] || {}, o.campo), vb = valorOrden(b, plan[b.actividad_id] || {}, o.campo);
       return (va < vb ? -1 : (va > vb ? 1 : 0)) * o.dir;
     });
-    return '<div class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:1"><div class="sx2-tabla-wrap"><table class="sx2-tabla sx2-py-tabla-trabajo"><thead><tr>' +
+    var marcables = ordenadas.filter(function (a) { return seleccionable(ctx, a); });
+    var conSel = marcables.length > 0;
+    var todas = conSel && marcables.every(function (a) { return sel[a.actividad_id]; });
+    return barraSeleccion(ctx, ordenadas) +
+      '<div class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:1"><div class="sx2-tabla-wrap"><table class="sx2-tabla sx2-py-tabla-trabajo"><thead><tr>' +
+      (conSel ? '<th class="sx2-py-col-sel"><input type="checkbox" class="js-py2t-sel-todas" aria-label="Seleccionar todas las que puedes pasar"' + (todas ? ' checked' : '') + '></th>' : '') +
       COLS.map(function (c) {
         var sort = o.campo === c.id ? (o.dir === 1 ? 'ascending' : 'descending') : 'none';
         return '<th class="js-py2t-orden' + (c.num ? ' sx2-num' : '') + '" data-campo="' + c.id + '" aria-sort="' + sort + '" tabindex="0">' + c.texto + '</th>';
@@ -152,7 +196,10 @@
       var avance = valorOrden(a, p, 'avance');
       var desv = p.desviacion_dias;
       var h = hitosPorId[a.hito_id];
-      return '<tr class="sx2-fila--clic" data-py2-tarea="' + U.esc(a.actividad_id) + '" tabindex="0">' +
+      return '<tr class="sx2-fila--clic' + (sel[a.actividad_id] ? ' sx2-py-fila--sel' : '') + '" data-py2-tarea="' + U.esc(a.actividad_id) + '" tabindex="0">' +
+        (conSel ? '<td class="sx2-py-col-sel">' + (seleccionable(ctx, a)
+          ? '<input type="checkbox" class="js-py2t-sel" data-id="' + U.esc(a.actividad_id) + '" aria-label="Seleccionar ' + U.esc(a.titulo) + '"' + (sel[a.actividad_id] ? ' checked' : '') + '>'
+          : '') + '</td>' : '') +
         '<td class="sx2-py-celda-tarea"><strong class="sx2-cortar">' + U.esc(a.titulo) + '</strong>' +
           (h || a.es_subtarea ? '<span class="sx2-tenue sx2-cortar">' + (a.es_subtarea ? U.ico('derecha', 11) + U.esc(a.padre_titulo || 'Subtarea') : U.ico('bandera', 11) + U.esc(h.nombre)) + '</span>' : '') + '</td>' +
         '<td>' + U.persona(PY.persona(a.responsable_email, a.responsable_nombre)) + '</td>' +
@@ -265,6 +312,7 @@
   }
 
   function pintar(ctx) {
+    reiniciarSiCambioProyecto(ctx);
     // Filtro/modo pedidos desde el Resumen (clic en un KPI o en "Ver…").
     if (PY.filtroTrabajo !== undefined && PY.filtroTrabajo !== null) {
       f.estado = PY.filtroTrabajo || 'todas';
@@ -302,6 +350,28 @@
     }
     raiz.addEventListener('click', function (ev) {
       var t = ev.target;
+      // Casillas de selección: no abren la tarea.
+      var cs = t.closest('.js-py2t-sel');
+      if (cs) {
+        ev.stopPropagation();
+        if (cs.checked) sel[cs.getAttribute('data-id')] = true; else delete sel[cs.getAttribute('data-id')];
+        PY.pintar({ sinAnimacion: true });
+        return;
+      }
+      var ct = t.closest('.js-py2t-sel-todas');
+      if (ct) {
+        var plan0 = PY.planPorId(ctx);
+        filtrar(ctx, plan0, false).forEach(function (a) {
+          if (!seleccionable(ctx, a)) return;
+          if (ct.checked) sel[a.actividad_id] = true; else delete sel[a.actividad_id];
+        });
+        PY.pintar({ sinAnimacion: true });
+        return;
+      }
+      // Un clic al lado de la casilla tampoco abre la tarea.
+      if (t.closest('.sx2-py-col-sel')) return;
+      if (t.closest('.js-py2t-sel-limpiar')) { sel = {}; PY.pintar({ sinAnimacion: true }); return; }
+      if (t.closest('.js-py2t-pasar')) { abrirPasarA(ctx); return; }
       var e = t.closest('.js-py2t-estado');
       if (e) { f.estado = e.getAttribute('data-estado'); PY.pintar({ sinAnimacion: true }); return; }
       var m = t.closest('.js-py2t-modo');
@@ -397,11 +467,47 @@
     PY.pintar({ sinAnimacion: true });
   }
 
+  // --- Pasar a… (reasignación en lote) ---------------------------------------------
+  // Traspaso dentro del equipo: se conservan estado, avance y fechas.
+  function abrirPasarA(ctx) {
+    var lista = seleccionadas(ctx);
+    if (!lista.length) return;
+    var personas = PY.quienesReciben(ctx);
+    var MAX = 8;
+    PY.formulario({
+      titulo: lista.length === 1 ? 'Pasar la tarea a…' : 'Pasar ' + lista.length + ' tareas a…',
+      subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">Conservan su estado, avance y fechas. Queda registrado y la persona recibe un aviso.</span>',
+      boton: 'Pasar',
+      campos: PY.campo('Nueva persona responsable', '<select class="sx2-select" name="responsable_email"><option value="">Elige a alguien del equipo…</option>' +
+          personas.map(function (p) { return '<option value="' + U.esc(p.email) + '">' + U.esc(p.nombre + (p.cargo ? ' — ' + p.cargo : '')) + '</option>'; }).join('') + '</select>') +
+        PY.campo('Motivo (opcional)', '<textarea class="sx2-input" name="motivo" maxlength="500" placeholder="Ej: las ejecuta Valentina desde octubre"></textarea>') +
+        '<div class="sx2-campo"><span class="sx2-campo__et">Tareas</span><ul class="sx2-py-pasar-lista">' +
+          lista.slice(0, MAX).map(function (a) {
+            return '<li><span class="sx2-cortar">' + U.esc(a.titulo) + '</span><small class="sx2-tenue">' + U.esc(PY.persona(a.responsable_email, a.responsable_nombre).nombre) + '</small></li>';
+          }).join('') +
+          (lista.length > MAX ? '<li class="sx2-tenue">y ' + (lista.length - MAX) + ' más</li>' : '') +
+        '</ul></div>',
+      preparar: function (x) {
+        if (!x.responsable_email) return 'Elige a quién pasarlas.';
+        return { proyecto_id: ctx.proyecto.proyecto_id, actividad_ids: JSON.stringify(lista.map(function (a) { return a.actividad_id; })), responsable_email: x.responsable_email, motivo: x.motivo };
+      },
+      accion: 'reasignarTareasProyecto',
+      listo: function (r) {
+        var d = (r && r.data) || {};
+        sel = {};
+        PY.aviso(d.reasignadas
+          ? (d.reasignadas === 1 ? 'Tarea pasada a ' : d.reasignadas + ' tareas pasadas a ') + (d.responsable_nombre || d.responsable_email) + '.'
+          : 'Ya estaban a nombre de esa persona.', 'exito');
+        PY.recargarProyecto();
+      }
+    });
+  }
+
   // --- Nueva tarea (drawer) --------------------------------------------------------
   function abrirNuevaTarea(ctx) {
     var det = ctx.detalle;
     var hoy = PY.hoyClave();
-    var integrantes = (det.integrantes || []).map(function (i) { return PY.persona(i.usuario_email, i.usuario_nombre); });
+    var integrantes = PY.quienesReciben(ctx);
     var d = U.drawer({
       titulo: 'Nueva tarea',
       subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(ctx.proyecto.nombre) + '</span>',
@@ -421,18 +527,22 @@
           }).join('') + '</select>') +
           PY.campo('Prioridad', '<select class="sx2-select" name="prioridad"><option value="P1">P1 · Crítica</option><option value="P2">P2 · Alta</option><option value="P3" selected>P3 · Media</option><option value="P4">P4 · Baja</option></select>') +
         '</div>' +
+        PY.campoColaboradores(ctx, { responsable_email: integrantes[0] ? integrantes[0].email : '', colaboradores: [] }) +
         (PY.campoDependencias ? PY.campoDependencias(ctx, null) : '') +
         '<p class="sx2-campo__error js-py2t-error" hidden></p>' +
       '</form>',
       pie: U.boton({ texto: 'Cancelar', clase: 'js-sx2-drawer-cerrar' }) + U.boton({ texto: 'Crear tarea', icono: 'check', variante: 'primario', clase: 'js-py2t-crear' })
     });
     var form = d.el.querySelector('.js-py2t-form');
+    form.querySelector('[name="responsable_email"]').addEventListener('change', function () { PY.sincronizarColaboradores(form); });
     var btn = d.el.querySelector('.js-py2t-crear');
     var err = d.el.querySelector('.js-py2t-error');
     function enviar(ev) {
       if (ev) ev.preventDefault();
       var datos = { proyecto_id: ctx.proyecto.proyecto_id, origen: 'ASIGNADA' };
-      new FormData(form).forEach(function (v, k) { if (k !== 'depende_de') datos[k] = String(v).trim(); });
+      new FormData(form).forEach(function (v, k) { if (k !== 'depende_de' && k !== 'colaboradores') datos[k] = String(v).trim(); });
+      var colabs = PY.colaboradoresMarcados(form);
+      if (colabs.length) datos.colaboradores_emails = JSON.stringify(colabs);
       // Puede depender de varias: todas las casillas marcadas, separadas por coma.
       if (PY.dependenciasMarcadas) datos.depende_de = PY.dependenciasMarcadas(form).join(',');
       if (!datos.titulo || !datos.fecha_compromiso) { err.textContent = 'Completa el título y la fecha comprometida.'; err.hidden = false; return; }

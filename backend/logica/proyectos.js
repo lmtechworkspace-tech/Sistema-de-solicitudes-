@@ -147,6 +147,19 @@ function puedeGestionarProyecto_(db, proyecto, contexto) {
   return rolEnProyecto_(db, proyecto.proyecto_id, contexto) === 'LIDER';
 }
 
+// Decisión del dueño (auditoría Proyectos + Mi trabajo, 16-10-2026): el EQUIPO
+// del proyecto -- líder, integrantes y colaboradores activos; no observadores --
+// puede cambiar el estado de cualquier tarea del proyecto y registrar su día.
+// Antes solo el responsable o un colaborador de la TAREA podían, y quien la
+// ejecutaba de hecho (sin estar a su nombre) quedaba bloqueado. La bitácora
+// sigue guardando quién hizo cada cambio.
+const ROLES_EQUIPO_PROYECTO_ = ['LIDER', 'INTEGRANTE', 'COLABORADOR'];
+function esEquipoProyecto_(db, proyecto, contexto) {
+  if (!proyecto || !contexto) return false;
+  if (contexto.rol === 'ADM') return true;
+  return ROLES_EQUIPO_PROYECTO_.indexOf(rolEnProyecto_(db, proyecto.proyecto_id, contexto)) !== -1;
+}
+
 function errorFechasProyecto_(inicio, objetivo) {
   if (!inicio || !objetivo) return null;
   const i = new Date(inicio), o = new Date(objetivo);
@@ -778,7 +791,7 @@ function listarMisTareas(db, data, contexto) {
         actividad_id: a.actividad_id, titulo: a.titulo, estado: a.estado,
         prioridad: a.prioridad, fecha_compromiso: a.fecha_compromiso,
         avance_pct: a.avance_pct, bloqueo_motivo: a.bloqueo_motivo,
-        fecha_propuesta: a.fecha_propuesta, confirmada_en: a.confirmada_en,
+        fecha_propuesta: a.fecha_propuesta, confirmada_en: a.confirmada_en, fecha_terminada: a.fecha_terminada,
         semaforo: s.codigo, semaforo_etiqueta: s.etiqueta,
         proyecto_id: a.proyecto_id || '', proyecto_nombre: a.proyecto_id ? (proyecto ? proyecto.nombre : '(proyecto eliminado)') : '',
         personal: !a.proyecto_id, proyecto_texto: a.proyecto_id ? '' : (a.proyecto || ''),
@@ -1192,23 +1205,21 @@ function editarTarea(db, data, contexto) {
     if (padre.tarea_padre_id) return errorValidacion_('tarea_padre_id', 'Esa tarea ya es una subtarea -- no se puede anidar un tercer nivel.');
     if (data.tarea_padre_id === data.actividad_id) return errorValidacion_('tarea_padre_id', 'Una tarea no puede ser padre de sí misma.');
   }
-  // Reasignar una tarea de proyecto tenia menos rigor que Actividades.
-  // reasignar (actividad suelta): no validaba que el nuevo responsable
-  // fuera integrante del proyecto (un email que no encontraba en
-  // PROYECTO_INTEGRANTES igual se guardaba, solo se omitia el nombre), y
-  // no tocaba estado/confirmada_en/bloqueo_*/confianza/avance_pct -- la
-  // tarea podia quedar EN_CURSO con la confirmacion de la persona
-  // ANTERIOR, como si el nuevo responsable ya hubiera aceptado un
-  // compromiso que nunca vio. No se porta el motivo/chequeo de JEFATURA de
-  // reasignar (no aplican al contexto de un proyecto, donde la autoridad
-  // real es el lider), pero si la consistencia de estado y la traza.
+  // Reasignar desde el proyecto: el nuevo responsable debe ser integrante
+  // activo (no observador), y la traza queda en la bitácora. Decisión del
+  // dueño (16-10-2026): es un TRASPASO dentro del equipo -- se conservan
+  // estado, avance y fecha comprometida (antes se reiniciaba todo y la
+  // nueva persona debía confirmar, y por eso nadie reasignaba). Pueden
+  // reasignar el líder (cualquiera) y el propio responsable (las suyas).
   const seReasigna = data.responsable_email !== undefined &&
     normalizarEmail_(data.responsable_email) !== normalizarEmail_(actividad.responsable_email);
   let nuevoRespIntegrante = null;
   if (seReasigna) {
-    nuevoRespIntegrante = leerSeguro_(db, 'PROYECTO_INTEGRANTES').find((i) =>
-      i.proyecto_id === proyecto.proyecto_id && esVerdadero_(i.activo) && normalizarEmail_(i.usuario_email) === normalizarEmail_(data.responsable_email));
-    if (!nuevoRespIntegrante) return errorValidacion_('responsable_email', 'El nuevo responsable debe ser integrante activo de este proyecto.');
+    if (!esGestor && normalizarEmail_(actividad.responsable_email) !== normalizarEmail_(contexto.email)) {
+      return { _forbidden: true, message: 'Solo el líder o el responsable de la tarea pueden reasignarla.' };
+    }
+    nuevoRespIntegrante = integranteQueRecibe_(db, proyecto, data.responsable_email);
+    if (!nuevoRespIntegrante) return errorValidacion_('responsable_email', 'El nuevo responsable debe ser integrante activo de este proyecto (no observador).');
   }
 
   const cambios = {};
@@ -1229,26 +1240,99 @@ function editarTarea(db, data, contexto) {
     const responsable = normalizarEmail_(data.responsable_email || actividad.responsable_email);
     cambios.colaboradores_emails = JSON.stringify((Array.isArray(lista) ? lista : []).filter((correo) => miembros[normalizarEmail_(correo)] && normalizarEmail_(correo) !== responsable));
   }
-  if (seReasigna) {
-    cambios.responsable_nombre = nuevoRespIntegrante.usuario_nombre || '';
-    cambios.estado = Actividades.ACTIVIDADES_ESTADOS.NO_INICIADA;
-    cambios.fecha_propuesta = data.fecha_compromiso !== undefined ? data.fecha_compromiso : (actividad.fecha_compromiso || actividad.fecha_propuesta);
-    cambios.fecha_compromiso = '';
-    cambios.confirmada_en = '';
-    cambios.bloqueo_motivo = '';
-    cambios.bloqueo_responsable_email = '';
-    cambios.bloqueo_desde = '';
-    cambios.confianza = 'VERDE';
-    cambios.avance_pct = '';
-  }
+  if (seReasigna) Object.assign(cambios, cambiosTraspaso_(actividad, nuevoRespIntegrante, cambios.colaboradores_emails));
   cambios.ultima_actualizacion = new Date().toISOString();
   const actualizado = actualizarFilaPorId_(db, 'ACTIVIDADES', 'actividad_id', actividad.actividad_id, cambios);
   if (seReasigna) {
-    Actividades.registrarEventoActividad_(db, actividad.actividad_id, 'REASIGNACION', contexto, 'Reasignada desde el proyecto',
+    Actividades.registrarEventoActividad_(db, actividad.actividad_id, 'REASIGNACION', contexto, String(data.motivo || '').trim().slice(0, 500) || 'Reasignada desde el proyecto',
       { responsable_anterior: actividad.responsable_email, responsable_nuevo: normalizarEmail_(data.responsable_email) });
+    avisarTraspaso_(db, proyecto, nuevoRespIntegrante, [actividad], contexto);
   }
   registrarEventoProyecto_(db, proyecto.proyecto_id, 'ACTUALIZACION', contexto, 'Tarea editada: ' + (cambios.titulo || actividad.titulo), 'ACTIVIDAD', actividad.actividad_id, '');
   return actualizado;
+}
+
+// --- Traspaso de tareas dentro del equipo (16-10-2026) -----------------------
+function integranteQueRecibe_(db, proyecto, email) {
+  const e = normalizarEmail_(email);
+  return leerSeguro_(db, 'PROYECTO_INTEGRANTES').find((i) =>
+    i.proyecto_id === proyecto.proyecto_id && esVerdadero_(i.activo) && i.rol_proyecto !== 'OBSERVADOR' &&
+    normalizarEmail_(i.usuario_email) === e) || null;
+}
+// Solo cambia quién responde: estado, avance, fechas y confirmación se
+// conservan. Quien recibe deja de figurar como colaborador de la tarea.
+function cambiosTraspaso_(actividad, integrante, colaboradoresJson) {
+  const nuevo = normalizarEmail_(integrante.usuario_email);
+  const base = colaboradoresJson !== undefined ? { colaboradores_emails: colaboradoresJson } : actividad;
+  return {
+    responsable_email: nuevo,
+    responsable_nombre: integrante.usuario_nombre || '',
+    colaboradores_emails: JSON.stringify(Actividades.colaboradoresDeActividad_(base).filter((c) => c !== nuevo))
+  };
+}
+function avisarTraspaso_(db, proyecto, integrante, tareas, contexto) {
+  const destino = normalizarEmail_(integrante.usuario_email);
+  if (!tareas.length || destino === normalizarEmail_(contexto && contexto.email)) return;
+  const quien = (contexto && (contexto.nombre || contexto.email)) || 'Alguien';
+  NotificacionesApp.encolarLote(db, [{
+    destinatario: destino, tipo: 'PROYECTO_TAREAS_REASIGNADAS',
+    titulo: tareas.length === 1 ? 'Te pasaron una tarea' : 'Te pasaron ' + tareas.length + ' tareas',
+    mensaje: quien + ' te pasó ' + (tareas.length === 1 ? '"' + tareas[0].titulo + '"' : tareas.length + ' tareas') + ' en "' + proyecto.nombre + '".',
+    modulo_id: 'mi_trabajo', texto_accion: 'Ver en Mi trabajo', vidaHoras: 72
+  }]);
+}
+
+// Reasignación en lote: "Pasar a…" sobre varias tareas del proyecto. Mismas
+// reglas que reasignar una sola en editarTarea; todo o nada (transacción).
+function reasignarTareas(db, data, contexto) {
+  data = data || {};
+  const proyecto = buscarProyecto_(db, data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  let ids = data.actividad_ids;
+  if (typeof ids === 'string') { try { ids = JSON.parse(ids); } catch (e) { ids = ids.split(','); } }
+  ids = (Array.isArray(ids) ? ids : []).map((x) => String(x || '').trim()).filter((x, i, arr) => x && arr.indexOf(x) === i);
+  if (!ids.length) return errorValidacion_('actividad_ids', 'Elige al menos una tarea.');
+  if (ids.length > 300) return errorValidacion_('actividad_ids', 'Son demasiadas tareas de una vez (máximo 300).');
+  const integrante = integranteQueRecibe_(db, proyecto, data.responsable_email);
+  if (!integrante) return errorValidacion_('responsable_email', 'Elige a un integrante activo del proyecto (no observador).');
+  const nuevo = normalizarEmail_(integrante.usuario_email);
+  const gestiona = puedeGestionarProyecto_(db, proyecto, contexto);
+  const yo = normalizarEmail_(contexto && contexto.email);
+  const porId = {};
+  leerSeguro_(db, 'ACTIVIDADES').forEach((a) => { if (a.proyecto_id === proyecto.proyecto_id && esVerdadero_(a.activa)) porId[a.actividad_id] = a; });
+
+  const aMover = [];
+  for (const id of ids) {
+    const a = porId[id];
+    if (!a) return errorValidacion_('actividad_ids', 'Una de las tareas ya no existe en este proyecto. Actualiza la pantalla.');
+    if (esTareaTerminalProyecto_(a)) return errorValidacion_('actividad_ids', '"' + a.titulo + '" ya está cerrada: no se puede reasignar.');
+    if (!gestiona && normalizarEmail_(a.responsable_email) !== yo) {
+      return { _forbidden: true, message: 'Solo el líder puede reasignar tareas de otras personas; tú puedes traspasar las tuyas.' };
+    }
+    if (normalizarEmail_(a.responsable_email) !== nuevo) aMover.push(a);
+  }
+  const motivo = String(data.motivo || '').trim().slice(0, 500);
+  const ahora = new Date().toISOString();
+  db.exec('BEGIN');
+  try {
+    aMover.forEach((a) => {
+      actualizarFilaPorId_(db, 'ACTIVIDADES', 'actividad_id', a.actividad_id,
+        Object.assign(cambiosTraspaso_(a, integrante), { ultima_actualizacion: ahora }));
+      Actividades.registrarEventoActividad_(db, a.actividad_id, 'REASIGNACION', contexto, motivo || 'Reasignada desde el proyecto',
+        { responsable_anterior: a.responsable_email, responsable_nuevo: nuevo });
+    });
+    if (aMover.length) {
+      registrarEventoProyecto_(db, proyecto.proyecto_id, 'ACTUALIZACION', contexto,
+        (aMover.length === 1 ? 'Tarea reasignada' : aMover.length + ' tareas reasignadas') + ' a ' + (integrante.usuario_nombre || nuevo), 'PROYECTO', proyecto.proyecto_id, motivo);
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  avisarTraspaso_(db, proyecto, integrante, aMover, contexto);
+  return { ok: true, reasignadas: aMover.length, sin_cambio: ids.length - aMover.length, responsable_email: nuevo, responsable_nombre: integrante.usuario_nombre || '' };
 }
 
 function fechasPlanRealEditadas_(data, actividad, cambios) {
@@ -2032,7 +2116,7 @@ function resolverTareaRegistro_(db, data, contexto) {
   if (!puedeVerProyecto_(db, proyecto, contexto)) return { error: { _forbidden: true, message: 'No tienes acceso a este proyecto.' } };
   const actividad = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id);
   if (!actividad) return { error: errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.') };
-  return { actividad, proyecto, gestiona: puedeGestionarProyecto_(db, proyecto, contexto) };
+  return { actividad, proyecto, gestiona: puedeGestionarProyecto_(db, proyecto, contexto), equipo: esEquipoProyecto_(db, proyecto, contexto) };
 }
 function quienGestiona_(proyecto) { return proyecto ? 'el líder del proyecto' : 'quien la supervisa'; }
 
@@ -2042,7 +2126,7 @@ function guardarRegistroDia(db, data, contexto) {
   if (r.error) return r.error;
   const actividad = r.actividad;
   const email = normalizarEmail_(contexto && contexto.email);
-  if (!Actividades.trabajaLaActividad_(actividad, email) && !r.gestiona) {
+  if (!Actividades.trabajaLaActividad_(actividad, email) && !r.gestiona && !r.equipo) {
     return { _forbidden: true, message: 'Solo quien trabaja la tarea o ' + quienGestiona_(r.proyecto) + ' puede registrar el día.' };
   }
 
@@ -2159,10 +2243,13 @@ function actualizarTarea(db, data, contexto) {
 
   const email = normalizarEmail_(contexto && contexto.email);
   const trabaja = Actividades.trabajaLaActividad_(actividad, email);
-  if (!trabaja && !resuelta.gestiona) {
+  // En un proyecto, el equipo puede cambiar el estado (ver esEquipoProyecto_);
+  // en un compromiso personal, solo quien lo trabaja.
+  const cambiaEstado = trabaja || !!resuelta.equipo;
+  if (!cambiaEstado && !resuelta.gestiona) {
     return { _forbidden: true, message: 'Solo quien trabaja la tarea o ' + quienGestiona_(proyecto) + ' puede actualizarla.' };
   }
-  if (accion && !trabaja) return { _forbidden: true, message: 'Solo el responsable o un colaborador pueden cambiar el avance o el estado de la tarea.' };
+  if (accion && !cambiaEstado) return { _forbidden: true, message: 'Solo el responsable o un colaborador pueden cambiar el avance o el estado de la tarea.' };
   if (accion && Actividades.esEstadoTerminal_(actividad.estado)) return errorValidacion_('actividad_id', 'Esta tarea ya está cerrada.');
   const motivo = String(data.bloqueo_motivo || '').trim();
   if ((accion === 'bloqueo' || estadoDiaPedido === 'bloqueado') && !motivo) return errorValidacion_('bloqueo_motivo', 'Indica el motivo del bloqueo.');
@@ -2205,7 +2292,7 @@ function actualizarTarea(db, data, contexto) {
         // "Listo" registrado para un día pasado: la tarea terminó ESE día.
         fecha_terminada: accion === 'listo' && data.dia ? dia : undefined,
         fecha_dia: dia
-      }, contexto);
+      }, contexto, { autorizado: cambiaEstado });
       if (tarea && (tarea._validationError || tarea._forbidden)) { db.exec('ROLLBACK'); return tarea; }
     }
     const registro = guardarRegistroDia(db, {
@@ -2660,7 +2747,7 @@ async function descargarDocumentoProyecto(db, data, contexto) {
 module.exports = {
   listar, listarMisTareas, listarCalendario, getDetalle, getDetalleCompleto, marcarSalaVisitada,
   crear, guardarComoPlantilla, listarPlantillas, actualizar, eliminar, gestionarIntegrante, gestionarHito,
-  crearTarea, editarTarea, listarTareas, listarBitacora, listarMiBitacora,
+  crearTarea, editarTarea, reasignarTareas, listarTareas, listarBitacora, listarMiBitacora,
   listarSala, publicarEnSala, convertirEventoEnTarea,
   gestionarReunion, agregarAcuerdoReunion, eliminarAcuerdoReunion, convertirAcuerdoEnTarea, listarReuniones,
   gestionarDecision, listarDecisiones,

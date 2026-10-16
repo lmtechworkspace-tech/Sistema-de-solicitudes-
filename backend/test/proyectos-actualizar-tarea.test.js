@@ -154,11 +154,27 @@ test('validaciones: día futuro, horas fuera de rango, avance fuera de rango, na
   assert.equal(filasBitacora(db, tarea.actividad_id).filter((b) => b.tipo !== 'CREADA').length, 0, 'ningún intento inválido escribió');
 });
 
-test('permisos: el líder registra el día pero no cambia el avance de una tarea ajena; un externo no puede nada', () => {
+// Decisión del dueño 16-10-2026: el equipo del proyecto (líder, integrantes,
+// colaboradores; no observadores) puede cambiar el estado de cualquier tarea.
+test('permisos: el equipo del proyecto cambia el estado de una tarea ajena; observador y externo no', () => {
   const { db, proyecto, tarea } = armar();
   const base = { proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id };
   assert.equal(Proyectos.actualizarTarea(db, Object.assign({ horas: 1 }, base), CTX_LEO).ok, true);
-  assert.equal(Proyectos.actualizarTarea(db, Object.assign({ accion: 'avance', avance_pct: 10 }, base), CTX_LEO)._forbidden, true);
+  const lider = Proyectos.actualizarTarea(db, Object.assign({ accion: 'avance', avance_pct: 10 }, base), CTX_LEO);
+  assert.equal(lider.ok, true, JSON.stringify(lider));
+  assert.equal(Number(tareaActual(db, tarea.actividad_id).avance_pct), 10);
+
+  const CTX_VALE = { email: 'vale@rld.cl', nombre: 'Vale Colaboradora', rol: 'DEV' };
+  Proyectos.gestionarIntegrante(db, { proyecto_id: proyecto.proyecto_id, usuario_email: 'vale@rld.cl', rol_proyecto: 'COLABORADOR' }, CTX_LEO);
+  const vale = Proyectos.actualizarTarea(db, Object.assign({ accion: 'listo' }, base), CTX_VALE);
+  assert.equal(vale.ok, true, JSON.stringify(vale));
+  assert.equal(tareaActual(db, tarea.actividad_id).estado, 'TERMINADA');
+  const entrega = filasBitacora(db, tarea.actividad_id).find((b) => b.tipo === 'ENTREGA');
+  assert.equal(entrega.autor_email, 'vale@rld.cl', 'la bitácora dice quién la cerró');
+
+  Proyectos.gestionarIntegrante(db, { proyecto_id: proyecto.proyecto_id, usuario_email: 'obs@rld.cl', rol_proyecto: 'OBSERVADOR' }, CTX_LEO);
+  const CTX_OBS = { email: 'obs@rld.cl', nombre: 'Obs', rol: 'DEV' };
+  assert.equal(Proyectos.actualizarTarea(db, Object.assign({ horas: 1 }, base), CTX_OBS)._forbidden, true);
   assert.equal(Proyectos.actualizarTarea(db, Object.assign({ horas: 1 }, base), CTX_OTRO)._forbidden, true);
 });
 

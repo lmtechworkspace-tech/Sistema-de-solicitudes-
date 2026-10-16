@@ -31,6 +31,52 @@
     return (a.colaboradores || []).some(function (c) { return String(c.email || '').toLowerCase() === yo; });
   }
 
+  // Decisión del dueño (16-10-2026): en un proyecto, el equipo (líder,
+  // integrantes, colaboradores; no observadores) cambia el estado de
+  // cualquier tarea. Mismo criterio que Proyectos.esEquipoProyecto_.
+  function esEquipo(ctx) {
+    if (!ctx || !ctx.proyecto) return false;
+    if (PY.miRol() === 'ADM') return true;
+    return ['LIDER', 'INTEGRANTE', 'COLABORADOR'].indexOf((ctx.detalle && ctx.detalle.rol_actual) || '') !== -1;
+  }
+  function puedeEstado(ctx, a) { return trabajaLa(a) || esEquipo(ctx); }
+  function soyResponsable(a) { return String(a.responsable_email || '').toLowerCase() === PY.miEmail(); }
+  // Quién puede recibir una tarea: integrantes activos que no son observadores.
+  function quienesReciben(ctx) {
+    return (ctx.detalle.integrantes || []).filter(function (i) { return i.rol_proyecto !== 'OBSERVADOR'; })
+      .map(function (i) { return PY.persona(i.usuario_email, i.usuario_nombre); });
+  }
+  // Colaboradores de la tarea: casillas con el equipo (sin quien es responsable).
+  function campoColaboradores(ctx, a) {
+    var resp = String((a && a.responsable_email) || '').toLowerCase();
+    var marcados = ((a && a.colaboradores) || []).map(function (c) { return String(c.email || '').toLowerCase(); });
+    var opciones = quienesReciben(ctx);
+    if (opciones.length < 2) return '';
+    return '<fieldset class="sx2-py-deps js-py2p-colabs"><legend>Colaboran</legend>' +
+      '<div class="sx2-py-deps__lista">' + opciones.map(function (p) {
+        var e = String(p.email).toLowerCase();
+        return '<label class="sx2-py-deps__op"' + (e === resp ? ' hidden' : '') + '><input type="checkbox" name="colaboradores" value="' + U.esc(e) + '"' + (marcados.indexOf(e) !== -1 ? ' checked' : '') + '>' +
+          '<span class="sx2-cortar">' + U.esc(p.nombre + (p.cargo ? ' — ' + p.cargo : '')) + '</span></label>';
+      }).join('') + '</div>' +
+      '<p class="sx2-campo__ayuda">Quienes colaboran ven la tarea en su Mi trabajo y pueden actualizarla.</p>' +
+    '</fieldset>';
+  }
+  function colaboradoresMarcados(form) {
+    return Array.prototype.filter.call(form.querySelectorAll('input[name="colaboradores"]:checked'), function (x) { return !x.closest('label').hidden; })
+      .map(function (x) { return x.value; });
+  }
+  // Al cambiar el responsable, esa persona no puede figurar también como colaboradora.
+  function sincronizarColaboradores(form) {
+    var sel = form.querySelector('[name="responsable_email"]');
+    if (!sel) return;
+    var resp = String(sel.value || '').toLowerCase();
+    form.querySelectorAll('input[name="colaboradores"]').forEach(function (x) {
+      var l = x.closest('label');
+      l.hidden = x.value === resp;
+      if (l.hidden) x.checked = false;
+    });
+  }
+
   function buscar(ctx, id) { return ctx.tareas.filter(function (a) { return a.actividad_id === id; })[0]; }
 
   // --- Pestañas -------------------------------------------------------------------
@@ -145,7 +191,8 @@
   }
 
   function formActualizar(ctx, a, opts) {
-    var puedeAvance = trabajaLa(a) && !PY.esTerminal(a);
+    var puedeAvance = puedeEstado(ctx, a) && !PY.esTerminal(a);
+    var porEquipo = puedeAvance && !trabajaLa(a);
     var hoy = PY.hoyClave();
     var acciones = ACCIONES.filter(function (x) {
       if (x.id === 'desbloqueo') return a.estado === 'BLOQUEADA';
@@ -154,6 +201,7 @@
     });
     var avanceActual = Number(a.avance_pct) || 0;
     return '<form class="sx2-form js-py2p-form-act" novalidate>' +
+      (porEquipo ? '<div class="sx2-py-aviso sx2-tono-info">' + U.ico('equipo', 16) + '<span>La tarea está a nombre de <strong>' + U.esc(PY.persona(a.responsable_email, a.responsable_nombre).nombre) + '</strong>. Como parte del equipo puedes actualizarla; queda registrado que fuiste tú.</span></div>' : '') +
       (puedeAvance
         ? '<div class="sx2-campo"><span class="sx2-campo__et">¿Qué pasó con la tarea?</span><div class="sx2-chips">' +
             acciones.map(function (x) { return U.chip({ texto: x.texto, icono: x.icono, tono: x.tono, clase: 'js-py2p-accion', datos: { accion: x.id } }); }).join('') +
@@ -197,16 +245,24 @@
   }
 
   function formEditar(ctx, a) {
-    var integrantes = (ctx.detalle.integrantes || []).map(function (i) { return PY.persona(i.usuario_email, i.usuario_nombre); });
+    var integrantes = quienesReciben(ctx);
+    // El responsable actual siempre aparece, aunque hoy sea observador o ya no esté.
+    if (a.responsable_email && !integrantes.some(function (p) { return String(p.email).toLowerCase() === String(a.responsable_email).toLowerCase(); })) {
+      integrantes.unshift(PY.persona(a.responsable_email, a.responsable_nombre));
+    }
+    var reasigna = !!(ctx.detalle.puede_gestionar || soyResponsable(a));
     var comp = a.fecha_compromiso ? String(a.fecha_compromiso).slice(0, 10) : '';
     var p0 = PY.planPorId(ctx)[a.actividad_id] || {};
     function fInput(v) { return v ? String(v).slice(0, 10) : ''; }
     return '<form class="sx2-form js-py2p-form-edit" novalidate>' +
       PY.campo('Título', '<input class="sx2-input" name="titulo" maxlength="160" value="' + U.esc(a.titulo) + '">') +
       PY.campo('Descripción', '<textarea class="sx2-input" name="descripcion" maxlength="2000">' + U.esc(a.descripcion || '') + '</textarea>') +
-      PY.campo('Responsable', '<select class="sx2-select" name="responsable_email">' + integrantes.map(function (p) {
+      PY.campo('Responsable', '<select class="sx2-select" name="responsable_email"' + (reasigna ? '' : ' disabled') + '>' + integrantes.map(function (p) {
         return '<option value="' + U.esc(p.email) + '"' + (String(p.email).toLowerCase() === String(a.responsable_email || '').toLowerCase() ? ' selected' : '') + '>' + U.esc(p.nombre + (p.cargo ? ' — ' + p.cargo : '')) + '</option>';
-      }).join('') + '</select>', 'Reasignar reinicia la confirmación: la nueva persona debe aceptar el compromiso.') +
+      }).join('') + '</select>', reasigna
+        ? 'Pasarla a otra persona conserva su estado, avance y fecha; queda registrado.'
+        : 'Solo el líder o la persona responsable pueden pasarla a otra persona.') +
+      campoColaboradores(ctx, a) +
       '<div class="sx2-form__fila">' +
         PY.campo('Fecha comprometida', '<input class="sx2-input" type="date" name="fecha_compromiso" value="' + comp + '">') +
         PY.campo('Prioridad', '<select class="sx2-select" name="prioridad">' + ['P1', 'P2', 'P3', 'P4'].map(function (x) {
@@ -244,7 +300,11 @@
     var pestana = 'detalle';
     var modo = opts.actualizar ? 'actualizar' : 'ver';
     var puedeGestionar = !!(ctx.detalle && ctx.detalle.puede_gestionar);
-    var puedeActualizar = trabajaLa(a) || puedeGestionar;
+    var puedeActualizar = puedeEstado(ctx, a) || puedeGestionar;
+    // Tarea entregada que espera revisión: la aprueba o devuelve el líder,
+    // el supervisor o un administrador.
+    var revisa = a.estado === 'EN_REVISION' && (puedeGestionar || PY.miRol() === 'ADM' ||
+      String(a.supervisor_email || '').toLowerCase() === PY.miEmail());
     // Compromiso personal (sin proyecto): no hay edición de proyecto; se
     // reprograma o cancela con las acciones del módulo Actividades.
     var personal = !ctx.proyecto;
@@ -273,7 +333,9 @@
       pie.innerHTML =
         (personal && abierta && trabajaLa(a) ? U.boton({ texto: 'Reprogramar', icono: 'calendario', clase: 'js-py2p-reprogramar' }) + U.boton({ soloIcono: true, icono: 'basura', variante: 'fantasma', titulo: 'Cancelar tarea', clase: 'js-py2p-cancelar' }) : '') +
         (puedeEditar ? U.boton({ texto: 'Editar', icono: 'editar', clase: 'js-py2p-editar' }) : '') +
-        (puedeActualizar ? U.boton({ texto: 'Actualizar tarea', icono: 'tendencia', variante: 'primario', clase: 'js-py2p-actualizar' }) : '');
+        (revisa
+          ? U.boton({ texto: 'Devolver', icono: 'izquierda', clase: 'js-py2p-devolver' }) + U.boton({ texto: 'Aprobar', icono: 'check', variante: 'primario', clase: 'js-py2p-aprobar' })
+          : (puedeActualizar ? U.boton({ texto: 'Actualizar tarea', icono: 'tendencia', variante: 'primario', clase: 'js-py2p-actualizar' }) : ''));
       pie.hidden = !pie.innerHTML;
     }
     function pintarActualizar() {
@@ -296,6 +358,9 @@
       pie.hidden = false;
       pie.innerHTML = U.boton({ texto: 'Volver', icono: 'izquierda', clase: 'js-py2p-volver' }) +
         U.boton({ texto: 'Guardar cambios', icono: 'check', variante: 'primario', clase: 'js-py2p-guardar-edit' });
+      var formE = d.el.querySelector('.js-py2p-form-edit');
+      var selResp = formE.querySelector('[name="responsable_email"]');
+      if (selResp) selResp.addEventListener('change', function () { sincronizarColaboradores(formE); });
       var fecha = d.el.querySelector('[name="fecha_compromiso"]');
       var original = fecha.value;
       fecha.addEventListener('input', function () { d.el.querySelector('.js-py2p-motivo-reprog').hidden = !original || fecha.value === original; });
@@ -336,7 +401,13 @@
         if (v !== String(a[k] || '')) cambios[k] = v;
       });
       if (!cambios.titulo && cambios.titulo !== undefined) { error('El título no puede quedar vacío.'); return; }
-      if (form.responsable_email.value.toLowerCase() !== String(a.responsable_email || '').toLowerCase()) cambios.responsable_email = form.responsable_email.value;
+      if (!form.responsable_email.disabled && form.responsable_email.value.toLowerCase() !== String(a.responsable_email || '').toLowerCase()) cambios.responsable_email = form.responsable_email.value;
+      if (form.querySelector('.js-py2p-colabs')) {
+        var colabs = colaboradoresMarcados(form).sort().join(',');
+        var colabsAntes = (a.colaboradores || []).map(function (c) { return String(c.email || '').toLowerCase(); })
+          .filter(function (e) { return e !== String(a.responsable_email || '').toLowerCase(); }).sort().join(',');
+        if (colabs !== colabsAntes || cambios.responsable_email) cambios.colaboradores_emails = JSON.stringify(colaboradoresMarcados(form));
+      }
       var deps = dependenciasMarcadas(form).sort().join(','), depsAntes = idsDependencias(a).sort().join(',');
       if (form.querySelector('.sx2-py-deps') && deps !== depsAntes) cambios.depende_de = deps;
       var fechaNueva = form.fecha_compromiso.value;
@@ -383,6 +454,29 @@
       if (t.closest('.js-py2p-reprogramar')) { abrirReprogramarPersonal(a, alGuardar); return; }
       if (t.closest('.js-py2p-cancelar')) { abrirCancelarPersonal(a, alGuardar); return; }
       if (t.closest('.js-py2p-editar')) { pintarEditar(); return; }
+      var apr = t.closest('.js-py2p-aprobar');
+      if (apr) {
+        apr.disabled = true;
+        PY.api('validarActividad', { actividad_id: a.actividad_id, aprobar: true }).then(function (r) {
+          apr.disabled = false;
+          if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo aprobar.', 'error'); return; }
+          d.cerrar();
+          PY.aviso('Tarea aprobada y terminada.', 'exito');
+          alGuardar();
+        });
+        return;
+      }
+      if (t.closest('.js-py2p-devolver')) {
+        PY.formulario({
+          titulo: 'Devolver tarea', boton: 'Devolver',
+          subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(a.titulo) + '</span>',
+          campos: PY.campo('¿Qué falta?', '<textarea class="sx2-input" name="motivo" maxlength="500" placeholder="Quien la entregó verá este comentario."></textarea>'),
+          preparar: function (x) { return x.motivo ? { actividad_id: a.actividad_id, aprobar: false, motivo: x.motivo } : 'Cuenta qué falta.'; },
+          accion: 'validarActividad', aviso: 'Tarea devuelta.',
+          listo: function () { d.cerrar(true); alGuardar(); }
+        });
+        return;
+      }
       if (t.closest('.js-py2p-volver')) { pintarVer(); return; }
       var ac = t.closest('.js-py2p-accion');
       if (ac) {
@@ -516,6 +610,10 @@
     return !!(ctx && ctx.proyecto && a && !PY.esTerminal(a) && (trabajaLa(a) || (ctx.detalle && ctx.detalle.puede_gestionar)));
   };
   PY.dependenciasMarcadas = dependenciasMarcadas;
+  PY.quienesReciben = quienesReciben;
+  PY.campoColaboradores = campoColaboradores;
+  PY.colaboradoresMarcados = colaboradoresMarcados;
+  PY.sincronizarColaboradores = sincronizarColaboradores;
   PY.abrirTareaDeProyecto = abrirTareaDeProyecto;
   PY.abrirTareaPersonal = abrirTareaPersonal;
 })();

@@ -801,3 +801,13 @@ body:has(.sx2-py-gantt-card--completa) .sx2-cambio-seccion { animation: none; }
 .sx2-py-leyenda-gantt i.sx2-py-leyenda-gantt__real--tarde { background: var(--sx-critico); }
 .sx2-py-leyenda-gantt i.sx2-py-leyenda-gantt__resumen { height: 6px; border-radius: 2px; background: color-mix(in srgb, var(--sx-texto) 45%, transparent); }
 .sx2-py-leyenda-gantt__sep { width: 1px; height: 14px; background: var(--sx-borde); }
+/* Selección múltiple en Trabajo + "Pasar a…" (auditoría 16-10-2026). */
+.sx2-py-seleccion { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border: 1px dashed var(--sx-borde); border-radius: var(--sx-radio); font-size: .8125rem; }
+.sx2-py-seleccion .sx2-tenue { display: inline-flex; align-items: center; gap: 6px; }
+.sx2-py-seleccion--activa { position: sticky; top: 8px; z-index: 3; border-style: solid; border-color: var(--sx-primario); background: var(--sx-primario-suave); box-shadow: var(--sx-sombra-2); }
+.sx2-py-col-sel { width: 36px; text-align: center; }
+.sx2-py-col-sel input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--sx-primario); }
+.sx2-py-fila--sel > td { background: var(--sx-primario-suave); }
+.sx2-py-pasar-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 220px; overflow-y: auto; }
+.sx2-py-pasar-lista li { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding: 6px 8px; border-radius: 6px; background: var(--sx-superficie-2); font-size: .8125rem; }
+.sx2-py-pasar-lista small { margin-left: auto; flex: none; }

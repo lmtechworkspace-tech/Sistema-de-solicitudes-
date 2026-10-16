@@ -448,10 +448,12 @@ function confirmar(db, data, contexto) {
   return actualizado;
 }
 
-function checkin(db, data, contexto) {
+// opciones.autorizado: quien llama ya verificó un permiso más amplio (el
+// equipo de un proyecto, ver Proyectos.actualizarTarea). Nunca viene del cliente.
+function checkin(db, data, contexto, opciones) {
   const actividad = buscarActividad_(db, data.actividad_id);
   if (!actividad) return errorValidacion_('actividad_id', 'Actividad no encontrada.');
-  if (!trabajaLaActividad_(actividad, contexto.email)) {
+  if (!(opciones && opciones.autorizado === true) && !trabajaLaActividad_(actividad, contexto.email)) {
     return { _forbidden: true, message: 'Solo el responsable o un colaborador pueden actualizar esta actividad.' };
   }
   if (esEstadoTerminal_(actividad.estado)) return errorValidacion_('actividad_id', 'Esta actividad ya esta cerrada.');
@@ -539,7 +541,10 @@ function validar(db, data, contexto) {
   const actividad = buscarActividad_(db, data.actividad_id);
   if (!actividad) return errorValidacion_('actividad_id', 'Actividad no encontrada.');
   if (actividad.estado !== ACTIVIDADES_ESTADOS.EN_REVISION) return errorValidacion_('actividad_id', 'Esta actividad no esta en revision.');
-  if (!puedeSupervisar_(actividad, contexto)) return { _forbidden: true, message: 'Solo el supervisor de esta actividad puede validarla.' };
+  // En una tarea de proyecto, también el líder (el supervisor queda fijado al
+  // crearla y puede haber cambiado el liderazgo).
+  const liderDelProyecto = !!actividad.proyecto_id && rolEnProyecto_(db, actividad.proyecto_id, contexto) === 'LIDER';
+  if (!puedeSupervisar_(actividad, contexto) && !liderDelProyecto) return { _forbidden: true, message: 'Solo el supervisor de esta actividad puede validarla.' };
   const ahora = new Date();
   if (data.aprobar === false) {
     const actualizado = reescribirActividad_(db, actividad.actividad_id, {
