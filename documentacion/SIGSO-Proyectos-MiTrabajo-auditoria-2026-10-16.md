@@ -157,3 +157,22 @@ para lo frecuente; el detalle sigue ahí, pero no estorba.
 - Corrección: a quien solo colabora ya no se le pide "Confirmar fecha" (el
   backend solo deja confirmar al responsable).
 - Probado en base DEMO local (escritorio y celular 375 px).
+
+## 8. Etapa 3 — hecha (sin commit)
+- **"Mis tareas"** en Trabajo (responsable o colaborador). Quien no lidera entra
+  con este filtro puesto si tiene tareas abiertas en el proyecto; llegar desde
+  el Resumen, Equipo o un hito lo quita.
+- **Tabla compacta por defecto:** Tarea, Responsable, Estado, Vence, Avance. El
+  chip **"Columnas de control"** muestra prioridad, plan/real y desviación (se
+  recuerda en el navegador). "Vence" usa la fecha propuesta si falta confirmarla
+  ("prop.") y se pinta en rojo si venció.
+- **Estado con el mismo vocabulario que Mi trabajo:** texto del estado, punto
+  del color del plazo (el plazo queda en el tooltip).
+- **Kanban arrastrable:** a "En curso" (empezar o destrabar), a "Terminadas"
+  (con confirmación), a "Bloqueadas" (abre el panel pidiendo el motivo).
+  "Por hacer" y "En revisión" no aceptan tarjetas (se explica con un aviso).
+  Solo se arrastra lo que la persona puede cambiar.
+- **Panel de tarea:** arriba Responsable, Estado (con cuándo vence), Avance y
+  Descripción; "Control del plan" (fechas plan/real, desviación, datos) queda
+  plegado y recuerda si la persona lo dejó abierto.
+- Probado en base DEMO local como colaboradora.

@@ -12,8 +12,17 @@
   var PY = window.PYv2;
   var U = UIv2;
 
-  var f = { estado: 'todas', responsable: '', hito: '', texto: '', modo: 'tabla', zoom: 'todo', orden: { campo: 'fin', dir: 1 } };
+  // soloMias: "Mis tareas" (responsable o colaborador). control: columnas de
+  // plan/real/desviación en la tabla (Etapa 3 de la auditoría 16-10-2026: la
+  // tabla parte compacta y el control se pide).
+  var f = { estado: 'todas', responsable: '', hito: '', texto: '', soloMias: false, control: false, modo: 'tabla', zoom: 'todo', orden: { campo: 'fin', dir: 1 } };
   try { f.modo = localStorage.getItem('sigso_py2_modo_trabajo') || 'tabla'; } catch (e) { /* sin storage */ }
+  try { f.control = localStorage.getItem('sigso_py2_trabajo_control') === '1'; } catch (e) { /* sin storage */ }
+  function esMia(a) {
+    var yo = PY.miEmail();
+    if (String(a.responsable_email || '').toLowerCase() === yo) return true;
+    return (a.colaboradores || []).some(function (c) { return String(c.email || '').toLowerCase() === yo; });
+  }
 
   // Carta Gantt (rediseño 2026-09-28): zoom de "Semana" (días) a "Todo" (el
   // proyecto entero en el ancho disponible), densidad, dependencias y pantalla
@@ -64,6 +73,8 @@
     if (id === proyectoVisto_) return;
     proyectoVisto_ = id;
     f.estado = 'todas'; f.responsable = ''; f.hito = ''; f.texto = '';
+    // Quien no lidera entra viendo lo suyo (si tiene algo aquí); un clic muestra todo.
+    f.soloMias = !ctx.detalle.puede_gestionar && ctx.tareas.some(function (a) { return esMia(a) && !PY.esTerminal(a); });
     sel = {};
   }
 
@@ -86,6 +97,7 @@
     return ctx.tareas.filter(function (a) {
       if (a.estado === 'CANCELADA') return false;
       if (!ignorarEstado && !coincide(a, plan, f.estado)) return false;
+      if (f.soloMias && !esMia(a)) return false;
       if (f.responsable && String(a.responsable_email || '').toLowerCase() !== f.responsable) return false;
       if (f.hito && (f.hito === '_' ? a.hito_id : a.hito_id !== f.hito)) return false;
       if (txt && (a.titulo + ' ' + (a.descripcion || '') + ' ' + PY.persona(a.responsable_email, a.responsable_nombre).nombre).toLowerCase().indexOf(txt) === -1) return false;
@@ -125,20 +137,61 @@
           U.boton({ texto: 'Nueva tarea', icono: 'nueva', variante: 'primario', clase: 'js-py2t-nueva' }) +
         '</div>' +
       '</div>' +
-      '<div class="sx2-chips">' + ESTADOS.map(function (e) {
+      '<div class="sx2-chips">' +
+        U.chip({ texto: 'Mis tareas', icono: 'persona', n: ctx.tareas.filter(function (a) { return esMia(a) && a.estado !== 'CANCELADA' && !PY.esTerminal(a); }).length,
+          activo: f.soloMias, clase: 'js-py2t-mias', titulo: f.soloMias ? 'Ver las tareas de todo el equipo' : 'Ver solo las tareas donde eres responsable o colaboras' }) +
+        '<span class="sx2-py-chips-sep" aria-hidden="true"></span>' +
+        ESTADOS.map(function (e) {
         return U.chip({ texto: e.texto, icono: e.icono, tono: e.tono, n: cuenta[e.id], activo: f.estado === e.id, clase: 'js-py2t-estado', datos: { estado: e.id } });
       }).join('') +
-      ((f.responsable || f.hito || f.texto || f.estado !== 'todas') ? '<button type="button" class="sx2-enlace js-py2t-limpiar">' + U.ico('equis', 13) + 'Limpiar filtros</button>' : '') +
+      ((f.responsable || f.hito || f.texto || f.soloMias || f.estado !== 'todas') ? '<button type="button" class="sx2-enlace js-py2t-limpiar">' + U.ico('equis', 13) + 'Limpiar filtros</button>' : '') +
+      (f.modo === 'tabla' ? '<span style="flex:1"></span>' + U.chip({ texto: 'Columnas de control', icono: 'tabla', activo: f.control, clase: 'js-py2t-control', titulo: 'Fechas de plan y reales y desviación de cada tarea' }) : '') +
       '</div>' +
     '</div>';
   }
 
   // --- Tabla ------------------------------------------------------------------------
+  // control: solo con "Columnas de control". textoCompacto: su nombre en la tabla compacta.
   var COLS = [
     { id: 'titulo', texto: 'Tarea' }, { id: 'resp', texto: 'Responsable' }, { id: 'estado', texto: 'Estado' },
-    { id: 'prio', texto: 'Prioridad' }, { id: 'ini', texto: 'Inicio plan', num: true }, { id: 'fin', texto: 'Fin plan', num: true },
-    { id: 'ireal', texto: 'Inicio real', num: true }, { id: 'real', texto: 'Fin real', num: true }, { id: 'avance', texto: 'Avance' }, { id: 'desv', texto: 'Desv. plazo', num: true }
+    { id: 'prio', texto: 'Prioridad', control: true }, { id: 'ini', texto: 'Inicio plan', num: true, control: true }, { id: 'fin', texto: 'Fin plan', textoCompacto: 'Vence', num: true },
+    { id: 'ireal', texto: 'Inicio real', num: true, control: true }, { id: 'real', texto: 'Fin real', num: true, control: true }, { id: 'avance', texto: 'Avance' }, { id: 'desv', texto: 'Desv. plazo', num: true, control: true }
   ];
+  // Estado en texto (qué se está haciendo) con el punto del color del plazo:
+  // el mismo vocabulario que Mi trabajo.
+  var ESTADO_TXT = { NO_INICIADA: 'Por empezar', EN_CURSO: 'En curso', BLOQUEADA: 'Bloqueada', EN_REVISION: 'En revisión', TERMINADA: 'Terminada', CANCELADA: 'Cancelada' };
+  function badgeEstado(a) {
+    return '<span title="' + U.esc(a.semaforo_etiqueta || '') + '">' + U.badge(ESTADO_TXT[a.estado] || a.estado, PY.tonoTarea(a)) + '</span>';
+  }
+  function celda(c, a, p, hitosPorId) {
+    var avance, desv, h;
+    switch (c.id) {
+      case 'titulo':
+        h = hitosPorId[a.hito_id];
+        return '<td class="sx2-py-celda-tarea"><strong class="sx2-cortar">' + U.esc(a.titulo) + '</strong>' +
+          (h || a.es_subtarea ? '<span class="sx2-tenue sx2-cortar">' + (a.es_subtarea ? U.ico('derecha', 11) + U.esc(a.padre_titulo || 'Subtarea') : U.ico('bandera', 11) + U.esc(h.nombre)) + '</span>' : '') + '</td>';
+      case 'resp': return '<td>' + U.persona(PY.persona(a.responsable_email, a.responsable_nombre)) + '</td>';
+      case 'estado': return '<td>' + badgeEstado(a) + '</td>';
+      case 'prio': return '<td>' + (a.prioridad ? U.badge(a.prioridad, PRIORIDAD_TONO[a.prioridad] || 'neutro', true) : '—') + '</td>';
+      case 'ini': return '<td class="sx2-num">' + PY.fecha(a.fecha_inicio_plan || p.plan_inicio || a.fecha_creacion) + '</td>';
+      case 'fin':
+        // Sin fecha confirmada, la propuesta (marcada como tal).
+        var fv = p.plan_fin || a.fecha_compromiso || a.fecha_propuesta;
+        var dd = PY.diasHasta(fv);
+        return '<td class="sx2-num' + (!f.control && dd !== null && dd < 0 && !PY.esTerminal(a) ? ' sx2-delta--mal' : '') + '"' +
+          (!a.fecha_compromiso && a.fecha_propuesta ? ' title="Fecha propuesta, falta que la persona la confirme"' : '') + '>' +
+          PY.fecha(fv) + (!a.fecha_compromiso && a.fecha_propuesta ? ' <small class="sx2-tenue">(prop.)</small>' : '') + '</td>';
+      case 'ireal': return '<td class="sx2-num">' + PY.fecha(a.fecha_inicio_real || p.fecha_inicio_real) + '</td>';
+      case 'real': return '<td class="sx2-num">' + PY.fecha(p.fecha_fin_real || a.fecha_terminada) + '</td>';
+      case 'avance':
+        avance = valorOrden(a, p, 'avance');
+        return '<td><div class="sx2-flex" style="gap:8px;min-width:110px"><span style="flex:1">' + U.barra(avance, PY.tonoTarea(a)) + '</span><span class="sx2-num" style="min-width:3.5ch">' + Math.round(avance) + '%</span></div></td>';
+      case 'desv':
+        desv = p.desviacion_dias;
+        return '<td class="sx2-num' + (desv > 0 ? ' sx2-delta--mal' : (desv < 0 ? ' sx2-delta--bien' : '')) + '">' + (desv === null || desv === undefined ? '—' : (desv > 0 ? '+' : '') + desv + ' d') + '</td>';
+    }
+    return '<td></td>';
+  }
   function valorOrden(a, p, campo) {
     switch (campo) {
       case 'titulo': return String(a.titulo).toLowerCase();
@@ -182,45 +235,39 @@
     });
     var marcables = ordenadas.filter(function (a) { return seleccionable(ctx, a); });
     var conSel = marcables.length > 0;
+    var cols = COLS.filter(function (c) { return f.control || !c.control; });
     var todas = conSel && marcables.every(function (a) { return sel[a.actividad_id]; });
     return barraSeleccion(ctx, ordenadas) +
       '<div class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:1"><div class="sx2-tabla-wrap"><table class="sx2-tabla sx2-py-tabla-trabajo"><thead><tr>' +
       (conSel ? '<th class="sx2-py-col-sel"><input type="checkbox" class="js-py2t-sel-todas" aria-label="Seleccionar todas las que puedes pasar"' + (todas ? ' checked' : '') + '></th>' : '') +
-      COLS.map(function (c) {
+      cols.map(function (c) {
         var sort = o.campo === c.id ? (o.dir === 1 ? 'ascending' : 'descending') : 'none';
-        return '<th class="js-py2t-orden' + (c.num ? ' sx2-num' : '') + '" data-campo="' + c.id + '" aria-sort="' + sort + '" tabindex="0">' + c.texto + '</th>';
+        return '<th class="js-py2t-orden' + (c.num ? ' sx2-num' : '') + '" data-campo="' + c.id + '" aria-sort="' + sort + '" tabindex="0">' + ((!f.control && c.textoCompacto) || c.texto) + '</th>';
       }).join('') +
     '</tr></thead><tbody>' +
     ordenadas.map(function (a) {
       var p = plan[a.actividad_id] || {};
-      var avance = valorOrden(a, p, 'avance');
-      var desv = p.desviacion_dias;
-      var h = hitosPorId[a.hito_id];
       return '<tr class="sx2-fila--clic' + (sel[a.actividad_id] ? ' sx2-py-fila--sel' : '') + '" data-py2-tarea="' + U.esc(a.actividad_id) + '" tabindex="0">' +
         (conSel ? '<td class="sx2-py-col-sel">' + (seleccionable(ctx, a)
           ? '<input type="checkbox" class="js-py2t-sel" data-id="' + U.esc(a.actividad_id) + '" aria-label="Seleccionar ' + U.esc(a.titulo) + '"' + (sel[a.actividad_id] ? ' checked' : '') + '>'
           : '') + '</td>' : '') +
-        '<td class="sx2-py-celda-tarea"><strong class="sx2-cortar">' + U.esc(a.titulo) + '</strong>' +
-          (h || a.es_subtarea ? '<span class="sx2-tenue sx2-cortar">' + (a.es_subtarea ? U.ico('derecha', 11) + U.esc(a.padre_titulo || 'Subtarea') : U.ico('bandera', 11) + U.esc(h.nombre)) + '</span>' : '') + '</td>' +
-        '<td>' + U.persona(PY.persona(a.responsable_email, a.responsable_nombre)) + '</td>' +
-        '<td>' + U.badge(a.semaforo_etiqueta || a.estado, PY.tonoTarea(a)) + '</td>' +
-        '<td>' + (a.prioridad ? U.badge(a.prioridad, PRIORIDAD_TONO[a.prioridad] || 'neutro', true) : '—') + '</td>' +
-        '<td class="sx2-num">' + PY.fecha(a.fecha_inicio_plan || p.plan_inicio || a.fecha_creacion) + '</td>' +
-        '<td class="sx2-num">' + PY.fecha(p.plan_fin || a.fecha_compromiso) + '</td>' +
-        '<td class="sx2-num">' + PY.fecha(a.fecha_inicio_real || p.fecha_inicio_real) + '</td>' +
-        '<td class="sx2-num">' + PY.fecha(p.fecha_fin_real || a.fecha_terminada) + '</td>' +
-        '<td><div class="sx2-flex" style="gap:8px;min-width:110px"><span style="flex:1">' + U.barra(avance, PY.tonoTarea(a)) + '</span><span class="sx2-num" style="min-width:3.5ch">' + Math.round(avance) + '%</span></div></td>' +
-        '<td class="sx2-num' + (desv > 0 ? ' sx2-delta--mal' : (desv < 0 ? ' sx2-delta--bien' : '')) + '">' + (desv === null || desv === undefined ? '—' : (desv > 0 ? '+' : '') + desv + ' d') + '</td>' +
+        cols.map(function (c) { return celda(c, a, p, hitosPorId); }).join('') +
       '</tr>';
     }).join('') +
     '</tbody></table></div></div>';
   }
 
   // --- Kanban -----------------------------------------------------------------------
+  // Arrastrar una tarjeta a otra columna cambia su estado (Etapa 3). Solo las
+  // columnas que una persona decide: "En curso", "Bloqueadas", "Terminadas".
+  // "Por hacer" y "En revisión" se llenan solas (crear / entregar con revisión).
+  function puedeMover(ctx, a) { return !PY.esTerminal(a) && a.estado !== 'EN_REVISION' && !!(PY.puedeEstado && PY.puedeEstado(ctx, a)); }
   function kanban(tareas, plan, ctx) {
     var hitosPorId = {};
     (ctx.detalle.hitos || []).forEach(function (h) { hitosPorId[h.hito_id] = h; });
-    return '<div class="sx2-py-kanban">' + COLUMNAS_KANBAN.map(function (col, ci) {
+    var algunoMovible = tareas.some(function (a) { return puedeMover(ctx, a); });
+    return (algunoMovible ? '<p class="sx2-tenue sx2-py-kanban__ayuda">' + U.ico('kanban', 14) + ' Arrastra una tarjeta a otra columna para cambiar su estado, o haz clic para ver el detalle.</p>' : '') +
+      '<div class="sx2-py-kanban">' + COLUMNAS_KANBAN.map(function (col, ci) {
       var propias = tareas.filter(function (a) { return a.estado === col.estado; })
         .sort(function (a, b) { return new Date(a.fecha_compromiso || '9999-12-31') - new Date(b.fecha_compromiso || '9999-12-31'); });
       return '<section class="sx2-py-kanban__col sx2-tono-' + col.tono + ' sx2-entra" style="--i:' + ci + '" data-estado="' + col.estado + '">' +
@@ -231,7 +278,7 @@
             var avance = valorOrden(a, p, 'avance');
             var d = PY.diasHasta(a.fecha_compromiso);
             var h = hitosPorId[a.hito_id];
-            return '<article class="sx2-py-kcard" data-py2-tarea="' + U.esc(a.actividad_id) + '" tabindex="0">' +
+            return '<article class="sx2-py-kcard' + (puedeMover(ctx, a) ? ' sx2-py-kcard--movible" draggable="true' : '') + '" data-py2-tarea="' + U.esc(a.actividad_id) + '" tabindex="0">' +
               '<div class="sx2-entre">' + U.badge(a.semaforo_etiqueta || a.estado, PY.tonoTarea(a)) +
                 (a.prioridad ? U.badge(a.prioridad, PRIORIDAD_TONO[a.prioridad] || 'neutro', true) : '') + '</div>' +
               '<h4 class="sx2-py-kcard__titulo">' + U.esc(a.titulo) + '</h4>' +
@@ -289,6 +336,69 @@
       SigsoGantt.leyenda({ lineaBase: hayBase && g.base }) +
     '</div>';
   }
+  // Qué significa soltar una tarea en cada columna.
+  function moverTarea(ctx, a, destino) {
+    if (!a || a.estado === destino) return;
+    var accion = null;
+    if (destino === 'EN_CURSO') accion = a.estado === 'BLOQUEADA' ? 'desbloqueo' : (a.estado === 'NO_INICIADA' ? 'avance' : null);
+    else if (destino === 'TERMINADA') accion = 'listo';
+    else if (destino === 'BLOQUEADA') {
+      // Un bloqueo necesita su motivo: se abre el panel con esa respuesta elegida.
+      PY.abrirTarea(a.actividad_id, { actualizar: true, accion: 'bloqueo' });
+      return;
+    }
+    if (!accion) {
+      PY.aviso(destino === 'NO_INICIADA' ? 'Una tarea ya empezada no vuelve a "Por hacer".' : 'Las tareas llegan a "En revisión" solas, al terminarlas si piden revisión.', 'info');
+      return;
+    }
+    var paso = accion === 'listo'
+      ? U.confirmar({ titulo: '¿Marcar como terminada?', texto: '"' + a.titulo + '" quedará terminada hoy.', boton: 'Sí, terminada' })
+      : Promise.resolve(true);
+    paso.then(function (si) {
+      if (!si) return;
+      PY.api('actualizarTareaProyecto', { proyecto_id: ctx.proyecto.proyecto_id, actividad_id: a.actividad_id, accion: accion }).then(function (r) {
+        if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo cambiar el estado.', 'error'); return; }
+        PY.aviso(accion === 'listo' ? '¡Tarea terminada!' : (accion === 'avance' ? 'Tarea en curso.' : 'Tarea destrabada.'), 'exito');
+        PY.recargarProyecto();
+      });
+    });
+  }
+  function engancharArrastre(raiz, ctx) {
+    var arrastrada = null;
+    raiz.addEventListener('dragstart', function (ev) {
+      var c = ev.target.closest && ev.target.closest('.sx2-py-kcard--movible');
+      if (!c) return;
+      arrastrada = c.getAttribute('data-py2-tarea');
+      ev.dataTransfer.effectAllowed = 'move';
+      try { ev.dataTransfer.setData('text/plain', arrastrada); } catch (e) { /* algunos navegadores */ }
+      c.classList.add('sx2-py-kcard--arrastrando');
+    });
+    raiz.addEventListener('dragend', function (ev) {
+      var c = ev.target.closest && ev.target.closest('.sx2-py-kcard');
+      if (c) c.classList.remove('sx2-py-kcard--arrastrando');
+      raiz.querySelectorAll('.sx2-py-kanban__col--sobre').forEach(function (x) { x.classList.remove('sx2-py-kanban__col--sobre'); });
+      arrastrada = null;
+    });
+    raiz.addEventListener('dragover', function (ev) {
+      var col = arrastrada && ev.target.closest('.sx2-py-kanban__col');
+      if (!col) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      raiz.querySelectorAll('.sx2-py-kanban__col--sobre').forEach(function (x) { if (x !== col) x.classList.remove('sx2-py-kanban__col--sobre'); });
+      col.classList.add('sx2-py-kanban__col--sobre');
+    });
+    raiz.addEventListener('drop', function (ev) {
+      var col = arrastrada && ev.target.closest('.sx2-py-kanban__col');
+      if (!col) return;
+      ev.preventDefault();
+      var id = arrastrada;
+      arrastrada = null;
+      col.classList.remove('sx2-py-kanban__col--sobre');
+      raiz.querySelectorAll('.sx2-py-kcard--arrastrando').forEach(function (x) { x.classList.remove('sx2-py-kcard--arrastrando'); });
+      moverTarea(ctx, ctx.tareas.filter(function (t) { return t.actividad_id === id; })[0], col.getAttribute('data-estado'));
+    });
+  }
+
   var ORDEN_ZOOM = ['semana', 'mes', 'trimestre', 'anio', 'todo'];
   // Esc sale de la pantalla completa del Gantt.
   document.addEventListener('keydown', function (ev) {
@@ -314,10 +424,15 @@
   function pintar(ctx) {
     reiniciarSiCambioProyecto(ctx);
     // Filtro/modo pedidos desde el Resumen (clic en un KPI o en "Ver…").
+    // Llegar desde el Resumen, Equipo o un hito es "ver lo del proyecto": sin "Mis tareas".
     if (PY.filtroTrabajo !== undefined && PY.filtroTrabajo !== null) {
       f.estado = PY.filtroTrabajo || 'todas';
+      f.soloMias = false;
       PY.filtroTrabajo = null;
     }
+    if (PY.responsableTrabajo || PY.hitoTrabajo) f.soloMias = false;
+    // Puente desde Mi trabajo: entrar directo a "Mis tareas" de este proyecto.
+    if (PY.misTareasTrabajo) { f.soloMias = true; f.estado = 'todas'; f.responsable = ''; f.hito = ''; PY.misTareasTrabajo = null; }
     if (PY.modoTrabajo) { f.modo = PY.modoTrabajo; PY.modoTrabajo = null; }
     if (PY.responsableTrabajo) { f.responsable = PY.responsableTrabajo; f.hito = ''; PY.responsableTrabajo = null; }
     if (PY.hitoTrabajo) { f.hito = PY.hitoTrabajo; f.responsable = ''; PY.hitoTrabajo = null; }
@@ -335,6 +450,7 @@
 
   var tBusqueda_ = null;
   function alMontar(raiz, ctx) {
+    if (f.modo === 'kanban') engancharArrastre(raiz, ctx);
     if (f.modo === 'gantt') {
       if (f.zoom !== 'todo') PY.ganttCentrarEnHoy(raiz);
       PY.ganttMontar(raiz);
@@ -371,6 +487,15 @@
       // Un clic al lado de la casilla tampoco abre la tarea.
       if (t.closest('.sx2-py-col-sel')) return;
       if (t.closest('.js-py2t-sel-limpiar')) { sel = {}; PY.pintar({ sinAnimacion: true }); return; }
+      if (t.closest('.js-py2t-mias')) { f.soloMias = !f.soloMias; PY.pintar({ sinAnimacion: true }); return; }
+      if (t.closest('.js-py2t-control')) {
+        f.control = !f.control;
+        try { localStorage.setItem('sigso_py2_trabajo_control', f.control ? '1' : '0'); } catch (er) { /* sin storage */ }
+        // Ordenada por una columna que se oculta: vuelve a "Vence".
+        if (!f.control && (COLS.filter(function (c) { return c.id === f.orden.campo; })[0] || {}).control) f.orden = { campo: 'fin', dir: 1 };
+        PY.pintar({ sinAnimacion: true });
+        return;
+      }
       if (t.closest('.js-py2t-pasar')) { abrirPasarA(ctx); return; }
       var e = t.closest('.js-py2t-estado');
       if (e) { f.estado = e.getAttribute('data-estado'); PY.pintar({ sinAnimacion: true }); return; }
@@ -400,7 +525,7 @@
       if (t.closest('.js-py2t-completa')) { g.completa = !g.completa; repintarGantt(); return; }
       var dg = t.closest('.js-py2t-gantt-pdf, .js-py2t-gantt-xlsx');
       if (dg) { descargarGantt(ctx, dg.classList.contains('js-py2t-gantt-pdf') ? 'pdf' : 'xlsx', dg); return; }
-      if (t.closest('.js-py2t-limpiar')) { f.estado = 'todas'; f.responsable = ''; f.hito = ''; f.texto = ''; PY.pintar({ sinAnimacion: true }); return; }
+      if (t.closest('.js-py2t-limpiar')) { f.estado = 'todas'; f.responsable = ''; f.hito = ''; f.texto = ''; f.soloMias = false; PY.pintar({ sinAnimacion: true }); return; }
       if (t.closest('.js-py2t-nueva')) { abrirNuevaTarea(ctx); return; }
       var o = t.closest('.js-py2t-orden');
       if (o) { ordenarPor(o.getAttribute('data-campo')); return; }

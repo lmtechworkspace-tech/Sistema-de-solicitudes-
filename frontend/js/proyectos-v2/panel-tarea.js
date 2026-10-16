@@ -120,7 +120,16 @@
       var d = Math.round((new Date(String(real).slice(0, 10)) - new Date(String(plan).slice(0, 10))) / 86400000);
       return '<td class="sx2-num ' + (d > 0 ? 'sx2-delta--mal' : (d < 0 ? 'sx2-delta--bien' : '')) + '">' + (d === 0 ? 'en fecha' : (d > 0 ? '+' : '') + d + ' d') + '</td>';
     }
-    s += seccion('Fechas', '<div class="sx2-tabla-wrap"><table class="sx2-tabla sx2-py-tabla-fechas"><thead><tr><th></th><th>Plan</th><th>Real</th><th class="sx2-num">Desfase</th></tr></thead><tbody>' +
+    // Etapa 3 (16-10-2026): arriba lo que sirve para actuar (quién, estado,
+    // cuándo vence, avance, descripción); el control del plan queda plegado.
+    var vence = a.fecha_compromiso || a.fecha_propuesta, ddv = PY.diasHasta(vence);
+    s += seccion('Estado', '<div class="sx2-flex" style="flex-wrap:wrap;gap:8px">' +
+      U.badge({ NO_INICIADA: 'Por empezar', EN_CURSO: 'En curso', BLOQUEADA: 'Bloqueada', EN_REVISION: 'En revisión', TERMINADA: 'Terminada', CANCELADA: 'Cancelada' }[a.estado] || a.estado, PY.tonoTarea(a)) +
+      (vence && !PY.esTerminal(a) ? '<span class="' + (ddv !== null && ddv < 0 ? 'sx2-delta--mal' : 'sx2-tenue') + '" style="font-size:.8125rem">' + U.ico('calendario', 13) + ' ' +
+        (ddv === null ? '' : (ddv < 0 ? 'Venció hace ' + (-ddv) + (ddv === -1 ? ' día' : ' días') : (ddv === 0 ? 'Vence hoy' : (ddv === 1 ? 'Vence mañana' : 'Vence el ' + PY.fecha(vence, true))))) +
+        (!a.confirmada_en && a.fecha_propuesta ? ' · fecha por confirmar' : '') + '</span>' : '') +
+    '</div>');
+    var ctl = seccion('Fechas', '<div class="sx2-tabla-wrap"><table class="sx2-tabla sx2-py-tabla-fechas"><thead><tr><th></th><th>Plan</th><th>Real</th><th class="sx2-num">Desfase</th></tr></thead><tbody>' +
       '<tr><th scope="row">Inicio</th><td>' + PY.fecha(iniPlan, true) + '</td><td>' + (iniReal ? PY.fecha(iniReal, true) : '<span class="sx2-tenue">Sin iniciar</span>') + '</td>' + desfase(iniReal, iniPlan) + '</tr>' +
       '<tr><th scope="row">Término</th><td>' + PY.fecha(finPlan, true) + '</td><td>' + (finReal ? PY.fecha(finReal, true) : '<span class="sx2-tenue">' + (a.estado === 'NO_INICIADA' ? '—' : 'en curso') + '</span>') + '</td>' + desfase(finReal, finPlan) + '</tr>' +
       '</tbody></table></div>' +
@@ -132,13 +141,15 @@
       (a.subtareas_total ? '<span class="sx2-tenue" style="font-size:.8125rem">' + a.subtareas_terminadas + ' de ' + a.subtareas_total + ' subtareas terminadas</span>' : '') +
     '</div>');
 
-    s += seccion('Desviación', '<div class="sx2-py-desv">' +
+    if (a.descripcion) s += seccion('Descripción', '<p class="sx2-py-descripcion">' + U.esc(a.descripcion) + '</p>');
+
+    ctl += seccion('Desviación', '<div class="sx2-py-desv">' +
       desvCaja('Plazo', dd === null || dd === undefined ? '—' : (dd > 0 ? '+' : '') + dd + ' días', dd > 0 ? 'critico' : (dd < 0 ? 'ok' : 'neutro')) +
       desvCaja('Avance', dp === null || dp === undefined ? '—' : (dp > 0 ? '+' : '') + dp + ' pp', dp < 0 ? 'critico' : (dp > 0 ? 'ok' : 'neutro')) +
     '</div>');
 
-    s += seccion('Datos', '<dl class="sx2-dato">' +
-      '<dt>Estado</dt><dd>' + U.badge(a.semaforo_etiqueta || a.estado, PY.tonoTarea(a)) + '</dd>' +
+    ctl += seccion('Datos', '<dl class="sx2-dato">' +
+      '<dt>Plazo</dt><dd>' + U.badge(a.semaforo_etiqueta || a.estado, PY.tonoTarea(a)) + '</dd>' +
       (ctx.proyecto
         ? '<dt>Hito</dt><dd>' + (hito ? U.esc(hito.nombre) : '—') + '</dd>'
         : '<dt>Tipo</dt><dd>Compromiso personal' + (a.origen === 'EMERGENTE' ? ' · no planificado' : '') + '</dd>' +
@@ -150,9 +161,16 @@
       (a.es_critica ? '<dt>Ruta crítica</dt><dd>' + U.badge('Sí · sin holgura', 'critico') + '</dd>' : '') +
     '</dl>');
 
-    if (a.descripcion) s += seccion('Descripción', '<p class="sx2-py-descripcion">' + U.esc(a.descripcion) + '</p>');
-    return s;
+    return s + '<details class="sx2-py-control"' + (verControl_ ? ' open' : '') + '><summary>' + U.ico('grafico', 15) + 'Control del plan <small class="sx2-tenue">fechas plan / real, desviación y datos</small></summary>' + ctl + '</details>';
   }
+  // Abierto o cerrado según lo dejó la persona la última vez (en este navegador).
+  var verControl_ = false;
+  try { verControl_ = localStorage.getItem('sigso_py2_panel_control') === '1'; } catch (e) { /* sin storage */ }
+  document.addEventListener('toggle', function (ev) {
+    if (!ev.target.classList || !ev.target.classList.contains('sx2-py-control')) return;
+    verControl_ = ev.target.open;
+    try { localStorage.setItem('sigso_py2_panel_control', verControl_ ? '1' : '0'); } catch (e) { /* sin storage */ }
+  }, true);
   function seccion(titulo, html) {
     return '<section class="sx2-seccion-drawer"><h3 class="sx2-seccion-drawer__titulo">' + U.esc(titulo) + '</h3>' + html + '</section>';
   }
@@ -660,6 +678,7 @@
   };
   PY.dependenciasMarcadas = dependenciasMarcadas;
   PY.quienesReciben = quienesReciben;
+  PY.puedeEstado = puedeEstado;
   PY.campoColaboradores = campoColaboradores;
   PY.colaboradoresMarcados = colaboradoresMarcados;
   PY.sincronizarColaboradores = sincronizarColaboradores;
