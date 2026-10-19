@@ -70,6 +70,18 @@ function mutualDe_(texto) {
 }
 function clientesCat_(db) { try { return leerFilas_(db, 'CAT_CLIENTES', COLUMNAS.CAT_CLIENTES); } catch (e) { return []; } }
 function activo_(c) { return c.activo === true || c.activo === 'TRUE' || c.activo === 1 || c.activo === '1'; }
+function texto0_(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
+/** «Bloqueado» en la columna Bloqueo de HomePymes. */
+function bloqueada_(c) { return texto0_(c.bloqueo) === 'bloqueado'; }
+/**
+ * Cliente vigente: no bloqueado y con Estado «Activo». Si la ficha no trae
+ * Estado (fichas creadas a mano en SIGSO), manda el `activo` de la ficha.
+ */
+function vigente_(c) {
+  if (bloqueada_(c)) return false;
+  const estado = texto0_(c.estado);
+  return estado ? estado === 'activo' : activo_(c);
+}
 function puede_(contexto) { return C.puedeCategoria_(contexto, C.CAT_CLIENTES); }
 function publica_(f) {
   return {
@@ -102,12 +114,17 @@ function empresa_(db, data) {
 function datos(db, data, contexto) {
   if (!C.tieneAcceso(db, contexto) || !puede_(contexto)) return C.NO_ENCONTRADO;
   const filas = C.dbCred().prepare('SELECT * FROM CRED_CLIENTES ORDER BY razon_social').all().map(publica_);
-  const clientes = clientesCat_(db).map((c) => ({
+  const conClaves = new Set(filas.map((f) => f.cliente_id));
+  const catalogo = clientesCat_(db);
+  // Solo clientes vigentes (pedido del dueño 2026-10-19): fuera los bloqueados y
+  // los inactivos. Si una empresa ya no vigente tiene claves guardadas, sigue
+  // apareciendo (marcada) para que se vean y se puedan borrar.
+  const clientes = catalogo.filter((c) => vigente_(c) || conClaves.has(String(c.cliente_id))).map((c) => ({
     cliente_id: String(c.cliente_id), razon_social: c.razon_social || '', rut: c.rut || '', codigo: c.codigo_cliente || '',
-    estado: c.estado || '', bloqueo: c.bloqueo || '', activo: activo_(c)
+    estado: c.estado || '', bloqueo: c.bloqueo || '', activo: vigente_(c), bloqueada: bloqueada_(c)
   }));
   // Las que solo existen por su RUT (no están en la base de clientes).
-  const ids = new Set(clientes.map((c) => c.cliente_id));
+  const ids = new Set(catalogo.map((c) => String(c.cliente_id)));
   const sueltas = {};
   filas.forEach((f) => { if (!ids.has(f.cliente_id) && !sueltas[f.cliente_id]) sueltas[f.cliente_id] = { cliente_id: f.cliente_id, razon_social: f.razon_social, rut: f.rut, codigo: '', estado: '', bloqueo: '', activo: true, fuera_de_base: true }; });
   return {
@@ -135,6 +152,12 @@ const guardar = C.conBoveda(function (db, data, contexto, x) {
   if (!TIPOS[tipo]) return errorValidacion('tipo', 'Elige Mutual o SEREMI.');
   const emp = empresa_(db, data);
   if (!emp) return errorValidacion('rut', data.cliente_id ? 'Esa empresa no está en la base de clientes.' : 'Escribe un RUT válido y el nombre de la empresa.');
+  // Bloqueados e inactivos no se consideran: no se les agregan claves nuevas
+  // (las que ya tenían se pueden editar o borrar).
+  const ficha = clientesCat_(db).find((c) => String(c.cliente_id) === emp.cliente_id);
+  if (ficha && !vigente_(ficha) && !C.dbCred().prepare('SELECT 1 FROM CRED_CLIENTES WHERE cliente_id = ?').get(emp.cliente_id)) {
+    return errorValidacion('rut', bloqueada_(ficha) ? 'Ese cliente está bloqueado: no se le guardan claves.' : 'Ese cliente está inactivo: no se le guardan claves.');
+  }
   const r = escribir_(emp, tipo, data, x);
   return { fila: publica_(C.dbCred().prepare('SELECT * FROM CRED_CLIENTES WHERE id = ?').get(r.id)) };
 });
@@ -201,6 +224,7 @@ const importar = C.conBoveda(function (db, data, contexto, x) {
   if (!entrada.length) return errorValidacion('filas', 'No llegó ninguna fila.');
   if (entrada.length > MAX_IMPORTAR) return errorValidacion('filas', 'Son más de ' + MAX_IMPORTAR + ' filas: divídelas en partes.');
   const d = C.dbCred(), vistos = new Set(), resultado = [];
+  const fichas = {}; clientesCat_(db).forEach((c) => { fichas[String(c.cliente_id)] = c; });
   const conteo = { nuevas: 0, actualizadas: 0, sin_cambios: 0, errores: 0, fuera_de_base: 0 };
   const plan = [];
   entrada.forEach((e, i) => {
@@ -208,6 +232,8 @@ const importar = C.conBoveda(function (db, data, contexto, x) {
     const emp = empresa_(db, { rut: rutTxt, razon_social: empresa });
     if (!rutValido_(rutTxt)) { conteo.errores++; resultado.push({ linea, empresa, rut: rutTxt, problema: 'RUT inválido' }); return; }
     if (!emp) { conteo.errores++; resultado.push({ linea, empresa, rut: rutTxt, problema: 'Falta el nombre de la empresa (no está en la base de clientes)' }); return; }
+    const ficha = fichas[emp.cliente_id];
+    if (ficha && !vigente_(ficha)) { conteo.errores++; resultado.push({ linea, empresa: emp.razon_social, rut: emp.rut, problema: bloqueada_(ficha) ? 'Cliente bloqueado: no se carga' : 'Cliente inactivo: no se carga' }); return; }
     if (vistos.has(emp.cliente_id)) { conteo.errores++; resultado.push({ linea, empresa, rut: rutTxt, problema: 'RUT repetido en la planilla (se usa la primera fila)' }); return; }
     vistos.add(emp.cliente_id);
     if (/^RUT-/.test(emp.cliente_id)) conteo.fuera_de_base++;

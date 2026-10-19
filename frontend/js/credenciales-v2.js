@@ -44,7 +44,7 @@
   var CAT_CLIENTES = 'clientes'; // categoría con tabla propia (credencialesClientes.js)
 
   var raiz_ = null, vista_ = 'cuentas', cat_ = '', d_ = null, turno_ = 0, reloj_ = null, ultimoUso_ = 0, inactividad_ = 15, verRetiradas_ = false;
-  var cli_ = null, cliFiltro_ = 'activos', cliBusca_ = '', cliMutual_ = '', cliTope_ = 60;
+  var cli_ = null, cliFiltro_ = 'todas', cliBusca_ = '', cliMutual_ = '', cliTope_ = 60;
   var montados_ = []; // vistas incrustadas (Hompy) que se repintan al guardar
 
   function txt(v) { return U.esc(String(v == null ? '' : v)); }
@@ -751,7 +751,6 @@
     var q = sinTildes(cliBusca_).trim(), qRut = q.replace(/[^0-9k]/g, '');
     return cli_.clientes.filter(function (c) {
       var fs = filasDe(c.cliente_id);
-      if (cliFiltro_ === 'activos' && !c.activo && !fs.MUTUAL && !fs.SEREMI) return false;
       if (cliFiltro_ === 'sin' && (fs.MUTUAL && fs.MUTUAL.tiene_clave && fs.SEREMI && fs.SEREMI.tiene_clave)) return false;
       if (cliFiltro_ === 'falla' && !((fs.MUTUAL && fs.MUTUAL.estado === 'NO_FUNCIONA') || (fs.SEREMI && fs.SEREMI.estado === 'NO_FUNCIONA'))) return false;
       if (cliMutual_ && !(fs.MUTUAL && fs.MUTUAL.institucion === cliMutual_)) return false;
@@ -839,7 +838,7 @@
     if (cli_.error) return U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudieron cargar las claves de clientes', texto: cli_.error }) });
     var r = resumenClientes();
     var porMutual = {}; cli_.filas.forEach(function (f) { if (f.tipo === 'MUTUAL' && f.institucion) porMutual[f.institucion] = (porMutual[f.institucion] || 0) + 1; });
-    var filtros = [['activos', 'Activas'], ['todas', 'Todas'], ['sin', 'Les falta alguna clave'], ['falla', 'No funcionan']];
+    var filtros = [['todas', 'Todas'], ['sin', 'Les falta alguna clave'], ['falla', 'No funcionan']];
     return heroClientes(r) +
       '<div class="cc-barra sx2-entra" style="--i:1">' +
         '<label class="cc-buscar">' + U.ico('lupa', 16) + '<input type="search" class="sx2-input js-cc-buscar" placeholder="Buscar por empresa, RUT o código" value="' + txt(cliBusca_) + '" aria-label="Buscar empresa">' +
@@ -891,7 +890,7 @@
           return '<tr class="cc-fila cc-fila--' + p.id + (sellada ? ' cc-fila--sellada' : '') + '" style="--i:' + Math.min(i, 24) + '">' +
             '<td class="cc-prot" data-et="Protección"><span class="cc-escudo cc-escudo--' + p.id + '" title="' + txt(p.titulo) + '">' + escudoSvg() + '<span>' + txt(p.texto) + '</span></span></td>' +
             '<td class="cc-empresa"><b>' + txt(c.razon_social) + '</b><span class="cr2-tenue">' + txt([c.codigo, c.rut].filter(Boolean).join(' · ')) + '</span>' +
-              (!c.activo ? U.badge('Inactiva', 'neutro', true) : '') + (c.fuera_de_base ? U.badge('No está en la base de clientes', 'alerta', true) : '') + '</td>' +
+              (!c.activo && !c.fuera_de_base ? U.badge(c.bloqueada ? 'Bloqueada: tenía claves' : 'Inactiva: tenía claves', 'neutro', true) : '') + (c.fuera_de_base ? U.badge('No está en la base de clientes', 'alerta', true) : '') + '</td>' +
             '<td data-et="Mutual adherida">' + (m ? '<span class="cc-mutual cc-mutual--' + txt(m.id.toLowerCase()) + '">' + txt(m.nombre) + '</span>' : '<span class="cr2-tenue">—</span>') + '</td>' +
             celdaPortal(c, fs.MUTUAL, 'MUTUAL') + celdaPortal(c, fs.SEREMI, 'SEREMI') +
             '<td class="cc-act" data-et="Último cambio">' + (ult ? '<span>' + txt(fecha(ult.actualizada_en)) + '</span><span class="cr2-tenue">' + txt(ult.actualizado_por || '') + '</span>' : '<span class="cr2-tenue">—</span>') + '</td>' +

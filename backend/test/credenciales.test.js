@@ -171,6 +171,10 @@ test('sin llave de Finanzas ni propia, la bóveda avisa y no cifra', async (t) =
 function sembrarClientes(db) {
   agregarFila_(db, 'CAT_CLIENTES', { cliente_id: 'CLI-1', razon_social: 'CONSTRUCTORA SAN PABLO SPA', rut: '76.353.457-K', codigo_cliente: 'HP-016-1', estado: 'Activo', bloqueo: 'Activo', activo: true });
   agregarFila_(db, 'CAT_CLIENTES', { cliente_id: 'CLI-2', razon_social: 'ESTANCO SPA', rut: '76.516.163-0', codigo_cliente: 'HP-049-1', estado: 'Inactivo', bloqueo: 'Bloqueado', activo: false });
+  // Activo pero bloqueado (pasa en la planilla de HomePymes): tampoco cuenta.
+  agregarFila_(db, 'CAT_CLIENTES', { cliente_id: 'CLI-3', razon_social: 'BLOQUEADA SPA', rut: '76.353.458-8', codigo_cliente: 'HP-050-1', estado: 'Activo', bloqueo: 'Bloqueado', activo: true });
+  // Ficha creada en SIGSO sin Estado: manda `activo`.
+  agregarFila_(db, 'CAT_CLIENTES', { cliente_id: 'CLI-4', razon_social: 'MANUAL SPA', rut: '76.100.200-7', codigo_cliente: '', estado: '', bloqueo: '', activo: true });
 }
 
 test('claves de clientes: la categoría aparece en bóvedas antiguas y se ve solo con acceso', async (t) => {
@@ -188,7 +192,9 @@ test('claves de clientes: la categoría aparece en bóvedas antiguas y se ve sol
   assert.equal((await llamar(db, 'credClientesDatos', (await login(db, 'otra')).token)).status, 404);
   const d = await llamar(db, 'credClientesDatos', due.token);
   assert.equal(d.status, 200);
-  assert.deepEqual(d.body.data.clientes.map((c) => c.razon_social), ['CONSTRUCTORA SAN PABLO SPA', 'ESTANCO SPA']);
+  assert.deepEqual(d.body.data.clientes.map((c) => c.razon_social), ['CONSTRUCTORA SAN PABLO SPA', 'MANUAL SPA'], 'sin bloqueados ni inactivos');
+  // A un bloqueado no se le agregan claves.
+  assert.equal((await llamar(db, 'credClienteGuardar', due.token, { boveda_token: boveda, cliente_id: 'CLI-3', tipo: 'SEREMI', usuario: 'x', clave: 'y' })).status, 400);
   // No se cuela como credencial suelta de la vista de tarjetas.
   assert.equal((await llamar(db, 'credGuardarCuenta', due.token, { boveda_token: boveda, categoria_id: 'clientes', plataforma: 'ACHS' })).status, 400);
 });
@@ -251,14 +257,17 @@ test('claves de clientes: la carga masiva muestra vista previa, no borra claves 
     { empresa: 'Nueva SPA', rut: '77.649.209-4', mutual: 'IST', usuario_mutual: 'n', clave_mutual: 'n-1' },
     { empresa: 'Mala', rut: '78-8', mutual: 'achs' },
     { empresa: 'Repetida', rut: '76.353.457-K', mutual: 'IST' },
-    { empresa: 'Rara', rut: '76.516.163-0', mutual: 'Otra cosa', usuario_seremi: 'e', clave_seremi: 'e-1' }
+    { empresa: 'Rara', rut: '76.100.200-7', mutual: 'Otra cosa', usuario_seremi: 'e', clave_seremi: 'e-1' },
+    { empresa: 'Estanco', rut: '76.516.163-0', mutual: 'ACHS', usuario_mutual: 'z', clave_mutual: 'z-1' },
+    { empresa: 'Bloqueada', rut: '76.353.458-8', mutual: 'IST', usuario_mutual: 'w', clave_mutual: 'w-1' }
   ];
   const p = await llamar(db, 'credClientesImportar', due.token, { boveda_token: boveda, filas });
   assert.equal(p.status, 200, JSON.stringify(p.body));
   assert.equal(p.body.data.vista_previa, true);
-  assert.deepEqual(p.body.data.conteo, { nuevas: 3, actualizadas: 0, sin_cambios: 1, errores: 2, fuera_de_base: 1 });
+  assert.deepEqual(p.body.data.conteo, { nuevas: 3, actualizadas: 0, sin_cambios: 1, errores: 4, fuera_de_base: 1 });
   assert.equal(C.dbCred().prepare('SELECT COUNT(*) AS n FROM CRED_CLIENTES').get().n, 1, 'la vista previa no guarda');
   assert.ok(p.body.data.filas.some((f) => f.avisos && f.avisos.length));
+  assert.deepEqual(p.body.data.filas.filter((f) => /no se carga/.test(f.problema || '')).map((f) => f.problema), ['Cliente bloqueado: no se carga', 'Cliente bloqueado: no se carga']);
   const ok = await llamar(db, 'credClientesImportar', due.token, { boveda_token: boveda, filas, confirmar: true });
   assert.equal(ok.body.data.conteo.nuevas, 3);
   const d = (await llamar(db, 'credClientesDatos', due.token)).body.data;
