@@ -27,7 +27,11 @@
  *  4. Bitácora encadenada por hash: quién vio qué clave, quién la cambió y a
  *     quién se le dio o quitó acceso. Borrar o editar una fila rompe la cadena.
  *
- * NO se guardan claves de clientes (misma decisión que el robot de la TGR).
+ * 2026-10-19: el dueño pidió guardar también las claves de los CLIENTES (Mutual
+ * y SEREMI de cada empresa, para Prevención). Viven en la categoría «Claves de
+ * clientes» con su propia tabla (CRED_CLIENTES): mismo cifrado, mismo candado
+ * y misma bitácora. Ver credencialesClientes.js. El robot de la TGR sigue sin
+ * guardar la clave que se le escribe.
  */
 
 const crypto = require('node:crypto');
@@ -47,7 +51,7 @@ const VENTANA_FALLOS_MS = 10 * 60 * 1000;
 const BLOQUEO_MS = 15 * 60 * 1000;
 const EMISOR_TOTP = 'SIGSO Credenciales';
 const NO_ENCONTRADO = Object.freeze({ _noEncontrado: true });
-const ICONOS = ['megafono', 'escudo', 'dinero', 'correo', 'capas', 'empresa', 'llave', 'candado', 'camara', 'equipo'];
+const ICONOS = ['megafono', 'escudo', 'dinero', 'correo', 'capas', 'empresa', 'llave', 'candado', 'camara', 'equipo', 'casco'];
 const ROLES = ['ADMINISTRA', 'EDITA', 'PUBLICA', 'CONSULTA'];
 const CADA = [0, 30, 90, 180, 365];
 const CATEGORIAS_INICIALES = [
@@ -56,8 +60,11 @@ const CATEGORIAS_INICIALES = [
   ['bancos', 'Bancos', 'dinero', 'Quién tiene acceso y con qué clave dinámica. Mejor no guardar claves bancarias.'],
   ['correo', 'Correo y dominio', 'correo', 'Cuentas de correo, el dominio, el hosting y Cloudflare.'],
   ['software', 'Software y suscripciones', 'capas', 'Programas y servicios que paga la empresa.'],
-  ['oficina', 'Oficina', 'empresa', 'WiFi, impresoras, cámaras.']
+  ['oficina', 'Oficina', 'empresa', 'WiFi, impresoras, cámaras.'],
+  ['clientes', 'Claves de clientes', 'casco', 'Mutual y SEREMI de cada empresa cliente (las usa Prevención).']
 ];
+/** Categoría con tabla propia (una fila por empresa y portal), no tarjetas. */
+const CAT_CLIENTES = 'clientes';
 
 // ---------------------------------------------------------------- configuración
 
@@ -87,7 +94,14 @@ const ESQUEMA_ = [
      estado TEXT NOT NULL DEFAULT 'ACTIVA', creado_por TEXT, creada_en TEXT NOT NULL, actualizado_por TEXT, actualizada_en TEXT)`,
   `CREATE TABLE IF NOT EXISTS CRED_AUTENTICADOR (cuenta_id TEXT PRIMARY KEY, secreto TEXT NOT NULL, activo INTEGER NOT NULL DEFAULT 0, ultimo_contador INTEGER NOT NULL DEFAULT 0, creado_en TEXT NOT NULL, activado_en TEXT)`,
   `CREATE TABLE IF NOT EXISTS CRED_SESIONES (token_hash TEXT PRIMARY KEY, cuenta_id TEXT NOT NULL, creada_en INTEGER NOT NULL, ultimo_uso INTEGER NOT NULL, equipo TEXT, ip TEXT, cerrada INTEGER NOT NULL DEFAULT 0)`,
-  `CREATE TABLE IF NOT EXISTS CRED_BITACORA (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, cuenta_id TEXT, nombre TEXT, accion TEXT NOT NULL, categoria_id TEXT, credencial_id TEXT, detalle TEXT, ip TEXT, equipo TEXT, hash_prev TEXT NOT NULL, hash TEXT NOT NULL)`
+  `CREATE TABLE IF NOT EXISTS CRED_BITACORA (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, cuenta_id TEXT, nombre TEXT, accion TEXT NOT NULL, categoria_id TEXT, credencial_id TEXT, detalle TEXT, ip TEXT, equipo TEXT, hash_prev TEXT NOT NULL, hash TEXT NOT NULL)`,
+  // Claves de clientes (2026-10-19): una fila por empresa y portal (MUTUAL | SEREMI).
+  // razon_social y rut se copian al guardar: la fila se entiende aunque la
+  // empresa salga de la base de clientes.
+  `CREATE TABLE IF NOT EXISTS CRED_CLIENTES (
+     id TEXT PRIMARY KEY, cliente_id TEXT NOT NULL, razon_social TEXT, rut TEXT, tipo TEXT NOT NULL, institucion TEXT, usuario TEXT, secreto TEXT, url TEXT, notas TEXT,
+     estado TEXT NOT NULL DEFAULT 'SIN_PROBAR', estado_nota TEXT, verificada_en TEXT, verificada_por TEXT, clave_cambiada_en TEXT,
+     creado_por TEXT, creada_en TEXT NOT NULL, actualizado_por TEXT, actualizada_en TEXT, UNIQUE (cliente_id, tipo))`
 ];
 function dbCred() {
   const ruta = rutaDb_();
@@ -101,6 +115,10 @@ function dbCred() {
   if (!hay) {
     const ins = db_.prepare('INSERT INTO CRED_CATEGORIAS (id, nombre, icono, descripcion, orden, activa, creada_en) VALUES (?,?,?,?,?,1,?)');
     CATEGORIAS_INICIALES.forEach(([id, n, ic, d], i) => ins.run(id, n, ic, d, i + 1, new Date().toISOString()));
+  } else {
+    // Bóvedas creadas antes del 2026-10-19 no tienen la categoría de clientes.
+    const [id, n, ic, d] = CATEGORIAS_INICIALES.find((c) => c[0] === CAT_CLIENTES);
+    db_.prepare('INSERT OR IGNORE INTO CRED_CATEGORIAS (id, nombre, icono, descripcion, orden, activa, creada_en) VALUES (?,?,?,?,?,1,?)').run(id, n, ic, d, CATEGORIAS_INICIALES.length, new Date().toISOString());
   }
   rutaAbierta_ = ruta;
   return db_;
@@ -370,6 +388,7 @@ const guardarCuenta = conBoveda(function (db, data, contexto, x) {
   const d = dbCred();
   const categoria = d.prepare('SELECT * FROM CRED_CATEGORIAS WHERE id = ?').get(String(data.categoria_id || ''));
   if (!categoria || !puedeCategoria_(contexto, categoria.id)) return errorValidacion('categoria_id', 'Elige una categoría a la que tengas acceso.');
+  if (categoria.id === CAT_CLIENTES) return errorValidacion('categoria_id', 'Las claves de clientes se guardan en su tabla, por empresa.');
   const plataforma = linea_(data.plataforma, 80);
   if (!plataforma) return errorValidacion('plataforma', 'Escribe la plataforma o el servicio (por ejemplo, Facebook).');
   const previa = data.id ? d.prepare('SELECT * FROM CRED_CUENTAS WHERE id = ?').get(String(data.id)) : null;
@@ -475,6 +494,8 @@ const bitacora = conBoveda(function (db, data, contexto, x) {
 module.exports = {
   NO_ENCONTRADO, tieneAcceso, estado, datos, prepararAutenticador, activarAutenticador, entrar, salir,
   verClave, guardarCuenta, retirarCuenta, guardarCategoria, darAcceso, quitarAcceso, bitacora,
+  // las usa credencialesClientes.js
+  CAT_CLIENTES, conBoveda, puedeCategoria_, cifrar, descifrar, linea_, texto_, url_, hoy_, json_,
   // pruebas / herramientas
   dbCred, verificarCadena_, reiniciarParaPruebas_, rutaDb_, llave_
 };

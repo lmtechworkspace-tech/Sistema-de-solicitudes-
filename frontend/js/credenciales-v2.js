@@ -8,6 +8,10 @@
  * con la sesión de SIGSO; VER, crear o cambiar una clave pide abrir la bóveda
  * con el código de Google Authenticator (se cierra sola a los 15 min).
  *
+ * 2026-10-19: pestaña «Clientes» (categoría «Claves de clientes»): una tabla
+ * por empresa con su mutual adherida y el usuario y la clave de la Mutual y de
+ * la SEREMI, para Prevención; con «¿funcionó?» y carga pegando desde Excel.
+ *
  * Expone `SigsoCredenciales.montar(el, { categoria })`, que usa Hompy para su
  * sección «Redes sociales», y `abrirBoveda()`, que hace de candado en ambos.
  */
@@ -33,10 +37,14 @@
     CREAR: ['Agregó una credencial', 'ok'], EDITAR: ['Editó una credencial', 'info'], CAMBIAR_CLAVE: ['Cambió una clave', 'ok'],
     MOVER: ['Cambió de categoría', 'info'], RETIRAR: ['Retiró una credencial', 'alerta'], REACTIVAR: ['Reactivó una credencial', 'info'],
     CREAR_CATEGORIA: ['Creó una categoría', 'info'], EDITAR_CATEGORIA: ['Editó una categoría', 'info'],
-    DAR_ACCESO: ['Dio acceso', 'ok'], QUITAR_ACCESO: ['Quitó acceso', 'alerta'], VER_BITACORA: ['Revisó la bitácora', 'neutro']
+    DAR_ACCESO: ['Dio acceso', 'ok'], QUITAR_ACCESO: ['Quitó acceso', 'alerta'], VER_BITACORA: ['Revisó la bitácora', 'neutro'],
+    CLAVE_FUNCIONA: ['Probó una clave: funciona', 'ok'], CLAVE_NO_FUNCIONA: ['Probó una clave: no funciona', 'critico'],
+    BORRAR_CLAVE: ['Borró una clave', 'alerta'], IMPORTAR_CLIENTES: ['Cargó claves desde Excel', 'info']
   };
+  var CAT_CLIENTES = 'clientes'; // categoría con tabla propia (credencialesClientes.js)
 
   var raiz_ = null, vista_ = 'cuentas', cat_ = '', d_ = null, turno_ = 0, reloj_ = null, ultimoUso_ = 0, inactividad_ = 15, verRetiradas_ = false;
+  var cli_ = null, cliFiltro_ = 'activos', cliBusca_ = '', cliMutual_ = '', cliTope_ = 60;
   var montados_ = []; // vistas incrustadas (Hompy) que se repintan al guardar
 
   function txt(v) { return U.esc(String(v == null ? '' : v)); }
@@ -80,6 +88,9 @@
     return { color: '', sigla: U.iniciales(String(plataforma).replace(/[^\p{L}\p{N}\s]/gu, ' ')).slice(0, 2).toLowerCase() };
   }
   function categoria(id) { return ((d_ && d_.categorias) || []).filter(function (c) { return c.id === id; })[0] || { id: id, nombre: id, icono: 'llave' }; }
+  /** Las categorías de tarjetas (todas menos «Claves de clientes», que es una tabla). */
+  function catsGenerales() { return ((d_ && d_.categorias) || []).filter(function (c) { return c.id !== CAT_CLIENTES; }); }
+  function hayClientes() { return ((d_ && d_.categorias) || []).some(function (c) { return c.id === CAT_CLIENTES; }); }
   function copiar(texto, que) {
     var listo = function () { aviso((que || 'Texto') + ' copiado. Se borrará del portapapeles en 30 segundos.', 'exito'); setTimeout(function () { try { navigator.clipboard.writeText(''); } catch (e) { /* nada */ } }, 30000); };
     try { navigator.clipboard.writeText(texto).then(listo, function () { aviso('No se pudo copiar. Selecciónalo y cópialo a mano.', 'alerta'); }); }
@@ -314,9 +325,10 @@
     '</div>';
   }
   function abrirFormulario(c, catFija) {
-    var nueva = !c; c = c || { categoria_id: catFija || cat_ || ((d_.categorias[0] || {}).id), personas: [], cambio_cada: 90, dos_pasos: false };
+    if (!catsGenerales().length) return;
+    var nueva = !c; c = c || { categoria_id: (catFija && catFija !== CAT_CLIENTES ? catFija : '') || cat_ || ((catsGenerales()[0] || {}).id), personas: [], cambio_cada: 90, dos_pasos: false };
     var abrir = function () {
-      var cats = d_.categorias.map(function (k) { return '<option value="' + txt(k.id) + '"' + (k.id === c.categoria_id ? ' selected' : '') + '>' + txt(k.nombre) + '</option>'; }).join('');
+      var cats = catsGenerales().map(function (k) { return '<option value="' + txt(k.id) + '"' + (k.id === c.categoria_id ? ' selected' : '') + '>' + txt(k.nombre) + '</option>'; }).join('');
       U.formulario({
         titulo: nueva ? 'Nueva credencial' : 'Editar ' + c.plataforma, ancho: true,
         subtitulo: '<span class="cr2-form-sub">' + U.ico('candado', 13) + ' La clave y las notas privadas se guardan cifradas.</span>',
@@ -512,6 +524,7 @@
     if (!raiz_) return;
     enlazarEn(raiz_);
     var t = ++turno_;
+    cli_ = null;
     raiz_.innerHTML = '<div class="sx2 sx2-pagina cr2">' + U.esqueleto('kpis', 4) + U.esqueleto('tarjetas', 6) + '</div>';
     traer().then(function () {
       if (t !== turno_) return;
@@ -520,22 +533,33 @@
     });
   }
   function cabecera() {
-    var ops = [{ id: 'cuentas', texto: 'Cuentas', icono: 'llave' }, { id: 'personas', texto: 'Por persona', icono: 'equipo' }];
+    var ops = [];
+    if (catsGenerales().length) ops.push({ id: 'cuentas', texto: 'Cuentas', icono: 'llave' });
+    if (hayClientes()) ops.push({ id: 'clientes', texto: 'Clientes', icono: 'casco' });
+    if (catsGenerales().length) ops.push({ id: 'personas', texto: 'Por persona', icono: 'equipo' });
     if (d_.es_admin) ops.push({ id: 'accesos', texto: 'Accesos', icono: 'escudoCheck' });
     ops.push({ id: 'bitacora', texto: 'Bitácora', icono: 'lista' });
+    var accion = vista_ === 'clientes'
+      ? U.boton({ texto: 'Cargar desde Excel', icono: 'subir', clase: 'js-cc-importar' }) + U.boton({ texto: 'Agregar empresa', icono: 'nueva', variante: 'primario', clase: 'js-cc-nueva' })
+      : catsGenerales().length ? U.boton({ texto: 'Nueva credencial', icono: 'nueva', variante: 'primario', clase: 'js-cr-nueva' }) : '';
+    var soloClientes = !catsGenerales().length;
     return '<header class="sx2-cabecera sx2-entra"><div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">Credenciales</span>' +
-      '<h1>Credenciales de la empresa</h1><p>Dónde está cada cuenta, quién tiene acceso y cuándo se cambió la clave. Las claves se ven con el código del teléfono.</p></div>' +
-      '<div class="sx2-cabecera__acciones">' + pildora() + U.segmento(ops, vista_, 'js-cr-vista') +
-      U.boton({ texto: 'Nueva credencial', icono: 'nueva', variante: 'primario', clase: 'js-cr-nueva' }) + '</div></header>';
+      (soloClientes ? '<h1>Claves de clientes</h1><p>Mutual y SEREMI de cada empresa. Las claves se ven con el código del teléfono y queda registrado quién las vio.</p>'
+        : '<h1>Credenciales de la empresa</h1><p>Dónde está cada cuenta, quién tiene acceso y cuándo se cambió la clave. Las claves se ven con el código del teléfono.</p>') + '</div>' +
+      '<div class="sx2-cabecera__acciones">' + pildora() + (ops.length > 1 ? U.segmento(ops, vista_, 'js-cr-vista') : '') + accion + '</div></header>';
   }
   function pintar() {
     if (!raiz_ || !d_) return;
     if (vista_ === 'accesos' && !d_.es_admin) vista_ = 'cuentas';
-    var cuerpo = vista_ === 'personas' ? vistaPersonas() : vista_ === 'accesos' ? vistaAccesos() : vista_ === 'bitacora' ? '<div class="js-cr-bitacora">' + U.esqueleto('tabla', 8) + '</div>' : vistaCuentas();
+    if (vista_ === 'clientes' && !hayClientes()) vista_ = 'cuentas';
+    if ((vista_ === 'cuentas' || vista_ === 'personas') && !catsGenerales().length) vista_ = hayClientes() ? 'clientes' : 'bitacora';
+    var cuerpo = vista_ === 'personas' ? vistaPersonas() : vista_ === 'accesos' ? vistaAccesos() : vista_ === 'bitacora' ? '<div class="js-cr-bitacora">' + U.esqueleto('tabla', 8) + '</div>'
+      : vista_ === 'clientes' ? '<div class="js-cc">' + (cli_ ? vistaClientes() : U.esqueleto('tabla', 8)) + '</div>' : vistaCuentas();
     raiz_.innerHTML = '<div class="sx2 sx2-pagina cr2 cr2-modulo">' + cabecera() + cuerpo + '</div>';
     if (U.animar) U.animar(raiz_);
     if (token()) iniciarReloj();
     if (vista_ === 'bitacora') cargarBitacora();
+    if (vista_ === 'clientes' && !cli_) traerClientes().then(pintarClientes);
   }
   function vistaCuentas() {
     var activas = d_.cuentas.filter(function (c) { return c.estado === 'ACTIVA'; });
@@ -543,12 +567,12 @@
     var porCambiar = d_.avisos.filter(function (a) { return a.tipo === 'VENCIDA' || a.tipo === 'SIN_FECHA'; }).length;
     var sin2 = activas.filter(function (c) { return !c.dos_pasos; }).length;
     var nombres = {}; activas.forEach(function (c) { c.personas.forEach(function (p) { nombres[p.nombre.toLowerCase()] = 1; }); });
-    if (cat_ && !d_.categorias.some(function (c) { return c.id === cat_; })) cat_ = '';
+    if (cat_ && !catsGenerales().some(function (c) { return c.id === cat_; })) cat_ = '';
     var chips = '<div class="cr2-chips">' + U.chip({ texto: 'Todas', n: activas.length, activo: !cat_, clase: 'js-cr-cat', datos: { cat: '' } }) +
-      d_.categorias.map(function (k) {
+      catsGenerales().map(function (k) {
         return U.chip({ texto: k.nombre, icono: k.icono, n: activas.filter(function (c) { return c.categoria_id === k.id; }).length, activo: cat_ === k.id, clase: 'js-cr-cat', datos: { cat: k.id } });
       }).join('') + '</div>';
-    var grupos = d_.categorias.filter(function (k) { return !cat_ || k.id === cat_; }).map(function (k) {
+    var grupos = catsGenerales().filter(function (k) { return !cat_ || k.id === cat_; }).map(function (k) {
       var lista = activas.filter(function (c) { return c.categoria_id === k.id; });
       if (!lista.length && !cat_) return '';
       return '<section class="cr2-grupo"><div class="cr2-grupo__cab"><span class="cr2-grupo__ico">' + U.ico(k.icono || 'llave', 16) + '</span><h2>' + txt(k.nombre) + '</h2>' +
@@ -603,7 +627,7 @@
         var con = d_.accesos.filter(function (a) { return a.categoria_id === k.id; });
         var ids = {}; con.forEach(function (a) { ids[a.cuenta_id] = 1; });
         var opciones = d_.personas.filter(function (p) { return !ids[p.cuenta_id]; }).map(function (p) { return '<option value="' + txt(p.cuenta_id) + '">' + txt(p.nombre) + '</option>'; }).join('');
-        return U.card({ titulo: k.nombre, icono: k.icono, i: i, sub: (function (n) { return n + (n === 1 ? ' cuenta' : ' cuentas'); })(d_.cuentas.filter(function (c) { return c.categoria_id === k.id && c.estado === 'ACTIVA'; }).length),
+        return U.card({ titulo: k.nombre, icono: k.icono, i: i, sub: k.id === CAT_CLIENTES ? 'Mutual y SEREMI' : (function (n) { return n + (n === 1 ? ' cuenta' : ' cuentas'); })(d_.cuentas.filter(function (c) { return c.categoria_id === k.id && c.estado === 'ACTIVA'; }).length),
           accion: { texto: 'Editar', clase: 'js-cr-editar-cat', datos: { cat: k.id } }, cuerpo:
           '<ul class="cr2-acc-lista"><li class="cr2-acc cr2-acc--fija">' + U.ico('escudo', 14) + '<span class="cr2-acc__n">Administración (tú)</span>' + U.badge('Siempre', 'neutro', true) + '</li>' +
             con.map(function (a) { return '<li class="cr2-acc">' + U.avatar({ nombre: a.nombre }, 'sm') + '<span class="cr2-acc__n">' + txt(a.nombre) + '<small>desde ' + txt(fecha(a.desde)) + '</small></span>' +
@@ -647,6 +671,351 @@
     });
   }
 
+  // --- Claves de clientes (2026-10-19; backend/logica/credencialesClientes.js) ----------------------
+  // Una tabla por empresa: mutual adherida, usuario y clave de la Mutual y de la SEREMI.
+  // La lista trae el usuario; la clave se ve con la bóveda abierta, como el resto.
+  function traerClientes() {
+    return api('credClientesDatos').then(function (r) { cli_ = r && r.ok ? r.data : { error: (r && r.message) || 'No se pudo cargar.' }; return cli_; });
+  }
+  function pintarClientes() {
+    var el = raiz_ && raiz_.querySelector('.js-cc');
+    if (!el || vista_ !== 'clientes') return;
+    el.innerHTML = vistaClientes();
+    if (U.animar) U.animar(el);
+  }
+  function mutualDe(id) { return ((cli_ && cli_.catalogos.mutuales) || []).filter(function (m) { return m.id === id; })[0] || null; }
+  function filasDe(clienteId) {
+    var r = {}; ((cli_ && cli_.filas) || []).forEach(function (f) { if (f.cliente_id === clienteId) r[f.tipo] = f; });
+    return r;
+  }
+  function filaPorId(id) { return ((cli_ && cli_.filas) || []).filter(function (f) { return f.id === id; })[0]; }
+  function clientePorId(id) { return ((cli_ && cli_.clientes) || []).filter(function (c) { return c.cliente_id === id; })[0]; }
+  function urlPortal(f) {
+    if (f.url) return f.url;
+    if (f.tipo === 'MUTUAL') { var m = mutualDe(f.institucion); return m ? m.url : ''; }
+    return (cli_.catalogos.tipos.SEREMI || {}).url || '';
+  }
+  function sinTildes(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function clientesFiltrados() {
+    var q = sinTildes(cliBusca_).trim(), qRut = q.replace(/[^0-9k]/g, '');
+    return cli_.clientes.filter(function (c) {
+      var fs = filasDe(c.cliente_id);
+      if (cliFiltro_ === 'activos' && !c.activo && !fs.MUTUAL && !fs.SEREMI) return false;
+      if (cliFiltro_ === 'sin' && (fs.MUTUAL && fs.MUTUAL.tiene_clave && fs.SEREMI && fs.SEREMI.tiene_clave)) return false;
+      if (cliFiltro_ === 'falla' && !((fs.MUTUAL && fs.MUTUAL.estado === 'NO_FUNCIONA') || (fs.SEREMI && fs.SEREMI.estado === 'NO_FUNCIONA'))) return false;
+      if (cliMutual_ && !(fs.MUTUAL && fs.MUTUAL.institucion === cliMutual_)) return false;
+      if (!q) return true;
+      return sinTildes(c.razon_social + ' ' + c.codigo).indexOf(q) !== -1 || (qRut.length >= 3 && String(c.rut).toLowerCase().replace(/[^0-9k]/g, '').indexOf(qRut) !== -1);
+    });
+  }
+  function vistaClientes() {
+    if (cli_.error) return U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudieron cargar las claves de clientes', texto: cli_.error }) });
+    var conMutual = 0, conSeremi = 0, fallan = 0, activos = 0;
+    cli_.clientes.forEach(function (c) {
+      var fs = filasDe(c.cliente_id);
+      if (c.activo) activos++;
+      if (fs.MUTUAL && fs.MUTUAL.tiene_clave) conMutual++;
+      if (fs.SEREMI && fs.SEREMI.tiene_clave) conSeremi++;
+      if ((fs.MUTUAL && fs.MUTUAL.estado === 'NO_FUNCIONA') || (fs.SEREMI && fs.SEREMI.estado === 'NO_FUNCIONA')) fallan++;
+    });
+    var porMutual = {}; cli_.filas.forEach(function (f) { if (f.tipo === 'MUTUAL' && f.institucion) porMutual[f.institucion] = (porMutual[f.institucion] || 0) + 1; });
+    var filtros = [['activos', 'Activas'], ['todas', 'Todas'], ['sin', 'Les falta alguna clave'], ['falla', 'No funcionan']];
+    return '<div class="sx2-fila-kpis">' +
+        U.kpi({ etiqueta: 'Empresas activas', valor: activos, icono: 'empresa', i: 0 }) +
+        U.kpi({ etiqueta: 'Con clave de Mutual', valor: conMutual, icono: 'casco', i: 1 }) +
+        U.kpi({ etiqueta: 'Con clave de SEREMI', valor: conSeremi, icono: 'escudo', i: 2 }) +
+        U.kpi({ etiqueta: 'Claves que no funcionan', valor: fallan, icono: 'alerta', tono: fallan ? 'critico' : 'ok', i: 3 }) +
+      '</div>' +
+      '<div class="cc-barra">' +
+        '<label class="cc-buscar">' + U.ico('lupa', 16) + '<input type="search" class="sx2-input js-cc-buscar" placeholder="Buscar por empresa, RUT o código" value="' + txt(cliBusca_) + '" aria-label="Buscar empresa"></label>' +
+        '<div class="cr2-chips">' + filtros.map(function (f) { return U.chip({ texto: f[1], activo: cliFiltro_ === f[0], clase: 'js-cc-filtro', datos: { f: f[0] }, tono: f[0] === 'falla' && fallan ? 'critico' : '' }); }).join('') +
+          cli_.catalogos.mutuales.filter(function (m) { return porMutual[m.id]; }).map(function (m) { return U.chip({ texto: m.id === 'MUTUAL' ? 'Mutual CChC' : m.id, n: porMutual[m.id], activo: cliMutual_ === m.id, clase: 'js-cc-mutual', datos: { m: m.id } }); }).join('') +
+        '</div>' +
+      '</div>' +
+      '<div class="js-cc-tabla">' + tablaClientes() + '</div>';
+  }
+  function celdaPortal(c, f, tipo) {
+    if (!f || (!f.usuario && !f.tiene_clave)) {
+      return '<td class="cc-portal cc-portal--vacio" data-et="' + (tipo === 'MUTUAL' ? 'Mutual' : 'SEREMI') + '">' + U.boton({ texto: 'Agregar', icono: 'nueva', sm: true, variante: 'fantasma', clase: 'js-cc-editar', datos: { cliente: c.cliente_id, tipo: tipo } }) + '</td>';
+    }
+    var url = urlPortal(f);
+    var estado = f.estado === 'NO_FUNCIONA' ? U.badge('No funciona', 'critico') : f.estado === 'FUNCIONA' ? '<span class="cc-ok" title="Funcionó el ' + txt(fecha(f.verificada_en)) + (f.verificada_por ? ' (' + txt(f.verificada_por) + ')' : '') + '">' + U.ico('check', 13) + '</span>' : '';
+    return '<td class="cc-portal" data-et="' + (tipo === 'MUTUAL' ? 'Mutual' : 'SEREMI') + '">' +
+      '<div class="cc-usuario">' + (f.usuario ? '<code>' + txt(f.usuario) + '</code>' : '<span class="cr2-tenue">Sin usuario</span>') + estado + '</div>' +
+      '<div class="cc-acciones">' +
+        (f.tiene_clave ? U.boton({ texto: 'Clave', icono: 'llave', sm: true, variante: 'primario', clase: 'js-cc-ver', datos: { id: f.id }, titulo: 'Ver la clave de ' + (tipo === 'MUTUAL' ? 'la Mutual' : 'la SEREMI') }) : U.badge('Sin clave', 'neutro', true)) +
+        (f.usuario ? U.boton({ soloIcono: true, icono: 'copiar', titulo: 'Copiar usuario', sm: true, variante: 'fantasma', clase: 'js-cc-copiar', datos: { id: f.id } }) : '') +
+        (url ? '<a class="sx2-boton sx2-boton--fantasma sx2-boton--icono sx2-boton--sm" href="' + txt(url) + '" target="_blank" rel="noopener noreferrer" title="Abrir el portal" aria-label="Abrir el portal">' + U.ico('enlace', 14) + '</a>' : '') +
+      '</div>' +
+      (f.estado === 'NO_FUNCIONA' && f.estado_nota ? '<p class="cc-nota">' + txt(f.estado_nota) + '</p>' : '') +
+    '</td>';
+  }
+  function tablaClientes() {
+    var lista = clientesFiltrados();
+    if (!cli_.clientes.length) {
+      return U.card({ cuerpo: U.vacio({ icono: 'empresa', titulo: 'No hay empresas todavía', texto: 'Las empresas salen de la base de clientes de SIGSO. También puedes cargar la planilla desde Excel o agregar una empresa por su RUT.',
+        accion: U.boton({ texto: 'Cargar desde Excel', icono: 'subir', variante: 'primario', clase: 'js-cc-importar' }) }) });
+    }
+    if (!lista.length) return U.card({ cuerpo: U.vacio({ icono: 'lupa', titulo: 'Ninguna empresa coincide', texto: 'Prueba con otra búsqueda o con el filtro «Todas».' }) });
+    var visibles = lista.slice(0, cliTope_);
+    return U.card({ sinRelleno: true, cuerpo: '<div class="fin2-tabla-envoltura"><table class="fin2-tabla cc-tabla"><thead><tr>' +
+        '<th>Empresa</th><th>Mutual adherida</th><th>Mutual · usuario y clave</th><th>SEREMI · usuario y clave</th><th aria-label="Editar"></th></tr></thead><tbody>' +
+        visibles.map(function (c) {
+          var fs = filasDe(c.cliente_id), m = fs.MUTUAL && mutualDe(fs.MUTUAL.institucion);
+          return '<tr>' +
+            '<td class="cc-empresa"><b>' + txt(c.razon_social) + '</b><span class="cr2-tenue">' + txt([c.codigo, c.rut].filter(Boolean).join(' · ')) + '</span>' +
+              (!c.activo ? U.badge('Inactiva', 'neutro', true) : '') + (c.fuera_de_base ? U.badge('No está en la base de clientes', 'alerta', true) : '') + '</td>' +
+            '<td data-et="Mutual adherida">' + (m ? '<span class="cc-mutual cc-mutual--' + txt(m.id.toLowerCase()) + '">' + txt(m.nombre) + '</span>' : '<span class="cr2-tenue">—</span>') + '</td>' +
+            celdaPortal(c, fs.MUTUAL, 'MUTUAL') + celdaPortal(c, fs.SEREMI, 'SEREMI') +
+            '<td class="cc-editar">' + U.boton({ soloIcono: true, icono: 'editar', titulo: 'Editar ' + c.razon_social, sm: true, variante: 'fantasma', clase: 'js-cc-editar', datos: { cliente: c.cliente_id } }) + '</td>' +
+          '</tr>';
+        }).join('') + '</tbody></table></div>' +
+      '<p class="cc-pie">' + (lista.length > visibles.length ? 'Mostrando ' + visibles.length + ' de ' + lista.length + '. ' + U.boton({ texto: 'Ver más', sm: true, variante: 'fantasma', clase: 'js-cc-mas' }) : lista.length + (lista.length === 1 ? ' empresa' : ' empresas')) +
+        ' · ' + U.ico('escudo', 13) + ' Sin descarga con claves: cada clave vista queda en la bitácora.</p>' });
+  }
+  function repintarTabla() { var t = raiz_ && raiz_.querySelector('.js-cc-tabla'); if (t) t.innerHTML = tablaClientes(); }
+
+  function verClaveCliente(f) {
+    var c = clientePorId(f.cliente_id) || { razon_social: f.razon_social };
+    conBoveda('credClienteVerClave', { id: f.id }).then(function (r) {
+      if (!r || !r.ok) { if (!r || !r.cancelado) aviso((r && r.message) || 'No se pudo ver la clave.', 'alerta'); return; }
+      var clave = r.data.clave || '', segundos = 90, url = urlPortal(f), m = f.tipo === 'MUTUAL' ? mutualDe(f.institucion) : null;
+      var titulo = f.tipo === 'MUTUAL' ? (m ? m.nombre : 'Mutual') : 'SEREMI de Salud';
+      var el = modal(U.boton({ variante: 'fantasma', soloIcono: true, icono: 'equis', titulo: 'Cerrar', clase: 'js-cr-cerrar cr2-modal__x' }) +
+        '<div class="cr2-ver__cab"><span class="cr2-logo">' + U.ico(f.tipo === 'MUTUAL' ? 'casco' : 'escudo', 18) + '</span>' +
+          '<div><h2 class="sx2-dialogo__titulo">' + txt(titulo) + '</h2><p class="cr2-ver__cat">' + txt(c.razon_social) + (f.rut ? ' · ' + txt(f.rut) : '') + '</p></div></div>' +
+        (f.usuario ? '<div class="cr2-ver__fila"><span class="cr2-ver__et">Usuario</span><code class="cr2-ver__valor">' + txt(f.usuario) + '</code>' +
+          U.boton({ soloIcono: true, icono: 'copiar', titulo: 'Copiar usuario', sm: true, clase: 'js-cr-copiar-u' }) + '</div>' : '') +
+        '<div class="cr2-ver__fila"><span class="cr2-ver__et">Clave</span>' +
+          (clave ? '<code class="cr2-ver__valor cr2-ver__clave js-cr-clave-txt" data-oculta="1">' + '•'.repeat(Math.min(clave.length, 16)) + '</code>' +
+            U.boton({ soloIcono: true, icono: 'ojo', titulo: 'Mostrar', sm: true, clase: 'js-cr-mostrar' }) + U.boton({ soloIcono: true, icono: 'copiar', titulo: 'Copiar clave', sm: true, clase: 'js-cr-copiar-c' })
+            : '<span class="cr2-ver__vacio">No hay clave guardada.</span>') + '</div>' +
+        (url ? '<a class="sx2-boton sx2-boton--secundario sx2-boton--sm cc-abrir" href="' + txt(url) + '" target="_blank" rel="noopener noreferrer">' + U.ico('enlace', 14) + 'Abrir el portal</a>' : '') +
+        '<div class="cc-probar"><span>¿Funcionó?</span>' +
+          U.boton({ texto: 'Sí', icono: 'check', sm: true, clase: 'js-cc-funciona' }) +
+          U.boton({ texto: 'No funcionó', icono: 'equis', sm: true, clase: 'js-cc-falla' }) + '</div>' +
+        '<p class="cr2-modal__pie">' + U.ico('reloj', 13) + ' Esta ventana se cierra en <b class="js-cr-cuenta">' + segundos + '</b> s. Quedó registrado que la viste.</p>');
+      var t = setInterval(function () { segundos--; var s = el.querySelector('.js-cr-cuenta'); if (s) s.textContent = segundos; if (segundos <= 0) cerrar(); }, 1000);
+      function cerrar() { clearInterval(t); document.removeEventListener('keydown', esc); if (el.parentNode) el.parentNode.removeChild(el); }
+      function esc(ev) { if (ev.key === 'Escape') cerrar(); }
+      function marcarComo(estado, nota) {
+        conBoveda('credClienteMarcar', { id: f.id, estado: estado, nota: nota || '' }).then(function (x) {
+          if (!x || !x.ok) { if (!x || !x.cancelado) aviso((x && x.message) || 'No se pudo anotar.', 'alerta'); return; }
+          aviso(estado === 'FUNCIONA' ? 'Anotado: la clave funciona.' : 'Anotado: hay que pedirle la clave nueva al cliente.', estado === 'FUNCIONA' ? 'exito' : 'alerta');
+          cerrar(); recargarClientes();
+        });
+      }
+      document.addEventListener('keydown', esc);
+      el.addEventListener('click', function (ev) {
+        if (ev.target.closest('.js-cr-cerrar')) return cerrar();
+        if (ev.target.closest('.js-cr-copiar-u')) return copiar(f.usuario, 'Usuario');
+        if (ev.target.closest('.js-cr-copiar-c')) return copiar(clave, 'Clave');
+        if (ev.target.closest('.js-cc-funciona')) return marcarComo('FUNCIONA');
+        if (ev.target.closest('.js-cc-falla')) {
+          var caja = el.querySelector('.cc-probar');
+          if (!caja.querySelector('.js-cc-nota')) {
+            caja.insertAdjacentHTML('beforeend', '<input class="sx2-input js-cc-nota" maxlength="200" placeholder="¿Qué pasó? (opcional)">' + U.boton({ texto: 'Anotar', sm: true, variante: 'primario', clase: 'js-cc-falla-ok' }));
+            caja.querySelector('.js-cc-nota').focus();
+          }
+          return;
+        }
+        if (ev.target.closest('.js-cc-falla-ok')) return marcarComo('NO_FUNCIONA', el.querySelector('.js-cc-nota').value);
+        var b = ev.target.closest('.js-cr-mostrar');
+        if (b) {
+          var x = el.querySelector('.js-cr-clave-txt'), oculta = x.dataset.oculta === '1';
+          x.textContent = oculta ? clave : '•'.repeat(Math.min(clave.length, 16)); x.dataset.oculta = oculta ? '0' : '1';
+          b.innerHTML = U.ico(oculta ? 'ojoTachado' : 'ojo', 14); b.title = oculta ? 'Ocultar' : 'Mostrar';
+        }
+      });
+    });
+  }
+  function recargarClientes() { return traerClientes().then(function () { if (vista_ === 'clientes') pintarClientes(); }); }
+
+  /** Una empresa con sus dos portales. Sin cliente: empresa nueva por RUT. */
+  function formCliente(clienteId, enfocar) {
+    var c = clienteId ? clientePorId(clienteId) : null, fs = c ? filasDe(c.cliente_id) : {};
+    function bloque(tipo, f) {
+      f = f || {};
+      var p = tipo.toLowerCase();
+      return '<h3 class="cr2-form-tit">' + U.ico(tipo === 'MUTUAL' ? 'casco' : 'escudo', 15) + (tipo === 'MUTUAL' ? ' Mutual' : ' SEREMI de Salud') + '</h3>' +
+        '<div class="cr2-form-grid">' +
+          (tipo === 'MUTUAL' ? U.campo('Mutual adherida', '<select class="sx2-select" name="mutual_institucion"><option value="">Sin dato</option>' +
+            cli_.catalogos.mutuales.map(function (m) { return '<option value="' + m.id + '"' + (f.institucion === m.id ? ' selected' : '') + '>' + txt(m.nombre) + '</option>'; }).join('') + '</select>') : '') +
+          U.campo('Usuario', '<input class="sx2-input" name="' + p + '_usuario" maxlength="160" autocomplete="off" value="' + txt(f.usuario || '') + '" placeholder="RUT o correo con que se entra">') +
+          '<div class="cr2-clave-campo">' + U.campo(f.tiene_clave ? 'Clave nueva' : 'Clave', '<span class="cr2-clave-input"><input class="sx2-input" name="' + p + '_clave" type="password" maxlength="200" autocomplete="new-password" placeholder="' + (f.tiene_clave ? 'Déjala vacía para no cambiarla' : 'La que dio el cliente') + '">' +
+            U.boton({ soloIcono: true, icono: 'ojo', titulo: 'Mostrar', sm: true, variante: 'fantasma', clase: 'js-cc-ver-input' }) + '</span>') + '</div>' +
+          U.campo('Dirección del portal (opcional)', '<input class="sx2-input" name="' + p + '_url" type="url" maxlength="500" value="' + txt(f.url || '') + '" placeholder="' + txt(tipo === 'SEREMI' ? cli_.catalogos.tipos.SEREMI.url : 'Se usa la de la mutual') + '">') +
+        '</div>' +
+        (f.tiene_clave ? '<label class="cr2-check cc-borrar"><input type="checkbox" name="' + p + '_borrar"><span><b>Borrar la clave guardada</b><small>Por ejemplo, si el cliente dejó de trabajar con nosotros.</small></span></label>' : '');
+    }
+    abrirBoveda().then(function (ok) {
+      if (!ok) return;
+      U.formulario({
+        titulo: c ? c.razon_social : 'Agregar empresa', ancho: true,
+        subtitulo: '<span class="cr2-form-sub">' + U.ico('candado', 13) + (c ? ' ' + txt([c.codigo, c.rut].filter(Boolean).join(' · ')) + ' · ' : ' ') + 'Las claves se guardan cifradas.</span>',
+        boton: 'Guardar',
+        campos:
+          (c ? '' : '<div class="cr2-form-grid">' +
+            U.campo('RUT de la empresa', '<input class="sx2-input" name="rut" maxlength="14" required placeholder="76.353.457-K">', 'Si ya está en la base de clientes, se usa esa ficha.') +
+            U.campo('Razón social', '<input class="sx2-input" name="razon_social" maxlength="160" placeholder="CONSTRUCTORA … SPA">') + '</div>') +
+          bloque('MUTUAL', fs.MUTUAL) + bloque('SEREMI', fs.SEREMI) +
+          U.campo('Notas', '<textarea class="sx2-input cr2-area" name="notas" rows="2" maxlength="1000" placeholder="Lo que conviene saber (sin escribir claves aquí).">' + txt((fs.MUTUAL || fs.SEREMI || {}).notas || '') + '</textarea>'),
+        alMontar: function (form) {
+          form.addEventListener('click', function (ev) {
+            var b = ev.target.closest('.js-cc-ver-input'); if (!b) return;
+            var inp = b.parentNode.querySelector('input');
+            inp.type = inp.type === 'password' ? 'text' : 'password'; b.innerHTML = U.ico(inp.type === 'password' ? 'ojo' : 'ojoTachado', 14);
+          });
+          var foco = enfocar && form.querySelector('[name=' + enfocar.toLowerCase() + '_usuario]');
+          if (foco) setTimeout(function () { foco.focus(); }, 80);
+        },
+        preparar: function (dd, form) {
+          var base = c ? { cliente_id: c.cliente_id } : { rut: dd.rut, razon_social: dd.razon_social };
+          if (!c && !dd.rut) return 'Escribe el RUT de la empresa.';
+          var envios = [];
+          ['MUTUAL', 'SEREMI'].forEach(function (tipo) {
+            var p = tipo.toLowerCase(), previa = fs[tipo];
+            var borrar = !!(form.querySelector('[name=' + p + '_borrar]') || {}).checked;
+            var datos = Object.assign({ tipo: tipo, usuario: dd[p + '_usuario'] || '', url: dd[p + '_url'] || '', notas: dd.notas || '' }, base);
+            if (tipo === 'MUTUAL') datos.institucion = dd.mutual_institucion || '';
+            if (dd[p + '_clave']) datos.clave = dd[p + '_clave'];
+            if (borrar) datos.borrar_clave = true;
+            var algo = datos.usuario || datos.clave || datos.url || (tipo === 'MUTUAL' && datos.institucion);
+            if (previa || algo) envios.push(datos);
+          });
+          if (!envios.length) return 'Completa al menos la mutual o un usuario.';
+          return envios;
+        },
+        enviar: function (envios) {
+          var r0 = { ok: true };
+          return envios.reduce(function (p, datos) {
+            return p.then(function (r) { return r && r.ok ? conBoveda('credClienteGuardar', datos) : r; });
+          }, Promise.resolve(r0));
+        },
+        aviso: 'Claves guardadas.',
+        listo: recargarClientes
+      });
+    });
+  }
+
+  // Carga masiva: pegar desde Excel (o un .csv). El texto no se guarda: se lee aquí,
+  // el servidor muestra la vista previa y, al confirmar, cifra cada clave.
+  var COLUMNAS_CC = [
+    ['empresa', 'Empresa'], ['rut', 'RUT'], ['mutual', 'Mutual adherida'], ['usuario_mutual', 'Usuario Mutual'], ['clave_mutual', 'Clave Mutual'],
+    ['usuario_seremi', 'Usuario SEREMI'], ['clave_seremi', 'Clave SEREMI']
+  ];
+  function leerTabla(texto) {
+    texto = String(texto || '').replace(/^﻿/, '');
+    var primera = texto.split(/\r?\n/)[0] || '';
+    var sep = primera.indexOf('\t') !== -1 ? '\t' : (primera.split(';').length > primera.split(',').length ? ';' : ',');
+    var filas = [], fila = [], campo = '', comillas = false;
+    for (var i = 0; i < texto.length; i++) {
+      var ch = texto[i];
+      if (comillas) { if (ch === '"') { if (texto[i + 1] === '"') { campo += '"'; i++; } else comillas = false; } else campo += ch; }
+      else if (ch === '"' && campo === '') comillas = true;
+      else if (ch === sep) { fila.push(campo); campo = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && texto[i + 1] === '\n') i++; fila.push(campo); filas.push(fila); fila = []; campo = ''; }
+      else campo += ch;
+    }
+    if (campo || fila.length) { fila.push(campo); filas.push(fila); }
+    return filas.filter(function (f) { return f.some(function (x) { return String(x).trim(); }); });
+  }
+  /** Reconoce las columnas por su encabezado. Devuelve { mapa, faltan }. */
+  function mapearColumnas(enc) {
+    var mapa = {};
+    enc.forEach(function (h, i) {
+      var t = sinTildes(h).replace(/\s+/g, ' ').trim();
+      var esClave = /clave|contrasen|password|pass\b/.test(t), esUsuario = /usuario|user/.test(t);
+      var k = '';
+      if (/seremi/.test(t)) k = esClave ? 'clave_seremi' : esUsuario ? 'usuario_seremi' : '';
+      else if (/mutual|achs|\bist\b/.test(t) && (esClave || esUsuario)) k = esClave ? 'clave_mutual' : 'usuario_mutual';
+      else if (/mutual/.test(t)) k = 'mutual';
+      else if (/^rut/.test(t) && !/represent/.test(t)) k = 'rut';
+      else if (/empresa|razon social|^nombre|cliente/.test(t) && !/rut|codigo/.test(t)) k = 'empresa';
+      if (k && mapa[k] === undefined) mapa[k] = i;
+    });
+    return { mapa: mapa, faltan: ['rut'].filter(function (k) { return mapa[k] === undefined; }) };
+  }
+  function plantilla() {
+    var csv = '﻿' + COLUMNAS_CC.map(function (c) { return c[1]; }).join(';') + '\r\n';
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'plantilla-claves-clientes.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+  function importarClientes() {
+    abrirBoveda().then(function (ok) {
+      if (!ok) return;
+      var filas = null;
+      var el = modal(U.boton({ variante: 'fantasma', soloIcono: true, icono: 'equis', titulo: 'Cerrar', clase: 'js-cr-cerrar cr2-modal__x' }) +
+        '<h2 class="sx2-dialogo__titulo">Cargar claves desde Excel</h2>' +
+        '<p class="sx2-dialogo__texto">En Excel selecciona la tabla <b>con su fila de títulos</b>, cópiala y pégala aquí. Se reconocen las columnas ' +
+          COLUMNAS_CC.map(function (c) { return '<b>' + c[1] + '</b>'; }).join(', ') + '. También sirve un archivo .csv.</p>' +
+        '<textarea class="sx2-input cc-pegar js-cc-pegar" rows="7" spellcheck="false" autocomplete="off" placeholder="Pega aquí (Ctrl+V)"></textarea>' +
+        '<div class="cc-importar-acc"><label class="sx2-boton sx2-boton--secundario sx2-boton--sm">' + U.ico('adjunto', 14) + 'Elegir .csv<input type="file" accept=".csv,.txt,text/csv" class="js-cc-archivo" hidden></label>' +
+          U.boton({ texto: 'Bajar plantilla', icono: 'descargar', sm: true, variante: 'fantasma', clase: 'js-cc-plantilla' }) + '<span class="cr2-flex"></span>' +
+          U.boton({ texto: 'Revisar', icono: 'derecha', variante: 'primario', clase: 'js-cc-revisar' }) + '</div>' +
+        '<div class="js-cc-resultado"></div>' +
+        '<p class="cr2-modal__pie">' + U.ico('candado', 13) + ' Lo pegado no se guarda tal cual: cada clave se cifra. Una celda de clave vacía no borra la que ya estaba.</p>');
+      el.querySelector('.cr2-modal__caja').classList.add('cr2-modal__caja--ancha');
+      var area = el.querySelector('.js-cc-pegar'), res = el.querySelector('.js-cc-resultado');
+      function cerrar() { area.value = ''; filas = null; document.removeEventListener('keydown', esc); if (el.parentNode) el.parentNode.removeChild(el); }
+      function esc(ev) { if (ev.key === 'Escape') cerrar(); }
+      document.addEventListener('keydown', esc);
+      setTimeout(function () { area.focus(); }, 60);
+      function mostrar(r, confirmado) {
+        var k = r.conteo, problemas = r.filas.filter(function (f) { return f.problema || (f.avisos && f.avisos.length); });
+        res.innerHTML = '<div class="cc-resumen">' +
+            '<span>' + U.badge(k.nuevas + ' nuevas', 'ok') + '</span><span>' + U.badge(k.actualizadas + ' se actualizan', 'info') + '</span>' +
+            '<span>' + U.badge(k.sin_cambios + ' sin cambios', 'neutro') + '</span>' + (k.errores ? '<span>' + U.badge(k.errores + ' con error', 'critico') + '</span>' : '') +
+            (k.fuera_de_base ? '<span>' + U.badge(k.fuera_de_base + ' fuera de la base de clientes', 'alerta') + '</span>' : '') + '</div>' +
+          (problemas.length ? '<ul class="cc-problemas">' + problemas.slice(0, 40).map(function (f) {
+            return '<li><b>Fila ' + (f.linea + 1) + '</b> ' + txt(f.empresa || f.rut || '') + ': ' + txt(f.problema || f.avisos.join('; ')) + '</li>';
+          }).join('') + (problemas.length > 40 ? '<li>… y ' + (problemas.length - 40) + ' más.</li>' : '') + '</ul>' : '') +
+          (confirmado ? '<p class="cc-listo">' + U.ico('check', 15) + ' Listo. Quedó en la bitácora.</p>'
+            : (k.nuevas + k.actualizadas ? '<div class="cc-importar-acc"><span class="cr2-flex"></span>' + U.boton({ texto: 'Guardar ' + (k.nuevas + k.actualizadas), icono: 'check', variante: 'primario', clase: 'js-cc-confirmar' }) + '</div>'
+              : '<p class="cr2-tenue">No hay nada nuevo que guardar.</p>'));
+      }
+      function revisar() {
+        var tabla = leerTabla(area.value);
+        if (tabla.length < 2) { res.innerHTML = '<p class="fin2-error">Pega la tabla con su fila de títulos y al menos una empresa.</p>'; return; }
+        var m = mapearColumnas(tabla[0]);
+        if (m.faltan.length) { res.innerHTML = '<p class="fin2-error">No encuentro la columna <b>RUT</b> en la primera fila. Revisa los títulos o baja la plantilla.</p>'; return; }
+        filas = tabla.slice(1).map(function (f) { var o = {}; Object.keys(m.mapa).forEach(function (k) { o[k] = String(f[m.mapa[k]] || '').trim(); }); return o; });
+        var b = el.querySelector('.js-cc-revisar'); b.disabled = true;
+        res.innerHTML = '<p class="cr2-tenue">Revisando ' + filas.length + ' filas…</p>';
+        conBoveda('credClientesImportar', { filas: filas }).then(function (r) {
+          b.disabled = false;
+          if (!r || !r.ok) { res.innerHTML = '<p class="fin2-error">' + txt((r && r.message) || 'No se pudo revisar.') + '</p>'; return; }
+          mostrar(r.data, false);
+        });
+      }
+      el.addEventListener('click', function (ev) {
+        if (ev.target.closest('.js-cr-cerrar')) return cerrar();
+        if (ev.target.closest('.js-cc-plantilla')) return plantilla();
+        if (ev.target.closest('.js-cc-revisar')) return revisar();
+        var b = ev.target.closest('.js-cc-confirmar');
+        if (b && filas) {
+          b.disabled = true;
+          conBoveda('credClientesImportar', { filas: filas, confirmar: true }).then(function (r) {
+            if (!r || !r.ok) { b.disabled = false; aviso((r && r.message) || 'No se pudo guardar.', 'alerta'); return; }
+            area.value = ''; filas = null;
+            mostrar(r.data, true);
+            aviso('Claves cargadas: ' + r.data.conteo.nuevas + ' nuevas y ' + r.data.conteo.actualizadas + ' actualizadas.', 'exito');
+            recargarClientes();
+          });
+        }
+      });
+      el.querySelector('.js-cc-archivo').addEventListener('change', function (ev) {
+        var f = ev.target.files && ev.target.files[0]; if (!f) return;
+        var lector = new FileReader();
+        lector.onload = function () { area.value = String(lector.result || ''); ev.target.value = ''; revisar(); };
+        lector.readAsText(f, 'utf-8');
+      });
+    });
+  }
+
   // --- Eventos (uno por contenedor) ---------------------------------------------------------------
   function buscar(id) { return ((d_ && d_.cuentas) || []).filter(function (c) { return c.id === id; })[0]; }
   function enlazarEn(el) {
@@ -665,6 +1034,14 @@
       else if (b.classList.contains('js-cr-cat')) { cat_ = b.dataset.cat || ''; pintar(); }
       else if (b.closest('.js-cr-vista') && b.dataset.id) { vista_ = b.dataset.id; pintar(); }
       else if (b.classList.contains('js-cr-reintentar-bit')) cargarBitacora();
+      else if (b.classList.contains('js-cc-ver')) { var fv = filaPorId(b.dataset.id); if (fv) verClaveCliente(fv); }
+      else if (b.classList.contains('js-cc-copiar')) { var fc = filaPorId(b.dataset.id); if (fc) copiar(fc.usuario, 'Usuario'); }
+      else if (b.classList.contains('js-cc-editar')) formCliente(b.dataset.cliente, b.dataset.tipo);
+      else if (b.classList.contains('js-cc-nueva')) { if (cli_ && !cli_.error) formCliente(null); }
+      else if (b.classList.contains('js-cc-importar')) importarClientes();
+      else if (b.classList.contains('js-cc-filtro')) { cliFiltro_ = b.dataset.f; cliTope_ = 60; pintarClientes(); }
+      else if (b.classList.contains('js-cc-mutual')) { cliMutual_ = cliMutual_ === b.dataset.m ? '' : b.dataset.m; cliTope_ = 60; pintarClientes(); }
+      else if (b.classList.contains('js-cc-mas')) { cliTope_ += 100; repintarTabla(); }
       else if (b.classList.contains('js-cr-nueva-cat')) formCategoria(null);
       else if (b.classList.contains('js-cr-editar-cat')) formCategoria(categoria(b.dataset.cat));
       else if (b.classList.contains('js-cr-dar')) {
@@ -684,6 +1061,10 @@
             });
           });
       }
+    });
+    el.addEventListener('input', function (ev) {
+      if (!ev.target.classList || !ev.target.classList.contains('js-cc-buscar')) return;
+      cliBusca_ = ev.target.value; cliTope_ = 60; repintarTabla();
     });
     el.addEventListener('toggle', function (ev) { if (ev.target.classList && ev.target.classList.contains('cr2-retiradas')) verRetiradas_ = ev.target.open; }, true);
   }

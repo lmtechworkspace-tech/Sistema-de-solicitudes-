@@ -104,6 +104,7 @@ const FinanzasPagadores = require('../logica/finanzasPagadores');
 const FinanzasMes = require('../logica/finanzasMes');
 const FinanzasAvisos = require('../logica/finanzasAvisos');
 const Credenciales = require('../logica/credenciales');
+const CredClientes = require('../logica/credencialesClientes');
 const Hompy = require('../logica/hompy');
 const PortalClientes = require('../logica/portalClientes');
 
@@ -773,6 +774,12 @@ const ACCIONES = {
   credDarAcceso: (db, data, contexto) => Credenciales.darAcceso(db, data, contexto),
   credQuitarAcceso: (db, data, contexto) => Credenciales.quitarAcceso(db, data, contexto),
   credBitacora: (db, data, contexto) => Credenciales.bitacora(db, data, contexto),
+  // Claves de clientes (2026-10-19): Mutual y SEREMI de cada empresa. Ver credencialesClientes.js.
+  credClientesDatos: (db, data, contexto) => CredClientes.datos(db, data, contexto),
+  credClienteVerClave: (db, data, contexto) => CredClientes.verClave(db, data, contexto),
+  credClienteGuardar: (db, data, contexto) => CredClientes.guardar(db, data, contexto),
+  credClienteMarcar: (db, data, contexto) => CredClientes.marcar(db, data, contexto),
+  credClientesImportar: (db, data, contexto) => CredClientes.importar(db, data, contexto),
   finanzasReabrirMes: (db, data, contexto) => FinanzasCierre.reabrir(db, data, contexto),
   finanzasParalelo: (db, data, contexto) => FinanzasCierre.paralelo(db, data, contexto),
   finanzasPasoRetiro: (db, data, contexto) => FinanzasCierre.marcarPasoRetiro(db, data, contexto),

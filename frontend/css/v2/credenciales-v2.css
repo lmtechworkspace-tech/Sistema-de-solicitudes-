@@ -175,6 +175,54 @@
 .cr2-check span { display: grid; gap: 2px; font-size: .875rem; }
 .cr2-check small { color: var(--sx-texto-3); font-size: .75rem; }
 
+/* --- Claves de clientes (tabla por empresa) --------------------------------- */
+.cc-barra { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.cc-buscar { position: relative; flex: 1 1 260px; max-width: 420px; display: flex; align-items: center; }
+.cc-buscar > svg { position: absolute; left: 11px; color: var(--sx-texto-3); pointer-events: none; }
+.cc-buscar input { width: 100%; padding-left: 34px; }
+.cc-tabla td { vertical-align: top; }
+.cc-empresa { min-width: 13rem; }
+.cc-empresa b { display: block; font-weight: 600; line-height: 1.3; }
+.cc-empresa .cr2-tenue { display: block; font-size: .75rem; font-variant-numeric: tabular-nums; margin: 2px 0 4px; }
+.cc-empresa .sx2-badge { margin-right: 4px; }
+.cc-mutual { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .75rem; font-weight: 600; white-space: nowrap; background: var(--sx-superficie-2, var(--cr-suave)); color: var(--sx-texto); }
+.cc-mutual--achs { background: color-mix(in srgb, #00843d 14%, transparent); color: #00843d; }
+.cc-mutual--ist { background: color-mix(in srgb, #0060a9 14%, transparent); color: #0060a9; }
+.cc-mutual--mutual { background: color-mix(in srgb, #e1251b 13%, transparent); color: #c41f16; }
+.cc-mutual--isl { background: color-mix(in srgb, #6b7280 16%, transparent); color: var(--sx-texto-2); }
+.cc-portal { min-width: 12rem; }
+.cc-usuario { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cc-usuario code { font-size: .8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14rem; }
+.cc-ok { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: color-mix(in srgb, var(--sx-ok, #15803d) 15%, transparent); color: var(--sx-ok, #15803d); }
+.cc-acciones { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.cc-nota { margin: 4px 0 0; font-size: .75rem; color: var(--sx-critico, #b91c1c); }
+.cc-editar { width: 1%; }
+.cc-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 10px 14px; font-size: .8125rem; color: var(--sx-texto-3); border-top: 1px solid var(--sx-borde); }
+.cc-pie svg { color: var(--cr); }
+.cc-abrir { margin-top: 4px; align-self: flex-start; gap: 6px; }
+.cc-probar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--sx-borde); font-size: .875rem; }
+.cc-probar > span { color: var(--sx-texto-2); margin-right: 4px; }
+.cc-probar .js-cc-nota { flex: 1 1 100%; }
+.cc-borrar { margin-top: 4px; }
+.cc-pegar { width: 100%; font: .8125rem/1.4 ui-monospace, Consolas, monospace; resize: vertical; -webkit-text-security: none; }
+.cc-importar-acc { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.cc-importar-acc label { cursor: pointer; gap: 6px; }
+.cc-resumen { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.cc-problemas { margin: 10px 0 0; padding: 8px 12px 8px 28px; max-height: 180px; overflow: auto; border-radius: 10px; background: color-mix(in srgb, var(--sx-alerta, #b45309) 7%, transparent); font-size: .8125rem; line-height: 1.5; }
+.cc-listo { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; color: var(--sx-ok, #15803d); font-weight: 600; }
+
+@media (max-width: 760px) {
+  /* La tabla pasa a una tarjeta por empresa. */
+  .cc-tabla thead { display: none; }
+  .cc-tabla, .cc-tabla tbody, .cc-tabla tr, .cc-tabla td { display: block; width: auto; }
+  .cc-tabla tr { position: relative; padding: 12px 14px; border-bottom: 1px solid var(--sx-borde); }
+  .cc-tabla td { border: 0; padding: 4px 0; }
+  .cc-tabla td[data-et]::before { content: attr(data-et); display: block; font-size: .6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--sx-texto-3); margin-bottom: 2px; }
+  .cc-editar { position: absolute; top: 8px; right: 8px; padding: 0 !important; }
+  .cc-empresa { padding-right: 40px !important; min-width: 0; }
+  .cc-buscar { max-width: none; }
+}
+
 @media (max-width: 640px) {
   .cr2-persona-fila { grid-template-columns: 1fr 1fr auto; }
   .cr2-persona-fila input[type=date] { grid-column: 1 / 3; grid-row: 2; }
