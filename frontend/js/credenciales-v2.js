@@ -97,6 +97,48 @@
     catch (e) { aviso('No se pudo copiar. Selecciónalo y cópialo a mano.', 'alerta'); }
   }
 
+  function reducido() { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+  /** Candado dibujado aquí para poder animar el arco (se abre con la clase cr2-desbloqueo / cr2--abierta). */
+  function candadoSvg(tam) {
+    return '<svg class="cr2-candado" width="' + tam + '" height="' + tam + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path class="cr2-candado__arco" d="M7 11V8a5 5 0 0 1 10 0v3"/><rect x="4.5" y="11" width="15" height="10" rx="2.5"/><path class="cr2-candado__ojo" d="M12 15v2.5"/></svg>';
+  }
+  var GLIFOS = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#$%&*@?!';
+  /** Efecto «descifrando»: cada carácter gira entre símbolos y se fija de izquierda a derecha. */
+  function descifrarEn(el, texto, alTerminar) {
+    if (el._descifrando) cancelAnimationFrame(el._descifrando);
+    if (reducido() || !texto) { el.textContent = texto; if (alTerminar) alTerminar(); return; }
+    var inicio = performance.now(), dur = Math.min(900, 260 + texto.length * 45);
+    el.classList.add('cr2-descifrando');
+    (function paso(ahora) {
+      var t = (ahora - inicio) / dur, fijos = Math.floor(Math.max(0, Math.min(1, t)) * texto.length), s = texto.slice(0, fijos);
+      for (var i = fijos; i < texto.length; i++) s += texto[i] === ' ' ? ' ' : GLIFOS[Math.floor(Math.random() * GLIFOS.length)];
+      el.textContent = s;
+      if (t < 1) el._descifrando = requestAnimationFrame(paso);
+      else { el._descifrando = null; el.textContent = texto; el.classList.remove('cr2-descifrando'); if (alTerminar) alTerminar(); }
+    })(inicio);
+  }
+  /** Al ocultar: los caracteres vuelven a puntos de derecha a izquierda. */
+  function cifrarEn(el, largo) {
+    if (el._descifrando) cancelAnimationFrame(el._descifrando);
+    var puntos = '•'.repeat(Math.min(largo, 16));
+    if (reducido()) { el.textContent = puntos; return; }
+    var actual = el.textContent, inicio = performance.now(), dur = 280;
+    (function paso(ahora) {
+      var t = Math.min(1, (ahora - inicio) / dur), quedan = Math.round((1 - t) * actual.length);
+      el.textContent = actual.slice(0, quedan) + puntos.slice(quedan);
+      if (t < 1) el._descifrando = requestAnimationFrame(paso); else { el._descifrando = null; el.textContent = puntos; }
+    })(inicio);
+  }
+  /** Mostrar/ocultar una clave con el efecto (lo usan las dos ventanas de «ver clave»). */
+  function alternarClave(el, b, clave) {
+    var x = el.querySelector('.js-cr-clave-txt'), oculta = x.dataset.oculta === '1';
+    if (oculta) descifrarEn(x, clave); else cifrarEn(x, clave.length);
+    x.dataset.oculta = oculta ? '0' : '1';
+    x.classList.toggle('cr2-ver__clave--visible', oculta);
+    b.innerHTML = U.ico(oculta ? 'ojoTachado' : 'ojo', 14); b.title = oculta ? 'Ocultar' : 'Mostrar';
+  }
+
   // --- El candado: abrir la bóveda (y registrar el autenticador la primera vez) --------------
   function casillas() {
     var h = '<div class="fin2-digitos cr2-digitos" role="group" aria-label="Código de 6 dígitos">';
@@ -172,7 +214,7 @@
         } else if (r.data.autenticador_activo) {
           inactividad_ = r.data.inactividad_min || inactividad_;
           el = modal(cerrar +
-            '<span class="cr2-modal__ico">' + U.ico('candado', 26) + '</span>' +
+            '<span class="cr2-modal__ico">' + candadoSvg(26) + '</span>' +
             '<h2 class="sx2-dialogo__titulo">Abrir la bóveda</h2>' +
             '<p class="sx2-dialogo__texto">Escribe el código de 6 dígitos de <b>Google Authenticator</b> («SIGSO Credenciales»).</p>' +
             casillas() + '<p class="fin2-error js-cr-err" role="alert"></p>' +
@@ -184,8 +226,11 @@
               if (!x || !x.ok) return limpiarCasillas(el, (x && x.message) || 'No se pudo abrir.');
               ultimoUso_ = Date.now(); inactividad_ = x.data.inactividad_min || inactividad_;
               guardarToken(x.data.boveda_token); iniciarReloj();
-              el.querySelector('.cr2-modal__caja').classList.add('cr2-abre');
-              setTimeout(function () { fin(true); }, 380);
+              // El candado se abre (y se pone verde) antes de que la ventana se vaya.
+              var caja = el.querySelector('.cr2-modal__caja');
+              caja.classList.add('cr2-desbloqueo');
+              setTimeout(function () { caja.classList.add('cr2-abre'); }, reducido() ? 0 : 520);
+              setTimeout(function () { fin(true); }, reducido() ? 0 : 900);
             });
           });
         } else {
@@ -271,7 +316,17 @@
       ? '<button type="button" class="cr2-pildora cr2-pildora--abierta js-cr-cerrar-boveda" title="Cerrar la bóveda ahora">' + U.ico('candado', 14) + 'Abierta · <span class="js-cr-reloj">' + inactividad_ + ':00</span></button>'
       : '<button type="button" class="cr2-pildora js-cr-abrir-boveda" title="Abrir con el código del teléfono">' + U.ico('candado', 14) + 'Bóveda cerrada</button>';
   }
-  function pintarPildora() { document.querySelectorAll('.js-cr-pildora').forEach(function (el) { el.innerHTML = pildoraHtml(); }); }
+  function pintarPildora() {
+    document.querySelectorAll('.js-cr-pildora').forEach(function (el) { el.innerHTML = pildoraHtml(); });
+    // Todo lo que muestra el estado de la bóveda (puerta, candados de la tabla) cuelga de esta clase.
+    var abierta = !!token();
+    document.querySelectorAll('.cr2').forEach(function (el) {
+      var antes = el.classList.contains('cr2--abierta');
+      el.classList.toggle('cr2--abierta', abierta);
+      if (abierta && !antes) { el.classList.remove('cr2--recien'); void el.offsetWidth; el.classList.add('cr2--recien'); }
+    });
+    document.querySelectorAll('.js-cc-estado-boveda').forEach(function (el) { el.innerHTML = estadoBovedaHtml(); });
+  }
 
   // --- Ver una clave ----------------------------------------------------------------------------
   function verClave(c) {
@@ -299,11 +354,7 @@
         if (ev.target.closest('.js-cr-copiar-u')) return copiar(c.usuario, 'Usuario');
         if (ev.target.closest('.js-cr-copiar-c')) return copiar(clave, 'Clave');
         var b = ev.target.closest('.js-cr-mostrar');
-        if (b) {
-          var x = el.querySelector('.js-cr-clave-txt'), oculta = x.dataset.oculta === '1';
-          x.textContent = oculta ? clave : '•'.repeat(Math.min(clave.length, 16)); x.dataset.oculta = oculta ? '0' : '1';
-          b.innerHTML = U.ico(oculta ? 'ojoTachado' : 'ojo', 14); b.title = oculta ? 'Ocultar' : 'Mostrar';
-        }
+        if (b) alternarClave(el, b, clave);
       });
     });
   }
@@ -555,7 +606,7 @@
     if ((vista_ === 'cuentas' || vista_ === 'personas') && !catsGenerales().length) vista_ = hayClientes() ? 'clientes' : 'bitacora';
     var cuerpo = vista_ === 'personas' ? vistaPersonas() : vista_ === 'accesos' ? vistaAccesos() : vista_ === 'bitacora' ? '<div class="js-cr-bitacora">' + U.esqueleto('tabla', 8) + '</div>'
       : vista_ === 'clientes' ? '<div class="js-cc">' + (cli_ ? vistaClientes() : U.esqueleto('tabla', 8)) + '</div>' : vistaCuentas();
-    raiz_.innerHTML = '<div class="sx2 sx2-pagina cr2 cr2-modulo">' + cabecera() + cuerpo + '</div>';
+    raiz_.innerHTML = '<div class="sx2 sx2-pagina cr2 cr2-modulo' + (token() ? ' cr2--abierta' : '') + (vista_ === 'clientes' ? ' cr2--clientes' : '') + '">' + cabecera() + cuerpo + '</div>';
     if (U.animar) U.animar(raiz_);
     if (token()) iniciarReloj();
     if (vista_ === 'bitacora') cargarBitacora();
@@ -708,72 +759,149 @@
       return sinTildes(c.razon_social + ' ' + c.codigo).indexOf(q) !== -1 || (qRut.length >= 3 && String(c.rut).toLowerCase().replace(/[^0-9k]/g, '').indexOf(qRut) !== -1);
     });
   }
+  /** Cuánto está resguardada una empresa: las dos claves, una o ninguna. */
+  function proteccion(fs) {
+    var n = (fs.MUTUAL && fs.MUTUAL.tiene_clave ? 1 : 0) + (fs.SEREMI && fs.SEREMI.tiene_clave ? 1 : 0);
+    var falla = (fs.MUTUAL && fs.MUTUAL.estado === 'NO_FUNCIONA') || (fs.SEREMI && fs.SEREMI.estado === 'NO_FUNCIONA');
+    if (falla) return { id: 'falla', texto: 'Revisar', titulo: 'Una clave no funcionó: hay que pedirla de nuevo' };
+    if (n === 2) return { id: 'completa', texto: 'Protegida', titulo: 'Mutual y SEREMI guardadas y cifradas' };
+    if (n === 1) return { id: 'parcial', texto: 'Parcial', titulo: 'Falta una de las dos claves' };
+    return { id: 'sin', texto: 'Sin claves', titulo: 'Todavía no hay claves guardadas' };
+  }
+  function escudoSvg() {
+    return '<svg class="cc-escudo__svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path class="cc-escudo__forma" d="M12 2.5 4.5 5.5v6c0 4.6 3.1 8.4 7.5 10 4.4-1.6 7.5-5.4 7.5-10v-6z"/><path class="cc-escudo__check" d="m8.5 12 2.5 2.5 4.5-5"/></svg>';
+  }
+  /** La puerta de la bóveda: pernos que se retraen y un dial que gira al abrir. */
+  function puertaSvg() {
+    var pernos = '';
+    for (var i = 0; i < 8; i++) pernos += '<g transform="rotate(' + (i * 45) + ' 60 60)"><rect class="cc-perno" x="56.5" y="3" width="7" height="13" rx="2"/></g>';
+    var marcas = '';
+    for (var k = 0; k < 12; k++) marcas += '<line transform="rotate(' + (k * 30) + ' 60 60)" x1="60" y1="31" x2="60" y2="' + (k % 3 ? 34 : 36) + '"/>';
+    return '<svg class="cc-puerta" viewBox="0 0 120 120" aria-hidden="true">' +
+      '<circle class="cc-puerta__halo" cx="60" cy="60" r="57"/>' +
+      '<g class="cc-puerta__pernos">' + pernos + '</g>' +
+      '<circle class="cc-puerta__marco" cx="60" cy="60" r="49"/>' +
+      '<circle class="cc-puerta__hoja" cx="60" cy="60" r="41"/>' +
+      '<g class="cc-puerta__dial"><g class="cc-puerta__marcas">' + marcas + '</g>' +
+        '<circle class="cc-puerta__rueda" cx="60" cy="60" r="20"/>' +
+        '<path class="cc-puerta__rayos" d="M60 42v36M42 60h36M47.3 47.3l25.4 25.4M72.7 47.3 47.3 72.7"/>' +
+        '<circle class="cc-puerta__centro" cx="60" cy="60" r="6"/></g>' +
+    '</svg>';
+  }
+  function estadoBovedaHtml() {
+    return token()
+      ? '<span class="cc-boveda__punto"></span><b>Bóveda abierta</b><span>Se cierra sola en <span class="js-cr-reloj">' + inactividad_ + ':00</span> sin uso.</span>'
+      : '<span class="cc-boveda__punto"></span><b>Bóveda cerrada</b><span>Las claves están cifradas. Para verlas se pide el código del teléfono.</span>';
+  }
+  function heroClientes(r) {
+    var pct = r.activos ? Math.round(r.protegidas * 100 / r.activos) : 0;
+    return '<section class="cc-boveda sx2-entra">' +
+      '<div class="cc-boveda__puerta">' + puertaSvg() + '</div>' +
+      '<div class="cc-boveda__txt">' +
+        '<p class="cc-boveda__estado js-cc-estado-boveda" role="status">' + estadoBovedaHtml() + '</p>' +
+        '<h2>Claves de los clientes, bajo llave</h2>' +
+        '<ul class="cc-sellos">' +
+          '<li>' + U.ico('candado', 13) + 'Cifradas AES-256</li>' +
+          '<li>' + U.ico('escudoCheck', 13) + 'Código del teléfono para verlas</li>' +
+          '<li>' + U.ico('lista', 13) + 'Bitácora de quién vio cada una</li>' +
+          '<li>' + U.ico('descargar', 13) + 'Sin descarga de claves</li>' +
+        '</ul>' +
+        '<div class="cc-boveda__acc">' +
+          '<button type="button" class="cc-boveda__btn cc-boveda__btn--abrir js-cr-abrir-boveda">' + candadoSvg(16) + 'Abrir la bóveda</button>' +
+          '<button type="button" class="cc-boveda__btn cc-boveda__btn--cerrar js-cr-cerrar-boveda">' + candadoSvg(16) + 'Cerrar ahora</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cc-boveda__cifras">' +
+        '<div class="cc-cobertura" style="--pct:' + pct + '">' + U.anillo(pct, { tam: 104, grosor: 9, tono: pct >= 80 ? 'ok' : pct >= 40 ? 'alerta' : 'critico' }) +
+          '<span>de las empresas activas con sus <b>dos claves</b></span></div>' +
+        '<dl class="cc-cifras">' +
+          '<div><dt>Empresas activas</dt><dd data-sx-cifra="' + r.activos + '">' + r.activos + '</dd></div>' +
+          '<div><dt>Claves cifradas</dt><dd data-sx-cifra="' + r.claves + '">' + r.claves + '</dd></div>' +
+          '<div><dt>Mutual · SEREMI</dt><dd>' + r.conMutual + ' · ' + r.conSeremi + '</dd></div>' +
+          '<div class="' + (r.fallan ? 'cc-cifras--mal' : '') + '"><dt>No funcionan</dt><dd data-sx-cifra="' + r.fallan + '">' + r.fallan + '</dd></div>' +
+        '</dl>' +
+      '</div>' +
+    '</section>';
+  }
+  function resumenClientes() {
+    var r = { activos: 0, protegidas: 0, conMutual: 0, conSeremi: 0, claves: 0, fallan: 0 };
+    cli_.clientes.forEach(function (c) {
+      var fs = filasDe(c.cliente_id), m = fs.MUTUAL && fs.MUTUAL.tiene_clave, s = fs.SEREMI && fs.SEREMI.tiene_clave;
+      if (c.activo) { r.activos++; if (m && s) r.protegidas++; }
+      if (m) { r.conMutual++; r.claves++; }
+      if (s) { r.conSeremi++; r.claves++; }
+      if ((fs.MUTUAL && fs.MUTUAL.estado === 'NO_FUNCIONA') || (fs.SEREMI && fs.SEREMI.estado === 'NO_FUNCIONA')) r.fallan++;
+    });
+    return r;
+  }
   function vistaClientes() {
     if (cli_.error) return U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudieron cargar las claves de clientes', texto: cli_.error }) });
-    var conMutual = 0, conSeremi = 0, fallan = 0, activos = 0;
-    cli_.clientes.forEach(function (c) {
-      var fs = filasDe(c.cliente_id);
-      if (c.activo) activos++;
-      if (fs.MUTUAL && fs.MUTUAL.tiene_clave) conMutual++;
-      if (fs.SEREMI && fs.SEREMI.tiene_clave) conSeremi++;
-      if ((fs.MUTUAL && fs.MUTUAL.estado === 'NO_FUNCIONA') || (fs.SEREMI && fs.SEREMI.estado === 'NO_FUNCIONA')) fallan++;
-    });
+    var r = resumenClientes();
     var porMutual = {}; cli_.filas.forEach(function (f) { if (f.tipo === 'MUTUAL' && f.institucion) porMutual[f.institucion] = (porMutual[f.institucion] || 0) + 1; });
     var filtros = [['activos', 'Activas'], ['todas', 'Todas'], ['sin', 'Les falta alguna clave'], ['falla', 'No funcionan']];
-    return '<div class="sx2-fila-kpis">' +
-        U.kpi({ etiqueta: 'Empresas activas', valor: activos, icono: 'empresa', i: 0 }) +
-        U.kpi({ etiqueta: 'Con clave de Mutual', valor: conMutual, icono: 'casco', i: 1 }) +
-        U.kpi({ etiqueta: 'Con clave de SEREMI', valor: conSeremi, icono: 'escudo', i: 2 }) +
-        U.kpi({ etiqueta: 'Claves que no funcionan', valor: fallan, icono: 'alerta', tono: fallan ? 'critico' : 'ok', i: 3 }) +
-      '</div>' +
-      '<div class="cc-barra">' +
-        '<label class="cc-buscar">' + U.ico('lupa', 16) + '<input type="search" class="sx2-input js-cc-buscar" placeholder="Buscar por empresa, RUT o código" value="' + txt(cliBusca_) + '" aria-label="Buscar empresa"></label>' +
-        '<div class="cr2-chips">' + filtros.map(function (f) { return U.chip({ texto: f[1], activo: cliFiltro_ === f[0], clase: 'js-cc-filtro', datos: { f: f[0] }, tono: f[0] === 'falla' && fallan ? 'critico' : '' }); }).join('') +
+    return heroClientes(r) +
+      '<div class="cc-barra sx2-entra" style="--i:1">' +
+        '<label class="cc-buscar">' + U.ico('lupa', 16) + '<input type="search" class="sx2-input js-cc-buscar" placeholder="Buscar por empresa, RUT o código" value="' + txt(cliBusca_) + '" aria-label="Buscar empresa">' +
+          '<span class="cc-buscar__n js-cc-n" aria-live="polite"></span></label>' +
+        '<div class="cr2-chips">' + filtros.map(function (f) { return U.chip({ texto: f[1], activo: cliFiltro_ === f[0], clase: 'js-cc-filtro', datos: { f: f[0] }, tono: f[0] === 'falla' && r.fallan ? 'critico' : '', n: f[0] === 'falla' && r.fallan ? r.fallan : null }); }).join('') +
           cli_.catalogos.mutuales.filter(function (m) { return porMutual[m.id]; }).map(function (m) { return U.chip({ texto: m.id === 'MUTUAL' ? 'Mutual CChC' : m.id, n: porMutual[m.id], activo: cliMutual_ === m.id, clase: 'js-cc-mutual', datos: { m: m.id } }); }).join('') +
         '</div>' +
       '</div>' +
-      '<div class="js-cc-tabla">' + tablaClientes() + '</div>';
+      '<div class="js-cc-tabla">' + tablaClientes(true) + '</div>';
   }
   function celdaPortal(c, f, tipo) {
+    var et = tipo === 'MUTUAL' ? 'Mutual' : 'SEREMI';
     if (!f || (!f.usuario && !f.tiene_clave)) {
-      return '<td class="cc-portal cc-portal--vacio" data-et="' + (tipo === 'MUTUAL' ? 'Mutual' : 'SEREMI') + '">' + U.boton({ texto: 'Agregar', icono: 'nueva', sm: true, variante: 'fantasma', clase: 'js-cc-editar', datos: { cliente: c.cliente_id, tipo: tipo } }) + '</td>';
+      return '<td class="cc-portal cc-portal--vacio" data-et="' + et + '">' + U.boton({ texto: 'Agregar', icono: 'nueva', sm: true, variante: 'fantasma', clase: 'js-cc-editar', datos: { cliente: c.cliente_id, tipo: tipo } }) + '</td>';
     }
     var url = urlPortal(f);
     var estado = f.estado === 'NO_FUNCIONA' ? U.badge('No funciona', 'critico') : f.estado === 'FUNCIONA' ? '<span class="cc-ok" title="Funcionó el ' + txt(fecha(f.verificada_en)) + (f.verificada_por ? ' (' + txt(f.verificada_por) + ')' : '') + '">' + U.ico('check', 13) + '</span>' : '';
-    return '<td class="cc-portal" data-et="' + (tipo === 'MUTUAL' ? 'Mutual' : 'SEREMI') + '">' +
+    return '<td class="cc-portal" data-et="' + et + '">' +
       '<div class="cc-usuario">' + (f.usuario ? '<code>' + txt(f.usuario) + '</code>' : '<span class="cr2-tenue">Sin usuario</span>') + estado + '</div>' +
       '<div class="cc-acciones">' +
-        (f.tiene_clave ? U.boton({ texto: 'Clave', icono: 'llave', sm: true, variante: 'primario', clase: 'js-cc-ver', datos: { id: f.id }, titulo: 'Ver la clave de ' + (tipo === 'MUTUAL' ? 'la Mutual' : 'la SEREMI') }) : U.badge('Sin clave', 'neutro', true)) +
+        (f.tiene_clave
+          ? '<button type="button" class="cc-llave js-cc-ver" data-id="' + txt(f.id) + '" title="Ver la clave de ' + (tipo === 'MUTUAL' ? 'la Mutual' : 'la SEREMI') + '">' +
+              '<span class="cc-llave__ico">' + candadoSvg(14) + '</span><span class="cc-llave__puntos" aria-hidden="true">••••••</span><span class="cc-llave__txt">Ver clave</span></button>'
+          : U.badge('Sin clave', 'neutro', true)) +
         (f.usuario ? U.boton({ soloIcono: true, icono: 'copiar', titulo: 'Copiar usuario', sm: true, variante: 'fantasma', clase: 'js-cc-copiar', datos: { id: f.id } }) : '') +
         (url ? '<a class="sx2-boton sx2-boton--fantasma sx2-boton--icono sx2-boton--sm" href="' + txt(url) + '" target="_blank" rel="noopener noreferrer" title="Abrir el portal" aria-label="Abrir el portal">' + U.ico('enlace', 14) + '</a>' : '') +
       '</div>' +
       (f.estado === 'NO_FUNCIONA' && f.estado_nota ? '<p class="cc-nota">' + txt(f.estado_nota) + '</p>' : '') +
     '</td>';
   }
-  function tablaClientes() {
+  /** `entrar`: las filas aparecen en cascada (solo al pintar la vista, no al buscar). */
+  function tablaClientes(entrar) {
     var lista = clientesFiltrados();
+    var n = raiz_ && raiz_.querySelector('.js-cc-n');
+    if (n) n.textContent = cliBusca_ ? lista.length + (lista.length === 1 ? ' empresa' : ' empresas') : '';
     if (!cli_.clientes.length) {
       return U.card({ cuerpo: U.vacio({ icono: 'empresa', titulo: 'No hay empresas todavía', texto: 'Las empresas salen de la base de clientes de SIGSO. También puedes cargar la planilla desde Excel o agregar una empresa por su RUT.',
         accion: U.boton({ texto: 'Cargar desde Excel', icono: 'subir', variante: 'primario', clase: 'js-cc-importar' }) }) });
     }
     if (!lista.length) return U.card({ cuerpo: U.vacio({ icono: 'lupa', titulo: 'Ninguna empresa coincide', texto: 'Prueba con otra búsqueda o con el filtro «Todas».' }) });
-    var visibles = lista.slice(0, cliTope_);
-    return U.card({ sinRelleno: true, cuerpo: '<div class="fin2-tabla-envoltura"><table class="fin2-tabla cc-tabla"><thead><tr>' +
-        '<th>Empresa</th><th>Mutual adherida</th><th>Mutual · usuario y clave</th><th>SEREMI · usuario y clave</th><th aria-label="Editar"></th></tr></thead><tbody>' +
-        visibles.map(function (c) {
-          var fs = filasDe(c.cliente_id), m = fs.MUTUAL && mutualDe(fs.MUTUAL.institucion);
-          return '<tr>' +
+    var visibles = lista.slice(0, cliTope_), ahora = Date.now();
+    return U.card({ sinRelleno: true, clase: 'cc-tarjeta-tabla', cuerpo: '<div class="fin2-tabla-envoltura"><table class="fin2-tabla cc-tabla' + (entrar ? ' cc-tabla--entra' : '') + '"><thead><tr>' +
+        '<th class="cc-th-prot">Protección</th><th>Empresa</th><th>Mutual adherida</th><th>Mutual · usuario y clave</th><th>SEREMI · usuario y clave</th><th class="cc-th-act">Último cambio</th><th aria-label="Editar"></th></tr></thead><tbody>' +
+        visibles.map(function (c, i) {
+          var fs = filasDe(c.cliente_id), m = fs.MUTUAL && mutualDe(fs.MUTUAL.institucion), p = proteccion(fs);
+          var ult = [fs.MUTUAL, fs.SEREMI].filter(Boolean).sort(function (a, b) { return String(b.actualizada_en).localeCompare(String(a.actualizada_en)); })[0];
+          // Recién guardada: la fila se «sella» (brillo + escudo que se marca).
+          var sellada = ult && ahora - new Date(ult.actualizada_en).getTime() < 8000;
+          return '<tr class="cc-fila cc-fila--' + p.id + (sellada ? ' cc-fila--sellada' : '') + '" style="--i:' + Math.min(i, 24) + '">' +
+            '<td class="cc-prot" data-et="Protección"><span class="cc-escudo cc-escudo--' + p.id + '" title="' + txt(p.titulo) + '">' + escudoSvg() + '<span>' + txt(p.texto) + '</span></span></td>' +
             '<td class="cc-empresa"><b>' + txt(c.razon_social) + '</b><span class="cr2-tenue">' + txt([c.codigo, c.rut].filter(Boolean).join(' · ')) + '</span>' +
               (!c.activo ? U.badge('Inactiva', 'neutro', true) : '') + (c.fuera_de_base ? U.badge('No está en la base de clientes', 'alerta', true) : '') + '</td>' +
             '<td data-et="Mutual adherida">' + (m ? '<span class="cc-mutual cc-mutual--' + txt(m.id.toLowerCase()) + '">' + txt(m.nombre) + '</span>' : '<span class="cr2-tenue">—</span>') + '</td>' +
             celdaPortal(c, fs.MUTUAL, 'MUTUAL') + celdaPortal(c, fs.SEREMI, 'SEREMI') +
+            '<td class="cc-act" data-et="Último cambio">' + (ult ? '<span>' + txt(fecha(ult.actualizada_en)) + '</span><span class="cr2-tenue">' + txt(ult.actualizado_por || '') + '</span>' : '<span class="cr2-tenue">—</span>') + '</td>' +
             '<td class="cc-editar">' + U.boton({ soloIcono: true, icono: 'editar', titulo: 'Editar ' + c.razon_social, sm: true, variante: 'fantasma', clase: 'js-cc-editar', datos: { cliente: c.cliente_id } }) + '</td>' +
           '</tr>';
         }).join('') + '</tbody></table></div>' +
       '<p class="cc-pie">' + (lista.length > visibles.length ? 'Mostrando ' + visibles.length + ' de ' + lista.length + '. ' + U.boton({ texto: 'Ver más', sm: true, variante: 'fantasma', clase: 'js-cc-mas' }) : lista.length + (lista.length === 1 ? ' empresa' : ' empresas')) +
         ' · ' + U.ico('escudo', 13) + ' Sin descarga con claves: cada clave vista queda en la bitácora.</p>' });
   }
-  function repintarTabla() { var t = raiz_ && raiz_.querySelector('.js-cc-tabla'); if (t) t.innerHTML = tablaClientes(); }
+  function repintarTabla() { var t = raiz_ && raiz_.querySelector('.js-cc-tabla'); if (t) t.innerHTML = tablaClientes(false); }
 
   function verClaveCliente(f) {
     var c = clientePorId(f.cliente_id) || { razon_social: f.razon_social };
@@ -782,7 +910,7 @@
       var clave = r.data.clave || '', segundos = 90, url = urlPortal(f), m = f.tipo === 'MUTUAL' ? mutualDe(f.institucion) : null;
       var titulo = f.tipo === 'MUTUAL' ? (m ? m.nombre : 'Mutual') : 'SEREMI de Salud';
       var el = modal(U.boton({ variante: 'fantasma', soloIcono: true, icono: 'equis', titulo: 'Cerrar', clase: 'js-cr-cerrar cr2-modal__x' }) +
-        '<div class="cr2-ver__cab"><span class="cr2-logo">' + U.ico(f.tipo === 'MUTUAL' ? 'casco' : 'escudo', 18) + '</span>' +
+        '<div class="cr2-ver__cab"><span class="cr2-logo cc-ver__candado">' + candadoSvg(20) + '</span>' +
           '<div><h2 class="sx2-dialogo__titulo">' + txt(titulo) + '</h2><p class="cr2-ver__cat">' + txt(c.razon_social) + (f.rut ? ' · ' + txt(f.rut) : '') + '</p></div></div>' +
         (f.usuario ? '<div class="cr2-ver__fila"><span class="cr2-ver__et">Usuario</span><code class="cr2-ver__valor">' + txt(f.usuario) + '</code>' +
           U.boton({ soloIcono: true, icono: 'copiar', titulo: 'Copiar usuario', sm: true, clase: 'js-cr-copiar-u' }) + '</div>' : '') +
@@ -798,6 +926,7 @@
       var t = setInterval(function () { segundos--; var s = el.querySelector('.js-cr-cuenta'); if (s) s.textContent = segundos; if (segundos <= 0) cerrar(); }, 1000);
       function cerrar() { clearInterval(t); document.removeEventListener('keydown', esc); if (el.parentNode) el.parentNode.removeChild(el); }
       function esc(ev) { if (ev.key === 'Escape') cerrar(); }
+      setTimeout(function () { var cj = el.querySelector('.cr2-modal__caja'); if (cj) cj.classList.add('cr2-desbloqueo'); }, 140);
       function marcarComo(estado, nota) {
         conBoveda('credClienteMarcar', { id: f.id, estado: estado, nota: nota || '' }).then(function (x) {
           if (!x || !x.ok) { if (!x || !x.cancelado) aviso((x && x.message) || 'No se pudo anotar.', 'alerta'); return; }
@@ -821,11 +950,7 @@
         }
         if (ev.target.closest('.js-cc-falla-ok')) return marcarComo('NO_FUNCIONA', el.querySelector('.js-cc-nota').value);
         var b = ev.target.closest('.js-cr-mostrar');
-        if (b) {
-          var x = el.querySelector('.js-cr-clave-txt'), oculta = x.dataset.oculta === '1';
-          x.textContent = oculta ? clave : '•'.repeat(Math.min(clave.length, 16)); x.dataset.oculta = oculta ? '0' : '1';
-          b.innerHTML = U.ico(oculta ? 'ojoTachado' : 'ojo', 14); b.title = oculta ? 'Ocultar' : 'Mostrar';
-        }
+        if (b) alternarClave(el, b, clave);
       });
     });
   }

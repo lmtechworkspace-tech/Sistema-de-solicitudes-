@@ -1558,6 +1558,9 @@
   // solicitudes) se leen mejor angostos y centrados -- por eso el ancho del
   // <main> se adapta al modulo en vez de ser fijo.
   var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad', 'hompy', 'finanzas', 'portal_clientes'].concat(IDS_DEPARTAMENTO);
+  // 2026-10-19: módulos que no son v2 pero igual van a pantalla completa
+  // (Credenciales: la tabla de claves de clientes aprovecha todo el ancho).
+  var MODULOS_ANCHO_TOTAL = ['credenciales'];
 
   // SIGSO v2 (documentacion/SIGSO-v2-hoja-de-ruta.md). Desde el 2026-09-25 la
   // versión clásica está retirada: cada módulo tiene UNA implementación, la v2.
@@ -1584,7 +1587,7 @@
   // Pantalla completa para los módulos v2.
   function actualizarModuloV2_(id) {
     var main = document.querySelector('#vista-shell .sigso-contenido');
-    if (main) main.classList.toggle('plataforma-contenido--total', usaV2_(id));
+    if (main) main.classList.toggle('plataforma-contenido--total', usaV2_(id) || MODULOS_ANCHO_TOTAL.indexOf(id) !== -1);
   }
   // Quien había elegido la clásica tenía la preferencia guardada: se limpia.
   try {
