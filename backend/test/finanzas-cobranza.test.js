@@ -10,6 +10,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { versionDe } = require('./_finanzasPrueba');
 const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
@@ -112,7 +113,10 @@ test('cartera: los pagos cubren de la factura más antigua a la más nueva, lo q
   const fuera = cb.clientes.find((c) => !c.en_sigso);
   assert.deepEqual([fuera.cliente, fuera.por_cobrar], ['EMPRESA FUERA DE SIGSO', 59500]);
   const ficha = C.fichaCliente(db, D({ clave: 'CL-1' }), ctx);
-  assert.deepEqual(ficha.facturas.map((f) => [f.folio, f.situacion, f.saldo]), [['502', 'Pago parcial', 88000], ['501', 'Pagada', 0]]);
+  // v2 (FIN-22) + corrección v2 I04.2: FIFO es SUGERENCIA. «Pagada» exige saldo CONFIRMADO cero; mientras
+  // la aplicación solo esté sugerida, la factura dice «Aplicación sugerida» (antes «Pagada (sugerido)»).
+  assert.deepEqual(ficha.facturas.map((f) => [f.folio, f.situacion, f.saldo]), [['502', 'Aplicación sugerida', 88000], ['501', 'Aplicación sugerida', 0]]);
+  assert.deepEqual(ficha.facturas.map((f) => f.saldo_confirmado), [119000, 119000], 'sin aplicaciones confirmadas, el saldo confirmado es el total');
   assert.equal(ficha.pagos.length, 1);
   assert.equal(cb.totales.por_cobrar, 88000 + 59500);
 });
@@ -125,10 +129,10 @@ test('días de atraso y tramos desde el vencimiento (30 días); anular e incobra
   assert.deepEqual([f501.vence, f501.dias, f501.situacion], ['2026-07-31', 67, 'Vencida']);
   assert.equal(m.get('CL-1').tramos.d61_90, 119000);
   const id = C.fichaCliente(db, D({ clave: 'CL-1' }), ctx).facturas.find((f) => f.folio === '501').id;
-  assert.ok(C.cambiarEstadoFactura(db, D({ id, estado: 'ANULADA' }), ctx)._validationError, 'exige motivo');
-  C.cambiarEstadoFactura(db, D({ id, estado: 'ANULADA', nota: 'emitida por error' }), ctx);
+  assert.ok(C.cambiarEstadoFactura(db, D({ id, expected_version: versionDe('FIN_FACTURAS', id), estado: 'ANULADA' }), ctx)._validationError, 'exige motivo');
+  C.cambiarEstadoFactura(db, D({ id, expected_version: versionDe('FIN_FACTURAS', id), estado: 'ANULADA', nota: 'emitida por error' }), ctx);
   assert.equal(C.cartera_(db).get('CL-1').facturas.length, 1);
-  C.cambiarEstadoFactura(db, D({ id, estado: 'INCOBRABLE', nota: 'cliente quebró' }), ctx);
+  C.cambiarEstadoFactura(db, D({ id, expected_version: versionDe('FIN_FACTURAS', id), estado: 'INCOBRABLE', nota: 'cliente quebró' }), ctx);
   const n = C.cartera_(db).get('CL-1');
   assert.deepEqual([n.incobrable, n.por_cobrar], [119000, 119000], 'la incobrable no suma a por cobrar');
 });

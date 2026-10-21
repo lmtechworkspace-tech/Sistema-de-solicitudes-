@@ -7,6 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { versionDe } = require('./_finanzasPrueba');
 const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
@@ -103,14 +104,18 @@ test('presupuesto: se guarda por empresa, el grupo suma, y se compara con lo rea
   const { db, ctx, D } = preparar(t);
   const meses = (v) => Array.from({ length: 12 }, () => v);
   assert.ok(P.guardar(db, D({ anio: 2026, empresa: '', lineas: [] }), ctx)._validationError, 'el presupuesto es por empresa');
-  assert.ok(P.guardar(db, D({ anio: 2026, empresa: 'HomePymes', lineas: [{ tipo: 'EGRESO', cuenta: 'Inventada', meses: meses(1) }] }), ctx)._validationError);
-  const g = P.guardar(db, D({ anio: 2026, empresa: 'HomePymes', lineas: [
+  assert.ok(P.guardar(db, D({ anio: 2026, empresa: 'HomePymes', expected_version: versionDe('FIN_PRESUPUESTO', '2026|HomePymes'), lineas: [{ tipo: 'EGRESO', cuenta: 'Inventada', meses: meses(1) }] }), ctx)._validationError);
+  const g = P.guardar(db, D({ anio: 2026, empresa: 'HomePymes', expected_version: versionDe('FIN_PRESUPUESTO', '2026|HomePymes'), lineas: [
     { tipo: 'INGRESO', cuenta: 'Servicio Mensual', meses: meses('1.000.000') },
     { tipo: 'EGRESO', cuenta: 'Sueldos', meses: meses(450000) },
     { tipo: 'EGRESO', cuenta: 'Arriendo Mensual', meses: meses(0) }
   ] }), ctx);
   assert.deepEqual([g.cuentas, g.ingresos_anio, g.egresos_anio], [2, 12000000, 5400000], 'texto con puntos se entiende; las líneas en cero no se guardan');
-  P.guardar(db, D({ anio: 2026, empresa: 'GDE', lineas: [{ tipo: 'INGRESO', cuenta: 'Servicio Mensual', meses: meses(200000) }] }), ctx);
+  P.guardar(db, D({ anio: 2026, empresa: 'GDE', expected_version: versionDe('FIN_PRESUPUESTO', '2026|GDE'), lineas: [{ tipo: 'INGRESO', cuenta: 'Servicio Mensual', meses: meses(200000) }] }), ctx);
+  // v2 (FIN-28): un borrador no se compara; recién aprobado manda.
+  assert.equal(P.ver(db, D({ anio: 2026, empresa: 'HomePymes' }), ctx).cargado, false, 'solo borrador: no hay presupuesto aprobado');
+  P.aprobar(db, D({ anio: 2026, empresa: 'HomePymes', expected_version: versionDe('FIN_PRESUPUESTO', '2026|HomePymes') }), ctx);
+  P.aprobar(db, D({ anio: 2026, empresa: 'GDE', expected_version: versionDe('FIN_PRESUPUESTO', '2026|GDE') }), ctx);
   const v = P.ver(db, D({ anio: 2026, empresa: 'HomePymes' }), ctx);
   const sm = v.filas.find((f) => f.tipo === 'INGRESO' && f.cuenta === 'Servicio Mensual');
   assert.deepEqual([sm.ppto[7], sm.real[7]], [1000000, 900000]);

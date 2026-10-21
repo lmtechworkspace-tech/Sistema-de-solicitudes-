@@ -33,16 +33,19 @@ function contexto_(db, excluir) {
   const d = I.db_();
   const fondos = new Map();       // cliente_id → saldo en custodia (sin los movimientos revisados)
   const ingresos = [];            // ingresos confirmados con cliente: {id, periodo, fecha, monto, cliente_id, cuenta}
-  d.prepare("SELECT id, periodo, fecha, datos FROM FIN_MOVIMIENTOS WHERE estado = 'CONFIRMADO'").all().forEach((r) => {
-    if (excluir.has(r.id)) return;
-    P.piezas_(I.des_(r.datos)).forEach((m) => {
-      const c = m.clasif;
-      if (!c || !c.cliente_id) return;
-      if (c.tipo === 'FONDO_RECIBIDO') fondos.set(c.cliente_id, (fondos.get(c.cliente_id) || 0) + m.abono);
-      if (c.tipo === 'FONDO_PAGADO') fondos.set(c.cliente_id, (fondos.get(c.cliente_id) || 0) - m.cargo);
-      if (c.tipo === 'INGRESO' && m.abono > 0) ingresos.push({ id: r.id, periodo: r.periodo, fecha: r.fecha, monto: m.abono, cliente_id: c.cliente_id, cuenta: c.cuenta });
-    });
+  // v2: desde la lectura única (banco + registro operativo sin conciliar), con los saldos iniciales aprobados.
+  require('./finanzasHechos').hechos_({ soloConfirmados: true }).forEach((m) => {
+    const id = m.movimiento_id || m.operacion_id;
+    if (excluir.has(id)) return;
+    const c = m.clasif;
+    if (!c || !c.cliente_id) return;
+    if (c.tipo === 'FONDO_RECIBIDO') fondos.set(c.cliente_id, (fondos.get(c.cliente_id) || 0) + m.abono);
+    if (c.tipo === 'FONDO_PAGADO') fondos.set(c.cliente_id, (fondos.get(c.cliente_id) || 0) - m.cargo);
+    if (c.tipo === 'INGRESO' && m.abono > 0) ingresos.push({ id, periodo: m.periodo, fecha: m.fecha, monto: m.abono, cliente_id: c.cliente_id, cuenta: c.cuenta });
   });
+  try {
+    require('./finanzasFondos').aperturas_().filter((a) => a.estado === 'APROBADA').forEach((a) => fondos.set(a.cliente_id, (fondos.get(a.cliente_id) || 0) + a.monto));
+  } catch (e) { /* sin aperturas */ }
   let cartera = null;
   try {
     const C = require('./finanzasCobranza');
@@ -133,17 +136,57 @@ function revisarUno_(r, mov, it, ctx) {
   return avisos;
 }
 
-/** Revisa sin guardar. data.items: como finanzasClasificar. */
-const revisarAntes = B.conBoveda('', function (db, data) {
-  const items = (Array.isArray(data && data.items) ? data.items : []).slice(0, 300);
+/**
+ * El servicio de revisión (sin guardar): lo usan el panel, los lotes y
+ * finanzasConfirmarSugeridas, así toda confirmación pasa por las mismas reglas.
+ */
+function revisarItems_(db, items) {
+  items = (Array.isArray(items) ? items : []).slice(0, 500);
   const d = I.db_();
   const ctx = contexto_(db, new Set(items.map((it) => txt_(it.id))));
-  const resultado = items.map((it) => {
+  return items.map((it) => {
     const r = d.prepare('SELECT id, periodo, fecha, estado, datos FROM FIN_MOVIMIENTOS WHERE id = ?').get(txt_(it.id));
     if (!r) return { id: it.id, avisos: [] };
     return { id: r.id, avisos: revisarUno_(r, I.des_(r.datos), it, ctx) };
   });
+}
+
+/** Revisa sin guardar. data.items: como finanzasClasificar. */
+const revisarAntes = B.conBoveda('', function (db, data) {
+  const resultado = revisarItems_(db, (Array.isArray(data && data.items) ? data.items : []).slice(0, 300));
   return { items: resultado, alertas: resultado.reduce((s, x) => s + x.avisos.filter((a) => a.nivel === 'alerta').length, 0) };
 });
 
-module.exports = { revisarAntes, revisarUno_, contexto_ };
+/**
+ * Las mismas reglas para una operación del registro (antes de confirmarla):
+ * custodia que queda negativa, pago doble, ingreso sin factura, etc.
+ * data: los campos de la operación (como finanzasGuardarOperacion).
+ */
+const revisarOperacion = B.conBoveda('', function (db, data) {
+  const m = require('./finanzasBase').montoClp_(data && data.monto);
+  const monto = m.ok ? Math.abs(m.valor) : 0;
+  const entrada = String((data && data.sentido) || '').toUpperCase() !== 'SALIDA';
+  const fecha = require('./finanzasBase').fechaCivil_(data && data.fecha) || require('./finanzasBase').hoy_();
+  const dists = Array.isArray(data && data.distribuciones) && data.distribuciones.length ? data.distribuciones : [Object.assign({ monto }, data)];
+  const it = dists.length > 1 ? { id: data.id || 'nueva', partes: dists } : Object.assign({ id: data.id || 'nueva' }, dists[0]);
+  const ctx = contexto_(db, new Set([String((data && data.id) || '')]));
+  const fila = { id: data.id || 'nueva', periodo: fecha.slice(0, 7), fecha, estado: 'PENDIENTE' };
+  const mov = { abono: entrada ? monto : 0, cargo: entrada ? 0 : monto, detalle: data.tercero ? { pagador: entrada ? data.tercero : '' } : null, planilla: null };
+  const avisos = revisarUno_(fila, mov, it, ctx);
+  // I05.5: pago de una obligación de Control interno — cuánto se esperaba y cuánto ya se registró (pagos parciales son válidos).
+  if (data && data.origen && data.origen.tipo === 'CONTROL_INTERNO') {
+    try {
+      const Op = require('./finanzasOperaciones');
+      const f = Op.fuente_(db, String(data.origen.registro_id || ''));
+      const otras = f && f.operaciones ? f.operaciones.filter((o) => o.id !== data.id && o.estado === 'CONFIRMADA').reduce((s, o) => s + o.monto, 0) : 0;
+      if (f && f.monto_esperado !== null && f.monto_esperado !== undefined) {
+        const P = require('./finanzasBase').plata_;
+        if (otras + monto > f.monto_esperado) avisos.push({ nivel: 'alerta', texto: 'Con esto se registrarían ' + P(otras + monto) + ' para una obligación de ' + P(f.monto_esperado) + ' (' + f.matriz_nombre + ', ' + f.cliente + '). ¿Incluye intereses o es otro pago?' });
+        else if (otras + monto < f.monto_esperado) avisos.push({ nivel: 'info', texto: 'Pago parcial: quedarían ' + P(f.monto_esperado - otras - monto) + ' por pagar de ' + P(f.monto_esperado) + ' (' + f.matriz_nombre + ').' });
+      }
+    } catch (e) { /* sin Control interno: sin aviso */ }
+  }
+  return { avisos, alertas: avisos.filter((a) => a.nivel === 'alerta').length };
+});
+
+module.exports = { revisarAntes, revisarItems_, revisarUno_, contexto_, revisarOperacion };

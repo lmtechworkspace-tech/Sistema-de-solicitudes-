@@ -17,40 +17,78 @@
  */
 
 const B = require('./finanzasBoveda');
+const Base = require('./finanzasBase');
 const FB = require('./finanzasBancos');
 const { errorValidacion, errorForbidden } = require('./errores');
 
 const I = FB.interno;
 
 let preparada_ = null;
+Base.registrarEsquema_(() => { preparada_ = null; });
 function db_() {
   const d = I.db_();
   if (preparada_ === d) return d;
   d.exec(`CREATE TABLE IF NOT EXISTS FIN_CIERRES (
     periodo TEXT PRIMARY KEY, estado TEXT NOT NULL, datos TEXT NOT NULL, actualizado_en TEXT, actualizado_por TEXT)`);
   d.exec(`CREATE TABLE IF NOT EXISTS FIN_AJUSTES (clave TEXT PRIMARY KEY, datos TEXT NOT NULL, actualizado_en TEXT, actualizado_por TEXT)`);
+  // v2 (FIN-41): cada cierre guarda una versión reproducible (el informe completo, no solo cinco totales).
+  d.exec(`CREATE TABLE IF NOT EXISTS FIN_CIERRE_VERSIONES (
+    id TEXT PRIMARY KEY, periodo TEXT NOT NULL, version INTEGER NOT NULL, datos TEXT NOT NULL, en TEXT NOT NULL, por TEXT)`);
   preparada_ = d;
   return d;
 }
 
+const ESTADOS_ = { ABIERTO: 'Abierto', EN_REVISION: 'En revisión', OBSERVADO: 'Devuelto con observaciones', CERRADO: 'Cerrado' };
+function filaCierre_(periodo) { return db_().prepare('SELECT * FROM FIN_CIERRES WHERE periodo = ?').get(String(periodo)); }
 function mesCerrado_(periodo) {
   try {
-    const r = db_().prepare('SELECT estado FROM FIN_CIERRES WHERE periodo = ?').get(String(periodo));
+    const r = filaCierre_(periodo);
     return !!(r && r.estado === 'CERRADO');
   } catch (e) { return false; }
 }
-function ultimoDia_(p) { const [a, m] = p.split('-').map(Number); return p + '-' + String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0'); }
-const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-function nombreMes_(p) { const [a, m] = p.split('-').map(Number); return MESES[m - 1] + ' ' + a; }
-const plata_ = (n) => { const v = Math.round(n || 0); return (v < 0 ? '−' : '') + '$' + Math.abs(v).toLocaleString('es-CL'); };
+function ultimoDia_(p) { return Base.ultimoDia_(p); }
+const nombreMes_ = (p) => Base.nombreMes_(p);
+const plata_ = (n) => Base.plata_(n);
+function ajuste_(clave) { const r = db_().prepare('SELECT datos FROM FIN_AJUSTES WHERE clave = ?').get(clave); return r ? I.des_(r.datos) : null; }
+function guardarAjuste_(clave, datos, x) {
+  db_().prepare('INSERT INTO FIN_AJUSTES (clave, datos, actualizado_en, actualizado_por) VALUES (?,?,?,?) ON CONFLICT(clave) DO UPDATE SET datos = excluded.datos, actualizado_en = excluded.actualizado_en, actualizado_por = excluded.actualizado_por')
+    .run(clave, I.cif_(datos), Base.ahora_(), x.nombre);
+}
+/** Excepciones autorizadas del mes (cuentas fuera de alcance, aperturas pendientes aceptadas), con motivo y quién. */
+function excepciones_(periodo) { return (ajuste_('excepciones|' + periodo) || { cuentas: {}, aperturas: null }); }
+/** I11.3 · Política de cierre vigente (parámetros visibles en Configuración y en Revisión del período). */
+function politicaCierre_() {
+  let rev = 0, dos = 0;
+  try { rev = Number(require('./finanzasCatalogos').param_('cierre_exige_revision', 0)) ? 1 : 0; dos = Number(require('./finanzasCatalogos').param_('cierre_dos_personas', 0)) ? 1 : 0; } catch (e) { /* por defecto */ }
+  return { exige_revision: !!rev, dos_personas: !!dos,
+    texto: (rev ? 'Solo se cierra un mes enviado a revisión y sin cambios desde entonces' : 'La revisión antes de cerrar es opcional') + '; ' + (dos ? 'quien lo envió a revisión no puede cerrarlo.' : 'la misma persona puede enviar y cerrar (queda registrado).') };
+}
+const LIMITACION_ = {
+  CUENTA: (n) => 'Las cifras del mes no incluyen los movimientos de ' + n + ' que falten; su saldo queda a la última cartola cargada.',
+  APERTURAS: () => 'Los fondos de clientes sin saldo inicial siguen parciales y la disponibilidad propia sigue no determinable: la excepción solo permite cerrar.'
+};
+/** I11.4 · Excepciones del mes como lista (vigentes y quitadas), cada una con su limitación. */
+function excepcionesLista_(periodo) {
+  const e = excepciones_(periodo), cuentas = I.cuentasMapa_();
+  const nombre = (id) => { const c = cuentas.get(id); return c ? c.banco + ' ···' + c.ultimos4 : id; };
+  const vig = Object.keys(e.cuentas || {}).map((id) => Object.assign({ tipo: 'CUENTA', alcance: nombre(id), cuenta_ref: id, vigente: true, limitacion: LIMITACION_.CUENTA(nombre(id)) }, e.cuentas[id]))
+    .concat(e.aperturas ? [Object.assign({ tipo: 'APERTURAS', alcance: 'Saldos iniciales de fondos de clientes', vigente: true, limitacion: LIMITACION_.APERTURAS() }, e.aperturas)] : []);
+  return vig.concat((e.historial || []).map((h) => Object.assign({}, h, { vigente: false })));
+}
 
-/** La lista de verificación de un mes. */
+/**
+ * La lista de verificación de un mes (v2, FIN-41): cobertura por cuenta (con
+ * las excepciones autorizadas a la vista), cuadre, todo revisado, saldos
+ * iniciales de fondos (o su excepción), operaciones sin banco (aviso) y
+ * ventas del SII (aviso).
+ */
 function verificar_(periodo) {
   const d = db_();
   const inicio = periodo + '-01', fin = ultimoDia_(periodo);
   const cuentas = I.cuentasMapa_();
+  const exc = excepciones_(periodo);
   const imps = d.prepare('SELECT cuenta_ref, desde, hasta, datos FROM FIN_IMPORTACIONES').all().map((r) => Object.assign(r, I.des_(r.datos)));
-  // 1) Cada cuenta conocida tiene cartolas que cubren el mes entero (sin huecos).
+  // 1) Cada cuenta conocida tiene cartolas que cubren el mes entero (sin huecos), salvo excepción autorizada.
   const cobertura = [...cuentas.values()].map((c) => {
     const tramos = imps.filter((x) => x.cuenta_ref === c.id && x.hasta >= inicio && x.desde <= fin).sort((a, b) => (a.desde < b.desde ? -1 : 1));
     let hasta = '';
@@ -59,7 +97,8 @@ function verificar_(periodo) {
       if (hasta && t.desde > siguienteDia_(hasta)) continuo = false;
       if (t.hasta > hasta) hasta = t.hasta;
     });
-    return { cuenta: c.banco + ' ···' + c.ultimos4 + ' (' + c.empresa + ')', completa: continuo && hasta >= fin, hasta: hasta || '' };
+    const excepcion = exc.cuentas && exc.cuentas[c.id] ? exc.cuentas[c.id] : null;
+    return { cuenta_ref: c.id, empresa: c.empresa, cuenta: c.banco + ' ···' + c.ultimos4 + ' (' + c.empresa + ')', completa: continuo && hasta >= fin, hasta: hasta || '', excepcion };
   });
   // 2) Las cartolas del mes cuadraron (saldo a saldo y con el resumen del banco).
   const delMes = imps.filter((x) => x.hasta >= inicio && x.desde <= fin);
@@ -67,22 +106,38 @@ function verificar_(periodo) {
   // 3) Nada sin revisar.
   const pend = d.prepare("SELECT COUNT(*) AS n FROM FIN_MOVIMIENTOS WHERE periodo = ? AND estado = 'PENDIENTE'").get(periodo).n;
   const total = d.prepare('SELECT COUNT(*) AS n FROM FIN_MOVIMIENTOS WHERE periodo = ?').get(periodo).n;
-  // 4) Ventas del SII del mes cargadas (aviso, no bloquea: puede no haber facturado).
+  // 4) Saldos iniciales de fondos de clientes (o la excepción aceptada con su motivo).
+  let sinApertura = 0;
+  try { sinApertura = require('./finanzasFondos').custodiaAl_(fin, '').sin_apertura; } catch (e) { sinApertura = 0; }
+  // 5) Operaciones registradas sin su movimiento del banco (aviso).
+  let sinBanco = 0;
+  try { sinBanco = require('./finanzasOperaciones').hechosRegistro_().filter((h) => h.sin_banco && h.periodo === periodo).length; } catch (e) { sinBanco = 0; }
+  // 5b) Corrección v2 (I01/I11.3): ningún posible duplicado sin resolver (registro ↔ banco ya clasificado).
+  let conflictos = [];
+  try { conflictos = require('./finanzasHechos').conflictos_({ periodo }); } catch (e) { conflictos = []; }
+  // 6) Ventas del SII del mes cargadas (aviso, no bloquea: puede no haber facturado).
   let ventas = 0;
   try { ventas = d.prepare("SELECT COUNT(*) AS n FROM FIN_FACTURAS WHERE periodo = ? AND origen = 'rcv'").get(periodo).n; } catch (e) { ventas = 0; }
+  const cubiertas = cobertura.filter((c) => c.completa || c.excepcion);
   const pasos = [
-    { id: 'cartolas', nombre: 'Cartolas del mes completo', ok: cobertura.length > 0 && cobertura.every((c) => c.completa), obligatorio: true,
-      detalle: cobertura.length ? cobertura.map((c) => c.cuenta + (c.completa ? ': completa' : ': falta' + (c.hasta ? ' desde el ' + siguienteDia_(c.hasta).slice(8) : ' todo el mes'))).join(' · ') : 'No hay cuentas cargadas.' },
+    { id: 'cartolas', nombre: 'Cartolas del mes completo', ok: cobertura.length > 0 && cubiertas.length === cobertura.length, obligatorio: true,
+      detalle: cobertura.length ? cobertura.map((c) => c.cuenta + (c.completa ? ': completa' : c.excepcion ? ': fuera de alcance (' + c.excepcion.motivo + ')' : ': falta' + (c.hasta ? ' desde el ' + siguienteDia_(c.hasta).slice(8) : ' todo el mes'))).join(' · ') : 'No hay cuentas cargadas.' },
     { id: 'cuadra', nombre: 'Saldos cuadran con el banco', ok: delMes.length > 0 && !descuadradas, obligatorio: true,
       detalle: delMes.length ? (descuadradas ? descuadradas + ' cartola(s) no cuadraron' : delMes.length + ' cartola(s), todas cuadran') : 'Sin cartolas del mes.' },
     { id: 'revisado', nombre: 'Todo revisado', ok: total > 0 && pend === 0, obligatorio: true,
       detalle: total ? (pend ? 'Faltan ' + pend + ' de ' + total + ' movimientos' : 'Los ' + total + ' movimientos confirmados') : 'Sin movimientos.' },
+    { id: 'aperturas', nombre: 'Saldos iniciales de fondos de clientes', ok: !sinApertura || !!exc.aperturas, obligatorio: true,
+      detalle: !sinApertura ? 'Todos los clientes con fondos tienen saldo inicial aprobado.' : exc.aperturas ? sinApertura + ' sin saldo inicial; excepción aceptada por ' + exc.aperturas.por + ': ' + exc.aperturas.motivo : sinApertura + ' cliente(s) sin saldo inicial aprobado: cárgalos en Fondos o acepta la excepción con su motivo.' },
+    { id: 'identidad', nombre: 'Sin posibles duplicados por resolver', ok: !conflictos.length, obligatorio: true,
+      detalle: conflictos.length ? conflictos.length + ' operación(es) registrada(s) podrían ser el mismo dinero que un movimiento del banco ya clasificado: vincúlalas o marca que son distintas en Conciliación.' : 'Nada registrado se confunde con un movimiento del banco.' },
+    { id: 'sin_banco', nombre: 'Operaciones conciliadas con el banco', ok: !sinBanco, obligatorio: false,
+      detalle: sinBanco ? sinBanco + ' operación(es) registradas sin su movimiento del banco: concílialas o revisa si son de otro mes.' : 'Todas las operaciones con medio bancario están conciliadas.' },
     { id: 'ventas', nombre: 'Ventas del SII cargadas', ok: ventas > 0, obligatorio: false,
       detalle: ventas ? ventas + ' documento(s) del Registro de Ventas' : 'No hay facturas del SII de este mes (si se facturó, súbelas en Cobranza).' }
   ];
-  return { periodo, pasos, listo: pasos.filter((p) => p.obligatorio).every((p) => p.ok) };
+  return { periodo, pasos, cobertura, listo: pasos.filter((p) => p.obligatorio).every((p) => p.ok) };
 }
-function siguienteDia_(iso) { const t = new Date(iso + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); }
+function siguienteDia_(iso) { return Base.sumarDias_(iso, 1); }
 
 // ---------------------------------------------------------------- acciones de cierre
 
@@ -94,46 +149,180 @@ const estado = B.conBoveda('VER_CIERRE', function (db) {
     const c = cierres.get(p);
     const v = verificar_(p);
     const info = c ? I.des_(c.datos) : null;
-    return Object.assign(v, { nombre: nombreMes_(p), estado: c ? c.estado : 'ABIERTO', cerrado_por: c && c.estado === 'CERRADO' ? c.actualizado_por : '', cerrado_en: c ? c.actualizado_en : '', foto: info && info.foto, ultimo_motivo: info && info.motivo });
+    const versiones = d.prepare('SELECT version, en, por FROM FIN_CIERRE_VERSIONES WHERE periodo = ? ORDER BY version DESC').all(p);
+    return Object.assign(v, { nombre: nombreMes_(p), estado: c ? c.estado : 'ABIERTO', estado_nombre: ESTADOS_[c ? c.estado : 'ABIERTO'], cerrado_por: c && c.estado === 'CERRADO' ? c.actualizado_por : '', cerrado_en: c ? c.actualizado_en : '',
+      foto: info && info.foto, ultimo_motivo: info && info.motivo, revision: info && info.revision || null, observaciones: (info && info.observaciones) || [], versiones,
+      // I08.9: «cerrado» y «cerrado con excepciones» se distinguen.
+      con_excepciones: !!(c && c.estado === 'CERRADO' && info && info.excepciones && (Object.keys(info.excepciones.cuentas || {}).length || info.excepciones.aperturas)) });
   });
-  return { meses, retiro: retiro_(db, meses) };
+  return { meses: meses.map((m) => Object.assign(m, { excepciones: excepcionesLista_(m.periodo) })), estados: ESTADOS_, retiro: retiro_(db, meses), politica: politicaCierre_() };
 });
 
-/** Foto del mes al cerrarlo (lo que quedó firme). */
+/**
+ * Foto del mes al cerrarlo (lo que quedó firme). I10.4: sale del MISMO
+ * contrato del informe (no del cálculo del tablero anterior), para que el
+ * cierre, la pantalla y el PDF digan lo mismo. «resultado» es el flujo propio.
+ */
 function foto_(db, periodo) {
   try {
-    const t = require('./finanzasTablero').calcular_(db, periodo, '');
-    return { ingresos: t.mes.ingresos, egresos: t.mes.egresos, resultado: t.mes.resultado, caja: t.caja, custodia: t.custodia };
+    const c = require('./finanzasReportes').reporte_(db, { periodo });
+    const m = c.metrics;
+    return { ingresos: m.ingresos, egresos: m.egresos, resultado: m.flujo_propio, caja: m.caja, custodia: m.custodia_positiva, custodia_deficit: m.custodia_deficit,
+      caja_libre: m.caja_libre, calidad: c.quality.status, revision: c.data_revision };
   } catch (e) { return null; }
 }
+/** Versión reproducible: el informe completo del grupo y de cada empresa, con los catálogos que se usaron. */
+function version_(db, periodo, aprobacion) {
+  const R = require('./finanzasReportes');
+  const Cat = require('./finanzasCatalogos');
+  const grupo = R.reporte_(db, { periodo });
+  const empresas = {};
+  grupo.scope.empresas.forEach((e) => { empresas[e] = R.reporte_(db, { periodo, empresa: e }); });
+  return { grupo, empresas, catalogos: { conceptos: Cat.lista_('CONCEPTO', { todos: true }).map((c) => ({ id: c.id, grupo: c.grupo, activo: c.activo })), parametros: Cat.lista_('PARAMETRO', { todos: true }) },
+    reglas_version: grupo.rule_version, revision: grupo.data_revision,
+    // I11.5: quién preparó, quién revisó y quién cerró; observaciones y excepciones aceptadas, tal como estaban al cerrar.
+    aprobacion: aprobacion || null };
+}
+function guardarCierre_(periodo, estado, datos, x) {
+  db_().prepare('INSERT INTO FIN_CIERRES (periodo, estado, datos, actualizado_en, actualizado_por) VALUES (?, ?, ?, ?, ?) ' +
+    'ON CONFLICT(periodo) DO UPDATE SET estado = excluded.estado, datos = excluded.datos, actualizado_en = excluded.actualizado_en, actualizado_por = excluded.actualizado_por')
+    .run(periodo, estado, I.cif_(datos), Base.ahora_(), x.nombre);
+}
 
+/** Quien prepara el mes lo envía a revisión (con su nota). No bloquea nada: avisa que está listo para revisar. */
+const enviarRevision = Base.conCapacidad('CONFIRMAR', '', function (db, data, contexto, x) {
+  const periodo = Base.periodo_(data && data.periodo);
+  if (!periodo) return errorValidacion('periodo', 'Mes no válido.');
+  if (mesCerrado_(periodo)) return errorValidacion('periodo', 'Ese mes ya está cerrado.');
+  const v = verificar_(periodo);
+  if (!v.listo) return errorValidacion('periodo', 'Antes de enviarlo a revisión falta: ' + v.pasos.filter((p) => p.obligatorio && !p.ok).map((p) => p.nombre.toLowerCase()).join(', ') + '.');
+  const r = filaCierre_(periodo);
+  const datos = r ? I.des_(r.datos) : {};
+  datos.revision = { enviado_por: x.nombre, en: Base.ahora_(), nota: Base.txt_(data.nota).slice(0, 500), revision_datos: Base.revision_() };
+  guardarCierre_(periodo, 'EN_REVISION', datos, x);
+  x.registrar('CIERRE_A_REVISION', nombreMes_(periodo));
+  return { periodo, estado: 'EN_REVISION' };
+});
+
+/** Quien revisa lo devuelve con observaciones (quedan en la historia del mes). */
+const observar = Base.conCapacidad('CIERRE', '', function (db, data, contexto, x) {
+  const periodo = Base.periodo_(data && data.periodo);
+  const obs = Base.txt_(data && data.observacion);
+  if (!periodo) return errorValidacion('periodo', 'Mes no válido.');
+  if (obs.length < 5) return errorValidacion('observacion', 'Escribe qué hay que corregir.');
+  if (mesCerrado_(periodo)) return errorValidacion('periodo', 'Ese mes está cerrado: reábrelo con motivo.');
+  const r = filaCierre_(periodo);
+  const datos = r ? I.des_(r.datos) : {};
+  datos.observaciones = (datos.observaciones || []).concat([{ por: x.nombre, en: Base.ahora_(), texto: obs.slice(0, 1000), resuelta: false }]).slice(-50);
+  guardarCierre_(periodo, 'OBSERVADO', datos, x);
+  x.registrar('CIERRE_OBSERVADO', nombreMes_(periodo) + ': ' + obs.slice(0, 80));
+  return { periodo, estado: 'OBSERVADO' };
+});
+
+/** Marca resuelta una observación (quien prepara, al corregir). */
+const resolverObservacion = Base.conCapacidad('CONFIRMAR', '', function (db, data, contexto, x) {
+  const periodo = Base.periodo_(data && data.periodo);
+  const r = filaCierre_(periodo);
+  if (!r) return errorValidacion('periodo', 'Ese mes no tiene observaciones.');
+  const datos = I.des_(r.datos);
+  const i = Number(data.indice);
+  if (!datos.observaciones || !datos.observaciones[i]) return errorValidacion('indice', 'Esa observación no existe.');
+  datos.observaciones[i].resuelta = true; datos.observaciones[i].resuelta_por = x.nombre; datos.observaciones[i].respuesta = Base.txt_(data.respuesta).slice(0, 500);
+  guardarCierre_(periodo, r.estado, datos, x);
+  x.registrar('CIERRE_OBSERVACION_RESUELTA', nombreMes_(periodo));
+  return { ok: true };
+});
+
+/**
+ * Excepción autorizada (FIN-41): una cuenta queda fuera del alcance del mes
+ * (p. ej. no tuvo movimientos y el banco no emite cartola), o se aceptan
+ * saldos iniciales pendientes. Siempre con motivo; queda en la bitácora y en
+ * el informe.
+ */
+const excepcion = Base.conCapacidad('CIERRE', '', function (db, data, contexto, x) {
+  const periodo = Base.periodo_(data && data.periodo);
+  const motivo = Base.txt_(data && data.motivo).slice(0, 300);
+  if (!periodo) return errorValidacion('periodo', 'Mes no válido.');
+  if (mesCerrado_(periodo)) return errorValidacion('periodo', 'Ese mes está cerrado.');
+  const exc = excepciones_(periodo);
+  exc.cuentas = exc.cuentas || {};
+  const tipo = Base.txt_(data.tipo).toUpperCase();
+  // I11.4: solo dos tipos de excepción (cuenta fuera de alcance, saldos iniciales pendientes). Nada que permita sobregirar,
+  // duplicar un hecho, romper una suma o confirmar una identidad ambigua: esos son invariantes, no se exceptúan.
+  if (['CUENTA', 'APERTURAS'].indexOf(tipo) === -1) return errorValidacion('tipo', 'Tipo de excepción no válido: solo una cuenta fuera de alcance o saldos iniciales pendientes.');
+  exc.historial = exc.historial || [];
+  if (data.quitar) {
+    // Quitar no borra: queda en la historia con quién y cuándo.
+    const previa = tipo === 'CUENTA' ? exc.cuentas[Base.txt_(data.cuenta_ref)] : exc.aperturas;
+    if (previa) exc.historial.push(Object.assign({ tipo, cuenta_ref: tipo === 'CUENTA' ? Base.txt_(data.cuenta_ref) : '', quitada_por: x.nombre, quitada_en: Base.ahora_(), motivo_quitar: motivo }, previa));
+    if (tipo === 'CUENTA') delete exc.cuentas[Base.txt_(data.cuenta_ref)]; else exc.aperturas = null;
+  } else {
+    if (motivo.length < 5) return errorValidacion('motivo', 'Escribe el motivo de la excepción.');
+    const evidencia = Base.txt_(data.evidencia).slice(0, 300);
+    // Quien la registra tiene la capacidad de cierre: solicita y aprueba en el mismo acto (queda dicho así).
+    const reg = { motivo, evidencia, solicitado_por: Base.txt_(data.solicitado_por).slice(0, 120) || x.nombre, aprobado_por: x.nombre, por: x.nombre, en: Base.ahora_() };
+    if (tipo === 'CUENTA') {
+      const c = I.cuentasMapa_().get(Base.txt_(data.cuenta_ref));
+      if (!c) return errorValidacion('cuenta_ref', 'Esa cuenta no existe.');
+      exc.cuentas[c.id] = Object.assign(reg, { limitacion: LIMITACION_.CUENTA(c.banco + ' ···' + c.ultimos4) });
+    } else exc.aperturas = Object.assign(reg, { limitacion: LIMITACION_.APERTURAS() });
+  }
+  guardarAjuste_('excepciones|' + periodo, exc, x);
+  x.registrar('CIERRE_EXCEPCION', nombreMes_(periodo) + ' · ' + tipo + (data.quitar ? ' (quitada)' : ': ' + motivo.slice(0, 80)));
+  return { ok: true };
+});
+
+/**
+ * Cierra el mes. Exige la lista obligatoria completa y que no queden
+ * observaciones sin resolver. Guarda una VERSIÓN reproducible del informe
+ * (grupo y cada empresa) además de la foto de siempre.
+ */
 const cerrar = B.conBoveda('', function (db, data, contexto, x) {
-  if (I.soloEscritura_(contexto)) return errorForbidden('Tu acceso a Finanzas es de solo lectura.');
+  { const e_ = Base.exigir_(contexto, 'CIERRE'); if (e_) return e_; }
   const periodo = String((data && data.periodo) || '');
   if (!/^\d{4}-\d{2}$/.test(periodo)) return errorValidacion('periodo', 'Mes no válido.');
   const v = verificar_(periodo);
   if (!v.listo) return errorValidacion('periodo', 'Todavía no se puede cerrar ' + nombreMes_(periodo) + ': ' + v.pasos.filter((p) => p.obligatorio && !p.ok).map((p) => p.nombre.toLowerCase()).join(', ') + '.');
+  const r = filaCierre_(periodo);
+  const previo = r ? I.des_(r.datos) : {};
+  const abiertas = (previo.observaciones || []).filter((o) => !o.resuelta);
+  if (abiertas.length) return errorValidacion('periodo', 'Hay ' + abiertas.length + ' observación(es) sin resolver.');
+  // I11.3 · Política de cierre.
+  const pol = politicaCierre_();
+  const enRevision = !!(r && r.estado === 'EN_REVISION' && previo.revision);
+  if (pol.exige_revision && !enRevision) return errorValidacion('periodo', 'La política exige enviar ' + nombreMes_(periodo) + ' a revisión antes de cerrarlo.');
+  if (pol.dos_personas && previo.revision && previo.revision.enviado_por === x.nombre) return Base.errPermiso('La política exige que cierre otra persona que la que envió el mes a revisión.');
+  const revisionVencida = !!(previo.revision && previo.revision.revision_datos && previo.revision.revision_datos !== Base.revision_());
+  if (revisionVencida && (pol.exige_revision || data.exigir_revision)) return Base.errConflicto('Los datos cambiaron desde que se envió a revisión: revísalo de nuevo.');
   const ahora = new Date().toISOString();
   const foto = foto_(db, periodo);
-  db_().prepare("INSERT INTO FIN_CIERRES (periodo, estado, datos, actualizado_en, actualizado_por) VALUES (?, 'CERRADO', ?, ?, ?) " +
-    "ON CONFLICT(periodo) DO UPDATE SET estado = 'CERRADO', datos = excluded.datos, actualizado_en = excluded.actualizado_en, actualizado_por = excluded.actualizado_por")
-    .run(periodo, I.cif_({ foto }), ahora, x.nombre);
-  x.registrar('CERRAR_MES', nombreMes_(periodo) + (foto ? ' · resultado ' + plata_(foto.resultado) : ''));
-  return { periodo, estado: 'CERRADO', foto };
+  const version = (db_().prepare('SELECT COALESCE(MAX(version), 0) AS n FROM FIN_CIERRE_VERSIONES WHERE periodo = ?').get(periodo).n) + 1;
+  db_().prepare('INSERT INTO FIN_CIERRE_VERSIONES (id, periodo, version, datos, en, por) VALUES (?,?,?,?,?,?)').run(Base.id_(), periodo, version, I.cif_(version_(db, periodo, { revision: previo.revision || null, revision_vencida: revisionVencida, observaciones: previo.observaciones || [], excepciones: excepcionesLista_(periodo), politica: pol, cerrado_por: x.nombre, cerrado_en: ahora })), ahora, x.nombre);
+  guardarCierre_(periodo, 'CERRADO', Object.assign(previo, { foto, version, excepciones: excepciones_(periodo), revision_vencida: revisionVencida }), x);
+  x.registrar('CERRAR_MES', nombreMes_(periodo) + ' v' + version + (foto ? ' · resultado ' + plata_(foto.resultado) : ''));
+  return { periodo, estado: 'CERRADO', foto, version };
 });
 
 const reabrir = B.conBoveda('', function (db, data, contexto, x) {
-  if (I.soloEscritura_(contexto)) return errorForbidden('Tu acceso a Finanzas es de solo lectura.');
+  { const e_ = Base.exigir_(contexto, 'CIERRE'); if (e_) return e_; }
   const periodo = String((data && data.periodo) || '');
   const motivo = String((data && data.motivo) || '').trim().slice(0, 300);
   if (motivo.length < 5) return errorValidacion('motivo', 'Escribe por qué se reabre el mes.');
   if (!mesCerrado_(periodo)) return errorValidacion('periodo', 'Ese mes no está cerrado.');
-  const r = db_().prepare('SELECT datos FROM FIN_CIERRES WHERE periodo = ?').get(periodo);
-  const datos = Object.assign(I.des_(r.datos), { motivo });
+  const r = filaCierre_(periodo);
+  const datos = Object.assign(I.des_(r.datos), { motivo, reaperturas: (I.des_(r.datos).reaperturas || []).concat([{ por: x.nombre, en: Base.ahora_(), motivo }]) });
   db_().prepare("UPDATE FIN_CIERRES SET estado = 'ABIERTO', datos = ?, actualizado_en = ?, actualizado_por = ? WHERE periodo = ?")
     .run(I.cif_(datos), new Date().toISOString(), x.nombre, periodo);
   x.registrar('REABRIR_MES', nombreMes_(periodo) + ': ' + motivo);
   return { periodo, estado: 'ABIERTO' };
+});
+
+/** Una versión guardada de un cierre: el informe tal como quedó al cerrar (reproducible). */
+const versionCierre = B.conBoveda('VER_CIERRE_VERSION', function (db, data) {
+  const periodo = Base.periodo_(data && data.periodo);
+  const r = db_().prepare('SELECT * FROM FIN_CIERRE_VERSIONES WHERE periodo = ? AND version = ?').get(periodo, Number(data && data.version));
+  if (!r) return errorValidacion('version', 'Esa versión no existe.');
+  return Object.assign({ periodo, version: r.version, en: r.en, por: r.por }, I.des_(r.datos));
 });
 
 // ---------------------------------------------------------------- paralelo con la planilla
@@ -144,6 +333,8 @@ const reabrir = B.conBoveda('', function (db, data, contexto, x) {
  * data: { banco: filas de CUENTA BANCARIA, facturas: filas de FACTURAS }
  */
 const paralelo = B.conBoveda('', function (db, data, contexto, x) {
+  // v2: el paralelo guarda su resumen (FIN_AJUSTES): es una escritura, exige la capacidad de cierre.
+  { const e_ = Base.exigir_(contexto, 'CIERRE'); if (e_) return e_; }
   const filasB = Array.isArray(data && data.banco) ? data.banco : [];
   const filasF = Array.isArray(data && data.facturas) ? data.facturas : [];
   const cab = (f) => Array.from(f || [], (c) => I.normalizar_(c));
@@ -246,7 +437,7 @@ function retiro_(db, meses) {
 }
 
 const marcarPasoRetiro = B.conBoveda('', function (db, data, contexto, x) {
-  if (I.soloEscritura_(contexto)) return errorForbidden('Tu acceso a Finanzas es de solo lectura.');
+  { const e_ = Base.exigir_(contexto, 'CIERRE'); if (e_) return e_; }
   const id = String((data && data.id) || '');
   if (!PASOS_MANUALES.some((p) => p.id === id)) return errorValidacion('id', 'Paso desconocido.');
   const d = db_();
@@ -259,4 +450,4 @@ const marcarPasoRetiro = B.conBoveda('', function (db, data, contexto, x) {
   return { ok: true };
 });
 
-module.exports = { estado, cerrar, reabrir, paralelo, marcarPasoRetiro, mesCerrado_, verificar_ };
+module.exports = { estado, cerrar, reabrir, paralelo, marcarPasoRetiro, enviarRevision, observar, resolverObservacion, excepcion, versionCierre, mesCerrado_, verificar_, foto_, politicaCierre_, excepcionesLista_ };

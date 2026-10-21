@@ -97,12 +97,22 @@ const Preferencias = require('../logica/preferencias');
 const FinanzasBoveda = require('../logica/finanzasBoveda');
 const FinanzasBancos = require('../logica/finanzasBancos');
 const FinanzasCobranza = require('../logica/finanzasCobranza');
-const FinanzasTablero = require('../logica/finanzasTablero');
+const FinanzasPendientes = require('../logica/finanzasPendientes');
 const FinanzasPresupuesto = require('../logica/finanzasPresupuesto');
 const FinanzasCierre = require('../logica/finanzasCierre');
 const FinanzasPagadores = require('../logica/finanzasPagadores');
 const FinanzasMes = require('../logica/finanzasMes');
 const FinanzasAvisos = require('../logica/finanzasAvisos');
+const FinanzasCatalogos = require('../logica/finanzasCatalogos');
+const FinanzasOperaciones = require('../logica/finanzasOperaciones');
+const FinanzasConciliacion = require('../logica/finanzasConciliacion');
+const FinanzasFondos = require('../logica/finanzasFondos');
+const FinanzasClientes = require('../logica/finanzasClientes');
+const FinanzasPlanificacion = require('../logica/finanzasPlanificacion');
+const FinanzasReportes = require('../logica/finanzasReportes');
+const FinanzasExportar = require('../logica/finanzasExportar');
+const FinanzasReglas = require('../logica/finanzasReglas');
+const FinanzasCargas = require('../logica/finanzasCargas');
 const Credenciales = require('../logica/credenciales');
 const CredClientes = require('../logica/credencialesClientes');
 const Hompy = require('../logica/hompy');
@@ -737,8 +747,10 @@ const ACCIONES = {
   finanzasFichaCliente: (db, data, contexto) => FinanzasCobranza.fichaCliente(db, data, contexto),
   finanzasEstadoFactura: (db, data, contexto) => FinanzasCobranza.cambiarEstadoFactura(db, data, contexto),
   // Etapa 4: tablero de gerencia e informe mensual en PDF con marca de agua.
-  finanzasTablero: (db, data, contexto) => FinanzasTablero.tablero(db, data, contexto),
-  finanzasInformePdf: (db, data, contexto) => FinanzasTablero.informePdf(db, data, contexto),
+  // I10.4: la pantalla del tablero anterior se retiró (sus cifras ya salen del informe); su ruta también,
+  // para que ningún consumidor vuelva a leer una interpretación distinta.
+  // v2 (FIN-39): el informe se arma en el servidor desde el contrato de reportes (no se imprime HTML del navegador).
+  finanzasInformePdf: (db, data, contexto) => FinanzasReportes.informePdf(db, data, contexto),
   // Etapa 5: presupuesto por año y empresa, comparado con lo real.
   finanzasPresupuesto: (db, data, contexto) => FinanzasPresupuesto.ver(db, data, contexto),
   finanzasGuardarPresupuesto: (db, data, contexto) => FinanzasPresupuesto.guardar(db, data, contexto),
@@ -790,6 +802,102 @@ const ACCIONES = {
   finanzasRevisarExcelBancos: (db, data, contexto) => FinanzasPagadores.revisarExcelBancos(db, data, contexto),
   finanzasGuardarNombres: (db, data, contexto) => FinanzasPagadores.guardarAlias(db, data, contexto),
   finanzasAprenderExcelBancos: (db, data, contexto) => FinanzasPagadores.aprenderExcelBancos(db, data, contexto),
+  // Finanzas v2 (2026-10-20, instrucciones maestras FIN-01…48): catálogos, registro
+  // operativo, conciliación, fondos por cliente, clientes, aplicaciones a facturas,
+  // planificación. Todas pasan por la bóveda y por las capacidades (finanzasBase.js).
+  finanzasCatalogos: (db, data, contexto) => FinanzasCatalogos.catalogos(db, data, contexto),
+  finanzasGuardarCatalogo: (db, data, contexto) => FinanzasCatalogos.guardar(db, data, contexto),
+  finanzasOperaciones: (db, data, contexto) => FinanzasOperaciones.listar(db, data, contexto),
+  finanzasOperacion: (db, data, contexto) => FinanzasOperaciones.detalle(db, data, contexto),
+  finanzasGuardarOperacion: (db, data, contexto) => FinanzasOperaciones.guardar(db, data, contexto),
+  finanzasAccionOperaciones: (db, data, contexto) => FinanzasOperaciones.accionLote(db, data, contexto),
+  finanzasRevisarPegado: (db, data, contexto) => FinanzasOperaciones.revisarPegado(db, data, contexto),
+  finanzasPublicarPegado: (db, data, contexto) => FinanzasOperaciones.publicarPegado(db, data, contexto),
+  finanzasPerfiles: (db, data, contexto) => FinanzasOperaciones.perfiles(db, data, contexto),
+  finanzasGuardarPerfil: (db, data, contexto) => FinanzasOperaciones.guardarPerfil(db, data, contexto),
+  finanzasGenerarPlantillas: (db, data, contexto) => FinanzasOperaciones.generarDePlantillas(db, data, contexto),
+  finanzasRevisarOperacion: (db, data, contexto) => FinanzasAvisos.revisarOperacion(db, data, contexto),
+  finanzasFuentesObligacion: (db, data, contexto) => FinanzasOperaciones.fuentesObligacion(db, data, contexto),
+  finanzasFuenteObligacion: (db, data, contexto) => FinanzasOperaciones.fuenteObligacion(db, data, contexto),
+  finanzasDuplicarOperacion: (db, data, contexto) => FinanzasOperaciones.duplicar(db, data, contexto),
+  finanzasPrevisualizarPlantillas: (db, data, contexto) => FinanzasOperaciones.previsualizarPlantillas(db, data, contexto),
+  finanzasConciliacion: (db, data, contexto) => FinanzasConciliacion.bandeja(db, data, contexto),
+  finanzasCandidatos: (db, data, contexto) => FinanzasConciliacion.candidatos(db, data, contexto),
+  finanzasConciliar: (db, data, contexto) => FinanzasConciliacion.conciliar(db, data, contexto),
+  finanzasDesconciliar: (db, data, contexto) => FinanzasConciliacion.desconciliar(db, data, contexto),
+  finanzasMarcarDistintas: (db, data, contexto) => FinanzasConciliacion.marcarDistintas(db, data, contexto),
+  finanzasExplicarRemanente: (db, data, contexto) => FinanzasConciliacion.explicarRemanente(db, data, contexto),
+  finanzasFondos: (db, data, contexto) => FinanzasFondos.fondos(db, data, contexto),
+  finanzasFichaFondos: (db, data, contexto) => FinanzasFondos.fichaFondos(db, data, contexto),
+  finanzasGuardarGestion: (db, data, contexto) => FinanzasFondos.guardarGestion(db, data, contexto),
+  finanzasEstadoGestion: (db, data, contexto) => FinanzasFondos.estadoGestion(db, data, contexto),
+  finanzasAsignarGestion: (db, data, contexto) => FinanzasFondos.asignarGestion(db, data, contexto),
+  finanzasGuardarApertura: (db, data, contexto) => FinanzasFondos.guardarApertura(db, data, contexto),
+  finanzasDecidirApertura: (db, data, contexto) => FinanzasFondos.decidirApertura(db, data, contexto),
+  finanzasReasignar: (db, data, contexto) => FinanzasFondos.reasignar(db, data, contexto),
+  finanzasAnularReasignacion: (db, data, contexto) => FinanzasFondos.anularReasignacion(db, data, contexto),
+  finanzasDecidirRemanente: (db, data, contexto) => FinanzasFondos.decidirRemanente(db, data, contexto),
+  finanzasGestionDesdePieza: (db, data, contexto) => FinanzasFondos.gestionDesdePieza(db, data, contexto),
+  finanzasRevisarAperturas: (db, data, contexto) => FinanzasFondos.revisarAperturas(db, data, contexto),
+  finanzasProponerAperturas: (db, data, contexto) => FinanzasFondos.proponerAperturas(db, data, contexto),
+  finanzasCorregirApertura: (db, data, contexto) => FinanzasFondos.corregirApertura(db, data, contexto),
+  finanzasConvertirRemanente: (db, data, contexto) => FinanzasFondos.convertirRemanente(db, data, contexto),
+  finanzasClientes: (db, data, contexto) => FinanzasClientes.clientes(db, data, contexto),
+  finanzasCliente: (db, data, contexto) => FinanzasClientes.ficha(db, data, contexto),
+  finanzasGuardarFicha: (db, data, contexto) => FinanzasClientes.guardarFicha(db, data, contexto),
+  finanzasGuardarServicio: (db, data, contexto) => FinanzasClientes.guardarServicio(db, data, contexto),
+  finanzasGuardarDocumento: (db, data, contexto) => FinanzasClientes.guardarDocumento(db, data, contexto),
+  finanzasSubirAdjunto: (db, data, contexto) => FinanzasClientes.subirAdjunto(db, data, contexto),
+  finanzasDescargarAdjunto: (db, data, contexto) => FinanzasClientes.descargarAdjunto(db, data, contexto),
+  finanzasGuardarAsignacion: (db, data, contexto) => FinanzasClientes.guardarAsignacion(db, data, contexto),
+  finanzasEditarFactura: (db, data, contexto) => FinanzasCobranza.editarFactura(db, data, contexto),
+  finanzasAplicar: (db, data, contexto) => FinanzasCobranza.aplicar(db, data, contexto),
+  finanzasDesaplicar: (db, data, contexto) => FinanzasCobranza.desaplicar(db, data, contexto),
+  finanzasAceptarSugeridasCobro: (db, data, contexto) => FinanzasCobranza.aceptarSugeridas(db, data, contexto),
+  finanzasGuardarRelacionCobro: (db, data, contexto) => FinanzasCobranza.guardarRelacion(db, data, contexto),
+  finanzasRelacionesCobro: (db, data, contexto) => FinanzasCobranza.relaciones(db, data, contexto),
+  finanzasFacturas: (db, data, contexto) => FinanzasCobranza.facturas(db, data, contexto),
+  finanzasCobrosElegibles: (db, data, contexto) => FinanzasCobranza.cobrosElegibles(db, data, contexto),
+  finanzasPendientes: (db, data, contexto) => FinanzasPendientes.pendientes(db, data, contexto),
+  finanzasAnularRelacionCobro: (db, data, contexto) => FinanzasCobranza.anularRelacion(db, data, contexto),
+  finanzasAprobarPresupuesto: (db, data, contexto) => FinanzasPresupuesto.aprobar(db, data, contexto),
+  finanzasPrevisualizarReparto: (db, data, contexto) => FinanzasPlanificacion.previsualizarReparto(db, data, contexto),
+  finanzasGastosCompartidos: (db, data, contexto) => FinanzasPlanificacion.gastosCompartidos(db, data, contexto),
+  finanzasGuardarGastoCompartido: (db, data, contexto) => FinanzasPlanificacion.guardarGastoCompartido(db, data, contexto),
+  finanzasVincularGasto: (db, data, contexto) => FinanzasPlanificacion.vincularGasto(db, data, contexto),
+  finanzasPrestamos: (db, data, contexto) => FinanzasPlanificacion.prestamos(db, data, contexto),
+  finanzasGuardarPrestamo: (db, data, contexto) => FinanzasPlanificacion.guardarPrestamo(db, data, contexto),
+  finanzasVincularPrestamo: (db, data, contexto) => FinanzasPlanificacion.vincularPrestamo(db, data, contexto),
+  finanzasProyectos: (db, data, contexto) => FinanzasPlanificacion.proyectos(db, data, contexto),
+  finanzasGuardarProyecto: (db, data, contexto) => FinanzasPlanificacion.guardarProyecto(db, data, contexto),
+  finanzasProvisiones: (db, data, contexto) => FinanzasPlanificacion.provisiones(db, data, contexto),
+  finanzasGuardarProvision: (db, data, contexto) => FinanzasPlanificacion.guardarProvision(db, data, contexto),
+  finanzasCompromisos: (db, data, contexto) => FinanzasPlanificacion.compromisos(db, data, contexto),
+  finanzasGuardarCompromiso: (db, data, contexto) => FinanzasPlanificacion.guardarCompromiso(db, data, contexto),
+  finanzasProyeccion: (db, data, contexto) => FinanzasPlanificacion.proyeccion(db, data, contexto),
+  finanzasReporte: (db, data, contexto) => FinanzasReportes.reporte(db, data, contexto),
+  finanzasReporteDetalle: (db, data, contexto) => FinanzasReportes.detalle(db, data, contexto),
+  finanzasExportar: (db, data, contexto) => FinanzasExportar.exportar(db, data, contexto),
+  finanzasReglas: (db, data, contexto) => FinanzasReglas.listar(db, data, contexto),
+  finanzasGuardarRegla: (db, data, contexto) => FinanzasReglas.guardarRegla(db, data, contexto),
+  finanzasCrearRegla: (db, data, contexto) => FinanzasReglas.crearRegla(db, data, contexto),
+  finanzasGuardarPagador: (db, data, contexto) => FinanzasReglas.guardarPagador(db, data, contexto),
+  finanzasGuardarAliasRegla: (db, data, contexto) => FinanzasReglas.guardarAlias(db, data, contexto),
+  finanzasCargarLibro: (db, data, contexto) => FinanzasCargas.cargar(db, data, contexto),
+  finanzasFuentes: (db, data, contexto) => FinanzasCargas.fuentes(db, data, contexto),
+  finanzasFuente: (db, data, contexto) => FinanzasCargas.fuente(db, data, contexto),
+  finanzasPublicarHoja: (db, data, contexto) => FinanzasCargas.publicar(db, data, contexto),
+  finanzasCorregirFilaCarga: (db, data, contexto) => FinanzasCargas.corregirFila(db, data, contexto),
+  finanzasCuadroControl: (db, data, contexto) => FinanzasCargas.cuadroControl(db, data, contexto),
+  finanzasCandidatas: (db, data, contexto) => FinanzasCargas.candidatas(db, data, contexto),
+  finanzasGestionDeCandidata: (db, data, contexto) => FinanzasCargas.crearGestionDeCandidata(db, data, contexto),
+  finanzasDondeQuedo: (db, data, contexto) => FinanzasCargas.dondeQuedo(db, data, contexto),
+  finanzasMejoras: (db, data, contexto) => FinanzasCargas.mejoras(db, data, contexto),
+  finanzasEnviarRevision: (db, data, contexto) => FinanzasCierre.enviarRevision(db, data, contexto),
+  finanzasObservarCierre: (db, data, contexto) => FinanzasCierre.observar(db, data, contexto),
+  finanzasResolverObservacion: (db, data, contexto) => FinanzasCierre.resolverObservacion(db, data, contexto),
+  finanzasExcepcionCierre: (db, data, contexto) => FinanzasCierre.excepcion(db, data, contexto),
+  finanzasVersionCierre: (db, data, contexto) => FinanzasCierre.versionCierre(db, data, contexto),
   // Hompy, la mascota (2026-10-06): solo cuentas con el módulo `hompy`
   // (cada acción lo verifica -- ver hompy.js).
   hompyDatos: (db, data, contexto) => Hompy.datos(db, data, contexto),
@@ -849,10 +957,15 @@ const ACCIONES = {
 
 function responderResultado_(resultado) {
   if (resultado && resultado._validationError) {
-    return { status: 400, body: { ok: false, error: 'validation', message: resultado.message, fields: resultado.fields } };
+    const body = { ok: false, error: 'validation', message: resultado.message, fields: resultado.fields };
+    // Finanzas v2: errores que se distinguen (conflicto de versión, período cerrado...).
+    if (resultado.codigo) body.codigo = resultado.codigo;
+    if (resultado.actual !== undefined) body.actual = resultado.actual;
+    return { status: 400, body };
   }
   if (resultado && resultado._forbidden) {
     const body = { ok: false, error: 'forbidden', message: resultado.message };
+    if (resultado.codigo) body.codigo = resultado.codigo;
     if (resultado.boveda_cerrada) body.boveda_cerrada = true;
     if (resultado.requiere_codigo) body.requiere_codigo = true;
     return { status: 403, body };

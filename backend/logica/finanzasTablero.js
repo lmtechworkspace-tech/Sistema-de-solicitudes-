@@ -24,6 +24,7 @@
  */
 
 const B = require('./finanzasBoveda');
+const Base = require('./finanzasBase');
 const FB = require('./finanzasBancos');
 const FC = require('./finanzasCobranza');
 const { errorValidacion } = require('./errores');
@@ -38,47 +39,37 @@ const OBLIGACIONES = [
 function mesSiguiente_(p) { const [a, m] = p.split('-').map(Number); return m === 12 ? (a + 1) + '-01' : a + '-' + String(m + 1).padStart(2, '0'); }
 function vacio_() { return { ingresos: 0, egresos: 0, resultado: 0, fondos_recibidos: 0, fondos_pagados: 0, traspasos: 0, prestamos_entra: 0, prestamos_sale: 0, pendientes: 0, pendiente_monto: 0, total: 0 }; }
 
-/** Todos los movimientos descifrados con su empresa (de la cuenta). */
-function movimientos_() {
-  const d = I.db_();
-  const cuentas = I.cuentasMapa_();
-  const P = require('./finanzasPagadores');
-  const out = [];
-  d.prepare('SELECT cuenta_ref, fecha, periodo, orden, estado, datos FROM FIN_MOVIMIENTOS ORDER BY fecha, orden').all().forEach((r) => {
-    const m = I.des_(r.datos);
-    const cu = cuentas.get(r.cuenta_ref) || {};
-    // Etapa A: una transferencia dividida entre clientes cuenta como sus partes (el saldo es el del movimiento).
-    P.piezas_(m, r.estado === 'CONFIRMADO' ? m.clasif : null).forEach((p) => out.push({ cuenta_ref: r.cuenta_ref, empresa: cu.empresa || '', banco: cu.banco, ultimos4: cu.ultimos4, fecha: r.fecha, periodo: r.periodo, estado: r.estado, abono: p.abono, cargo: p.cargo, saldo: m.saldo, clasif: p.clasif || null }));
-  });
-  return out;
-}
+/**
+ * Todos los hechos económicos (banco + registro operativo sin conciliar), con
+ * su empresa. v2: viene de finanzasHechos.js, la lectura única (FIN-34).
+ */
+function movimientos_() { return require('./finanzasHechos').todos_(); }
 
 /**
- * Qué parte de un movimiento le toca a una empresa ('' = el grupo entero).
- * Un gasto compartido (clasif.reparto) se reparte en partes iguales entre las
- * empresas de la lista, aunque lo haya pagado otra (Etapa 5; GASTOS
- * COMPARTIDOS de SIGECO). Todo lo demás es 100 % de la empresa de la cuenta.
+ * Qué FRACCIÓN de un hecho le toca a una empresa ('' = el grupo entero). Se
+ * conserva para compatibilidad; los cálculos usan montoEmpresa_ (montos
+ * exactos, sin pesos que aparezcan o desaparezcan al repartir).
  */
 function factor_(m, emp) {
-  if (!emp) return 1;
-  const rep = m.clasif && m.clasif.tipo === 'EGRESO' && Array.isArray(m.clasif.reparto) && m.clasif.reparto.length >= 2 ? m.clasif.reparto : null;
-  if (rep) return rep.indexOf(emp) !== -1 ? 1 / rep.length : 0;
-  return m.empresa === emp ? 1 : 0;
+  const total = m.abono || m.cargo || 0;
+  if (!total) return 0;
+  return require('./finanzasHechos').parteEmpresa_(m, emp) / total;
 }
+function montoEmpresa_(m, emp) { return require('./finanzasHechos').parteEmpresa_(m, emp); }
 
-function acumular_(o, m, f) {
-  f = f === undefined ? 1 : f;
-  if (!f) return;
+/** Suma un hecho (con el monto que le toca al alcance) en el acumulador del período. */
+function acumular_(o, m, montoParte) {
+  const monto = montoParte === undefined ? (m.abono || m.cargo || 0) : montoParte;
+  if (!monto) return;
   const c = m.clasif;
   o.total++;
-  if (!c) { o.pendientes++; o.pendiente_monto += m.abono || m.cargo; return; }
-  const monto = Math.round((m.abono || m.cargo) * f);
-  if (c.tipo === 'INGRESO') o.ingresos += Math.round(m.abono * f);
-  else if (c.tipo === 'EGRESO') o.egresos += Math.round(m.cargo * f);
-  else if (c.tipo === 'FONDO_RECIBIDO') o.fondos_recibidos += m.abono;
-  else if (c.tipo === 'FONDO_PAGADO') o.fondos_pagados += m.cargo;
+  if (!c) { o.pendientes++; o.pendiente_monto += monto; return; }
+  if (c.tipo === 'INGRESO') o.ingresos += monto;
+  else if (c.tipo === 'EGRESO') o.egresos += monto;
+  else if (c.tipo === 'FONDO_RECIBIDO') o.fondos_recibidos += monto;
+  else if (c.tipo === 'FONDO_PAGADO') o.fondos_pagados += monto;
   else if (c.tipo === 'TRASPASO') o.traspasos += monto;
-  else if (c.tipo === 'PRESTAMO') { if (m.abono) o.prestamos_entra += m.abono; else o.prestamos_sale += m.cargo; }
+  else if (c.tipo === 'PRESTAMO') { if (m.abono) o.prestamos_entra += monto; else o.prestamos_sale += monto; }
   o.resultado = o.ingresos - o.egresos;
 }
 
@@ -87,6 +78,11 @@ function acumular_(o, m, f) {
  * "Préstamos entre empresas" de SIGECO:
  *  - PRESTAMO que SALE de la cuenta de A hacia B → B le debe a A; si ENTRA → A le debe a B.
  *  - Gasto compartido pagado por A → cada otra empresa del reparto le debe su parte a A.
+ * v2 (FIN-26): si están cargadas las cuentas de AMBAS empresas, el mismo
+ * préstamo aparece dos veces (sale de A y entra a B). Esas dos piernas se
+ * emparejan (mismo monto, empresas cruzadas, ±5 días) y cuentan UNA vez.
+ * Los préstamos registrados con su ficha (finanzasPlanificacion.js) se
+ * cuentan por su ficha y sus piernas no se vuelven a sumar.
  */
 function deudasEntreEmpresas_(movs) {
   const saldo = {}; // "A|B" con A < B: positivo = B le debe a A
@@ -96,17 +92,24 @@ function deudasEntreEmpresas_(movs) {
     const k = x + '|' + y;
     saldo[k] = (saldo[k] || 0) + (acreedor === x ? monto : -monto);
   };
+  const piernas = movs.filter((m) => m.clasif && m.clasif.tipo === 'PRESTAMO' && m.clasif.empresa && !m.clasif.prestamo_id);
+  const usadas = new Set();
+  piernas.forEach((m, i) => {
+    if (usadas.has(i)) return;
+    usadas.add(i);
+    // La pierna espejo: en la otra empresa, con la empresa cruzada, mismo monto y sentido contrario.
+    const j = piernas.findIndex((o, k) => !usadas.has(k) && o.empresa === m.clasif.empresa && o.clasif.empresa === m.empresa &&
+      (m.cargo ? o.abono === m.cargo : o.cargo === m.abono) && Math.abs(Date.parse(o.fecha) - Date.parse(m.fecha)) <= 5 * 864e5);
+    if (j !== -1) usadas.add(j);
+    if (m.cargo > 0) sumar(m.empresa, m.clasif.empresa, m.cargo); else sumar(m.clasif.empresa, m.empresa, m.abono);
+  });
   movs.forEach((m) => {
     const c = m.clasif;
-    if (!c) return;
-    if (c.tipo === 'PRESTAMO' && c.empresa) {
-      if (m.cargo > 0) sumar(m.empresa, c.empresa, m.cargo); else sumar(c.empresa, m.empresa, m.abono);
-    }
-    if (c.tipo === 'EGRESO' && Array.isArray(c.reparto) && c.reparto.length >= 2) {
-      const parte = m.cargo / c.reparto.length;
-      c.reparto.forEach((e) => sumar(m.empresa, e, parte));
-    }
+    if (!c || c.tipo !== 'EGRESO' || !c.reparto) return;
+    const partes = FB.partesReparto_(c.reparto, m.cargo) || [];
+    partes.forEach((p) => sumar(m.empresa, p.empresa, p.monto));
   });
+  try { require('./finanzasPlanificacion').saldosPrestamos_().filter((p) => p.estado !== 'ANULADO' && p.estado !== 'PAGADO').forEach((p) => sumar(p.origen, p.destino, p.saldo_reconocido || 0)); } catch (e) { /* sin préstamos registrados */ }
   return Object.keys(saldo).map((k) => {
     const [x, y] = k.split('|'), v = Math.round(saldo[k]);
     return v > 0 ? { debe: y, a: x, monto: v } : { debe: x, a: y, monto: -v };
@@ -118,11 +121,16 @@ function calcular_(db, periodo, empresa) {
   const periodos = [...new Set(todos.map((m) => m.periodo))].sort();
   if (!periodos.length) return { sin_datos: true, empresas: [], periodos: [] };
   const p = periodos.indexOf(periodo) !== -1 ? periodo : periodos[periodos.length - 1];
-  const empresasConDatos = [...new Set(todos.map((m) => m.empresa).filter(Boolean))];
+  // v2: también las empresas que solo aparecen en repartos de gastos compartidos o como contraparte de préstamos.
+  const empresasConDatos = [...new Set(todos.map((m) => m.empresa).concat(todos.flatMap((m) => {
+    const c = m.clasif;
+    if (!c) return [];
+    return (c.reparto ? (FB.partesReparto_(c.reparto, m.cargo) || []).map((p) => p.empresa) : []).concat(c.tipo === 'PRESTAMO' && c.empresa ? [c.empresa] : []);
+  })).filter(Boolean))];
   const emp = empresasConDatos.indexOf(empresa) !== -1 ? empresa : '';
   // Cuentas propias (caja, fondos) y lo que le toca de cada movimiento (con gastos compartidos).
   const delAlcance = todos.filter((m) => !emp || m.empresa === emp);
-  const conParte = todos.map((m) => ({ m, f: factor_(m, emp) })).filter((x) => x.f > 0);
+  const conParte = todos.map((m) => ({ m, f: montoEmpresa_(m, emp) })).filter((x) => x.f > 0);
 
   // Serie: hasta 12 meses que terminan en el elegido.
   const iFin = periodos.indexOf(p);
@@ -136,27 +144,22 @@ function calcular_(db, periodo, empresa) {
   conParte.filter((x) => x.m.periodo === p && x.m.clasif).forEach((x) => {
     const m = x.m;
     const cta = m.clasif.cuenta + (m.clasif.reparto && emp ? ' (compartido)' : '');
-    if (m.clasif.tipo === 'EGRESO') gastos[cta] = (gastos[cta] || 0) + Math.round(m.cargo * x.f);
-    if (m.clasif.tipo === 'INGRESO') ingresos[cta] = (ingresos[cta] || 0) + Math.round(m.abono * x.f);
+    if (m.clasif.tipo === 'EGRESO') gastos[cta] = (gastos[cta] || 0) + x.f;
+    if (m.clasif.tipo === 'INGRESO') ingresos[cta] = (ingresos[cta] || 0) + x.f;
   });
   const ordenar = (o) => Object.keys(o).map((k) => ({ cuenta: k, monto: o[k] })).sort((a, b) => b.monto - a.monto);
 
   // Caja al cierre del mes: último saldo de cada cuenta con fecha <= fin del mes.
-  const finMes = p + '-31';
-  const ultimo = new Map();
-  delAlcance.forEach((m) => { if (m.fecha <= finMes) ultimo.set(m.cuenta_ref, m); });
-  const cuentas = [...ultimo.values()].map((m) => ({ banco: m.banco, ultimos4: m.ultimos4, empresa: m.empresa, saldo: m.saldo, al: m.fecha }));
+  const finMes = Base.ultimoDia_(p);
+  // Por fecha del banco (I02.4): la caja concilia con la cartola.
+  const cuentas = require('./finanzasHechos').saldosAl_({ hasta: finMes, empresa: emp || '' }).map((c) => ({ banco: c.banco, ultimos4: c.ultimos4, empresa: c.empresa, saldo: c.saldo, al: c.al }));
   const caja = cuentas.reduce((s, c) => s + (Number(c.saldo) || 0), 0);
 
   // Fondos de clientes en custodia, acumulado al cierre del mes.
-  const fondos = new Map();
-  delAlcance.filter((m) => m.fecha <= finMes && m.clasif && (m.clasif.tipo === 'FONDO_RECIBIDO' || m.clasif.tipo === 'FONDO_PAGADO')).forEach((m) => {
-    const f = fondos.get(m.clasif.cliente_id) || { cliente: m.clasif.cliente, saldo: 0 };
-    f.saldo += m.clasif.tipo === 'FONDO_RECIBIDO' ? m.abono : -m.cargo;
-    fondos.set(m.clasif.cliente_id, f);
-  });
-  const fondosLista = [...fondos.values()];
-  const custodia = fondosLista.reduce((s, f) => s + f.saldo, 0);
+  // v2 (FIN-13/15): por cliente y con saldo inicial (apertura); sin apertura el saldo es PARCIAL.
+  const cust = require('./finanzasFondos').custodiaAl_(finMes, emp);
+  const fondosLista = cust.clientes;
+  const custodia = cust.total;
   const negativos = fondosLista.filter((f) => f.saldo < 0).sort((a, b) => a.saldo - b.saldo);
 
   // Cobranza de hoy.
@@ -173,14 +176,14 @@ function calcular_(db, periodo, empresa) {
   // Comparación entre empresas (siempre todas, para el gráfico).
   const porEmpresa = empresasConDatos.map((e) => ({
     empresa: e,
-    serie: serieP.map((per) => { const o = vacio_(); todos.filter((m) => m.periodo === per).forEach((m) => acumular_(o, m, factor_(m, e))); return { periodo: per, resultado: o.resultado, ingresos: o.ingresos, egresos: o.egresos }; })
+    serie: serieP.map((per) => { const o = vacio_(); todos.filter((m) => m.periodo === per).forEach((m) => acumular_(o, m, montoEmpresa_(m, e))); return { periodo: per, resultado: o.resultado, ingresos: o.ingresos, egresos: o.egresos }; })
   }));
 
   // Obligaciones del mes siguiente, estimadas con lo pagado en el mes elegido.
   const sig = mesSiguiente_(p);
   const obligaciones = OBLIGACIONES.map((o) => ({
     nombre: o.nombre, fecha: sig + '-' + String(o.dia).padStart(2, '0'),
-    estimado: conParte.filter((x) => x.m.periodo === p && x.m.clasif && x.m.clasif.tipo === 'EGRESO' && o.cuentas.indexOf(x.m.clasif.cuenta) !== -1).reduce((s, x) => s + Math.round(x.m.cargo * x.f), 0)
+    estimado: conParte.filter((x) => x.m.periodo === p && x.m.clasif && x.m.clasif.tipo === 'EGRESO' && o.cuentas.indexOf(x.m.clasif.cuenta) !== -1).reduce((s, x) => s + x.f, 0)
   }));
   const totalOblig = obligaciones.reduce((s, o) => s + o.estimado, 0);
 
@@ -193,7 +196,9 @@ function calcular_(db, periodo, empresa) {
   // / gasto promedio de la empresa en los últimos 3 meses con gastos.
   const conGasto = serie.filter((s) => s.egresos > 0).slice(-3);
   const gastoPromedio = conGasto.length ? Math.round(conGasto.reduce((a, s) => a + s.egresos, 0) / conGasto.length) : 0;
-  const cajaLibre = caja - Math.max(custodia, 0);
+  // v2 (FIN-15, T12): se reserva la plata de CADA cliente con saldo a favor; el
+  // déficit de un cliente no libera la plata de otro (antes se restaba el neto).
+  const cajaLibre = caja - cust.positivos;
   const mesesCaja = gastoPromedio ? Math.round(cajaLibre / gastoPromedio * 10) / 10 : null;
 
   // Etapa 5 · Entre empresas: préstamos + la parte de los gastos compartidos que pagó otra.
@@ -206,6 +211,7 @@ function calcular_(db, periodo, empresa) {
     cobranza: cob, por_empresa: porEmpresa, obligaciones, total_obligaciones: totalOblig,
     presupuesto_cargado: !!(presupuesto && Object.keys(presupuesto).length),
     caja_libre: cajaLibre, gasto_promedio: gastoPromedio, meses_caja: mesesCaja,
+    custodia_positiva: cust.positivos, custodia_deficit: cust.negativos, custodia_parcial: cust.parcial, clientes_sin_apertura: cust.sin_apertura,
     entre_empresas: emp ? interco.filter((d) => d.debe === emp || d.a === emp) : interco,
     calidad: { total: mes.total, pendientes: mes.pendientes, pendiente_monto: mes.pendiente_monto, completo: mes.pendientes === 0 }
   };
@@ -256,8 +262,9 @@ function lectura_(t) {
   if (!t.total_obligaciones) {
     L.push({ tono: 'alerta', texto: 'No hay pagos de sueldos, imposiciones ni IVA de la empresa confirmados en ' + nombreMes_(t.periodo) + ': no se puede estimar si la caja alcanza para el mes que viene.' });
   } else {
-    const alcanza = t.caja >= t.total_obligaciones;
-    L.push({ tono: alcanza ? 'ok' : 'critico', texto: 'La caja (' + plata_(t.caja) + (alcanza ? ') alcanza' : ') NO alcanza') + ' para sueldos, imposiciones e IVA del mes que viene (≈ ' + plata_(t.total_obligaciones) + ', estimado con lo pagado este mes).' });
+    // Corrección v2 (I03.2): la caja total no es plata propia; la suficiencia la evalúa el informe (finanzasReportes)
+    // solo con disponibilidad propia determinada. Aquí se informa el monto sin concluir.
+    L.push({ tono: 'info', texto: 'Sueldos, imposiciones e IVA del mes que viene: ≈ ' + plata_(t.total_obligaciones) + ' (estimado con lo pagado este mes). Si alcanza o no se ve en Informes, que verifica saldos iniciales y cartolas.' });
   }
   if (t.custodia > 0) L.push({ tono: 'info', texto: 'Hay ' + plata_(t.custodia) + ' de clientes en custodia: es plata de ellos para sus imposiciones e IVA, no se puede gastar.' });
   else if (t.custodia < 0) L.push({ tono: 'alerta', texto: 'En total, lo pagado por cuenta de clientes supera en ' + plata_(-t.custodia) + ' lo que mandaron. Suele faltar la plata que llegó antes del primer mes cargado.' });

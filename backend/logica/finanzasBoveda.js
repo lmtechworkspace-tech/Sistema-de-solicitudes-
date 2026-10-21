@@ -67,11 +67,14 @@ function listaAvisar_() {
   return String(process.env.SIGSO_FINANZAS_AVISAR || '')
     .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
+let llaveMemo_ = { b64: null, buf: null };
 function llave_() {
   const b64 = String(process.env.SIGSO_FINANZAS_LLAVE || '').trim();
   if (!b64) return null;
-  const buf = Buffer.from(b64, 'base64');
-  return buf.length === 32 ? buf : null;
+  // I12.2: se decodifica una vez por valor de la variable (si cambia la llave, se vuelve a decodificar).
+  if (llaveMemo_.b64 !== b64) { const b = Buffer.from(b64, 'base64'); llaveMemo_ = { b64, buf: b.length === 32 ? b : null }; }
+  const buf = llaveMemo_.buf;
+  return buf;
 }
 function rutaDb_() {
   if (process.env.SIGSO_FINANZAS_DB_PATH) return process.env.SIGSO_FINANZAS_DB_PATH;
@@ -144,15 +147,44 @@ function cifrar(texto) {
   const datos = Buffer.concat([c.update(String(texto), 'utf8'), c.final()]);
   return 'v1:' + Buffer.concat([iv, c.getAuthTag(), datos]).toString('base64');
 }
+/**
+ * I12.2 · Texto plano memorizado por texto cifrado. Cada cifrado lleva un IV
+ * aleatorio: un mismo sobre corresponde siempre al mismo texto, así que no hay
+ * datos viejos (un cambio produce otro sobre). Cada lector recibe su propio
+ * texto (y su propio JSON.parse): nadie comparte objetos. Se vacía al cerrar la
+ * última sesión abierta de la bóveda (limpiarCaches_).
+ */
+const claro_ = new Map();
+const MAX_CLARO_ = 80000;
 function descifrar(sobre) {
+  const s = String(sobre || '');
   const k = llave_();
   if (!k) throw new Error('La bóveda no tiene llave configurada.');
-  const m = /^v1:(.+)$/.exec(String(sobre || ''));
+  // La memoria es por llave: con otra llave, el mismo sobre no se abre (se descifra de verdad y falla).
+  const clave = llaveMemo_.b64 + '|' + s;
+  const c = claro_.get(clave);
+  if (c !== undefined) return c;
+  const m = /^v1:(.+)$/.exec(s);
   if (!m) throw new Error('Dato cifrado con formato desconocido.');
   const buf = Buffer.from(m[1], 'base64');
   const d = crypto.createDecipheriv('aes-256-gcm', k, buf.subarray(0, 12));
   d.setAuthTag(buf.subarray(12, 28));
-  return Buffer.concat([d.update(buf.subarray(28)), d.final()]).toString('utf8');
+  const txt = Buffer.concat([d.update(buf.subarray(28)), d.final()]).toString('utf8');
+  if (claro_.size >= MAX_CLARO_) claro_.clear();
+  claro_.set(clave, txt);
+  return txt;
+}
+/** Quién más necesita olvidar lo que tiene en memoria al cerrar la bóveda (cachés de cifras). */
+const limpiadores_ = [];
+function registrarLimpieza_(fn) { limpiadores_.push(fn); }
+function limpiarCaches_() {
+  claro_.clear();
+  limpiadores_.forEach((f) => { try { f(); } catch (e) { /* nada */ } });
+}
+/** Sesiones de la bóveda aún vigentes (no cerradas ni vencidas). */
+function sesionesAbiertas_(ahora) {
+  const t = ahora || Date.now();
+  return dbFin().prepare('SELECT COUNT(*) AS n FROM FIN_SESIONES WHERE cerrada = 0 AND ultimo_uso >= ? AND creada_en >= ?').get(t - INACTIVIDAD_MS, t - MAXIMO_MS).n;
 }
 
 // ---------------------------------------------------------------- TOTP (RFC 6238)
@@ -407,6 +439,8 @@ function salir(db, data, contexto) {
       .run(hashToken_(data.boveda_token), String(contexto.cuenta_id));
     if (r.changes) registrar_({ cuenta_id: contexto.cuenta_id, nombre: nombreDe_(cuentaDe_(db, contexto), contexto), accion: 'SALIR', ip: ipDe_(contexto), equipo: equipoDe_(data) });
   }
+  // I12.2: si ya no queda nadie con la bóveda abierta, el servidor olvida las cifras que tenía en memoria.
+  if (!sesionesAbiertas_()) limpiarCaches_();
   return { ok: true };
 }
 
@@ -457,7 +491,8 @@ function reiniciarAutenticador_(cuentaId, motivo) {
 }
 
 module.exports = {
-  NO_ENCONTRADO, tieneAcceso, conBoveda, cifrar, descifrar, dbFin,
+  NO_ENCONTRADO, tieneAcceso, conBoveda, cifrar, descifrar, dbFin, registrarLimpieza_, limpiarCaches_, sesionesAbiertas_,
+  memoria_: () => ({ textos_descifrados: claro_.size }),
   estado, prepararAutenticador, activarAutenticador, entrar, salir, bitacora, resumen,
   // pruebas / herramientas
   codigoTotp, base32, desdeBase32, contadorActual_, verificarCadena_, reiniciarAutenticador_, reiniciarParaPruebas_

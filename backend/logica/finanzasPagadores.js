@@ -28,12 +28,15 @@
 
 const crypto = require('node:crypto');
 const B = require('./finanzasBoveda');
+const Base = require('./finanzasBase');
+const Cat = require('./finanzasCatalogos');
 const FB = require('./finanzasBancos');
 const { errorValidacion, errorForbidden } = require('./errores');
 
 const I = FB.interno;
 
 let preparada_ = null;
+Base.registrarEsquema_(() => { preparada_ = null; });
 function db_() {
   const d = I.db_();
   if (preparada_ === d) return d;
@@ -127,7 +130,7 @@ function rango_(lista, campo) {
 
 /** Agrega el detalle del banco a los movimientos de la cartola (no crea movimientos). */
 const importarDetalle = B.conBoveda('', function (db, data, contexto, x) {
-  if (I.soloEscritura_(contexto)) return errorForbidden('Tu acceso a Finanzas es de solo lectura.');
+  { const e_ = Base.exigir_(contexto, 'REGISTRAR'); if (e_) return e_; }
   const det = leerDetalle(data && data.filas);
   if (det.error) return errorValidacion('archivo', det.error);
   const cuenta = (data && data.cuenta && I.cuentasMapa_().get(data.cuenta)) || cuentaDesdeNombre_(data && data.nombre_archivo);
@@ -162,7 +165,8 @@ function pagadorDe_(nombre) {
 }
 function pagadores_() {
   const m = new Map();
-  db_().prepare('SELECT huella, datos FROM FIN_PAGADORES').all().forEach((r) => m.set(r.huella, I.des_(r.datos)));
+  // v2 (FIN-20): un pagador desactivado en el editor de reglas no propone clientes.
+  db_().prepare('SELECT huella, datos FROM FIN_PAGADORES').all().forEach((r) => { const p = I.des_(r.datos); if (p.activo !== false) m.set(r.huella, p); });
   return m;
 }
 /** Anota que un pagador pagó por un cliente (veces += 1). */
@@ -190,7 +194,7 @@ function clientePorNombre_(nombre, clientes) {
 
 function aliasMapa_() {
   const m = new Map();
-  db_().prepare('SELECT huella, datos FROM FIN_ALIAS').all().forEach((r) => m.set(r.huella, I.des_(r.datos)));
+  db_().prepare('SELECT huella, datos FROM FIN_ALIAS').all().forEach((r) => { const a = I.des_(r.datos); if (a.activo !== false) m.set(r.huella, a); });
   return m;
 }
 const GASTOS_CONOCIDOS = { COMISION: 'Comisión Banco', 'CUENTAS BASICAS': 'Cuentas Básicas', ARRIENDO: 'Arriendo Mensual', 'CAJA CHICA': 'Caja Chica', PATENTE: 'Patente Comercial' };
@@ -199,7 +203,7 @@ function proponerAlias_(alias, clientes) {
   const a = I.normalizar_(alias);
   if (!a) return null;
   if (GASTOS_CONOCIDOS[a]) return { clase: 'gasto', cuenta: GASTOS_CONOCIDOS[a] };
-  const emp = FB.EMPRESAS.find((e) => I.normalizar_(e) === a || (a === 'AYS' && e === 'HomePymes') || (a.indexOf('VIRTUAL') === 0 && e === 'Virtual Base'));
+  const emp = Cat.empresa_(a) || (a.indexOf('VIRTUAL') === 0 ? 'Virtual Base' : '');
   if (emp) return { clase: 'empresa', empresa: emp };
   const palabras = a.replace(/\bCONST\b/g, 'CONSTRUC').split(' ').filter((p) => p.length >= 3);
   if (!palabras.length) return null;
@@ -249,7 +253,7 @@ const revisarExcelBancos = B.conBoveda('', function (db, data) {
 
 /** Guarda qué es cada nombre corto: cliente, empresa del grupo, gasto de la empresa o ignorar. */
 const guardarAlias = B.conBoveda('', function (db, data, contexto, x) {
-  if (I.soloEscritura_(contexto)) return errorForbidden('Tu acceso a Finanzas es de solo lectura.');
+  { const e_ = Base.exigir_(contexto, 'REGLAS'); if (e_) return e_; }
   const clientes = new Map(I.clientes_(db).map((c) => [c.id, c.nombre]));
   const lista = Array.isArray(data && data.alias) ? data.alias.slice(0, 1000) : [];
   const ahora = new Date().toISOString();
@@ -258,8 +262,8 @@ const guardarAlias = B.conBoveda('', function (db, data, contexto, x) {
   lista.forEach((a) => {
     const destino = { clase: txt_(a.clase) };
     if (destino.clase === 'cliente') { if (!clientes.has(txt_(a.cliente_id))) { errores.push(a.alias + ': elige el cliente'); return; } destino.cliente_id = txt_(a.cliente_id); destino.cliente = clientes.get(destino.cliente_id); }
-    else if (destino.clase === 'empresa') { if (FB.EMPRESAS.indexOf(txt_(a.empresa)) === -1) { errores.push(a.alias + ': elige la empresa'); return; } destino.empresa = txt_(a.empresa); }
-    else if (destino.clase === 'gasto') { if (FB.TIPOS && FB.CUENTAS_EGRESO.indexOf(txt_(a.cuenta)) === -1) { errores.push(a.alias + ': elige la cuenta del gasto'); return; } destino.cuenta = txt_(a.cuenta); }
+    else if (destino.clase === 'empresa') { if (Cat.empresas_().indexOf(txt_(a.empresa)) === -1) { errores.push(a.alias + ': elige la empresa'); return; } destino.empresa = txt_(a.empresa); }
+    else if (destino.clase === 'gasto') { if (FB.cuentasDe_('EGRESO').indexOf(txt_(a.cuenta)) === -1) { errores.push(a.alias + ': elige la cuenta del gasto'); return; } destino.cuenta = txt_(a.cuenta); }
     else if (destino.clase !== 'ignorar') return;
     db_().prepare('INSERT INTO FIN_ALIAS (huella, datos, actualizado_en, actualizado_por) VALUES (?,?,?,?) ON CONFLICT(huella) DO UPDATE SET datos = excluded.datos, actualizado_en = excluded.actualizado_en, actualizado_por = excluded.actualizado_por')
       .run(huella_('alias', a.alias), I.cif_({ alias: txt_(a.alias), destino }), ahora, x.nombre);
@@ -302,12 +306,14 @@ function clasifDesdeExcel_(fila, destino, medio) {
  * aprende de qué cliente era. Nunca confirma nada.
  */
 const aprenderExcelBancos = B.conBoveda('', function (db, data, contexto, x) {
-  if (I.soloEscritura_(contexto)) return errorForbidden('Tu acceso a Finanzas es de solo lectura.');
+  { const e_ = Base.exigir_(contexto, 'REGISTRAR'); if (e_) return e_; }
   const ex = leerExcelBancos(data && data.filas);
   if (ex.error) return errorValidacion('archivo', ex.error);
   const cuenta = I.cuentasMapa_().get(txt_(data && data.cuenta));
   if (!cuenta) return errorValidacion('cuenta', 'Elige a qué cuenta del banco corresponde esta hoja.');
   const r = rango_(ex.filas, 'fecha');
+  // I13 (QA-R16, datos reales): al volver a publicar solo quedan filas sin fecha ni monto; no hay nada que aprender.
+  if (!r) return { filas: 0, emparejadas: 0, sin_movimiento: 0, con_sugerencia: 0, nombres_sin_ensenar: 0, pagadores_aprendidos: 0 };
   const movs = movimientosDe_(cuenta.id, r[0], r[1]);
   const pares = emparejar_(ex.filas, movs, (y) => y.fecha);
   const alias = aliasMapa_();
@@ -405,5 +411,7 @@ function contextoPagadores_() {
 
 module.exports = {
   importarDetalle, revisarExcelBancos, guardarAlias, aprenderExcelBancos,
+  // asegurarTablas_: crea FIN_PAGADORES y FIN_ALIAS si aún no existen (para quien solo las lee).
+  asegurarTablas_: () => { db_(); },
   piezas_, pagadorDe_, sugerirConPagador_, contextoPagadores_, registrarPagador_, leerDetalle, leerExcelBancos, analizarDescripcion_, proponerAlias_, clientePorNombre_
 };

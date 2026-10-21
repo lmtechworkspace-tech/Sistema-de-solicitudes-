@@ -36,10 +36,14 @@ const crypto = require('node:crypto');
 const B = require('./finanzasBoveda');
 const { leerFilas_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
-const { errorValidacion, errorForbidden } = require('./errores');
+const { errorValidacion } = require('./errores');
+const Base = require('./finanzasBase');
+const Cat = require('./finanzasCatalogos');
 
 // ---------------------------------------------------------------- catálogos
 
+// Semilla histórica. La lista vigente vive en FIN_CATALOGO (finanzasCatalogos.js):
+// usar Cat.empresas_() para validar.
 const EMPRESAS = ['HomePymes', 'Homeconsulting', 'HomePrevise', 'GDE', 'RLD', 'Virtual Base'];
 // Nombres con que cada empresa puede aparecer en una glosa (razón social o fantasía).
 const NOMBRES_EMPRESA = {
@@ -53,8 +57,11 @@ const NOMBRES_EMPRESA = {
 const TIPOS = {
   INGRESO: { nombre: 'Ingreso de la empresa', sentido: 'abono' },
   EGRESO: { nombre: 'Gasto de la empresa', sentido: 'cargo' },
-  FONDO_RECIBIDO: { nombre: 'Fondo de cliente recibido', sentido: 'abono', cliente: true },
-  FONDO_PAGADO: { nombre: 'Pago por cuenta de cliente', sentido: 'cargo', cliente: true },
+  // v2 (FIN-15/16): subtipos dentro del mismo sentido y titularidad. Una devolución
+  // al cliente sale de sus fondos pero no es el pago de una obligación; un
+  // reintegro (lo que vuelve, p. ej. de Previred) entra a sus fondos.
+  FONDO_RECIBIDO: { nombre: 'Fondo de cliente recibido', sentido: 'abono', cliente: true, subtipos: { RECEPCION: 'Recepción de fondos', REINTEGRO: 'Reintegro (vuelve dinero de un pago)' } },
+  FONDO_PAGADO: { nombre: 'Pago por cuenta de cliente', sentido: 'cargo', cliente: true, subtipos: { PAGO_OBLIGACION: 'Pago de una obligación', DEVOLUCION: 'Devolución al cliente' } },
   TRASPASO: { nombre: 'Traspaso entre cuentas propias', sentido: '' },
   PRESTAMO: { nombre: 'Préstamo entre empresas', sentido: '', empresa: true }
 };
@@ -66,12 +73,14 @@ const CUENTAS = {
     'Servidores y Sistemas', 'Otros Egresos'],
   FONDO: ['Imposiciones', 'IVA', 'Sueldos', 'Convenios', 'Renta', 'Otro']
 };
+// Conceptos vigentes desde el catálogo (FIN-03); si el catálogo no responde, la semilla.
 function cuentasDe_(tipo) {
-  if (tipo === 'INGRESO') return CUENTAS.INGRESO;
-  if (tipo === 'EGRESO') return CUENTAS.EGRESO;
-  if (tipo === 'FONDO_RECIBIDO' || tipo === 'FONDO_PAGADO') return CUENTAS.FONDO;
-  return [];
+  const g = tipo === 'INGRESO' ? 'INGRESO' : tipo === 'EGRESO' ? 'EGRESO' : (tipo === 'FONDO_RECIBIDO' || tipo === 'FONDO_PAGADO') ? 'FONDO' : '';
+  if (!g) return [];
+  try { const l = Cat.conceptos_(g); if (l.length) return l; } catch (e) { /* sin bóveda: semilla */ }
+  return CUENTAS[g];
 }
+function empresasValidas_() { try { const l = Cat.empresas_(); if (l.length) return l; } catch (e) { /* semilla */ } return EMPRESAS; }
 // Glosas que no dicen quién es: nunca se vuelven regla (todas se verían iguales).
 const GENERICAS = [
   /^PAGO CUENTAS VIA INTERNET$/, /^ABONO POR TRF DESDE OTRO BANCO/, /^TRASPASO FONDOS OTRO BANCO/,
@@ -82,6 +91,7 @@ const GENERICAS = [
 // ---------------------------------------------------------------- esquema
 
 let preparada_ = null;
+Base.registrarEsquema_(() => { preparada_ = null; });
 function db_() {
   const d = B.dbFin();
   if (preparada_ === d) return d;
@@ -100,6 +110,11 @@ function db_() {
        id TEXT PRIMARY KEY, huella TEXT NOT NULL UNIQUE, datos TEXT NOT NULL, origen TEXT NOT NULL,
        usos INTEGER NOT NULL DEFAULT 0, actualizada_en TEXT NOT NULL)`
   ].forEach((sql) => d.exec(sql));
+  // v2 (FIN-08, FIN-20): migraciones aditivas — versión para detectar ediciones simultáneas,
+  // reglas que se pueden desactivar y versionar sin borrarlas.
+  Base.asegurarColumna_(d, 'FIN_MOVIMIENTOS', 'version', 'INTEGER NOT NULL DEFAULT 0');
+  Base.asegurarColumna_(d, 'FIN_REGLAS', 'activa', 'INTEGER NOT NULL DEFAULT 1');
+  Base.asegurarColumna_(d, 'FIN_REGLAS', 'version', 'INTEGER NOT NULL DEFAULT 0');
   preparada_ = d;
   return d;
 }
@@ -128,20 +143,12 @@ function monto_(v) {
   const n = Number(s.replace(',', '.'));
   return isFinite(n) ? Math.round(n) : NaN;
 }
-function fechaIso_(v) {
-  const s = String(v == null ? '' : v).trim();
-  let m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(s);
-  if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
-  if (/^\d{5}(\.\d+)?$/.test(s)) return new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(s)) * 864e5).toISOString().slice(0, 10);
-  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
-  return m ? m[1] + '-' + m[2] + '-' + m[3] : '';
-}
+// v2 (FIN-07): fecha civil validada contra el calendario real (un 31-02 ya no pasa).
+function fechaIso_(v) { return Base.fechaCivil_(v); }
 const texto_ = (v) => String(v == null ? '' : v).trim();
 function mesCerrado_(periodo) { try { return require('./finanzasCierre').mesCerrado_(periodo); } catch (e) { return false; } }
-function soloEscritura_(contexto) {
-  const lista = String(process.env.SIGSO_FINANZAS_SOLO_LECTURA || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
-  return lista.indexOf(String(contexto.cuenta_id || '').toLowerCase()) !== -1;
-}
+/** ¿Le falta a esta cuenta la capacidad? (v2: capacidades en vez de solo «solo lectura»). */
+function soloEscritura_(contexto, cap) { return !Base.puede_(contexto, cap || 'REGISTRAR'); }
 
 // ---------------------------------------------------------------- lectura de la cartola
 
@@ -240,7 +247,22 @@ function nombreEnGlosa_(glosa) {
 
 function empresaEnGlosa_(glosa) {
   const g = ' ' + normalizar_(glosa) + ' ';
-  return EMPRESAS.find((e) => NOMBRES_EMPRESA[e].some((n) => g.indexOf(' ' + normalizar_(n) + (n.endsWith(' ') ? ' ' : '')) !== -1)) || '';
+  // Nombres fijos + alias del catálogo (de 3 letras o más, como palabra completa).
+  let lista = [];
+  try { lista = Cat.lista_('EMPRESA', { todos: true }).map((e) => ({ id: e.id, nombres: (NOMBRES_EMPRESA[e.id] || []).concat((e.alias || []).filter((a) => normalizar_(a).length >= 3)) })); } catch (e) { lista = []; }
+  if (!lista.length) lista = EMPRESAS.map((e) => ({ id: e, nombres: NOMBRES_EMPRESA[e] }));
+  const hit = lista.find((e) => e.nombres.some((n) => { const k = normalizar_(n); return k && g.indexOf(' ' + k + (/\s$/.test(n) || k.length <= 4 ? ' ' : '')) !== -1; }));
+  return hit ? hit.id : '';
+}
+/** I07.6: una regla con alcance solo aplica a esa empresa / cuenta / sentido y dentro de su vigencia. */
+function reglaAplica_(regla, m, ctx, sentido) {
+  const a = regla.alcance || {}, v = regla.vigencia || {};
+  const cuenta = m.cuenta_ref || ctx.cuenta_ref || '';
+  if (a.empresa && a.empresa !== ctx.empresa) return false;
+  if (a.cuenta_ref && cuenta && a.cuenta_ref !== cuenta) return false;
+  if (a.sentido && a.sentido !== sentido) return false;
+  if (m.fecha && ((v.desde && m.fecha < v.desde) || (v.hasta && m.fecha > v.hasta))) return false;
+  return true;
 }
 function esGenerica_(glosa) { const g = normalizar_(glosa); return GENERICAS.some((re) => re.test(g)); }
 function huellaGlosa_(glosa) { return hmac_('glosa|' + normalizar_(glosa)); }
@@ -260,11 +282,24 @@ function sugerir_(m, ctx) {
   if (/^COMISION|^IMPUESTO|^INTERES|MANTENCION/.test(g) && sentido === 'cargo') return Object.assign(base, { tipo: 'EGRESO', cuenta: 'Comisión Banco', certeza: 'alta', motivo: 'Cobro del banco' });
   // Etapa A: lo que anotaron en el Excel BANCOS, el pagador conocido y el detalle del banco
   // (nombre completo, Previred/SII/Tesorería) mandan sobre la glosa cortada de la cartola.
+  // v2 (FIN-19, T28): si la operación ya registró este dinero, se propone CONCILIAR (no clasificar
+  // de nuevo: el hecho se contaría dos veces). Solo con una operación única; con empate, se avisa.
+  if (ctx.opsSinBanco && m.fecha) {
+    const monto = m.abono || m.cargo, sent = m.abono > 0 ? 'ENTRADA' : 'SALIDA';
+    const cand = ctx.opsSinBanco.filter((o) => o.empresa === ctx.empresa && o.sentido === sent && o.monto === monto && Math.abs(Date.parse(o.fecha) - Date.parse(m.fecha)) <= 10 * 864e5);
+    if (cand.length === 1) {
+      const o = cand[0], d0 = (o.distribuciones || [])[0] || {};
+      const una = (o.distribuciones || []).length === 1;
+      return Object.assign(base, una ? { tipo: d0.tipo, subtipo: d0.subtipo || '', cuenta: d0.cuenta || '', cliente_id: d0.cliente_id || '', cliente: d0.cliente || '', empresa: d0.empresa || '' } : {},
+        { operacion_candidata: o.id, certeza: 'media', motivo: 'Coincide con una operación registrada el ' + o.fecha.slice(8) + '-' + o.fecha.slice(5, 7) + (o.tercero ? ' (' + o.tercero + ')' : '') + ': concílialos para no contarla dos veces.' });
+    }
+    if (cand.length > 1) base.motivo = cand.length + ' operaciones registradas calzan con este monto: concilia la que corresponde.';
+  }
   const conPagador = require('./finanzasPagadores').sugerirConPagador_(m, ctx, base);
   if (conPagador) return conPagador;
   // 1) Regla aprendida para esta glosa exacta.
   const regla = ctx.reglas.get(huellaGlosa_(m.glosa));
-  if (regla && (!TIPOS[regla.tipo] || !TIPOS[regla.tipo].sentido || TIPOS[regla.tipo].sentido === sentido)) {
+  if (regla && reglaAplica_(regla, m, ctx, sentido) && (!TIPOS[regla.tipo] || !TIPOS[regla.tipo].sentido || TIPOS[regla.tipo].sentido === sentido)) {
     const segura = regla.origen === 'persona' && !regla.ambigua;
     return Object.assign(base, regla, {
       certeza: segura ? 'alta' : 'media',
@@ -315,7 +350,7 @@ function completa_(c, sentido) {
 function contextoSugerencias_(db, empresa) {
   const d = db_();
   const reglas = new Map();
-  d.prepare('SELECT huella, datos, origen FROM FIN_REGLAS').all().forEach((r) => reglas.set(r.huella, Object.assign(des_(r.datos).clasif, { origen: r.origen })));
+  d.prepare('SELECT huella, datos, origen FROM FIN_REGLAS WHERE COALESCE(activa, 1) = 1').all().forEach((r) => { const dd = des_(r.datos); reglas.set(r.huella, Object.assign({}, dd.clasif, { origen: r.origen, alcance: dd.alcance || null, vigencia: dd.vigencia || null })); });
   // Último tipo confirmado por cliente (para "lo de la última vez").
   const tipoPorCliente = new Map();
   d.prepare("SELECT datos FROM FIN_MOVIMIENTOS WHERE estado = 'CONFIRMADO' ORDER BY fecha, orden").all().forEach((r) => {
@@ -325,7 +360,9 @@ function contextoSugerencias_(db, empresa) {
   let facturasPorMonto = null;
   try { facturasPorMonto = require('./finanzasCobranza').facturasPorMonto_(db); } catch (e) { facturasPorMonto = null; }
   const extra = require('./finanzasPagadores').contextoPagadores_();
-  return { reglas, tipoPorCliente, clientes: clientes_(db), empresa, facturasPorMonto, pagadores: extra.pagadores, recibidos: extra.recibidos };
+  let opsSinBanco = [];
+  try { opsSinBanco = require('./finanzasConciliacion').opsSinBanco_(); } catch (e) { opsSinBanco = []; }
+  return { reglas, tipoPorCliente, clientes: clientes_(db), empresa, facturasPorMonto, pagadores: extra.pagadores, recibidos: extra.recibidos, opsSinBanco };
 }
 
 // ---------------------------------------------------------------- cuentas
@@ -341,18 +378,38 @@ function publicaCuenta_(r) {
 
 // ---------------------------------------------------------------- acciones
 
-const catalogo = B.conBoveda('', function (db) {
+/**
+ * Todo lo que las pantallas necesitan para no repetir listas (v2, FIN-03):
+ * empresas, conceptos, medios, repartos (con su modo), tipos con subtipos,
+ * clientes (con RUT y alias), proyectos de SIGSO, obligaciones, parámetros y
+ * las capacidades de quien pregunta (para ocultar lo que no puede hacer).
+ */
+const catalogo = B.conBoveda('', function (db, data, contexto) {
+  const ctlg = (tipo) => Cat.lista_(tipo).map((x) => Object.assign({}, x));
+  let alias = new Map();
+  try { alias = require('./finanzasClientes').aliasPorCliente_(); } catch (e) { alias = new Map(); }
   return {
-    empresas: EMPRESAS,
-    // Repartos de gastos compartidos (SIGECO: CONFIG.EMPRESAS_PRORRATEO; Virtual Base paga y no se carga).
-    repartos: [
-      { id: 'sigeco', nombre: 'Partes iguales: GDE, HomePymes, HomePrevise y RLD', empresas: ['GDE', 'HomePymes', 'HomePrevise', 'RLD'] },
-      { id: 'todas', nombre: 'Partes iguales entre las 6 empresas', empresas: EMPRESAS.slice() }
-    ],
-    tipos: Object.keys(TIPOS).map((k) => ({ id: k, nombre: TIPOS[k].nombre, sentido: TIPOS[k].sentido, cliente: !!TIPOS[k].cliente, empresa: !!TIPOS[k].empresa, cuentas: cuentasDe_(k) })),
-    clientes: clientes_(db).map((c) => ({ id: c.id, nombre: c.nombre, rut: c.rut })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    empresas: Cat.empresas_(),
+    empresas_detalle: ctlg('EMPRESA'),
+    repartos: Cat.lista_('REPARTO').map((r) => ({ id: r.id, nombre: r.nombre, modo: r.modo || 'IGUALES', partes: r.partes || [], empresas: (r.partes || []).map((p) => p.empresa) })),
+    tipos: Object.keys(TIPOS).map((k) => ({ id: k, nombre: TIPOS[k].nombre, sentido: TIPOS[k].sentido, cliente: !!TIPOS[k].cliente, empresa: !!TIPOS[k].empresa, cuentas: cuentasDe_(k),
+      subtipos: TIPOS[k].subtipos ? Object.keys(TIPOS[k].subtipos).map((s) => ({ id: s, nombre: TIPOS[k].subtipos[s] })) : [] })),
+    medios: ctlg('MEDIO'), bancos: ctlg('BANCO'), canales: ctlg('CANAL'), vendedores: ctlg('VENDEDOR'), obligaciones: ctlg('OBLIGACION'),
+    tipos_proyecto: ctlg('TIPO_PROYECTO'), provisiones: Cat.conceptos_('PROVISION'),
+    proyectos: proyectosSigso_(db),
+    clientes: clientes_(db).map((c) => ({ id: c.id, nombre: c.nombre, rut: c.rut, alias: alias.get(c.id) || [] })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')),
+    capacidades: Base.capacidades_(contexto),
+    capacidades_nombres: Base.CAPACIDADES
   };
 });
+/** Proyectos de SIGSO (módulo Proyectos) para usarlos como dimensión: solo id, código, nombre y estado. */
+function proyectosSigso_(db) {
+  try {
+    return leerFilas_(db, 'PROYECTOS', COLUMNAS.PROYECTOS)
+      .filter((p) => p.proyecto_id && !(p.activa === false || p.activa === 'FALSE'))
+      .map((p) => ({ id: String(p.proyecto_id), codigo: String(p.codigo || ''), nombre: String(p.nombre || ''), estado: String(p.estado || ''), presupuesto: Number(p.presupuesto_monto) || 0 }));
+  } catch (e) { return []; }
+}
 
 /** Revisa una cartola SIN guardar nada: qué cuenta es, si cuadra, cuántas filas son nuevas. */
 const revisarCartola = B.conBoveda('', function (db, data) {
@@ -376,7 +433,7 @@ const revisarCartola = B.conBoveda('', function (db, data) {
 
 /** Guarda la cartola: crea la cuenta si es nueva (con su empresa) y agrega solo lo que no estaba. */
 const importarCartola = B.conBoveda('', function (db, data, contexto, x) {
-  if (soloEscritura_(contexto)) return errorForbidden('Tu acceso a Finanzas es de solo lectura.');
+  { const e_ = Base.exigir_(contexto, 'REGISTRAR'); if (e_) return e_; }
   const c = leerCartola(data && data.filas);
   if (c.error) return errorValidacion('archivo', c.error);
   if (!c.cuadra && !(data && data.aceptar_descuadre)) return errorValidacion('archivo', 'La cartola no cuadra: ' + c.errores[0]);
@@ -384,7 +441,7 @@ const importarCartola = B.conBoveda('', function (db, data, contexto, x) {
   let cuenta = cuentaPorNumero_(c.numero);
   if (!cuenta) {
     const empresa = texto_(data && data.empresa);
-    if (EMPRESAS.indexOf(empresa) === -1) return errorValidacion('empresa', 'Elige a qué empresa pertenece esta cuenta.');
+    if (empresasValidas_().indexOf(empresa) === -1) return errorValidacion('empresa', 'Elige a qué empresa pertenece esta cuenta.');
     const id = crypto.randomUUID();
     d.prepare('INSERT INTO FIN_CUENTAS (id, banco, huella_numero, datos, ultimos4, empresa, creada_en) VALUES (?,?,?,?,?,?,?)')
       .run(id, c.banco, hmac_('cuenta|' + c.numero), cif_({ numero: c.numero, titular: c.titular }), c.numero.slice(-4), empresa, new Date().toISOString());
@@ -396,6 +453,7 @@ const importarCartola = B.conBoveda('', function (db, data, contexto, x) {
     !d.prepare('SELECT 1 FROM FIN_MOVIMIENTOS WHERE huella = ?').get(hmac_(['mov', c.numero, m.fecha, m.doc, m.cargo, m.abono, m.saldo].join('|')))).map((m) => m.fecha.slice(0, 7)))];
   if (cerrados.length) return errorValidacion('archivo', 'La cartola trae movimientos nuevos de un mes cerrado (' + cerrados.join(', ') + '). Reábrelo en «Cierre» si de verdad faltaban.');
   const ctx = contextoSugerencias_(db, cuenta.empresa);
+  ctx.cuenta_ref = cuenta.id;
   const impId = crypto.randomUUID();
   const ahora = new Date().toISOString();
   const base = d.prepare('SELECT COALESCE(MAX(orden), 0) AS n FROM FIN_MOVIMIENTOS').get().n;
@@ -423,7 +481,7 @@ function movimientoPublico_(r, cuentas) {
   const d = des_(r.datos);
   const cu = cuentas.get(r.cuenta_ref) || {};
   return {
-    id: r.id, fecha: r.fecha, estado: r.estado, glosa: d.glosa, doc: d.doc, cargo: d.cargo, abono: d.abono, saldo: d.saldo,
+    id: r.id, fecha: r.fecha, estado: r.estado, version: r.version || 0, cuenta_ref: r.cuenta_ref, glosa: d.glosa, doc: d.doc, cargo: d.cargo, abono: d.abono, saldo: d.saldo,
     cuenta: { banco: cu.banco, ultimos4: cu.ultimos4, empresa: cu.empresa }, sugerencia: d.sugerencia, clasif: d.clasif,
     // Etapa A: lo que dice el detalle del banco (quién pagó, Previred/SII…) y lo que anotaron en el Excel BANCOS.
     detalle: d.detalle || null, planilla: d.planilla ? { alias: d.planilla.alias, obs: d.planilla.obs, plan: d.planilla.plan } : null,
@@ -471,71 +529,191 @@ function validarClasif_(c, mov) {
   if (!t) return 'Elige qué tipo de movimiento es.';
   if (t.sentido && t.sentido !== sentido) return t.nombre + (sentido === 'abono' ? ' no puede ser plata que entra.' : ' no puede ser plata que sale.');
   if (t.cliente && !c.cliente_id) return 'Elige de qué cliente es.';
-  if (t.empresa && EMPRESAS.indexOf(c.empresa) === -1) return 'Elige con qué empresa del grupo.';
+  if (t.empresa && empresasValidas_().indexOf(c.empresa) === -1) return 'Elige con qué empresa del grupo.';
   if (cuentasDe_(c.tipo).length && cuentasDe_(c.tipo).indexOf(c.cuenta) === -1) return 'Elige la cuenta o el concepto.';
+  if (c.subtipo && !(t.subtipos && t.subtipos[c.subtipo])) return 'Ese subtipo no corresponde a «' + t.nombre + '».';
   return '';
 }
 
 /**
+ * Reparto de un gasto compartido (FIN-25). Entra como arreglo de empresas
+ * (partes iguales, forma anterior) o como { modo, partes:[{empresa, valor}] }:
+ *  - IGUALES: valor se ignora;
+ *  - PORCENTAJE: los valores suman 100;
+ *  - FIJO: los valores suman exacto el monto del gasto.
+ * Devuelve { reparto } normalizado, { error } o {} si no hay reparto.
+ */
+function normalizarReparto_(entrada, monto) {
+  if (!entrada || (Array.isArray(entrada) && !entrada.length)) return {};
+  const validas = empresasValidas_();
+  let modo = 'IGUALES', partes;
+  if (Array.isArray(entrada)) partes = [...new Set(entrada.map(texto_))].map((e) => ({ empresa: e }));
+  else {
+    modo = ['IGUALES', 'PORCENTAJE', 'FIJO'].indexOf(texto_(entrada.modo).toUpperCase()) !== -1 ? texto_(entrada.modo).toUpperCase() : 'IGUALES';
+    partes = (Array.isArray(entrada.partes) ? entrada.partes : []).map((p) => ({ empresa: texto_(p.empresa), valor: p.valor }));
+  }
+  partes = partes.filter((p) => p.empresa);
+  if (new Set(partes.map((p) => p.empresa)).size !== partes.length) return { error: 'Una empresa aparece dos veces en el reparto.' };
+  const malas = partes.filter((p) => validas.indexOf(p.empresa) === -1);
+  if (malas.length) return { error: 'Empresa desconocida en el reparto: ' + malas.map((p) => p.empresa).join(', ') + '.' };
+  if (partes.length < 2) return Array.isArray(entrada) ? {} : { error: 'Un gasto compartido se reparte entre 2 o más empresas.' };
+  if (modo === 'PORCENTAJE') {
+    partes = partes.map((p) => ({ empresa: p.empresa, valor: Math.round(Number(String(p.valor).replace(',', '.')) * 100) / 100 }));
+    if (partes.some((p) => !(p.valor >= 0))) return { error: 'Cada porcentaje debe ser un número de 0 a 100.' };
+    const suma = Math.round(partes.reduce((s, p) => s + p.valor, 0) * 100) / 100;
+    if (suma !== 100) return { error: 'Los porcentajes suman ' + String(suma).replace('.', ',') + ' %, deben sumar 100 %.' };
+  } else if (modo === 'FIJO') {
+    const vs = partes.map((p) => Base.montoClp_(p.valor));
+    if (vs.some((v) => !v.ok || v.valor < 0)) return { error: 'Cada parte fija necesita un monto válido.' };
+    partes = partes.map((p, i) => ({ empresa: p.empresa, valor: vs[i].valor }));
+    const suma = partes.reduce((s, p) => s + p.valor, 0);
+    if (suma !== monto) return { error: 'Las partes fijas suman ' + Base.plata_(suma) + ' y el gasto es de ' + Base.plata_(monto) + '.' };
+  } else partes = partes.map((p) => ({ empresa: p.empresa }));
+  return { reparto: { modo, partes } };
+}
+/**
+ * Cuánto le toca a cada empresa de un gasto compartido: [{empresa, monto}],
+ * sumando exacto el gasto (los pesos que sobran del redondeo se entregan con
+ * un criterio fijo: mayor resto y, en empate, el orden del reparto).
+ */
+function partesReparto_(reparto, monto) {
+  if (!reparto) return null;
+  const r = Array.isArray(reparto) ? { modo: 'IGUALES', partes: reparto.map((e) => ({ empresa: e })) } : reparto;
+  if (!r.partes || r.partes.length < 2) return null;
+  let montos;
+  if (r.modo === 'FIJO') montos = r.partes.map((p) => Number(p.valor) || 0);
+  else montos = Base.repartir_(monto, r.partes.map((p) => (r.modo === 'PORCENTAJE' ? Number(p.valor) || 0 : 1)));
+  return r.partes.map((p, i) => ({ empresa: p.empresa, monto: montos[i] }));
+}
+
+/**
+ * Normaliza y valida UNA clasificación (o una parte de una división) para un
+ * movimiento de cierto sentido y monto. Lo usan los movimientos del banco y
+ * el registro operativo (finanzasOperaciones.js): mismas reglas en ambos.
+ * Devuelve { clasif } o { error }.
+ */
+function normalizarClasif_(it, mov, ctxN) {
+  const c = {
+    tipo: texto_(it.tipo), subtipo: texto_(it.subtipo).toUpperCase(), cuenta: texto_(it.cuenta), cliente_id: texto_(it.cliente_id),
+    empresa: texto_(it.empresa), nota: texto_(it.nota).slice(0, 300)
+  };
+  const t = TIPOS[c.tipo];
+  if (c.cliente_id && !ctxN.clientes.has(c.cliente_id)) return { error: 'Ese cliente no existe en SIGSO.' };
+  c.cliente = c.cliente_id ? ctxN.clientes.get(c.cliente_id) : '';
+  if (!t || (!t.cliente && c.tipo !== 'INGRESO')) { c.cliente_id = ''; c.cliente = ''; }
+  if (!t || !t.empresa) c.empresa = '';
+  if (!cuentasDe_(c.tipo).length) c.cuenta = '';
+  if (!t || !t.subtipos) c.subtipo = '';
+  // Dimensiones (FIN-13/27): no cambian el monto; solo dicen a qué gestión, proyecto u obligación pertenece.
+  const gestion = texto_(it.gestion_id);
+  if (gestion) {
+    if (!t || !t.cliente) return { error: 'Solo la plata de un cliente se asigna a una gestión de fondos.' };
+    const g = ctxN.gestion ? ctxN.gestion(gestion) : null;
+    if (!g) return { error: 'Esa gestión de fondos no existe.' };
+    if (g.cliente_id !== c.cliente_id) return { error: 'La gestión de fondos es de otro cliente.' };
+    c.gestion_id = gestion;
+  }
+  const proyecto = texto_(it.proyecto_id);
+  if (proyecto) {
+    if (ctxN.proyectos && !ctxN.proyectos.has(proyecto)) return { error: 'Ese proyecto no existe.' };
+    c.proyecto_id = proyecto;
+  }
+  if (texto_(it.periodo_obligacion)) {
+    const p = Base.periodo_(it.periodo_obligacion);
+    if (!p) return { error: 'El período de la obligación no se entiende (usa AAAA-MM).' };
+    c.periodo_obligacion = p;
+  }
+  if (texto_(it.destino)) c.destino = texto_(it.destino).slice(0, 160);
+  if (texto_(it.prestamo_id)) c.prestamo_id = texto_(it.prestamo_id);
+  if (texto_(it.servicio_id)) c.servicio_id = texto_(it.servicio_id);
+  if (c.tipo === 'EGRESO' && it.reparto) {
+    const r = normalizarReparto_(it.reparto, mov.abono || mov.cargo);
+    if (r.error) return { error: r.error };
+    if (r.reparto) c.reparto = r.reparto;
+  }
+  const err = validarClasif_(c, mov);
+  if (err) return { error: err };
+  return { clasif: c };
+}
+/** Contexto compartido para normalizar muchas clasificaciones de una vez. */
+function contextoNormalizar_(db) {
+  const lista = clientes_(db);
+  let gestiones = null;
+  return {
+    listaClientes: lista,
+    clientes: new Map(lista.map((c) => [c.id, c.nombre])),
+    proyectos: new Set(proyectosSigso_(db).map((p) => p.id).concat((() => { try { return require('./finanzasPlanificacion').proyectosLegado_().map((p) => p.id); } catch (e) { return []; } })())),
+    gestion: (id) => {
+      if (!gestiones) { try { gestiones = require('./finanzasFondos').gestionesMapa_(); } catch (e) { gestiones = new Map(); } }
+      return gestiones.get(id) || null;
+    }
+  };
+}
+/** Una clasificación con partes: valida cada parte y que sumen exacto el movimiento. */
+function normalizarPartes_(it, mov, ctxN) {
+  const total = mov.abono || mov.cargo;
+  const partes = [];
+  for (const p of it.partes.slice(0, 10)) {
+    const m = Base.montoClp_(p.monto);
+    if (!m.ok || !(m.valor > 0)) return { error: 'Cada parte necesita un monto mayor que cero.' };
+    const r = normalizarClasif_(p, mov, ctxN);
+    if (r.error) return { error: 'Parte de ' + Base.plata_(m.valor) + ': ' + r.error };
+    partes.push(Object.assign({ monto: m.valor }, r.clasif));
+  }
+  const suma = partes.reduce((a, q) => a + q.monto, 0);
+  if (suma !== total) return { error: 'Las partes suman ' + Base.plata_(suma) + ' y el movimiento es de ' + Base.plata_(total) + '.' };
+  return { clasif: { partes, nota: texto_(it.nota).slice(0, 300) } };
+}
+
+/**
  * Confirma o corrige la clasificación de uno o varios movimientos.
- * items: [{ id, tipo, cuenta, cliente_id, empresa, nota, recordar }]
+ * items: [{ id, tipo, subtipo, cuenta, cliente_id, empresa, nota, reparto, partes,
+ *           gestion_id, proyecto_id, periodo_obligacion, destino, expected_version, recordar }]
  * Con `recordar` (por defecto sí), la glosa queda como regla, salvo que sea genérica.
+ * v2: si llega expected_version y el movimiento cambió entretanto, ese ítem
+ * vuelve con conflicto (codigo CONFLICTO_VERSION) y no se pisa.
  */
 const clasificar = B.conBoveda('', function (db, data, contexto, x) {
-  if (soloEscritura_(contexto)) return errorForbidden('Tu acceso a Finanzas es de solo lectura.');
+  { const e_ = Base.exigir_(contexto, 'CONFIRMAR'); if (e_) return e_; }
   const items = Array.isArray(data && data.items) ? data.items.slice(0, 500) : [];
   if (!items.length) return errorValidacion('items', 'No hay movimientos para guardar.');
   const d = db_();
-  const listaClientes = clientes_(db);
-  const clientes = new Map(listaClientes.map((c) => [c.id, c.nombre]));
+  const ctxN = contextoNormalizar_(db);
+  const listaClientes = ctxN.listaClientes;
   const errores = [];
   const ahora = new Date().toISOString();
   let hechos = 0, reglas = 0;
+  const tocados = [];
   d.exec('BEGIN');
   try {
     items.forEach((it) => {
       const r = d.prepare('SELECT * FROM FIN_MOVIMIENTOS WHERE id = ?').get(texto_(it.id));
       if (!r) { errores.push({ id: it.id, mensaje: 'No existe.' }); return; }
       // Etapa 6: un mes cerrado queda fijo (se reabre con motivo en «Cierre»).
-      if (mesCerrado_(r.periodo)) { errores.push({ id: it.id, mensaje: 'El mes ' + r.periodo + ' está cerrado. Reábrelo en «Cierre» si hay que corregir algo.' }); return; }
-      const datos = des_(r.datos);
-      const c = {
-        tipo: texto_(it.tipo), cuenta: texto_(it.cuenta), cliente_id: texto_(it.cliente_id), empresa: texto_(it.empresa), nota: texto_(it.nota).slice(0, 300)
-      };
-      if (c.cliente_id && !clientes.has(c.cliente_id)) { errores.push({ id: it.id, mensaje: 'Ese cliente no existe en SIGSO.' }); return; }
-      c.cliente = c.cliente_id ? clientes.get(c.cliente_id) : '';
-      if (!TIPOS[c.tipo] || !TIPOS[c.tipo].cliente) { if (c.tipo !== 'INGRESO') { c.cliente_id = ''; c.cliente = ''; } }
-      if (!TIPOS[c.tipo] || !TIPOS[c.tipo].empresa) c.empresa = '';
-      if (!cuentasDe_(c.tipo).length) c.cuenta = '';
-      // Etapa 5: un gasto de la empresa puede repartirse en partes iguales entre
-      // varias empresas del grupo (arriendo, internet, aseo: el GASTOS
-      // COMPARTIDOS de SIGECO). Solo EGRESO y con 2 o más empresas.
-      const reparto = Array.isArray(it.reparto) ? [...new Set(it.reparto.map(texto_))].filter((e) => EMPRESAS.indexOf(e) !== -1) : [];
-      if (c.tipo === 'EGRESO' && reparto.length >= 2) c.reparto = reparto;
-      // Etapa A: dividir una transferencia entre varios clientes o tipos (la suma debe dar el total).
-      if (Array.isArray(it.partes) && it.partes.length >= 2) {
-        const total = datos.abono || datos.cargo;
-        const partes = [];
-        for (const p of it.partes.slice(0, 10)) {
-          const q = { monto: Math.round(Number(String(p.monto).replace(/[^0-9]/g, '')) || 0), tipo: texto_(p.tipo), cuenta: texto_(p.cuenta), cliente_id: texto_(p.cliente_id), empresa: texto_(p.empresa) };
-          if (!(q.monto > 0)) { errores.push({ id: it.id, mensaje: 'Cada parte necesita un monto.' }); return; }
-          if (q.cliente_id && !clientes.has(q.cliente_id)) { errores.push({ id: it.id, mensaje: 'Un cliente de las partes no existe en SIGSO.' }); return; }
-          q.cliente = q.cliente_id ? clientes.get(q.cliente_id) : '';
-          if (!TIPOS[q.tipo] || (!TIPOS[q.tipo].cliente && q.tipo !== 'INGRESO')) { q.cliente_id = ''; q.cliente = ''; }
-          if (!TIPOS[q.tipo] || !TIPOS[q.tipo].empresa) q.empresa = '';
-          if (!cuentasDe_(q.tipo).length) q.cuenta = '';
-          const e2 = validarClasif_(q, datos);
-          if (e2) { errores.push({ id: it.id, mensaje: 'Parte de $' + q.monto.toLocaleString('es-CL') + ': ' + e2 }); return; }
-          partes.push(q);
-        }
-        const suma = partes.reduce((a, q) => a + q.monto, 0);
-        if (suma !== total) { errores.push({ id: it.id, mensaje: 'Las partes suman $' + suma.toLocaleString('es-CL') + ' y el movimiento es de $' + total.toLocaleString('es-CL') + '.' }); return; }
-        datos.clasif = { partes, nota: c.nota };
-      } else {
-        const err = validarClasif_(c, datos);
-        if (err) { errores.push({ id: it.id, mensaje: err }); return; }
-        datos.clasif = c;
+      if (mesCerrado_(r.periodo)) { errores.push({ id: it.id, codigo: 'PERIODO_CERRADO', mensaje: 'El mes ' + r.periodo + ' está cerrado. Reábrelo en «Cierre» si hay que corregir algo.' }); return; }
+      // I11.2: cambiar un movimiento YA confirmado exige la versión vista. La primera clasificación de un pendiente
+      // se protege por su estado: si otra persona lo confirmó entretanto, ya no está pendiente y se exige la versión.
+      const sinVersion = it.expected_version === undefined || it.expected_version === null || it.expected_version === '';
+      if (sinVersion && r.estado !== 'PENDIENTE') { errores.push({ id: it.id, codigo: 'VERSION_REQUERIDA', mensaje: 'Este movimiento ya estaba confirmado: ábrelo de nuevo para cambiarlo.' }); return; }
+      if (!sinVersion && Number(it.expected_version) !== Number(r.version || 0)) {
+        errores.push({ id: it.id, codigo: 'CONFLICTO_VERSION', mensaje: 'Otra persona cambió este movimiento mientras lo revisabas (' + (r.actualizado_por || '') + '). Ábrelo de nuevo.' });
+        return;
       }
+      const datos = des_(r.datos);
+      // v2 (I02): un movimiento vinculado con el registro (total o en parte) se corrige en Conciliación; clasificarlo aquí pisaría el vínculo.
+      if (datos.clasif && datos.clasif.conciliado) { errores.push({ id: it.id, codigo: 'CONCILIADO', mensaje: 'Está vinculado con operaciones registradas: complétalo o deshaz el vínculo en Conciliación.' }); return; }
+      // v2 (T28): si el movimiento calza con una operación registrada, se concilia; clasificarlo
+      // por separado contaría el mismo dinero dos veces (salvo que se diga que NO es esa operación).
+      if (r.estado === 'PENDIENTE' && datos.sugerencia && datos.sugerencia.operacion_candidata && !it.no_es_operacion && !it.operaciones) {
+        errores.push({ id: it.id, codigo: 'CONCILIAR', mensaje: 'Este movimiento coincide con una operación ya registrada: concílialos (o indica que no es la misma).' });
+        return;
+      }
+      const n = Array.isArray(it.partes) && it.partes.length >= 2 ? normalizarPartes_(it, datos, ctxN) : normalizarClasif_(it, datos, ctxN);
+      if (n.error) { errores.push({ id: it.id, mensaje: n.error }); return; }
+      const c = n.clasif;
+      c.confirmado_por = x.nombre;
+      if (it.operaciones) c.operaciones = it.operaciones; // vínculo con el registro operativo (conciliación)
+      datos.clasif = c;
       // El pagador aprende de qué cliente(s) era (una vez por movimiento).
       const pagador = datos.detalle && datos.detalle.pagador;
       if (pagador && datos.abono > 0 && !datos.pagador_aprendido) {
@@ -543,12 +721,14 @@ const clasificar = B.conBoveda('', function (db, data, contexto, x) {
         P.piezas_(datos).forEach((p) => { if (p.clasif && p.clasif.cliente_id) P.registrarPagador_(pagador, p.clasif.cliente_id, p.clasif.cliente, 'persona'); });
         datos.pagador_aprendido = true;
       }
-      d.prepare("UPDATE FIN_MOVIMIENTOS SET estado = 'CONFIRMADO', datos = ?, actualizado_en = ?, actualizado_por = ? WHERE id = ?")
+      d.prepare("UPDATE FIN_MOVIMIENTOS SET estado = 'CONFIRMADO', datos = ?, actualizado_en = ?, actualizado_por = ?, version = COALESCE(version, 0) + 1 WHERE id = ?")
         .run(cif_(datos), ahora, x.nombre, r.id);
       hechos++;
+      tocados.push({ glosa: datos.glosa, pagador: datos.detalle && datos.detalle.pagador, cuenta_ref: r.cuenta_ref });
       if (it.recordar !== false && !esGenerica_(datos.glosa) && !datos.clasif.partes && !(datos.detalle && datos.detalle.pagador)) {
         const h = huellaGlosa_(datos.glosa);
-        const regla = { glosa: datos.glosa, clasif: { tipo: c.tipo, cuenta: c.cuenta, cliente_id: c.cliente_id, cliente: c.cliente, empresa: c.empresa, reparto: c.reparto, ambigua: ambigua_(datos.glosa, listaClientes) } };
+        // La regla guarda solo la clasificación (no la gestión, el período ni el destino, que son de ESE movimiento).
+        const regla = { glosa: datos.glosa, clasif: { tipo: c.tipo, subtipo: c.subtipo, cuenta: c.cuenta, cliente_id: c.cliente_id, cliente: c.cliente, empresa: c.empresa, reparto: c.reparto, ambigua: ambigua_(datos.glosa, listaClientes) } };
         d.prepare("INSERT INTO FIN_REGLAS (id, huella, datos, origen, usos, actualizada_en) VALUES (?,?,?,'persona',1,?) " +
           "ON CONFLICT(huella) DO UPDATE SET datos = excluded.datos, origen = 'persona', usos = usos + 1, actualizada_en = excluded.actualizada_en")
           .run(crypto.randomUUID(), h, cif_(regla), ahora);
@@ -558,43 +738,82 @@ const clasificar = B.conBoveda('', function (db, data, contexto, x) {
     d.exec('COMMIT');
   } catch (e) { d.exec('ROLLBACK'); throw e; }
   if (hechos) x.registrar('CLASIFICAR', hechos + ' movimiento(s)');
-  if (hechos) resugerirPendientes_(db);
+  if (hechos) resugerirPendientes_(db, alcanceDe_(tocados));
   return { hechos, reglas, errores };
 });
 
-// Con reglas nuevas, los pendientes de toda la bóveda se vuelven a sugerir.
-function resugerirPendientes_(db) {
+/**
+ * A quién afecta lo recién confirmado (FIN-44): la misma glosa (regla), el
+ * mismo pagador y los pendientes de esas cuentas (Previred del mismo monto,
+ * «lo de la última vez» del cliente). El resto no cambia de sugerencia.
+ */
+function alcanceDe_(tocados) {
+  return {
+    glosas: new Set(tocados.map((t) => normalizar_(t.glosa))),
+    pagadores: new Set(tocados.map((t) => normalizar_(t.pagador)).filter(Boolean)),
+    cuentas: new Set(tocados.map((t) => t.cuenta_ref))
+  };
+}
+
+/**
+ * Vuelve a sugerir los pendientes (todos, o solo los del `alcance`). El
+ * contexto pesado (confirmados, cartera, pagadores) se arma UNA vez; solo se
+ * reescribe la fila cuya sugerencia cambió. Devuelve cuántas cambiaron.
+ */
+function resugerirPendientes_(db, alcance) {
   const d = db_();
   const cuentas = cuentasMapa_();
-  const porEmpresa = {};
+  const comun = contextoSugerencias_(db, 'HomePymes');
+  const ctxDe = (emp) => Object.assign({}, comun, { empresa: emp });
+  let cambiadas = 0;
+  const afectado = (r) => {
+    if (!alcance) return true;
+    const g = normalizar_(r.d.glosa), p = normalizar_(r.d.detalle && r.d.detalle.pagador);
+    return alcance.glosas.has(g) || (p && alcance.pagadores.has(p)) || alcance.cuentas.has(r.cuenta_ref);
+  };
+  const upd = d.prepare('UPDATE FIN_MOVIMIENTOS SET datos = ? WHERE id = ?');
   // Primero los abonos: un pago a Previred/SII busca al cliente entre lo recibido,
   // y eso tiene que incluir lo que se acaba de reconocer en esta misma pasada.
   d.prepare("SELECT id, cuenta_ref, fecha, datos FROM FIN_MOVIMIENTOS WHERE estado = 'PENDIENTE'").all()
     .map((r) => Object.assign(r, { d: des_(r.datos) }))
+    .filter(afectado)
     .sort((x, y) => (y.d.abono > 0) - (x.d.abono > 0))
     .forEach((r) => {
       const emp = (cuentas.get(r.cuenta_ref) || {}).empresa || 'HomePymes';
-      const ctx = porEmpresa[emp] || (porEmpresa[emp] = contextoSugerencias_(db, emp));
+      const ctx = ctxDe(emp);
       const datos = r.d;
-      datos.sugerencia = sugerir_(Object.assign({ fecha: r.fecha }, datos), ctx);
+      const antes = JSON.stringify(datos.sugerencia || null);
+      datos.sugerencia = sugerir_(Object.assign({ fecha: r.fecha, cuenta_ref: r.cuenta_ref }, datos), ctx);
       const s = datos.sugerencia;
-      if (datos.abono > 0 && s && s.cliente_id && s.certeza !== 'baja' && ctx.recibidos) ctx.recibidos.push({ fecha: r.fecha, monto: datos.abono, cliente_id: s.cliente_id, cliente: s.cliente });
-      d.prepare('UPDATE FIN_MOVIMIENTOS SET datos = ? WHERE id = ?').run(cif_(datos), r.id);
+      if (datos.abono > 0 && s && s.cliente_id && s.certeza !== 'baja' && comun.recibidos) comun.recibidos.push({ fecha: r.fecha, monto: datos.abono, cliente_id: s.cliente_id, cliente: s.cliente });
+      if (JSON.stringify(s) !== antes) { upd.run(cif_(datos), r.id); cambiadas++; }
     });
+  return cambiadas;
 }
 
-/** Confirma de una vez todo lo que tiene sugerencia de certeza alta y completa. */
-const confirmarSugeridas = B.conBoveda('', function (db, data, contexto, x) {
-  if (soloEscritura_(contexto)) return errorForbidden('Tu acceso a Finanzas es de solo lectura.');
+/**
+ * Confirma de una vez lo que tiene sugerencia de certeza alta y completa.
+ * v2 (FIN-02): pasa por la MISMA revisión de avisos que el panel y los lotes;
+ * lo que tiene una alerta no se confirma y vuelve en `detenidos`.
+ */
+const confirmarSugeridas = B.conBoveda('', function (db, data, contexto) {
+  { const e_ = Base.exigir_(contexto, 'CONFIRMAR'); if (e_) return e_; }
   const periodo = texto_(data && data.periodo);
   const filas = db_().prepare("SELECT * FROM FIN_MOVIMIENTOS WHERE estado = 'PENDIENTE' AND periodo = ?").all(periodo);
   const items = [];
   filas.forEach((r) => {
     const d = des_(r.datos); const s = d.sugerencia || {};
-    if (s.certeza === 'alta' && completa_(s, d.abono > 0 ? 'abono' : 'cargo')) items.push({ id: r.id, tipo: s.tipo, cuenta: s.cuenta, cliente_id: s.cliente_id, empresa: s.empresa, reparto: s.reparto, recordar: false });
+    if (s.certeza === 'alta' && completa_(s, d.abono > 0 ? 'abono' : 'cargo')) items.push({ id: r.id, tipo: s.tipo, subtipo: s.subtipo, cuenta: s.cuenta, cliente_id: s.cliente_id, empresa: s.empresa, reparto: s.reparto, recordar: false, expected_version: r.version || 0 });
   });
-  if (!items.length) return { hechos: 0, reglas: 0, errores: [] };
-  return clasificar(db, Object.assign({}, data, { items }), contexto);
+  if (!items.length) return { hechos: 0, reglas: 0, errores: [], detenidos: [] };
+  const A = require('./finanzasAvisos');
+  const rev = A.revisarItems_(db, items);
+  const conAlerta = new Set(rev.filter((x) => x.avisos.some((a) => a.nivel === 'alerta')).map((x) => x.id));
+  const limpios = items.filter((it) => !conAlerta.has(it.id));
+  const detenidos = rev.filter((x) => conAlerta.has(x.id));
+  if (!limpios.length) return { hechos: 0, reglas: 0, errores: [], detenidos };
+  const r = clasificar(db, Object.assign({}, data, { items: limpios }), contexto);
+  return Object.assign({}, r, { detenidos });
 });
 
 /**
@@ -605,7 +824,7 @@ const confirmarSugeridas = B.conBoveda('', function (db, data, contexto, x) {
  * siempre fueron del mismo cliente quedan como reglas "de la planilla".
  */
 const aprenderPlanilla = B.conBoveda('', function (db, data, contexto, x) {
-  if (soloEscritura_(contexto)) return errorForbidden('Tu acceso a Finanzas es de solo lectura.');
+  { const e_ = Base.exigir_(contexto, 'REGISTRAR'); if (e_) return e_; }
   const filas = Array.isArray(data && data.filas) ? data.filas : [];
   const cab = (filas[0] || []).map(normalizar_);
   const ix = (n) => cab.indexOf(n);
@@ -679,7 +898,7 @@ const resumenBancos = B.conBoveda('', function () {
     });
   });
   const pendientes = d.prepare("SELECT COUNT(*) AS n FROM FIN_MOVIMIENTOS WHERE estado = 'PENDIENTE'").get().n;
-  const reglas = d.prepare('SELECT COUNT(*) AS n FROM FIN_REGLAS').get().n;
+  const reglas = d.prepare('SELECT COUNT(*) AS n FROM FIN_REGLAS WHERE COALESCE(activa, 1) = 1').get().n;
   return {
     cuentas: lista, pendientes, reglas,
     fondos: [...fondos.values()].map((f) => Object.assign(f, { saldo: f.recibido - f.pagado })).sort((a, b) => Math.abs(b.saldo) - Math.abs(a.saldo))
@@ -687,10 +906,14 @@ const resumenBancos = B.conBoveda('', function () {
 });
 
 module.exports = {
+  reglaAplica_,
   catalogo, revisarCartola, importarCartola, movimientos, clasificar, confirmarSugeridas, aprenderPlanilla, resumenBancos,
   // pruebas
   leerCartola, sugerir_, esGenerica_, monto_, EMPRESAS, TIPOS, resugerirPendientes_, completa_, CUENTAS_EGRESO: CUENTAS.EGRESO,
   empresaEnTexto_: (t) => empresaEnGlosa_(t),
+  // v2: compartido con el registro operativo, la conciliación y la planificación
+  cuentasDe_, empresasValidas_, normalizarClasif_, normalizarPartes_, contextoNormalizar_, normalizarReparto_, partesReparto_,
+  validarClasif_, huellaGlosa_, ambigua_, contextoSugerencias_, proyectosSigso_, movimientoPublico_, alcanceDe_,
   // compartido con finanzasCobranza.js
-  interno: { db_, des_: (t) => des_(t), cif_: (o) => cif_(o), hmac_: (t) => hmac_(t), normalizar_, clientes_, fechaIso_, soloEscritura_, cuentasMapa_ }
+  interno: { db_, des_: (t) => des_(t), cif_: (o) => cif_(o), hmac_: (t) => hmac_(t), normalizar_, clientes_, fechaIso_, soloEscritura_, cuentasMapa_, movimientoPublico_ }
 };

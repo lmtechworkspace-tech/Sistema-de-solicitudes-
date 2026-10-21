@@ -6,6 +6,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { versionDe } = require('./_finanzasPrueba');
 const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
@@ -104,7 +105,7 @@ test('Previred marcado como otra cosa, y custodia que queda en negativo', (t) =>
   r = revisar([{ id: prev, tipo: 'FONDO_PAGADO', cuenta: 'Imposiciones', cliente_id: 'CL-2' }]);
   assert.match(textos(r).join('|'), /alerta: CONSTRUCTORA NORTE SPA tiene \$20\.000 en custodia; con este pago queda en −\$100\.000/);
   // Cuando se registra lo que mandó el cliente, ya no avisa.
-  F.clasificar(db, D({ items: [{ id: id('TRANSFER DE CONSTRUCTORA'), tipo: 'FONDO_RECIBIDO', cuenta: 'Imposiciones', cliente_id: 'CL-2' }] }), ctx);
+  F.clasificar(db, D({ items: [{ id: id('TRANSFER DE CONSTRUCTORA'), expected_version: versionDe('FIN_MOVIMIENTOS', id('TRANSFER DE CONSTRUCTORA')), tipo: 'FONDO_RECIBIDO', cuenta: 'Imposiciones', cliente_id: 'CL-2' }] }), ctx);
   assert.equal(revisar([{ id: prev, tipo: 'FONDO_PAGADO', cuenta: 'Imposiciones', cliente_id: 'CL-2' }]).alertas, 0);
   // En un lote, lo que el cliente manda en el mismo lote cuenta para su pago.
   P.registrarPagador_('Juan Pérez Soto', 'CL-3', 'CONSTRUCTORA SUR LTDA', 'persona');

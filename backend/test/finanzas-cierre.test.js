@@ -7,6 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { versionDe } = require('./_finanzasPrueba');
 const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
@@ -71,7 +72,8 @@ test('la lista del mes pide cartolas completas, que cuadren y nada sin revisar; 
   F.importarCartola(db, D({ filas: cartola([['20/08/2026', 'ARRIENDO', 100000, 0, '9']], 1200000, '16-08-2026 al 31-08-2026') }), ctx);
   todosConfirmados(db, D, ctx, '2026-08');
   mes = C.estado(db, D({}), ctx).meses.find((m) => m.periodo === '2026-08');
-  assert.deepEqual(mes.pasos.filter((p) => p.obligatorio).map((p) => p.ok), [true, true, true]);
+  // v2: también los saldos iniciales de fondos (aquí no hay fondos de clientes: listo).
+  assert.deepEqual(mes.pasos.filter((p) => p.obligatorio).map((p) => p.ok), [true, true, true, true, true]); // v2 I11.3: + «sin posibles duplicados por resolver»
   assert.equal(mes.pasos.find((p) => p.id === 'ventas').ok, false, 'aviso, no bloquea');
   const r = C.cerrar(db, D({ periodo: '2026-08' }), ctx);
   assert.equal(r.estado, 'CERRADO');
@@ -94,7 +96,7 @@ test('un mes cerrado no se reclasifica ni recibe movimientos nuevos; reabrir exi
   assert.match(nueva.message, /mes cerrado \(2026-08\)/);
   assert.ok(C.reabrir(db, D({ periodo: '2026-08', motivo: 'x' }), ctx)._validationError);
   assert.equal(C.reabrir(db, D({ periodo: '2026-08', motivo: 'faltaba una comisión' }), ctx).estado, 'ABIERTO');
-  assert.equal(F.clasificar(db, D({ items: [{ id: m.id, tipo: 'INGRESO', cuenta: 'Otros Ingresos' }] }), ctx).hechos, 1);
+  assert.equal(F.clasificar(db, D({ items: [{ id: m.id, expected_version: versionDe('FIN_MOVIMIENTOS', m.id), tipo: 'INGRESO', cuenta: 'Otros Ingresos' }] }), ctx).hechos, 1);
   const acciones = B.dbFin().prepare('SELECT accion FROM FIN_BITACORA').all().map((x) => x.accion);
   assert.ok(acciones.includes('CERRAR_MES') && acciones.includes('REABRIR_MES'));
 });
