@@ -13,3 +13,9 @@ _datos-manual/
 _deploy-fase10/
 _catalogos-revision/
 data/
+
+# Finanzas: cartolas, Excel BANCOS y planillas SIGECO REALES (confidenciales). Nunca al repositorio.
+documentacion/finanzas-documento/datos-iniciales/
+documentacion/finanzas-documento/*CONFIDENCIAL*
+# Salidas locales de las herramientas de Finanzas (pueden traer cifras reales).
+backend/herramientas/finanzas-demo/*.json

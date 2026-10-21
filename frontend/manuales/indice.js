@@ -35,5 +35,5 @@ SigsoManual.indice([
   { id: 'hompy', archivo: 'hompy', grupo: 'Áreas', titulo: 'Hompy, la mascota', icono: 'hompy', color: 'var(--mod-hompy)', modulos: ['hompy'],
     resumen: 'Calendario, reporte de salida a terreno con su dinero, Estudio TikTok, marcas colaboradoras y reporte del mes.' },
   { id: 'finanzas', archivo: 'finanzas', grupo: 'Finanzas', titulo: 'Finanzas (la bóveda)', icono: 'candado', color: 'var(--mod-finanzas)', modulos: ['finanzas'],
-    resumen: 'Abrir la bóveda, el mes paso a paso, cartolas y detalle del banco, revisar movimientos, tablero, cobranza, presupuesto y cierre.' }
-], '2026-10-16b');
+    resumen: 'Abrir la bóveda, registrar y reutilizar, pegar desde Excel, subir el banco y conciliar, aplicar cobros a facturas, fondos de clientes, pendientes y errores, informe y cierre.' }
+], '2026-10-21');
