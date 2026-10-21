@@ -403,6 +403,8 @@
     if (!raiz_ || !est_.opts) return;
     var o = est_.opts;
     var m = moduloVisible();
+    // El módulo que muestra la columna (p. ej. Finanzas usa una columna más angosta: 244 px).
+    raiz_.setAttribute('data-sb-modulo', m.id || '');
     // Cambió el área: desde el riel todo parte cerrado (la página queda marcada);
     // por otro camino (dirección, atajo, buscador) se abre la ruta de la página.
     if (m.id !== est_.ultMod) {

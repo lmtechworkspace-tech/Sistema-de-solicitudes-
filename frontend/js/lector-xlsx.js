@@ -89,8 +89,8 @@
       return fills[Number((x.match(/ fillId="(\d+)"/) || [])[1] || 0)] || '';
     });
   }
-  function filas_(xml, ss, est) {
-    var filas = [], colores = est ? [] : null;
+  function filas_(xml, ss, est, conFormulas) {
+    var filas = [], colores = est ? [] : null, formulas = conFormulas ? [] : null;
     var reFila = /<row [^>]*?(\/>|>[\s\S]*?<\/row>)/g, m;
     while ((m = reFila.exec(xml))) {
       var r = m[0];
@@ -107,6 +107,11 @@
         if (t === 's') val = ss[Number(v)];
         else if (t === 'inlineStr') val = dec_((c.match(/<t[^>]*>([^<]*)<\/t>/) || [])[1] || '');
         else val = v === undefined ? '' : dec_(v);
+        // Finanzas v2 (FIN-18): la fórmula se conserva como evidencia (texto), nunca se ejecuta.
+        if (formulas) {
+          var fx = c.match(/<f[^>]*>([^<]*)<\/f>/);
+          if (fx && fx[1]) (formulas[num - 1] = formulas[num - 1] || [])[colNum_(ref)] = '=' + dec_(fx[1]);
+        }
         if (val !== undefined && val !== '') {
           fila[colNum_(ref)] = String(val);
           if (est) {
@@ -118,7 +123,7 @@
       filas[num - 1] = fila;
     }
     for (var j = 0; j < filas.length; j++) if (!filas[j]) filas[j] = [];
-    return { filas: filas, colores: colores };
+    return { filas: filas, colores: colores, formulas: formulas };
   }
 
   /**
@@ -145,16 +150,18 @@
           var rid = (m[0].match(/ r:id="([^"]*)"/) || [])[1] || '';
           var rel = rels.match(new RegExp('<Relationship [^>]*Id="' + rid + '"[^>]*>')) || [];
           var destino = ((rel[0] || '').match(/Target="([^"]*)"/) || [])[1] || '';
-          if (!opciones.hojas || opciones.hojas(nombre)) hojas.push({ nombre: nombre, ruta: destino.replace(/^\/?(xl\/)?/, 'xl/') });
+          var oculta = /\sstate="(hidden|veryHidden)"/.test(m[0]);
+          if (!opciones.hojas || opciones.hojas(nombre)) hojas.push({ nombre: nombre, oculta: oculta, ruta: destino.replace(/^\/?(xl\/)?/, 'xl/') });
         }
         // De a una: una hoja grande descomprimida pesa decenas de MB en memoria.
         var salida = [];
         return hojas.reduce(function (p, h) {
           return p.then(function () {
             return leerEntrada_(buf, mapa, h.ruta).then(function (xml) {
-              var r = filas_(xml, ss, est && opciones.colores(h.nombre) ? est : null);
-              var hoja = { hoja: h.nombre, filas: r.filas };
+              var r = filas_(xml, ss, est && opciones.colores(h.nombre) ? est : null, !!opciones.formulas);
+              var hoja = { hoja: h.nombre, filas: r.filas, oculta: !!h.oculta };
               if (r.colores) hoja.colores = r.colores;
+              if (r.formulas) hoja.formulas = r.formulas;
               salida.push(hoja);
             });
           });

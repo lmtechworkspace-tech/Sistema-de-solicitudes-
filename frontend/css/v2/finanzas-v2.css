@@ -162,7 +162,7 @@
 .fin2-rev__nums b { color: var(--sx-texto); font-variant-numeric: tabular-nums; }
 .fin2-rev__cert { display: flex; gap: 2px; height: 8px; border-radius: 999px; overflow: hidden; background: var(--sx-borde); }
 .fin2-rev__cert i { display: block; min-width: 0; }
-.fin2-acciones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.fin2-acciones { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .fin2-barra-mes { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .fin2-input--sm { padding: 6px 8px; font-size: .8125rem; border-radius: 8px; min-width: 0; }
 .fin2-barra-mes .fin2-input--sm { width: auto; }
@@ -218,8 +218,8 @@
 /* --- Etapa 4: tablero (finanzas-tablero-v2.js) ----------------------------- */
 /* Paleta de series validada (dataviz: CVD ΔE ≥ 9 claro/oscuro): azul, naranjo, aqua. */
 .fin2 { --fin2-ing: #2a78d6; --fin2-egr: #eb6834; --fin2-s3: #1baf7a; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .fin2 { --fin2-ing: #3987e5; --fin2-egr: #d95926; --fin2-s3: #199e70; } }
-:root[data-theme="dark"] .fin2 { --fin2-ing: #3987e5; --fin2-egr: #d95926; --fin2-s3: #199e70; }
+@media (prefers-color-scheme: dark) { :root:not([data-tema="claro"]) .fin2 { --fin2-ing: #3987e5; --fin2-egr: #d95926; --fin2-s3: #199e70; } }
+:root[data-tema="oscuro"] .fin2 { --fin2-ing: #3987e5; --fin2-egr: #d95926; --fin2-s3: #199e70; }
 .fin2-cab-extra { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .fin2-cab-extra .fin2-input--sm { width: auto; }
 .fin2-informe { display: flex; flex-direction: column; gap: var(--sx-e-5, 20px); }
@@ -484,3 +484,411 @@
 
 /* Cierre: el paso manual (casilla + texto) ocupa toda la fila; no la columna de 22 px del ícono. */
 .fin2-pasos-mes li:has(> .fin2-retiro-man) { display: block; }
+
+/* ===========================================================================
+ * Rediseño 2026-10-20 (instrucciones maestras FIN-01…FIN-48): navegación por
+ * tareas, Registro diario tipo planilla, Conciliación, Fondos, Clientes,
+ * Planificación, Informes, Cargas y Configuración.
+ * ======================================================================== */
+
+/* --- Navegación: áreas + subnavegación ----------------------------------- */
+.fin2-marco { position: sticky; top: 0; z-index: 5; display: flex; flex-direction: column; gap: 6px; margin: 0 0 var(--sx-e-3, 12px);
+  padding: 6px 0 8px; background: color-mix(in srgb, var(--sx-fondo, var(--sx-superficie)) 92%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.fin2-nav { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+.fin2-nav__areas { display: flex; gap: 4px; flex-wrap: wrap; padding: 4px; border-radius: 14px; background: var(--sx-superficie); border: 1px solid var(--sx-borde); }
+.fin2-nav__area { display: inline-flex; align-items: center; gap: 7px; padding: 8px 12px; border: 0; border-radius: 10px; background: none; color: var(--sx-texto-2);
+  font: 600 .8125rem/1 var(--fuente); cursor: pointer; transition: background .15s, color .15s; }
+.fin2-nav__area:hover { background: var(--fin-suave); color: var(--sx-texto); }
+.fin2-nav__area[aria-selected="true"] { background: var(--fin); color: #fff; box-shadow: 0 6px 16px -8px var(--fin); }
+.fin2-nav__area:focus-visible, .fin2-subnav__op:focus-visible { outline: 2px solid var(--fin); outline-offset: 2px; }
+.fin2-nav__area--config { margin-left: 6px; }
+.fin2-nav__lado { display: flex; gap: 8px; align-items: center; }
+.fin2-subnav { display: flex; gap: 2px; flex-wrap: wrap; border-bottom: 1px solid var(--sx-borde); }
+.fin2-subnav__op { padding: 8px 12px 9px; border: 0; background: none; color: var(--sx-texto-3); font: 600 .8125rem/1 var(--fuente); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.fin2-subnav__op:hover { color: var(--sx-texto); }
+.fin2-subnav__op[aria-selected="true"] { color: var(--fin); border-bottom-color: var(--fin); }
+
+/* --- Barras de contexto, cintas y utilidades ------------------------------ */
+.fin2-ctx { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; margin-bottom: var(--sx-e-3, 12px); }
+.fin2-campo--fila { flex-direction: row; align-items: center; gap: 8px; }
+.fin2-campo--fila > span { white-space: nowrap; font-weight: 600; }
+.fin2-campo--fila .fin2-input { width: auto; min-width: 140px; }
+.fin2-input--sm { padding: 7px 10px; font-size: .8125rem; border-radius: 9px; }
+.fin2-cinta { margin-bottom: var(--sx-e-3, 12px); }
+.fin2-cinta--alerta { background: var(--sx-alerta-suave, color-mix(in srgb, var(--sx-alerta, #b45309) 12%, transparent)); }
+.fin2-cinta--alerta > svg { color: var(--sx-alerta, #b45309); }
+.fin2-cinta--critico { background: color-mix(in srgb, var(--sx-critico, #b91c1c) 12%, transparent); }
+.fin2-cinta--critico > svg { color: var(--sx-critico, #b91c1c); }
+.fin2-cinta--ok { background: var(--sx-ok-suave, color-mix(in srgb, var(--sx-ok, #15803d) 12%, transparent)); }
+.fin2-cinta--ok > svg { color: var(--sx-ok, #15803d); }
+.fin2-cinta--info > svg { color: var(--fin); }
+.fin2-cinta > div { flex: 1; min-width: 200px; }
+.fin2-razones { margin: 6px 0 4px; padding-left: 18px; font-size: .8125rem; display: flex; flex-direction: column; gap: 3px; }
+.fin2-tiras { margin-bottom: var(--sx-e-3, 12px); }
+.fin2-filtros { margin-bottom: var(--sx-e-3, 12px); }
+.fin2-lote { margin-bottom: 8px; padding: 6px 8px; border-radius: 12px; background: var(--sx-superficie-2); }
+.fin2-lote__sel { flex: 1; min-width: 160px; font-size: .8125rem; color: var(--sx-texto-2); }
+.fin2-acciones-min { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.fin2-check { display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 8px; font-size: .8125rem; cursor: pointer; }
+.fin2-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 14px; align-items: start; }
+.fin2-form-grid > .fin2-acciones { grid-column: 1 / -1; margin-top: 0; }
+.fin2-fila-inactiva td { opacity: .55; }
+.fin2-tabla--clic tbody tr { cursor: pointer; transition: background .12s; }
+.fin2-tabla--clic tbody tr:hover, .fin2-tabla--clic tbody tr:focus-visible { background: var(--fin-suave); outline: 0; }
+.fin2-tabla--chica { font-size: .78125rem; }
+.fin2-tabla--chica td, .fin2-tabla--chica th { padding: 6px 8px; }
+.fin2-rejilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sx-e-4, 16px); margin-top: var(--sx-e-4, 16px); }
+.fin2-rejilla > .sx2-card { margin-top: 0 !important; }
+.fin2 .sx2-card + .sx2-card, .fin2 .sx2-fila-kpis + .sx2-card { margin-top: var(--sx-e-4, 16px); }
+.fin2-lista-saldos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.fin2-lista-saldos li { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--sx-borde); font-size: .875rem; }
+.fin2-lista-saldos li:last-child { border-bottom: 0; }
+.fin2-lista-saldos li > span:first-child { flex: 1; min-width: 0; }
+.fin2-lista-saldos small { display: block; color: var(--sx-texto-3); font-size: .75rem; margin-top: 2px; }
+.fin2-hist { list-style: none; margin: 0; padding: 0; font-size: .75rem; color: var(--sx-texto-2); display: flex; flex-direction: column; gap: 3px; }
+.fin2-defs { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: .8125rem; }
+.fin2-defs dt { font-weight: 600; }
+.fin2-defs dd { margin: 0; color: var(--sx-texto-2); }
+.fin2-falta { display: inline-flex; gap: 4px; align-items: center; font-size: .75rem; color: var(--sx-alerta, #b45309); font-weight: 600; }
+.fin2-falta svg { flex: none; }
+/* I14: en la fila del registro, lo que falta se resume en 2 líneas (el detalle completo va en el título y en el panel). */
+.fin2-falta--corta > span { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* --- Registro diario: tabla tipo planilla ---------------------------------- */
+.fin2-reg { border: 1px solid var(--sx-borde); border-radius: 14px; background: var(--sx-superficie); overflow: auto; }
+.fin2-reg__cab, .fin2-reg__fila { display: grid; align-items: center; gap: 0;
+  grid-template-columns: 30px 118px minmax(110px, 1fr) minmax(120px, 1fr) minmax(110px, .9fr) minmax(100px, .8fr) 92px 92px minmax(120px, .9fr) 112px 32px; min-width: 1060px; }
+.fin2-reg__cab { position: sticky; top: 0; z-index: 1; background: var(--sx-superficie-2); border-bottom: 1px solid var(--sx-borde);
+  font-size: .6875rem; text-transform: uppercase; letter-spacing: .04em; color: var(--sx-texto-3); font-weight: 600; }
+.fin2-reg__cab > span { padding: 9px 8px; }
+.fin2-reg__fila { border-bottom: 1px solid var(--sx-borde); border-left: 3px solid transparent; font-size: .8125rem; min-height: 40px; }
+.fin2-reg__fila:last-child { border-bottom: 0; }
+.fin2-reg__fila > span { padding: 4px 8px; min-width: 0; }
+.fin2-reg__fila:not(.fin2-reg__fila--edit) { cursor: pointer; }
+.fin2-reg__fila:not(.fin2-reg__fila--edit):hover, .fin2-reg__fila:focus-visible { background: var(--fin-suave); outline: 0; }
+.fin2-reg__fila--edit { background: color-mix(in srgb, var(--fin) 3%, var(--sx-superficie)); }
+.fin2-reg__fila--edit > span { padding: 2px; }
+.fin2-reg__fila--falta { border-left-color: var(--sx-alerta, #b45309); }
+.fin2-reg__fila--anulada { opacity: .5; text-decoration: line-through; }
+.fin2-reg__fila--abierta { background: var(--fin-suave); border-left-color: var(--fin); }
+.fin2-reg__txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin2-reg__txt small { display: block; color: var(--sx-texto-3); font-size: .6875rem; }
+.fin2-reg__acc { display: flex; justify-content: center; }
+.fin2-reg__vacio { padding: 18px; }
+.fin2-rc { width: 100%; height: 34px; padding: 4px 8px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--sx-texto); font: inherit; font-size: .8125rem; }
+.fin2-rc:hover { border-color: var(--sx-borde); background: var(--sx-superficie); }
+.fin2-rc:focus { outline: 0; border-color: var(--fin); background: var(--sx-superficie); box-shadow: 0 0 0 3px var(--fin-suave); }
+.fin2-rc.fin2-der { text-align: right; font-variant-numeric: tabular-nums; }
+.fin2-der { text-align: right; }
+.fin2-ayuda--teclas { margin-top: 8px; }
+.fin2-acciones-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.fin2-accion { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--sx-borde); background: var(--sx-superficie);
+  color: var(--sx-texto); font: inherit; cursor: pointer; transition: border-color .15s, transform .15s, box-shadow .15s; }
+.fin2-accion:hover, .fin2-accion:focus-visible { border-color: var(--fin); box-shadow: 0 8px 18px -12px var(--fin); transform: translateY(-1px); outline: 0; }
+.fin2-accion b { font-size: .875rem; }
+.fin2-accion small { color: var(--sx-texto-3); font-size: .75rem; line-height: 1.35; }
+.fin2-parte2 { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--sx-borde); border-radius: 12px; background: var(--sx-superficie-2); }
+.fin2-parte2 + .fin2-parte2 { margin-top: 8px; }
+.fin2-parte2__fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; align-items: end; }
+.fin2-pegar { font: .8125rem/1.4 var(--fuente-mono); white-space: pre; }
+.fin2-mapa { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.fin2-peg-tabla td { white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.fin2-peg-mala td { background: color-mix(in srgb, var(--sx-critico, #b91c1c) 5%, transparent); }
+.fin2-celda-mala { box-shadow: inset 0 -2px 0 var(--sx-critico, #b91c1c); color: var(--sx-critico, #b91c1c); }
+.fin2-p-sec__t { margin: 8px 0 4px; font-size: .8125rem; }
+.fin2-plantillas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.fin2-plantillas li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--sx-borde); border-radius: 10px; }
+.fin2-plantillas li .fin2-ayuda { flex: 1; min-width: 180px; }
+
+/* --- Conciliación ---------------------------------------------------------- */
+.fin2-conc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sx-e-4, 16px); margin-top: var(--sx-e-4, 16px); }
+.fin2-conc .sx2-card { margin-top: 0 !important; }
+.fin2-conc__lista { list-style: none; margin: 0; padding: 0; max-height: 56vh; overflow: auto; }
+.fin2-conc__item { display: grid; grid-template-columns: 20px 82px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 6px; border-radius: 10px; cursor: pointer; font-size: .8125rem; }
+.fin2-conc__item:hover { background: var(--sx-superficie-2); }
+.fin2-conc__item--sel { background: var(--fin-suave); }
+.fin2-conc__txt { min-width: 0; }
+.fin2-conc__txt b, .fin2-conc__txt small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin2-conc__txt small { color: var(--sx-texto-3); font-size: .6875rem; }
+.fin2-conc__barra { position: sticky; bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px; padding: 10px 14px; border-radius: 14px;
+  background: var(--sx-superficie); border: 1px solid var(--sx-borde); box-shadow: 0 14px 30px -18px rgba(0,0,0,.35); font-size: .8125rem; }
+.fin2-conc__barra > .fin2-ayuda { flex: 1; min-width: 180px; }
+.fin2-conc__barra--ok { border-color: var(--sx-ok, #15803d); }
+.fin2-sug { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.fin2-sug__item { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) minmax(180px, auto); gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--sx-borde); border-radius: 12px; }
+.fin2-sug__lado { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: .8125rem; }
+.fin2-sug__lado small { color: var(--sx-texto-3); font-size: .6875rem; text-transform: uppercase; letter-spacing: .04em; }
+.fin2-sug__lado span { color: var(--sx-texto-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin2-sug__igual { color: var(--fin); display: grid; place-items: center; }
+.fin2-sug__acc { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; text-align: right; }
+
+/* --- Fondos y Clientes ------------------------------------------------------ */
+.fin2-p .fin2-ficha-cab { justify-content: space-between; padding: 12px 14px; border-radius: 14px; background: var(--fin-suave); }
+.fin2-ficha-cab small { display: block; font-size: .75rem; color: var(--sx-texto-2); }
+.fin2-p .fin2-ficha-cab b { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.fin2-ficha-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.fin2-ficha-caja { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--sx-borde); background: var(--sx-superficie); }
+.fin2-ficha-caja small { font-size: .75rem; color: var(--sx-texto-3); text-transform: uppercase; letter-spacing: .04em; }
+.fin2-ficha-caja b { font-size: 1.25rem; }
+.fin2-ficha-caja span { font-size: .8125rem; color: var(--sx-texto-2); }
+.fin2-gest { border: 1px solid var(--sx-borde); border-radius: 12px; background: var(--sx-superficie); }
+.fin2-gest + .fin2-gest { margin-top: 8px; }
+.fin2-gest > summary { display: flex; gap: 8px; align-items: center; padding: 10px 12px; cursor: pointer; font-size: .875rem; list-style: none; }
+.fin2-gest > summary::-webkit-details-marker { display: none; }
+.fin2-gest > summary > .fin2-num { margin-left: auto; font-weight: 700; }
+.fin2-gest__cuerpo { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
+.fin2-desglose { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; margin: 0; }
+.fin2-desglose > div { padding: 6px 8px; border-radius: 8px; background: var(--sx-superficie-2); }
+.fin2-desglose dt { font-size: .6875rem; color: var(--sx-texto-3); }
+.fin2-desglose dd { margin: 0; font-weight: 600; font-size: .875rem; }
+.fin2-desglose > .fin2-desglose__total { background: var(--fin-suave); }
+.fin2-piezas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.fin2-piezas li { display: grid; grid-template-columns: 82px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--sx-borde); font-size: .8125rem; }
+.fin2-piezas li:has(> input) { grid-template-columns: auto 82px minmax(0, 1fr) auto; }
+.fin2-piezas li:last-child { border-bottom: 0; }
+.fin2-piezas small { display: block; color: var(--sx-texto-3); font-size: .6875rem; }
+
+/* --- Informes --------------------------------------------------------------- */
+.fin2-kpis { margin-bottom: var(--sx-e-4, 16px); }
+.fin2-kpis .sx2-kpi__cuerpo { flex-direction: column; align-items: flex-start; }
+.fin2-kpis .sx2-kpi__tendencia { white-space: normal; line-height: 1.3; }
+.fin2-ins { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.fin2-ins__item { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid var(--sx-borde); border-left: 4px solid var(--sx-borde-fuerte, var(--sx-borde)); }
+.fin2-ins__item.sx2-tono-critico { border-left-color: var(--sx-critico, #b91c1c); }
+.fin2-ins__item.sx2-tono-alerta { border-left-color: var(--sx-alerta, #b45309); }
+.fin2-ins__item.sx2-tono-ok { border-left-color: var(--sx-ok, #15803d); }
+.fin2-ins__item.sx2-tono-info { border-left-color: var(--fin); }
+.fin2-ins__ico { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--sx-superficie-2); }
+.fin2-ins__item.sx2-tono-critico .fin2-ins__ico { color: var(--sx-critico, #b91c1c); }
+.fin2-ins__item.sx2-tono-alerta .fin2-ins__ico { color: var(--sx-alerta, #b45309); }
+.fin2-ins__item.sx2-tono-ok .fin2-ins__ico { color: var(--sx-ok, #15803d); }
+.fin2-ins__item.sx2-tono-info .fin2-ins__ico { color: var(--fin); }
+.fin2-ins__txt { margin: 0; font-weight: 600; font-size: .875rem; line-height: 1.45; }
+.fin2-ins__contrib { margin: 6px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.fin2-ins__contrib span { padding: 2px 8px; border-radius: 999px; background: var(--sx-superficie-2); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.fin2-ins__lim { margin: 6px 0 0; font-size: .75rem; color: var(--sx-texto-3); }
+.fin2-ins__acc { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 8px; }
+.fin2-ins__acc .fin2-ayuda { margin-left: auto; font-size: .6875rem; }
+.fin2-graf { width: 100%; height: auto; display: block; }
+.fin2-graf__a { fill: var(--fin); }
+.fin2-graf__b { fill: #c2410c; }
+.fin2-graf__hueco { fill: none; stroke: var(--sx-borde-fuerte, var(--sx-borde)); stroke-dasharray: 4 4; }
+.fin2-graf__sin { fill: var(--sx-texto-3); font-size: 10px; text-anchor: middle; }
+.fin2-graf__ppto { stroke: var(--sx-texto); stroke-width: 2; stroke-dasharray: 5 3; }
+.fin2-graf__base { stroke: var(--sx-borde); }
+.fin2-graf__eje { fill: var(--sx-texto-3); font-size: 11px; text-anchor: middle; }
+.fin2-graf__eje--act { fill: var(--sx-texto); font-weight: 700; }
+.fin2-leyenda { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 8px 0 0; font-size: .75rem; color: var(--sx-texto-2); }
+.fin2-leyenda span { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: -8px; }
+.fin2-leyenda .fin2-leyenda__a { background: var(--fin); }
+.fin2-leyenda .fin2-leyenda__b { background: #c2410c; }
+.fin2-leyenda .fin2-leyenda__p { height: 0; border-top: 2px dashed var(--sx-texto); border-radius: 0; }
+.fin2-leyenda .fin2-leyenda__h { border: 1px dashed var(--sx-borde-fuerte, var(--sx-borde)); }
+.fin2-exp__tipos { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.fin2-exp__tipo { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--sx-borde); border-radius: 12px; cursor: pointer; font-size: .8125rem; }
+.fin2-exp__tipo:has(input:checked) { border-color: var(--fin); background: var(--fin-suave); }
+.fin2-exp__tipo span { display: flex; flex-direction: column; gap: 2px; }
+.fin2-exp__tipo small { color: var(--sx-texto-3); }
+form .fin2-exp__tipo { margin-bottom: 6px; }
+
+/* --- Planificación ----------------------------------------------------------- */
+.fin2-rep-fila { display: grid; grid-template-columns: minmax(0, 1fr) 140px 34px; gap: 8px; align-items: center; margin-bottom: 6px; }
+.fin2-rep-fila:not(:has(.js-fp-rep-val)) { grid-template-columns: minmax(0, 1fr) 34px; }
+
+/* --- Cargas y configuración ------------------------------------------------------ */
+.fin2-soltar { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 26px 18px; border: 2px dashed var(--sx-borde-fuerte, var(--sx-borde)); border-radius: 16px;
+  text-align: center; cursor: pointer; color: var(--sx-texto-2); transition: border-color .15s, background .15s; }
+.fin2-soltar:hover, .fin2-soltar:focus-visible, .fin2-soltar--sobre { border-color: var(--fin); background: var(--fin-suave); outline: 0; }
+.fin2-soltar svg { color: var(--fin); }
+.fin2-soltar b { color: var(--sx-texto); }
+.fin2-soltar span { font-size: .8125rem; max-width: 60ch; }
+.fin2-cargas__otros { margin: 10px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.fin2-hojas { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+.fin2-hoja { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--sx-borde); background: var(--sx-superficie); color: var(--sx-texto-2); font: 600 .75rem/1 var(--fuente); cursor: pointer; }
+.fin2-hoja:hover { border-color: var(--fin); }
+.fin2-hoja--act { background: var(--fin); border-color: var(--fin); color: #fff; }
+.fin2-hoja--act .sx2-chip__n { background: rgba(255,255,255,.25); color: #fff; }
+
+@media (max-width: 900px) {
+  .fin2-conc { grid-template-columns: minmax(0, 1fr); }
+  .fin2-sug__item { grid-template-columns: minmax(0, 1fr); }
+  .fin2-sug__igual { transform: rotate(90deg); justify-self: start; }
+  .fin2-sug__acc { align-items: flex-start; text-align: left; }
+}
+@media (max-width: 640px) {
+  .fin2-nav__area span { display: none; }
+  .fin2-nav__area[aria-selected="true"] span { display: inline; }
+  .fin2-busca { flex: 1 1 100%; margin-left: 0; }
+  .fin2-campo--fila { flex: 1 1 100%; }
+  .fin2-campo--fila .fin2-input { flex: 1; min-width: 0; }
+  .fin2-defs { grid-template-columns: minmax(0, 1fr); }
+  .fin2-rep-fila { grid-template-columns: minmax(0, 1fr) 100px 34px; }
+  .fin2-marco { position: static; }
+}
+@media (prefers-reduced-motion: reduce) { .fin2-accion, .fin2-nav__area { transition: none; } }
+.fin2-peg-res { white-space: normal !important; min-width: 220px; max-width: 320px !important; }
+
+/* Corrección v2 · I01: posible duplicado con el banco (panel de la operación y Conciliación). */
+.fin2-dup { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--sx-critico, #b91c1c); background: color-mix(in srgb, var(--sx-critico, #b91c1c) 6%, var(--sx-superficie)); }
+.fin2-dup__mov { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--sx-borde); }
+.fin2-dup__mov small { display: block; color: var(--sx-texto-3); font-size: .75rem; }
+.fin2-vinc > div { flex: 1; min-width: 0; }
+.fin2-vinc__lista { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.fin2-vinc__lista li { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 6px 8px; border-radius: 10px; background: var(--sx-superficie); }
+.fin2-vinc__lista small { display: block; color: var(--sx-texto-3); font-size: .75rem; }
+
+/* Corrección v2 I04 · bandeja de cobranza por factura */
+.fin2-fact { min-width: 900px; }
+.fin2-fact td { vertical-align: top; }
+.fin2-fila--sel td { background: var(--sx-acento-suave, rgba(28, 92, 171, .07)); }
+.fin2-fact .fin2-acc { white-space: nowrap; }
+.fin2-conc__txt small.fin2-terceros { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.4; }
+
+.fin2-fact td:nth-child(2) b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin2-fact th:first-child, .fin2-fact td:first-child { width: 34px; padding-left: 12px; padding-right: 4px; }
+.fin2-fact td:nth-child(2), .fin2-fact th:nth-child(2) { max-width: 190px; }
+
+/* Corrección v2 I05 · registro */
+.fin2-orden { all: unset; cursor: pointer; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; }
+.fin2-orden:hover, .fin2-orden:focus-visible { color: var(--fin, var(--sx-acento)); text-decoration: underline; }
+.fin2-alcance { margin: 4px 0 6px; }
+.fin2-guardado { color: var(--sx-ok, #15803d); white-space: nowrap; }
+.fin2-accion--fuente { width: 100%; text-align: left; margin-bottom: 12px; border: 1px dashed var(--fin, var(--sx-acento)); background: var(--fin-suave, transparent); }
+.fin2-fuente { width: 100%; text-align: left; cursor: pointer; border: 0; background: transparent; font: inherit; }
+.fin2-tenue { opacity: .62; }
+/* Corrección v2 I06 · ficha de fondos */
+.fin2-lista-saldos li { flex-wrap: wrap; }
+.fin2-lista-saldos li > span:first-child .sx2-badge { white-space: normal; height: auto; line-height: 1.35; }
+.fin2-piezas li { align-items: start; }
+.fin2-piezas .fin2-acciones-min { justify-content: flex-start; margin-top: 6px; }
+
+/* Corrección v2 I08.4 · Registro más compacto: llegar a las filas sin recorrer una pantalla de controles */
+.fin2 .fin2-tiras { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.fin2 .fin2-tira { padding: 6px 10px; border-radius: 10px; }
+.fin2 .fin2-tira b { font-size: .975rem; line-height: 1.25; }
+.fin2 .fin2-tira span { font-size: .7rem; line-height: 1.2; }
+.fin2 .fin2-ctx { margin-bottom: 8px; }
+.fin2 .fin2-ctx .fin2-busca { flex: 1 1 200px; max-width: 320px; }
+.fin2-fila-filtros { display: flex; gap: 8px 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 8px; }
+.fin2-fila-filtros .fin2-filtros { margin-bottom: 0; }
+.fin2-lote[hidden] { display: none; }
+.fin2 .fin2-alcance { margin: 0 0 6px; }
+.fin2-reg__cab, .fin2-reg__fila { grid-template-columns: 30px 108px minmax(100px, 1fr) minmax(100px, 1fr) minmax(100px, .9fr) minmax(90px, .8fr) 92px 92px 112px 112px 32px; min-width: 1000px; }
+.fin2-reg__fila .sx2-badge { white-space: normal; line-height: 1.25; height: auto; }
+/* Cabecera de Finanzas: título y acciones en la misma fila mientras quepan */
+.fin2 .sx2-cabecera { flex-wrap: wrap; row-gap: 8px; }
+.fin2 .sx2-cabecera__txt { flex: 1 1 240px; min-width: 0; }
+.fin2 .sx2-cabecera__txt p { font-size: .875rem; }
+.fin2 .sx2-cabecera__acciones { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
+.fin2-boveda { display: inline-flex; align-items: center; gap: 2px; }
+.fin2-reg__cab, .fin2-reg__fila { grid-template-columns: 30px 100px minmax(90px, 1fr) minmax(90px, 1fr) minmax(90px, .9fr) minmax(84px, .8fr) 88px 88px 104px 104px 32px; min-width: 920px; }
+/* I08.11 · Acciones en celdas de tabla (Préstamos, Reglas, Cargas): la celda sigue siendo celda y sus botones bajan
+   de línea si no caben; antes la celda era inline-flex y recortaba «Vincular movimiento» / «Editar». */
+.fin2-tabla td.fin2-acciones-min { display: table-cell; white-space: normal; text-align: right; min-width: 128px; }
+.fin2-tabla td.fin2-acciones-min > .sx2-boton, .fin2-tabla td.fin2-acciones-min > button { margin: 2px 0 2px 4px; }
+/* Las insignias largas de las tablas bajan de línea en vez de ensanchar la tabla, y la columna de
+   acciones queda fija a la derecha: siempre alcanzable aunque la tabla necesite desplazarse. */
+.fin2-tabla td .sx2-badge { white-space: normal; height: auto; line-height: 1.25; }
+.fin2-tabla td.fin2-acciones-min, .fin2-tabla td.fin2-acc { position: sticky; right: 0; z-index: 1; background: var(--sx-superficie); box-shadow: -8px 0 8px -8px rgba(15, 23, 42, .18); }
+.fin2-tabla tr.fin2-fila--sel td.fin2-acc { background: var(--sx-superficie); }
+
+.fin2-explica { margin: 0 0 8px; font-size: .8125rem; }
+.fin2-explica summary { cursor: pointer; color: var(--fin, var(--sx-acento)); }
+.fin2-fact { min-width: 860px; }
+.fin2 .fin2-tira.sx2-tono-neutro { border-left-color: var(--sx-borde-fuerte, var(--sx-borde)); }
+/* I08 · Cobranza: la tabla cabe en 1366 sin tapar Estado ni Saldo (documento y créditos bajan de línea; acciones apiladas). */
+.fin2-fact th, .fin2-fact td:nth-child(3), .fin2-fact td:nth-child(6) { white-space: normal; }
+.fin2-fact td:nth-child(3) { min-width: 120px; max-width: 160px; }
+.fin2-fact .fin2-motivo { white-space: normal; }
+.fin2-fact td.fin2-acc { width: 1%; padding-left: 6px; }
+.fin2-fact td.fin2-acc .sx2-boton { display: flex; width: 100%; justify-content: center; margin: 2px 0; }
+/* I08.4 · Registro: texto de trabajo a 14 px (objetivo 14–16 px) sin perder filas. */
+.fin2-reg__fila { font-size: .875rem; }
+.fin2 .fin2-tira--doble b { font-size: .875rem; }
+/* I08.4 · Espacio útil: separación de 12 px entre bloques (como Bandeja), sin sumar márgenes propios al gap. */
+#modulo-finanzas > .sx2-pagina.fin2 { gap: 12px; }
+#modulo-finanzas > .sx2-pagina.fin2 > .fin2-ctx, #modulo-finanzas > .sx2-pagina.fin2 > .fin2-alcance,
+#modulo-finanzas > .sx2-pagina.fin2 > .fin2-tiras, #modulo-finanzas > .sx2-pagina.fin2 > .fin2-fila-filtros { margin-bottom: 0; }
+
+/* I08.9 · Cierre: un mes principal, selector de meses y transición SIGECO plegada. */
+.fin2-meses-sel { display: flex; gap: 8px; flex-wrap: wrap; }
+.fin2-mes-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px 6px 12px; border-radius: 10px; border: 1px solid var(--sx-borde); background: var(--sx-superficie); color: var(--sx-texto); font: inherit; font-size: .8125rem; cursor: pointer; }
+.fin2-mes-chip[aria-selected="true"] { border-color: var(--fin, var(--sx-acento)); box-shadow: inset 0 0 0 1px var(--fin, var(--sx-acento)); }
+.fin2-mes-chip:focus-visible { outline: 2px solid var(--fin, var(--sx-acento)); outline-offset: 2px; }
+.fin2-mes__cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fin2-mes__nombre { font-size: 1.125rem; margin-right: 6px; }
+.fin2-siguiente { display: grid; gap: 2px; margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: var(--fin-suave, var(--sx-superficie-2)); border-left: 3px solid var(--fin, var(--sx-acento)); }
+.fin2-siguiente span { font-size: .75rem; color: var(--sx-texto-3); text-transform: uppercase; letter-spacing: .04em; }
+.fin2-siguiente small { color: var(--sx-texto-2); }
+.fin2-mes__h { font-size: .8125rem; margin: 14px 0 4px; color: var(--sx-texto-2); }
+.fin2-pasos-mes li > .sx2-boton { margin-left: auto; align-self: center; flex-shrink: 0; }
+.fin2-mes__listos summary, .fin2-transicion > summary { cursor: pointer; font-weight: 600; font-size: .875rem; padding: 6px 0; }
+.fin2-transicion { border: 1px solid var(--sx-borde); border-radius: 14px; padding: 8px 16px; background: var(--sx-superficie); }
+.fin2-transicion[open] { padding-bottom: 16px; }
+.fin2-transicion > summary .fin2-ayuda { font-weight: 400; margin-left: 6px; }
+.fin2-transicion > .fin2-cadena { margin: 8px 0 12px; }
+
+/* I08.6 · Pendientes: una lista de lo que falta, con su origen; y el retorno desde el origen. */
+.fin2-pend-tabla td { vertical-align: top; }
+.fin2-pend__motivo { max-width: 420px; color: var(--sx-texto-2); }
+.fin2-pend--ultimo td { background: var(--fin-suave); }
+.fin2-volver { display: inline-block; margin: 2px 0 4px; font-size: .8125rem; }
+
+/* I08.7 · Ficha del cliente por secciones. */
+.fin2-ficha-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--sx-borde); margin: 12px 0 4px; }
+.fin2-ficha-tab { font: inherit; font-size: .875rem; padding: 8px 12px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--sx-texto-2); cursor: pointer; margin-bottom: -1px; }
+.fin2-ficha-tab[aria-selected="true"] { color: var(--sx-texto); border-bottom-color: var(--fin, var(--sx-acento)); font-weight: 600; }
+.fin2-ficha-tab:focus-visible { outline: 2px solid var(--fin, var(--sx-acento)); outline-offset: -2px; }
+/* I08.9 · El nombre del mes no hereda mayúsculas por palabra. */
+.fin2-mes .fin2-mes__cab { text-transform: none; }
+.fin2-mes__nombre { text-transform: capitalize; }
+/* I08.11 · Teléfono: filtros en una fila desplazable y Pendientes como lista (sin columna fija encima). */
+@media (max-width: 640px) {
+  #modulo-finanzas .fin2-fila-filtros .fin2-filtros { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  #modulo-finanzas .fin2-fila-filtros .fin2-filtros > * { flex-shrink: 0; }
+  .fin2-pend-tabla thead { display: none; }
+  .fin2-pend-tabla, .fin2-pend-tabla tbody { display: block; min-width: 0; }
+  .fin2-pend-tabla tr { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 10px 12px; border-bottom: 1px solid var(--sx-borde); }
+  .fin2-pend-tabla td { display: block; padding: 0; border: 0; }
+  .fin2-pend-tabla td.fin2-acc { position: static; grid-column: 2; grid-row: 1 / span 2; box-shadow: none; background: none; align-self: center; }
+  .fin2-pend-tabla td.fin2-der { text-align: left; }
+  .fin2-pend__motivo { max-width: none; }
+}
+/* I08.10 · Etiquetas de estado en oscuro: el texto se aclara para pasar 4,5:1 sobre su fondo teñido (medido). */
+@media (prefers-color-scheme: dark) { :root:not([data-tema="claro"]) #modulo-finanzas .sx2-badge { color: color-mix(in srgb, var(--sx-tono, var(--sx-texto)) 80%, #fff); } }
+:root[data-tema="oscuro"] #modulo-finanzas .sx2-badge { color: color-mix(in srgb, var(--sx-tono, var(--sx-texto)) 80%, #fff); }
+
+/* I08.4 · Densidad compacta del Registro: misma letra (14 px), menos alto; los nombres van en una línea. */
+.fin2-reg__cab .js-finr-densidad[aria-pressed="true"] { color: var(--fin, var(--sx-acento)); background: var(--fin-suave); }
+.fin2-reg--compacta .fin2-reg__fila { min-height: 32px; }
+.fin2-reg--compacta .fin2-reg__fila > span { padding-top: 2px; padding-bottom: 2px; }
+.fin2-reg--compacta .fin2-reg__fila:not(.fin2-reg__fila--edit) > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fin2-reg--compacta .fin2-reg__fila > span:has(.sx2-badge) { white-space: normal; overflow: visible; }
+.fin2-reg__cab > span:last-child { padding: 0 2px; display: grid; place-items: center; }
+.fin2-reg__cab .js-finr-densidad { width: 28px; height: 28px; min-width: 0; padding: 0; }
+
+/* I09 · Informes: lectura priorizada, portafolio, cascada, tabla equivalente y escala del gráfico. */
+.fin2-ins-otros { margin-top: 8px; }
+.fin2-ins-otros > summary, .fin2-tabla-equiv > summary { cursor: pointer; font-size: .8125rem; font-weight: 600; color: var(--fin, var(--sx-acento)); padding: 6px 0; }
+.fin2-portafolio { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.fin2-portafolio__item { width: 100%; text-align: left; display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--sx-borde); background: var(--sx-superficie); color: var(--sx-texto); font: inherit; cursor: pointer; }
+.fin2-portafolio__item:hover, .fin2-portafolio__item:focus-visible { border-color: var(--fin, var(--sx-acento)); outline: 0; }
+.fin2-portafolio__item small { color: var(--sx-texto-2); font-size: .75rem; }
+.fin2-cascada__col { width: 30%; }
+.fin2-cascada__barra { display: block; height: 10px; border-radius: 3px; }
+.fin2-cascada__barra--a { background: var(--fin2-ing, #2a78d6); }
+.fin2-cascada__barra--b { background: var(--fin2-egr, #eb6834); margin-left: auto; }
+.fin2-cascada__tot td { font-weight: 700; border-top: 2px solid var(--sx-borde-fuerte, var(--sx-borde)); }
+.fin2-graf__escala { font-size: 10px; fill: var(--sx-texto-3); }
+.fin2-graf__curso { font-size: 10px; fill: var(--sx-alerta, #b45309); text-anchor: middle; }
+/* I08.8 · Resumen en dos zonas de tres cifras. */
+.fin2-zona__t { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--sx-texto-3); margin: 0 0 6px; font-weight: 600; }
+.fin2 .fin2-kpis--3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .fin2 .fin2-kpis--3 { grid-template-columns: 1fr; } }
+/* I10 · Los selectores de la cabecera (Presupuesto) toman su ancho, no el de la fila. */
+.fin2 .sx2-cabecera__acciones > select.fin2-input { width: auto; flex: 0 0 auto; }
+/* I10.2 · Préstamos: el estado no queda bajo la columna de acciones. */
+.fin2-plan .fin2-tabla .sx2-badge { white-space: nowrap; }
+.fin2-plan .fin2-tabla td.fin2-acciones-min { min-width: 0; }
+.fin2-plan .fin2-tabla td.fin2-acciones-min > .sx2-boton { display: flex; width: 100%; justify-content: center; }

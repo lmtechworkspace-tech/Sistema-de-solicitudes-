@@ -17,6 +17,8 @@
   var x_ = null;                 // contexto que entrega finanzas-v2.js
   var cat_ = null;               // tipos, empresas, clientes
   var mov_ = { periodo: '', filtro: 'pendientes', datos: null, sel: {}, avisos: {} };   // avisos: id → texto (Etapa C, lotes)
+  // I12.2/I12.4: al cerrarse la bóveda, la pantalla olvida las cifras que tenía cargadas.
+  document.addEventListener('sigso-fin-cerrada', function () { mov_.datos = null; mov_.sel = {}; cat_ = null; });
   var revisiones_ = [];          // cartolas leídas y revisadas, aún sin importar
 
   function txt(v) { return U.esc(String(v == null ? '' : v)); }
@@ -50,7 +52,7 @@
     Promise.all([x.api('finanzasResumenBancos'), catalogo()]).then(function (rs) {
       if (!x.vigente(t)) return;
       var r = rs[0];
-      if (!r || !r.ok) { if (r && !r.boveda_cerrada) x.pagina(x.cab('Bancos') + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: r.message || '' }) })); return; }
+      if (!r || !r.ok) { if (r && !r.boveda_cerrada) x.pagina(x.cab('Bancos') + U.card({ cuerpo: U.vacio({ accion: '<button type="button" class="sx2-boton sx2-boton--secundario sx2-boton--sm js-fin-reintentar">Reintentar</button>', icono: 'alerta', titulo: 'No se pudo cargar', texto: r.message || '' }) })); return; }
       pintarBancos(r.data);
     });
   }
@@ -319,7 +321,7 @@
     Promise.all([x.api('finanzasMovimientos', { periodo: mov_.periodo }), catalogo()]).then(function (rs) {
       if (!x.vigente(t)) return;
       var r = rs[0];
-      if (!r || !r.ok) { if (r && !r.boveda_cerrada) x.pagina(x.cab('Movimientos') + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: r.message || '' }) })); return; }
+      if (!r || !r.ok) { if (r && !r.boveda_cerrada) x.pagina(x.cab('Movimientos') + U.card({ cuerpo: U.vacio({ accion: '<button type="button" class="sx2-boton sx2-boton--secundario sx2-boton--sm js-fin-reintentar">Reintentar</button>', icono: 'alerta', titulo: 'No se pudo cargar', texto: r.message || '' }) })); return; }
       mov_.datos = r.data; mov_.periodo = r.data.periodo; mov_.sel = {}; mov_.avisos = {};
       pintarMovimientos();
     });
@@ -471,11 +473,12 @@
     var cli = nombre ? cat_.clientes.filter(function (c) { return c.nombre === nombre; })[0] : null;
     var rep = q('.js-finm-reparto');
     var preset = rep && cat_.repartos ? cat_.repartos.filter(function (r) { return r.id === rep; })[0] : null;
-    return { id: el.dataset.id, tipo: t ? t.value : '', cuenta: q('.js-finm-cuenta'), cliente_id: cli ? cli.id : '', empresa: q('.js-finm-empresa'), reparto: preset ? preset.empresas : [], nota: q('.js-finm-nota'), _clienteEscrito: nombre && !cli };
+    var mv = ((mov_.datos && mov_.datos.movimientos) || []).filter(function (m) { return m.id === el.dataset.id; })[0];
+    return { id: el.dataset.id, expected_version: mv ? mv.version : undefined, tipo: t ? t.value : '', cuenta: q('.js-finm-cuenta'), cliente_id: cli ? cli.id : '', empresa: q('.js-finm-empresa'), reparto: preset ? preset.empresas : [], nota: q('.js-finm-nota'), _clienteEscrito: nombre && !cli };
   }
   function desdeSugerencia(m) {
     var s = m.sugerencia || {};
-    return { id: m.id, tipo: s.tipo, cuenta: s.cuenta, cliente_id: s.cliente_id, empresa: s.empresa, reparto: s.reparto || [], nota: '' };
+    return { id: m.id, expected_version: m.version, tipo: s.tipo, cuenta: s.cuenta, cliente_id: s.cliente_id, empresa: s.empresa, reparto: s.reparto || [], nota: '' };
   }
   function guardar(items) {
     var malos = items.filter(function (i) { return i._clienteEscrito; });
@@ -486,12 +489,17 @@
       var e = r.data.errores || [];
       e.forEach(function (er) { var tr = document.querySelector('.fin2-mov[data-id="' + er.id + '"]'); if (tr) { tr.classList.add('fin2-mov--error'); tr.title = er.mensaje; } });
       aviso(r.data.hechos + ' guardado(s)' + (r.data.reglas ? ' · el sistema aprendió ' + r.data.reglas + ' glosa(s)' : '') + (e.length ? ' · ' + e.length + ' con error: ' + e[0].mensaje : ''));
+      // I02.3: «coincide con una operación registrada» lleva a vincularla (el panel muestra el botón).
+      var conc = e.filter(function (er) { return er.codigo === 'CONCILIAR'; })[0];
+      if (conc && !r.data.hechos) { if (panel_ && panel_.id === conc.id) { var zv = panel_.api.el.querySelector('.js-finm-vinc'); if (zv && zv.scrollIntoView) zv.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } else abrirPanel(conc.id); }
       if (r.data.hechos) return recargar().then(function () { return r.data; });
       return r.data;
     });
   }
   function recargar() {
+    var x = x_, t = x_.turno();
     return x_.api('finanzasMovimientos', { periodo: mov_.periodo }).then(function (r) {
+      if (!x.vigente(t)) return; // T32 (I13): la persona ya está en otra vista
       if (r && r.ok) { mov_.datos = r.data; mov_.sel = {}; pintarMovimientos(); }
     });
   }
@@ -525,6 +533,7 @@
     var cuerpo = '<div class="fin2-p" data-id="' + txt(m.id) + '">' +
       '<div class="fin2-p-monto ' + (m.abono ? 'fin2-pos' : '') + '">' + (m.abono ? '+' : '−') + plata(m.abono || m.cargo) + '<small>' + (m.abono ? 'entró' : 'salió') + ' el ' + txt(fechaCorta(m.fecha)) + ' · ' + txt((m.cuenta || {}).banco + ' ···' + (m.cuenta || {}).ultimos4) + '</small></div>' +
       '<section class="fin2-p-sec"><h3>Lo que dice el banco</h3><p class="fin2-glosa">' + txt(m.glosa) + (m.doc ? ' <span class="fin2-ayuda">· doc. ' + txt(m.doc) + '</span>' : '') + '</p>' + pistas(m) + '</section>' +
+      '<div class="js-finm-vinc" aria-live="polite"></div>' +
       sug +
       '<section class="fin2-p-sec"><h3>¿Qué es?</h3><div class="fin2-tipos" role="radiogroup">' + tipos.map(function (t) {
         return '<label class="fin2-tipo-op"><input type="radio" name="finm-tipo" class="js-finm-tipo" value="' + txt(t.id) + '"' + (t.id === c.tipo ? ' checked' : '') + '>' +
@@ -547,10 +556,50 @@
     void previo;
     panel_.api.el.classList.add('fin2-panel');
     enlazarPanel(panel_.api.el);
+    vinculoRegistro(panel_.api.el, m);
     var cajaYa = panel_.api.el.querySelector('.fin2-dividir'); if (cajaYa) faltaDividir(cajaYa);
     revisarPanel(panel_.api.el.querySelector('.fin2-p'));
     marcarAbierto();
     var fila_ = document.querySelector('.fin2-mov[data-id="' + id + '"]'); if (fila_ && fila_.scrollIntoView) fila_.scrollIntoView({ block: 'nearest' });
+  }
+  /**
+   * I02.3 · Vincular con el registro: si el movimiento coincide con una operación ya registrada (monto exacto,
+   * sentido, empresa, ±N días), se ofrece unirlos aquí mismo y seguir con el siguiente pendiente. Si ya está
+   * vinculado, se dice y se corrige en Conciliación (clasificarlo aquí pisaría el vínculo).
+   */
+  function vinculoRegistro(el, m) {
+    var z = el.querySelector('.js-finm-vinc'); if (!z) return;
+    if (m.clasif && m.clasif.conciliado) {
+      z.innerHTML = '<div class="fin2-p-caja fin2-p-caja--ok">' + U.ico('enlace', 16) + '<span><b>Vinculado con lo registrado' + (m.clasif.parcial ? ' (en parte)' : '') + '.</b> Para corregirlo, deshaz o completa el vínculo en Conciliación.</span>' +
+        '<button type="button" class="sx2-enlace js-finm-ir-conc">Abrir Conciliación</button></div>';
+      return;
+    }
+    x_.api('finanzasCandidatos', { movimiento_id: m.id }).then(function (r) {
+      if (!r || !r.ok || !el.isConnected) return;
+      var l = r.data.candidatos || [];
+      if (!l.length) return;
+      z.innerHTML = '<div class="fin2-p-caja fin2-p-caja--info fin2-vinc">' + U.ico('enlace', 16) + '<div><b>' + (r.data.empate ? 'Hay ' + l.length + ' operaciones registradas iguales: elige cuál es' : 'Ya está registrada') + '.</b> ' +
+        (m.estado === 'CONFIRMADO' ? 'Este movimiento ya está clasificado y además coincide con lo registrado: si es el mismo dinero, vincúlalos (si no, se cuenta dos veces).' : 'Vincúlalo con lo registrado: toma su cliente, obligación y período, sin volver a escribirlos.') +
+        '<ul class="fin2-vinc__lista">' + l.slice(0, 4).map(function (c) {
+          return '<li><span>' + txt(c.fecha) + ' · ' + plata(c.monto) + ' · ' + txt(c.tercero || '') + '<small>' + txt(c.resumen || '') + ' · ' + txt((c.motivos || []).join(' · ')) + '</small></span>' +
+            U.boton({ texto: 'Vincular con este registro', icono: 'enlace', sm: true, variante: 'primario', clase: 'js-finm-vincular', datos: { op: c.operacion_id, v: c.version, cap: 'CONCILIAR' } }) + '</li>';
+        }).join('') + '</ul></div></div>';
+      x_.aplicarCapacidades(z);
+    });
+  }
+  function vincularDesdePanel(el, b) {
+    var id = el.querySelector('.fin2-p').dataset.id, m = movDe(id);
+    var sig = vecino(id, 1);
+    b.disabled = true;
+    x_.api('finanzasConciliar', { idempotency_key: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random(), movimientos: [{ id: id, expected_version: m ? m.version : undefined }], operaciones: [{ id: b.dataset.op, expected_version: Number(b.dataset.v) }] }).then(function (r) {
+      b.disabled = false;
+      if (!r || !r.ok) { aviso((r && r.message) || 'No se pudo vincular.'); return; }
+      aviso('Vinculado con lo registrado: un solo hecho.');
+      recargar().then(function () {
+        var prox = sig && movDe(sig.id) ? sig.id : (visibles()[0] || {}).id;
+        if (prox && prox !== id) cambiarPanel(prox); else if (panel_) { panel_.api.cerrar(); aviso('Listo: no quedan más en esta vista.'); }
+      });
+    });
   }
   function marcarAbierto() {
     document.querySelectorAll('.fin2-mov--abierto').forEach(function (e) { e.classList.remove('fin2-mov--abierto'); });
@@ -737,6 +786,8 @@
       var b = ev.target.closest('button');
       if (!b) return;
       var p = el.querySelector('.fin2-p');
+      if (b.classList.contains('js-finm-vincular')) { vincularDesdePanel(el, b); return; }
+      if (b.classList.contains('js-finm-ir-conc')) { if (panel_) panel_.api.cerrar(); x_.ir('conciliacion', { periodo: mov_.periodo }); return; }
       if (b.classList.contains('js-finm-p-ok')) guardarPanel(p, false);
       else if (b.classList.contains('js-finm-p-ok-sig')) guardarPanel(p, true);
       else if (b.classList.contains('js-finm-p-sig')) { var s = vecino(p.dataset.id, 1); if (s) cambiarPanel(s.id); }

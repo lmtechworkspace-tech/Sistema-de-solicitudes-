@@ -15,6 +15,8 @@
   var x_ = null;
   var hoy = new Date();
   var est_ = { anio: hoy.getFullYear(), empresa: '', mes: hoy.getMonth(), modo: 'comparar', datos: null, todas: false };
+  // I12.2/I12.4: al cerrarse la bóveda, la pantalla olvida las cifras que tenía cargadas.
+  document.addEventListener('sigso-fin-cerrada', function () { est_.datos = null; });
   var MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   var MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   var PESO = '$', MENOS = '−';
@@ -33,12 +35,12 @@
 
   function ver(x) {
     x_ = x; enlazar();
-    if (est_.modo === 'editar' && !est_.empresa) est_.empresa = 'HomePymes';
+    if (est_.modo === 'editar' && !est_.empresa) est_.empresa = (est_.datos && est_.datos.empresas && est_.datos.empresas[0]) || 'HomePymes';
     var t = x.turno();
     x.pagina(x.cab('Presupuesto', controles()) + U.esqueleto('tabla', 10));
     x.api('finanzasPresupuesto', { anio: est_.anio, empresa: est_.empresa }).then(function (r) {
       if (!x.vigente(t)) return;
-      if (!r || !r.ok) { if (r && !r.boveda_cerrada) x.pagina(x.cab('Presupuesto', controles()) + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: r.message || '' }) })); return; }
+      if (!r || !r.ok) { if (r && !r.boveda_cerrada) x.pagina(x.cab('Presupuesto', controles()) + U.card({ cuerpo: U.vacio({ accion: '<button type="button" class="sx2-boton sx2-boton--secundario sx2-boton--sm js-fin-reintentar">Reintentar</button>', icono: 'alerta', titulo: 'No se pudo cargar', texto: r.message || '' }) })); return; }
       est_.datos = r.data;
       // Hasta que se elija otro, el mes es el último con movimientos (el mes en curso suele estar vacío).
       if (!est_.mesElegido && r.data.ultimo_mes_con_datos !== null && r.data.ultimo_mes_con_datos !== undefined && r.data.ultimo_mes_con_datos < est_.mes) est_.mes = r.data.ultimo_mes_con_datos;
@@ -48,7 +50,7 @@
 
   function controles() {
     var anios = [est_.anio - 1, est_.anio, est_.anio + 1];
-    var emps = (est_.datos && est_.datos.empresas) || ['HomePymes', 'Homeconsulting', 'HomePrevise', 'GDE', 'RLD', 'Virtual Base'];
+    var emps = (est_.datos && est_.datos.empresas) || [];
     return U.segmento([{ id: 'comparar', texto: 'Comparar', icono: 'grafico' }, { id: 'editar', texto: 'Editar', icono: 'editar' }], est_.modo, 'js-finp-modo') +
       '<select class="fin2-input fin2-input--sm js-finp-anio" aria-label="Año">' + anios.map(function (a) { return '<option' + (a === est_.anio ? ' selected' : '') + '>' + a + '</option>'; }).join('') + '</select>' +
       '<select class="fin2-input fin2-input--sm js-finp-emp" aria-label="Empresa">' + (est_.modo === 'editar' ? '' : '<option value="">Grupo (suma)</option>') +
@@ -69,9 +71,22 @@
     var w = Math.min(pct, 150) / 150 * 100;
     return '<span class="fin2-ejec"><i class="sx2-tono-' + tono + '" style="width:' + w + '%"></i><b style="left:' + (100 / 150 * 100) + '%"></b></span><span class="fin2-ayuda">' + pct + ' %</span>';
   }
+  /** I10.1 · Contra qué versión se compara: aprobada (quién y cuándo) o heredada (procedencia, sin aprobación inventada). */
+  function versionComparada(d) {
+    var v = d.versiones || [];
+    if (!v.length) return '';
+    return '<p class="fin2-ayuda fin2-alcance">Se compara contra: ' + v.map(function (x) {
+      return txt(x.empresa) + ' v' + x.version + (x.heredado
+        ? ' ' + U.badge('Heredada', 'alerta') + ' <span title="' + txt(x.procedencia || '') + '">sin aprobación registrada' + (x.cargado_por ? '; la cargó ' + txt(x.cargado_por) + (x.cargado_en ? ' el ' + txt(String(x.cargado_en).slice(0, 10)) : '') : '') + '</span>'
+        : ' aprobada por ' + txt(x.por || '—') + (x.en ? ' el ' + txt(String(x.en).slice(0, 10)) : ''));
+    }).join(' · ') + '.</p>';
+  }
   function pintarComparar() {
     var d = est_.datos, m = est_.mes;
-    var acum = function (arr) { return suma(arr.slice(0, m + 1)); };
+    // I10.1 · El acumulado del año suma solo los meses con cartolas (los mismos en presupuesto y real).
+    var conDatos = (d.meses_con_datos || []).filter(function (i) { return i <= m; });
+    var acum = function (arr) { return conDatos.reduce(function (t, i) { return t + (arr[i] || 0); }, 0); };
+    var rango = conDatos.length ? MESES_L[conDatos[0]] + (conDatos.length > 1 ? '–' + MESES_L[conDatos[conDatos.length - 1]] : '') : '';
     var tot = { INGRESO: { pm: 0, rm: 0, pa: 0, ra: 0 }, EGRESO: { pm: 0, rm: 0, pa: 0, ra: 0 } };
     var filas = d.filas.filter(function (f) { return est_.todas || suma(f.ppto) || suma(f.real); });
     d.filas.forEach(function (f) { var o = tot[f.tipo]; o.pm += f.ppto[m]; o.rm += f.real[m]; o.pa += acum(f.ppto); o.ra += acum(f.real); });
@@ -90,24 +105,30 @@
         '<td class="fin2-num fin2-der fin2-sep">' + plata(o.pa) + '</td><td class="fin2-num fin2-der">' + plata(o.ra) + '</td><td class="fin2-num fin2-der sx2-tono-' + da.tono + ' fin2-desv">' + da.txt + '</td></tr>';
     };
     var kres = desvio(resM.r, resM.p, 'INGRESO'), kacu = desvio(resA.r, resA.p, 'INGRESO');
+    var bor = d.borrador && d.borrador.estado === 'BORRADOR' ? d.borrador : null;
     x_.pagina(x_.cab('Presupuesto', controles()) +
-      (!d.cargado ? '<div class="fin2-cinta sx2-entra">' + U.ico('info', 16) + '<span><b>No hay presupuesto ' + d.anio + ' cargado' + (d.empresa ? ' para ' + txt(d.empresa) : '') + '.</b> Lo real se muestra igual; cárgalo en «Editar» (por empresa).</span>' +
+      (bor ? '<div class="fin2-cinta fin2-cinta--alerta sx2-entra">' + U.ico('alerta', 16) + '<span><b>Versión ' + bor.version + ' en borrador</b> (' + txt(bor.por || '') + '): no se compara hasta aprobarla. ' +
+        (bor.requiere_validacion ? txt(bor.requiere_validacion) + ' ' : '') + 'Lo que ves abajo es la versión aprobada' + (d.cargado ? '' : ' (todavía no hay)') + '.</span>' +
+        U.boton({ texto: 'Aprobar versión ' + bor.version, icono: 'check', variante: 'primario', sm: true, clase: 'js-finp-aprobar', datos: { v: bor.version, val: bor.requiere_validacion ? '1' : '', cap: 'PRESUPUESTO' } }) + '</div>' : '') +
+      (d.base_no_comparable ? '<div class="fin2-cinta sx2-entra">' + U.ico('info', 16) + '<span>' + txt(d.base_no_comparable) + '</span></div>' : '') +
+      (!d.cargado && !bor ? '<div class="fin2-cinta sx2-entra">' + U.ico('info', 16) + '<span><b>No hay presupuesto ' + d.anio + ' cargado' + (d.empresa ? ' para ' + txt(d.empresa) : '') + '.</b> Lo real se muestra igual; cárgalo en «Editar» (por empresa).</span>' +
         U.boton({ texto: 'Cargar presupuesto', icono: 'editar', variante: 'primario', sm: true, clase: 'js-finp-ir-editar' }) + '</div>' : '') +
-      (d.primer_mes_con_datos !== null && d.primer_mes_con_datos > 0 && m >= d.primer_mes_con_datos && d.cargado
-        ? '<div class="fin2-cinta sx2-entra">' + U.ico('alerta', 16) + '<span>Los movimientos de ' + d.anio + ' empiezan en <b>' + MESES_L[d.primer_mes_con_datos] + '</b>: el «año a ' + MESES_L[m] + '» compara también los meses anteriores, que no tienen cartolas cargadas. Mira la columna del mes.</span></div>' : '') +
+      (d.cargado && conDatos.length < m + 1
+        ? '<div class="fin2-cinta sx2-entra">' + U.ico('info', 16) + '<span>El acumulado compara <b>' + conDatos.length + ' de ' + (m + 1) + ' meses</b>' + (rango ? ' (' + txt(rango) + ')' : '') + ': solo los meses con cartolas cargadas, en presupuesto y en real.</span></div>' : '') +
+      versionComparada(d) +
       (d.primer_mes_con_datos !== null && m < d.primer_mes_con_datos
         ? '<div class="fin2-cinta sx2-entra">' + U.ico('info', 16) + '<span>No hay cartolas cargadas de ' + MESES_L[m] + ' ' + d.anio + ': lo real aparece en cero.</span></div>' : '') +
       '<div class="sx2-fila-kpis fin2-kpis5">' +
         U.kpi({ etiqueta: 'Ingresos de ' + MESES_L[m], valor: plata(tot.INGRESO.rm), icono: 'dinero', i: 0, tendencia: tot.INGRESO.pm ? { texto: Math.round(tot.INGRESO.rm / tot.INGRESO.pm * 100) + ' % de lo presupuestado', tono: tot.INGRESO.rm >= tot.INGRESO.pm ? 'ok' : 'critico' } : null }) +
         U.kpi({ etiqueta: 'Gastos de ' + MESES_L[m], valor: plata(tot.EGRESO.rm), icono: 'recibo', i: 1, tendencia: tot.EGRESO.pm ? { texto: Math.round(tot.EGRESO.rm / tot.EGRESO.pm * 100) + ' % de lo presupuestado', tono: tot.EGRESO.rm <= tot.EGRESO.pm ? 'ok' : 'critico' } : null }) +
         U.kpi({ etiqueta: 'Resultado de ' + MESES_L[m], valor: plata(resM.r), icono: 'tendencia', i: 2, tendencia: resM.p ? { texto: 'presupuesto ' + plata(resM.p), tono: kres.tono } : null }) +
-        U.kpi({ etiqueta: 'Resultado del año a ' + MESES_L[m], valor: plata(resA.r), icono: 'calendario', i: 3, tendencia: resA.p ? { texto: 'presupuesto ' + plata(resA.p), tono: kacu.tono } : null }) +
+        U.kpi({ etiqueta: 'Resultado del año a ' + MESES_L[m] + (conDatos.length < m + 1 ? ' (' + conDatos.length + ' meses)' : ''), valor: plata(resA.r), icono: 'calendario', i: 3, tendencia: resA.p ? { texto: 'presupuesto ' + plata(resA.p), tono: kacu.tono } : null }) +
       '</div>' +
       U.card({ sinRelleno: true, cuerpo:
         '<div class="fin2-tabla-barra"><span class="fin2-ayuda">Ingresos: más que lo presupuestado es bueno. Gastos: más que lo presupuestado es malo. Los gastos compartidos cuentan la parte de cada empresa.</span>' +
           '<label class="fin2-ayuda" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="js-finp-todas"' + (est_.todas ? ' checked' : '') + '>Ver todas las cuentas</label></div>' +
         '<div class="fin2-tabla-envoltura"><table class="fin2-tabla fin2-ppto"><thead>' +
-          '<tr><th rowspan="2">Cuenta</th><th colspan="4" class="fin2-cen">' + txt(MESES_L[m]) + '</th><th colspan="3" class="fin2-cen fin2-sep">Año a ' + txt(MESES_L[m]) + '</th></tr>' +
+          '<tr><th rowspan="2">Cuenta</th><th colspan="4" class="fin2-cen">' + txt(MESES_L[m]) + '</th><th colspan="3" class="fin2-cen fin2-sep">Año a ' + txt(MESES_L[m]) + (conDatos.length < m + 1 ? ' <small>(' + conDatos.length + ' meses con datos)</small>' : '') + '</th></tr>' +
           '<tr><th class="fin2-der">Presupuesto</th><th class="fin2-der">Real</th><th class="fin2-der">Diferencia</th><th>Ejecución</th><th class="fin2-der fin2-sep">Presupuesto</th><th class="fin2-der">Real</th><th class="fin2-der">Diferencia</th></tr>' +
         '</thead><tbody>' + seccion('INGRESO', 'Ingresos') + seccion('EGRESO', 'Gastos') +
           '<tr class="fin2-tot fin2-res"><td>Resultado</td><td class="fin2-num fin2-der">' + plata(resM.p) + '</td><td class="fin2-num fin2-der">' + plata(resM.r) + '</td><td class="fin2-num fin2-der sx2-tono-' + kres.tono + ' fin2-desv">' + kres.txt + '</td><td></td>' +
@@ -122,8 +143,8 @@
     var cab = '<tr><th>Cuenta</th>' + MESES.map(function (m) { return '<th class="fin2-der">' + m + '</th>'; }).join('') + '<th class="fin2-der">Total año</th><th></th></tr>';
     var fila = function (f) {
       return '<tr class="js-finp-fila" data-tipo="' + f.tipo + '" data-cuenta="' + txt(f.cuenta) + '"><td class="fin2-ppto-cta">' + txt(f.cuenta) + '</td>' +
-        f.ppto.map(function (v, i) { return '<td><input class="fin2-input fin2-input--sm fin2-celda js-finp-celda" inputmode="numeric" data-i="' + i + '" value="' + (v ? v.toLocaleString('es-CL') : '') + '" aria-label="' + txt(f.cuenta) + ' ' + MESES_L[i] + '"></td>'; }).join('') +
-        '<td class="fin2-num fin2-der js-finp-total"><b>' + plata(suma(f.ppto)) + '</b></td>' +
+        (d.hay_borrador ? f.borrador : f.ppto).map(function (v, i) { return '<td><input class="fin2-input fin2-input--sm fin2-celda js-finp-celda" inputmode="numeric" data-i="' + i + '" value="' + (v ? v.toLocaleString('es-CL') : '') + '" aria-label="' + txt(f.cuenta) + ' ' + MESES_L[i] + '"></td>'; }).join('') +
+        '<td class="fin2-num fin2-der js-finp-total"><b>' + plata(suma(d.hay_borrador ? f.borrador : f.ppto)) + '</b></td>' +
         '<td>' + U.boton({ soloIcono: true, icono: 'copiar', sm: true, variante: 'fantasma', titulo: 'Repetir el primer mes con valor en todo el año', clase: 'js-finp-repetir' }) + '</td></tr>';
     };
     var sec = function (tipo, titulo) {
@@ -149,10 +170,11 @@
       if (meses.some(function (v) { return v; })) lineas.push({ tipo: tr.dataset.tipo, cuenta: tr.dataset.cuenta, meses: meses });
     });
     b.disabled = true;
-    x_.api('finanzasGuardarPresupuesto', { anio: est_.anio, empresa: est_.empresa, lineas: lineas }).then(function (r) {
+    var vb = est_.datos && est_.datos.borrador ? est_.datos.borrador.version : undefined;
+    x_.api('finanzasGuardarPresupuesto', { anio: est_.anio, empresa: est_.empresa, lineas: lineas, expected_version: vb }).then(function (r) {
       b.disabled = false;
       if (!r || !r.ok) { aviso((r && r.message) || 'No se pudo guardar.'); return; }
-      aviso('Presupuesto ' + r.data.anio + ' de ' + r.data.empresa + ' guardado: ingresos ' + plata(r.data.ingresos_anio) + ' y gastos ' + plata(r.data.egresos_anio) + ' en el año.');
+      aviso('Borrador del presupuesto ' + r.data.anio + ' de ' + r.data.empresa + ' guardado (falta aprobarlo): ingresos ' + plata(r.data.ingresos_anio) + ' y gastos ' + plata(r.data.egresos_anio) + ' en el año.');
       est_.modo = 'comparar'; ver(x_);
     });
   }
@@ -181,6 +203,16 @@
       else if (b.classList.contains('js-finp-ir-editar')) { est_.modo = 'editar'; ver(x_); }
       else if (b.classList.contains('js-finp-cancelar')) { est_.modo = 'comparar'; ver(x_); }
       else if (b.classList.contains('js-finp-guardar')) { guardar(b); }
+      else if (b.classList.contains('js-finp-aprobar')) {
+        if (!est_.empresa) { aviso('Elige la empresa del presupuesto para aprobarlo.'); return; }
+        U.confirmar({ titulo: 'Aprobar el presupuesto ' + est_.anio + ' de ' + est_.empresa, texto: (b.dataset.val ? 'Tiene valores que se repiten igual todos los meses (venían así de la planilla): confirma que los revisaste. ' : '') + 'Desde ahora esta versión es la que se compara con lo real; la anterior queda en el historial.', boton: 'Aprobar' }).then(function (si) {
+          if (!si) return;
+          x_.api('finanzasAprobarPresupuesto', { anio: est_.anio, empresa: est_.empresa, expected_version: Number(b.dataset.v), confirmo_validacion: !!b.dataset.val }).then(function (r) {
+            if (!r || !r.ok) { aviso((r && r.message) || 'No se pudo aprobar.'); return; }
+            aviso('Presupuesto aprobado (versión ' + r.data.version + ').'); ver(x_);
+          });
+        });
+      }
       else if (b.classList.contains('js-finp-repetir')) {
         var tr = b.closest('tr'), celdas = tr.querySelectorAll('.js-finp-celda');
         var base = Array.prototype.map.call(celdas, function (i) { return num(i.value); }).filter(function (v) { return v; })[0] || 0;

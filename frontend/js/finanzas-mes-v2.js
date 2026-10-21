@@ -25,7 +25,7 @@
     x.pagina(x.cab('El mes') + U.esqueleto('tarjetas', 3));
     x.api('finanzasElMes', { periodo: elegido_ ? periodo_ : '' }).then(function (r) {
       if (!x.vigente(t)) return;
-      if (!r || !r.ok) { if (r && !r.boveda_cerrada) x.pagina(x.cab('El mes') + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: (r && r.message) || '' }) })); return; }
+      if (!r || !r.ok) { if (r && !r.boveda_cerrada) x.pagina(x.cab('El mes') + U.card({ cuerpo: U.vacio({ accion: '<button type="button" class="sx2-boton sx2-boton--secundario sx2-boton--sm js-fin-reintentar">Reintentar</button>', icono: 'alerta', titulo: 'No se pudo cargar', texto: (r && r.message) || '' }) })); return; }
       periodo_ = r.data.periodo;
       pintar(r.data);
     });

@@ -337,3 +337,10 @@ a.sb-manual { text-decoration: none; }
 .sb-fila .sb-n2 { flex: 1; }
 .sb-fila:hover .sb-pill { visibility: hidden; }
 .sb-fila:not(:has(.sb-quitar)):hover .sb-pill { visibility: visible; }
+
+/* Finanzas (corrección v2 I08.2): su navegación vive en esta columna; basta un ancho de 244 px
+   (orientativo 220–248) para dejar más espacio de trabajo. Solo en escritorio y con el panel abierto. */
+@media (min-width: 1024px) {
+  #plataforma-sidebar[data-sb-modulo="finanzas"]:not(.plataforma-sidebar--colapsado) .sb-panel-caja,
+  #plataforma-sidebar[data-sb-modulo="finanzas"] .sb-panel { width: 244px; }
+}

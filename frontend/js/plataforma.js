@@ -1417,7 +1417,8 @@
     proyectos: function (id) { var m = moduloProyectos_(); return m && m.irAItem && m.irAItem(id); },
     novedades: function (id) { return window.SigsoNovedades && window.SigsoNovedades.irAItem && window.SigsoNovedades.irAItem(id); },
     pausas_coordinacion: function (id) { return window.SigsoCoordinacion && window.SigsoCoordinacion.irAItem && window.SigsoCoordinacion.irAItem(id); },
-    hompy: function (id) { return window.SigsoHompy && window.SigsoHompy.irAItem(id); }
+    hompy: function (id) { return window.SigsoHompy && window.SigsoHompy.irAItem(id); },
+    finanzas: function (id) { return window.SigsoFinanzas && window.SigsoFinanzas.irAItem && window.SigsoFinanzas.irAItem(id); }
   };
   IDS_DEPARTAMENTO.forEach(function (dep) { IR_A_ITEM_POR_MODULO[dep] = function (id) { var m = moduloDepartamento_(dep); return m && m.irAItem(id); }; });
 

@@ -611,6 +611,11 @@
 
   // --- edición en la celda ------------------------------------------------------------------
   var editando_ = null;
+  document.addEventListener('click', function (ev) {
+    var a = ev.target.closest && ev.target.closest('.js-ci2-a-finanzas');
+    if (!a) return;
+    try { var k = 'sigso_fin_contexto'; var o = JSON.parse(sessionStorage.getItem(k) || '{}') || {}; o.fuente_ci = a.getAttribute('data-id'); sessionStorage.setItem(k, JSON.stringify(o)); } catch (e) { /* sin storage: Finanzas abre normal */ }
+  });
   function abrirEditor(td) {
     if (editando_) cerrarEditor(true);
     var tr = td.parentNode, id = tr.getAttribute('data-id'), col = td.getAttribute('data-col');
@@ -719,6 +724,8 @@
       U.campo('Observaciones (SIGSO)', '<textarea class="sx2-input" name="observaciones" rows="2"' + (reg ? '' : ' disabled') + '>' + U.esc(x ? x.observaciones : '') + '</textarea>') +
       '<div hidden><datalist id="ci2-dlf-__cliente">' + (cfg_.clientes || []).map(function (c) { return '<option value="' + U.esc(etiquetaCliente(c)) + '"></option>'; }).join('') + '</datalist>' +
         m.columnas.filter(function (c) { return c.sugerencias && c.sugerencias.length; }).map(function (c) { return '<datalist id="ci2-dlf-' + U.esc(c.clave) + '">' + c.sugerencias.map(function (s) { return '<option value="' + U.esc(s) + '"></option>'; }).join('') + '</datalist>'; }).join('') + '</div>' +
+      // Corrección v2 de Finanzas (I05.5): el pago de IVA o imposiciones se registra en Finanzas reutilizando esta fila (sin volver a escribirla).
+      (x && (m.clave === 'IVA' || m.clave === 'PAGO_IMPOSICIONES') ? '<p class="sx2-tenue" style="font-size:.8125rem"><a href="#/finanzas" class="sx2-enlace js-ci2-a-finanzas" data-id="' + U.esc(x.registro_id) + '">Registrar el pago en Finanzas</a> · se abre con el cliente, el período, el concepto y el monto de esta fila (pide el código de la bóveda).</p>' : '') +
       (x ? '<div class="ci2-historial js-ci2-historial"><span class="sx2-campo__et">Historial</span><p class="sx2-tenue">Cargando…</p></div>' : '');
     var e = x ? estadoDe(m, x.estado) : null;
     U.formulario({
