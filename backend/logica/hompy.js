@@ -223,7 +223,8 @@ function traje_(db, salidas, eventos) {
     h.push({ fecha: s.fecha_cierre || '', estado: s.datos.estado_traje, nota: s.datos.nota_traje || '', fuente: 'SALIDA', por: s.cerrado_por || '',
       evento_id: s.evento_id, titulo: e ? e.titulo : '', usado_por: s.datos.traje || '' });
   });
-  h.sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+  // En el mismo segundo manda lo anotado a mano: es la corrección explícita del reporte.
+  h.sort((a, b) => (a.fecha !== b.fecha ? (a.fecha < b.fecha ? 1 : -1) : (a.fuente === b.fuente ? 0 : (a.fuente === 'MANUAL' ? -1 : 1))));
   const actual = h[0] || { estado: 'BUENO', fecha: '', nota: '', fuente: 'INICIAL' };
   return { estado: actual.estado, fecha: actual.fecha, nota: actual.nota, fuente: actual.fuente, titulo: actual.titulo || '', historial: h.slice(0, 40) };
 }
