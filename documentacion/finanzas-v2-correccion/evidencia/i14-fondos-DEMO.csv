@@ -1,0 +1,14 @@
+﻿Exportación;Fondos por gestión
+Filtros;2026-10 · grupo
+Corte;2026-10-21
+Base;Caja bruta / registros
+Moneda;CLP (pesos chilenos)
+Estado de los datos;PROVISIONAL
+Revisión de datos;f2da1c54-16
+Versión de reglas;—
+Generado por;Operadora Demo
+Confidencial;Datos de la bóveda de Finanzas
+
+Cliente;Gestión;Obligación;Período;Estado;Saldo inicial;Recibido;Reintegros;Pagado;Devuelto;Reasignado (neto);Saldo;Calidad
+CONSTRUCTORA NORTE SPA;b81f8fe3-6ffe-4c6a-992c-6356ecf1e280;Imposiciones;2026-08;ABIERTA;0;0;0;0;0;0;0;Parcial (sin saldo inicial)
+CONSTRUCTORA NORTE SPA;;(sin gestión);;;0;3900000;0;1850000;0;0;2050000;Parcial (sin saldo inicial)

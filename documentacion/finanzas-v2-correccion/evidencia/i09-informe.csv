@@ -1,0 +1,40 @@
+﻿Exportación;Informe del mes
+Filtros;2026-10 · grupo
+Corte;2026-10-20
+Base;Caja bruta
+Moneda;CLP (pesos chilenos)
+Estado de los datos;PROVISIONAL
+Revisión de datos;b04a82b3-0
+Versión de reglas;v1
+Generado por;Operadora Demo
+Confidencial;Datos de la bóveda de Finanzas
+
+Sección;Concepto;Valor (CLP);Estado;Comparación o detalle;Definición o nota
+Indicador;Cobros propios;976000;Provisoria;Mes anterior: +$143.000 (+17,2 %) (sin calificar) · Año anterior: Sin base comparable · Presupuesto: +$76.000 (+8,4 %) (sin calificar);Suma de «Ingreso de la empresa» confirmados del mes (banco y registro sin conciliar), sin compensaciones. Lo registrado que podría ser el mismo dinero que un movimiento del banco ya clasificado no se suma: cuenta el banco y lo registrado queda como «pendiente de identidad». Fuentes: Movimientos del banco confirmados y operaciones registradas aún sin su banco Excluye: Fondos de clientes, traspasos, préstamos, compensaciones y ventas facturadas que no se han cobrado Fecha: Fecha efectiva del movimiento
+Indicador;Pagos propios;475000;Provisoria;Mes anterior: −$1.775.000 (-78,9 %) (sin calificar) · Año anterior: Sin base comparable · Presupuesto: −$1.775.000 (-78,9 %) (sin calificar);"Suma de «Gasto de la empresa» confirmados del mes; un gasto compartido cuenta solo la parte de la empresa. Fuentes: Movimientos del banco confirmados y operaciones registradas aún sin su banco Excluye: Pagos por cuenta de clientes, traspasos, préstamos, la parte de otras empresas en gastos compartidos y gastos devengados aún no pagados Fecha: Fecha efectiva del movimiento"
+Indicador;Flujo propio;501000;Provisoria;Mes anterior: +$1.918.000 (cambió de signo) · Año anterior: Sin base comparable;Cobros propios − pagos propios. No es utilidad contable: la plata de clientes, los traspasos y los préstamos van aparte. Fuentes: Cobros propios y pagos propios del mismo mes Excluye: Todo lo ajeno (fondos de clientes) y lo interno (traspasos, préstamos). No es utilidad contable Fecha: Fecha efectiva del movimiento
+Indicador;Fondos de clientes recibidos;1800000;Provisoria;Mes anterior: +$900.000 (+100 %) (sin calificar) · Año anterior: Sin base comparable;Plata que los clientes mandaron para sus obligaciones (no es ingreso). Fuentes: Movimientos clasificados como fondo de cliente recibido Excluye: Cobros propios Fecha: Fecha efectiva del movimiento
+Indicador;Pagado por cuenta de clientes;100000;Provisoria;Mes anterior: −$770.000 (-88,5 %) (sin calificar) · Año anterior: Sin base comparable;Pagos hechos con la plata de los clientes (no es gasto). Fuentes: Movimientos clasificados como pago por cuenta de clientes Excluye: Pagos propios Fecha: Fecha efectiva del movimiento
+Indicador;Saldo bancario al corte;3084000;Determinada;;Último saldo de cada cuenta bancaria incluida en sus cartolas hasta el corte (fecha del banco), con la cobertura de cada una. Solo cuentas bancarias: no incluye caja chica. No es, por sí solo, plata propia. Fuentes: Último saldo de cada cartola cargada Excluye: Caja chica y efectivo fuera del banco Fecha: Fecha del banco (corte)
+Indicador;Fondos administrados de clientes;870000;Provisoria;;Por cliente: saldo inicial aprobado + recibido − pagado. Se suman por separado los saldos a favor y los déficit (el déficit de uno no reduce lo de otro). Fuentes: Saldos iniciales aprobados, fondos recibidos y pagados por cuenta de cada cliente Excluye: Cobros propios Fecha: Corte del informe
+Indicador;Disponibilidad propia;;No determinable;;Saldo bancario al corte − suma de los saldos A FAVOR de cada cliente. Solo se determina con cartolas completas al corte, saldos iniciales aprobados de todos los clientes con fondos, sin importes por clasificar y sin posibles duplicados. Si falta algo: «no determinable» (la resta se muestra aparte como referencia, no como disponibilidad). Fuentes: Saldo bancario al corte y fondos a favor de clientes Excluye: Ninguna resta si faltan datos: queda no determinable Fecha: Corte del informe
+Indicador;Meses de caja;;No determinable;;Disponibilidad propia ÷ pagos propios promedio de los últimos 3 meses con pagos. Solo con disponibilidad propia determinada. Fuentes: Disponibilidad propia y pagos propios de los últimos 3 meses con pagos Excluye: — Fecha: Corte del informe
+Calidad;PENDIENTES;1350000;PROVISIONAL;1 movimiento(s) sin revisar por $1.350.000.;
+Calidad;CONFLICTO_IDENTIDAD;357000;PROVISIONAL;1 operación(es) registrada(s) por $357.000 podrían ser el mismo dinero que un movimiento del banco ya clasificado: cuenta el banco y lo registrado queda aparte hasta vincularlos o marcar que son distintos.;
+Calidad;SIN_BANCO;400000;PROVISIONAL;2 operación(es) registradas todavía sin su movimiento del banco ($400.000).;
+Calidad;MES_EN_CURSO;;PROVISIONAL;El mes está en curso (corte 2026-10-20): no se compara como un mes completo.;
+Comentario principal;DATOS_INCOMPLETOS v1;;alerta;Octubre 2026 aún no permite evaluar una mejora: hay $1.350.000 por revisar en 1 movimiento(s), una coincidencia de $357.000 pendiente de vincular y 2 operación(es) por $400.000 sin su movimiento del banco. Completa esas revisiones antes de comparar el flujo.;Mientras tanto no se califican las comparaciones, no se calcula la disponibilidad propia y no se puede afirmar si alcanza para noviembre 2026.
+Comentario principal;ABONOS_SIN_FACTURA v1;2659000;info;$2.659.000 cobrados a clientes todavía no se aplican a una factura.;No es plata en custodia: son cobros propios esperando su factura o su aplicación.
+Comentario principal;OBLIGACIONES v1;;info;Para noviembre 2026: $450.000 en compromisos registrados y ≈ $1.800.000 estimados (Sueldos). No se puede afirmar si alcanza. Obligaciones sin monto conocido: Imposiciones, IVA (F29).;Lo estimado sale del promedio de lo pagado: no es una deuda confirmada.
+Comentario principal;FLUJO_PROPIO v1;501000;info;"El flujo propio de octubre 2026 va en $501.000 (cobros $976.000 − pagos $475.000); contra el mismo tramo de septiembre 2026 (−$1.417.000): +$1.918.000 (cambió de signo), sin calificar. Lo que más movió el flujo: Sueldos +$1.800.000, Servicio Mensual +$143.000, Cuentas Básicas +$89.000.";"Muestra qué conceptos cambiaron; no explica por qué. Mes en curso: 01–20 contra 01–20 de septiembre 2026."
+Comentario;ENTRE_EMPRESAS v1;;info;Entre empresas: GDE le debe $1.000.000 a HomePymes.;"Préstamos y gastos compartidos; cada préstamo se cuenta una vez aunque se vea en las dos cuentas."
+Comentario;FONDOS_CLIENTES v1;870000;info;Hay $870.000 de clientes en custodia (suma de saldos a favor): es plata de ellos, no se puede gastar.;
+Comentario;INGRESOS_VS_PPTO v1;976000;info;Los cobros propios llegan al 108,4 % del presupuesto aprobado de cobros ($976.000 de $900.000), sin calificar.;"Mes en curso: acumulado parcial contra el presupuesto del mes completo; sin regla de distribución aprobada no se evalúa."
+Cascada;Servicio Mensual;976000;cobro;;
+Cascada;Arriendo Mensual;-450000;pago;;
+Cascada;Caja Chica;-25000;pago;;
+Cascada;Flujo propio (suma);501000;Cuadra con el indicador;;
+Cuenta;BCI ···2222 · HomePymes;3084000;Completa;Apertura 2408000 · entradas 2476000 · salidas 1800000;Diferencia 0
+Serie;2026-08;-1536000;;flujo propio;
+Serie;2026-09;-1506000;;flujo propio;
+Serie;2026-10;501000;;flujo propio;

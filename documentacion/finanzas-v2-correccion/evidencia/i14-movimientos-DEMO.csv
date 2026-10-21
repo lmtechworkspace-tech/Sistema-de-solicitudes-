@@ -1,0 +1,17 @@
+﻿Exportación;Movimientos del banco
+Filtros;2026-10 · grupo
+Corte;2026-10-21
+Base;Caja bruta / registros
+Moneda;CLP (pesos chilenos)
+Estado de los datos;PROVISIONAL
+Revisión de datos;f2da1c54-16
+Versión de reglas;—
+Generado por;Operadora Demo
+Confidencial;Datos de la bóveda de Finanzas
+
+ID;Fecha;Empresa;Cuenta;Glosa del banco;N° doc.;Monto (+ entra / − sale);Saldo;Estado;Tipo;Subtipo;Concepto;Cliente;Empresa contraparte;Gestión de fondos;Proyecto;Período obligación;Destino;Reparto;Nota;Detalle del banco;Operaciones conciliadas;Confirmado por
+8d6a2e8e-522b-4eb8-aa1c-7e10fd4c816b;2026-10-02;HomePymes;BCI ···2222;TRANSFER DE ANDES MONTAJE;21;357000;2765000;CONFIRMADO;Ingreso de la empresa;;Servicio Mensual;ANDES MONTAJES INDUSTRIALES SPA;;;;;;;;;;Operadora Demo
+ae20d060-a30e-4537-aa9f-0173f637dee6;2026-10-06;HomePymes;BCI ···2222;TRANSFER DE CONSTRUCTORA NORTE;22;1500000;4265000;CONFIRMADO;Fondo de cliente recibido;RECEPCION;Imposiciones;CONSTRUCTORA NORTE SPA;;;;;;;;;;Operadora Demo
+4e06f4c7-06a9-414e-8446-c346a396e069;2026-10-08;HomePymes;BCI ···2222;PAGO CUENTAS VIA INTERNET;23;-1350000;2915000;PENDIENTE;;;;;;;;;;;;;;Operadora Demo
+d120b12e-5bd8-40d8-8a1c-e3ca9d998f67;2026-10-10;HomePymes;BCI ···2222;ARRIENDO OFICINA;24;-450000;2465000;PENDIENTE;;;;;;;;;;;;;;Operadora Demo
+0ac1631e-50ca-4055-9ee7-3f39d186a764;2026-10-14;HomePymes;BCI ···2222;TRANSFER DE PANADERIA SOL;25;619000;3084000;PENDIENTE;;;;;;;;;;;;;;Operadora Demo

@@ -1,0 +1,63 @@
+{
+ "nota": "Ensayo por servicios sobre una COPIA de la base de piloto (datos ficticios). Fija el resultado esperado; no es la sesión con operadoras.",
+ "pendientes_al_partir": 8,
+ "t1": {
+  "factura_9101": [
+   0,
+   "Pagada"
+  ],
+  "cobros_elegibles": 1
+ },
+ "t2_t3": {
+  "saldo_gestion": 101739,
+  "pagado_por_destino": [
+   [
+    "Obra A",
+    1258430
+   ],
+   [
+    "Obra B",
+    386260
+   ],
+   [
+    "Obra C",
+    353571
+   ]
+  ],
+  "periodo": "2026-09"
+ },
+ "t4": {
+  "factura_9102": [
+   300000,
+   "Pago parcial"
+  ]
+ },
+ "t5": {
+  "errores_por_fila": [
+   [
+    3,
+    [
+     "fecha"
+    ]
+   ],
+   [
+    4,
+    [
+     "cliente"
+    ]
+   ]
+  ],
+  "validas_tras_corregir": 6,
+  "publicadas": 6,
+  "al_repetir": {
+   "publicadas": 0,
+   "repetidas": 6
+  }
+ },
+ "t6": {
+  "candidato_propuesto": true,
+  "mes_de_la_operacion": "2026-09-30",
+  "conciliacion": "CONCILIADA"
+ },
+ "pendientes_al_terminar": 0
+}

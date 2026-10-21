@@ -1,0 +1,6 @@
+16/10/2026	Movistar		gasto	Cuentas Básicas		89.000
+16/10/2026	Electrica Pacifico	76.111.222-9	ingreso	Servicio Mensual	238.000	
+31/09/2026	Librería Central		gasto	Otros Egresos		23.500
+17/10/2026	Constructora Norte	Constructora Norte	fondo recibido	IVA	640.000	
+17/10/2026	Transportes del Sur	78.222.333-4	ingreso	Servicio Mensual	476.000	
+18/10/2026	Caja chica		gasto	Caja Chica		25.000
