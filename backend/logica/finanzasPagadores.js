@@ -413,5 +413,7 @@ module.exports = {
   importarDetalle, revisarExcelBancos, guardarAlias, aprenderExcelBancos,
   // asegurarTablas_: crea FIN_PAGADORES y FIN_ALIAS si aún no existen (para quien solo las lee).
   asegurarTablas_: () => { db_(); },
-  piezas_, pagadorDe_, sugerirConPagador_, contextoPagadores_, registrarPagador_, leerDetalle, leerExcelBancos, analizarDescripcion_, proponerAlias_, clientePorNombre_
+  piezas_, pagadorDe_, sugerirConPagador_, contextoPagadores_, registrarPagador_, leerDetalle, leerExcelBancos, analizarDescripcion_, proponerAlias_, clientePorNombre_,
+  // v3 (libro del banco): lo que ya se enseñó de cada nombre corto.
+  aliasMapa_: () => aliasMapa_(), huellaAlias_: (a) => huella_('alias', a)
 };

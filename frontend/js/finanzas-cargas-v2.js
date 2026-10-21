@@ -94,6 +94,8 @@
       prog.innerHTML = '<p class="fin2-ayuda">' + hojas.length + ' hoja(s) leídas · reconociendo…</p>';
       return x_.api('finanzasRevisarCartola', { filas: (hojas[0] && hojas[0].filas) || [] }).then(function (rc) {
         if (rc && rc.ok && hojas.length === 1) { mostrarCartola(rc.data, hojas[0].filas, archivo.name, prog); return null; }
+        // v3: el Excel BANCOS se lleva mes a mes al libro del banco (cada fila con su movimiento, su OBS y sus grupos).
+        if (hojas.some(esHojaBancos)) { mostrarBancos(hojas, archivo.name, prog); return null; }
         // 3) Libro SIGECO o BANCOS: staging (nada se publica todavía).
         prog.innerHTML = '<p class="fin2-ayuda">' + hojas.length + ' hoja(s) leídas · cargando sin publicar…</p>';
         return x_.api('finanzasCargarLibro', { hash: rs[0], nombre: archivo.name, hojas: hojas });
@@ -129,6 +131,60 @@
       });
     });
   }
+  // ---- v3: Excel BANCOS → libro del banco ------------------------------------------------
+  function encabezadoBancos(h) {
+    for (var i = 0; i < Math.min(h.filas.length, 40); i++) {
+      var f = (h.filas[i] || []).map(function (c) { return String(c == null ? '' : c).trim().toUpperCase(); });
+      if (f.indexOf('FECHA') !== -1 && f.indexOf('TOTAL') !== -1 && f.indexOf('OBS') !== -1) return { fila: i, cab: f };
+    }
+    return null;
+  }
+  function esHojaBancos(h) { return !!encabezadoBancos(h); }
+  function mesesDeHoja(h) {
+    var e = encabezadoBancos(h); if (!e) return [];
+    var iF = e.cab.indexOf('FECHA'), iT = e.cab.indexOf('TOTAL'), cuenta = {};
+    h.filas.slice(e.fila + 1).forEach(function (f) {
+      var n = Number((f || [])[iF]), t = Number((f || [])[iT]);
+      if (!(n > 30000 && n < 60000) || !t) return;
+      var d = new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * 864e5).toISOString().slice(0, 7);
+      cuenta[d] = (cuenta[d] || 0) + 1;
+    });
+    return Object.keys(cuenta).sort().map(function (m) { return { mes: m, filas: cuenta[m] }; });
+  }
+  function mostrarBancos(hojas, nombre, prog) {
+    var lista = hojas.filter(esHojaBancos);
+    x_.api('finanzasResumenBancos', {}).then(function (rb) {
+      var cuentas = rb && rb.ok ? (rb.data.cuentas || []) : [];
+      prog.innerHTML = cinta('info', '<b>Excel BANCOS · ' + txt(nombre) + '</b>: cada mes se lleva al <b>libro del banco</b>. Cada fila se une a su movimiento de la cartola (o, si ese mes no tiene cartola, entra marcada «sin cartola»), se clasifica como dice la columna OBS y se arman sus grupos de fondos. Repetirlo no duplica nada.') +
+        lista.map(function (h, i) {
+          return '<div class="fin3-hoja" data-i="' + i + '"><b>' + txt(h.nombre) + (h.oculta ? ' <small class="fin2-ayuda">(oculta)</small>' : '') + '</b>' +
+            '<label class="fin2-campo fin2-campo--fila"><span>Cuenta</span><select class="fin2-input fin2-input--sm js-fca-bcta">' + opciones(cuentas.map(function (c) { return [c.id, c.banco + ' ···' + c.ultimos4 + ' · ' + c.empresa]; }), /BCI/i.test(h.nombre) && cuentas[0] ? cuentas[0].id : '', 'Elige la cuenta…') + '</select></label>' +
+            '<span class="fin3-hoja__meses">' + mesesDeHoja(h).map(function (m) { return U.boton({ texto: 'Llevar ' + m.mes + ' (' + m.filas + ')', sm: true, clase: 'js-fca-bmes', datos: { mes: m.mes, i: i, cap: 'MIGRAR' } }); }).join('') + '</span></div>';
+        }).join('') + '<div class="js-fca-bres"></div>';
+      prog.querySelectorAll('.js-fca-bmes').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var h = lista[Number(b.dataset.i)];
+          var cta = prog.querySelector('.fin3-hoja[data-i="' + b.dataset.i + '"] .js-fca-bcta').value;
+          if (!cta) { x_.aviso('Elige a qué cuenta del banco corresponde la hoja.', 'error'); return; }
+          b.disabled = true; b.setAttribute('aria-busy', 'true');
+          x_.api('finanzasLlevarMesBancos', { filas: h.filas, formulas: h.formulas || [], periodo: b.dataset.mes, cuenta_ref: cta, archivo: nombre + ' · ' + h.nombre }).then(function (r) {
+            b.disabled = false; b.removeAttribute('aria-busy');
+            var res = prog.querySelector('.js-fca-bres');
+            if (!r || !r.ok) { res.innerHTML = cinta('critico', txt((r && r.message) || 'No se pudo llevar el mes.')); return; }
+            var d = r.data, gr = d.grupos.filter(function (g) { return g.gestion_id; });
+            res.innerHTML = cinta(d.por_revisar.length || d.sin_banco.length ? 'alerta' : 'ok', '<b>' + txt(d.periodo) + ':</b> ' + d.filas + ' filas · ' + d.emparejadas + ' unidas a la cartola' +
+              (d.creadas_sin_cartola ? ' · ' + d.creadas_sin_cartola + ' sin cartola (no verificadas)' : '') + (d.sin_banco.length ? ' · <b>' + d.sin_banco.length + ' que el banco no trae este mes</b>' : '') +
+              ' · ' + d.clasificadas + ' clasificadas · ' + d.por_revisar.length + ' por revisar · ' + gr.length + ' grupos de fondos.') +
+              (d.sin_banco.length ? '<details class="fin2-p"><summary>Filas de la planilla que no están en el banco de ' + txt(d.periodo) + '</summary><ul class="fin2-lista-saldos">' + d.sin_banco.map(function (s) { return '<li><span>' + txt(s.fecha) + ' · ' + txt(s.alias) + ' · ' + txt(s.obs) + '</span><b>' + txt(String(s.monto)) + '</b></li>'; }).join('') + '</ul></details>' : '') +
+              '<div class="fin2-acciones" style="justify-content:flex-start">' + U.boton({ texto: 'Abrir el libro de ' + d.periodo, icono: 'derecha', sm: true, variante: 'primario', clase: 'js-fca-alibro', datos: { mes: d.periodo } }) + '</div>';
+            res.querySelector('.js-fca-alibro').addEventListener('click', function (ev) { x_.ir('libro', { periodo_libro: ev.currentTarget.dataset.mes }); });
+          });
+        });
+      });
+      x_.aplicarCapacidades(prog);
+    });
+  }
+
   function subirVentas(archivo, prog) {
     var leer = archivo.arrayBuffer();
     if (/\.gz$/i.test(archivo.name)) {

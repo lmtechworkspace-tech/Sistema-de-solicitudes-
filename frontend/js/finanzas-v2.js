@@ -35,15 +35,16 @@
   var cat_ = null, catP_ = null, observador_ = null;
 
   // ---- Áreas y subvistas (FIN-31) ----------------------------------------------------------
+  // v3 «banco primero» (21-10-2026): cinco áreas. El libro del banco es la tabla principal (como el Excel BANCOS);
+  // el registro paralelo, la conciliación aparte, Pendientes y Planificación se retiraron (sus rutas llevan a su reemplazo).
   var AREAS = [
-    { id: 'trabajo', texto: 'Trabajo diario', icono: 'tareas', vistas: [['registro', 'Registro'], ['pendientes', 'Pendientes'], ['mes', 'Seguimiento del mes']] },
-    { id: 'clientes', texto: 'Clientes', icono: 'equipo', vistas: [['clientes', 'Clientes'], ['fondos', 'Fondos de clientes'], ['cobranza', 'Cobranza']] },
-    { id: 'bancos', texto: 'Bancos', icono: 'dinero', vistas: [['bancos', 'Cuentas'], ['conciliacion', 'Conciliación'], ['movimientos', 'Movimientos'], ['cargas', 'Cargas']] },
-    { id: 'plan', texto: 'Planificación', icono: 'diana', vistas: [['presupuesto', 'Presupuesto'], ['gastos', 'Gastos compartidos'], ['prestamos', 'Préstamos'], ['proyectos', 'Proyectos'], ['provisiones', 'Provisiones'], ['proyeccion', 'Compromisos y proyección']] },
-    { id: 'informes', texto: 'Informes', icono: 'grafico', vistas: [['tablero', 'Resumen'], ['exportar', 'Exportación']] },
-    { id: 'cierre', texto: 'Cierre', icono: 'candado', vistas: [['cierre', 'Revisión del período']] },
-    { id: 'config', texto: 'Configuración', icono: 'ajustes', vistas: [['catalogos', 'Catálogos'], ['reglas', 'Reglas'], ['migracion', 'Historia de migración'], ['inicio', 'Seguridad'], ['bitacora', 'Bitácora']] }
+    { id: 'mes', texto: 'El mes', icono: 'calendario', vistas: [['mes', 'El mes']] },
+    { id: 'libro', texto: 'Libro del banco', icono: 'dinero', vistas: [['libro', 'Libro del banco']] },
+    { id: 'clientes', texto: 'Clientes', icono: 'equipo', vistas: [['clientes', 'Clientes'], ['fondos', 'Fondos de clientes'], ['cobranza', 'Facturas y cobranza']] },
+    { id: 'informes', texto: 'Informes', icono: 'grafico', vistas: [['flujo', 'Flujo por mes'], ['tablero', 'Informe del mes'], ['presupuesto', 'Presupuesto'], ['exportar', 'Exportar']] },
+    { id: 'config', texto: 'Configuración', icono: 'ajustes', vistas: [['cargas', 'Subir archivos'], ['cierre', 'Cierre de meses'], ['bancos', 'Cuentas del banco'], ['catalogos', 'Catálogos'], ['reglas', 'Nombres y reglas'], ['inicio', 'Seguridad'], ['bitacora', 'Bitácora']] }
   ];
+  var RETIRADAS = { registro: 'libro', movimientos: 'libro', conciliacion: 'libro', pendientes: 'mes', gastos: 'flujo', prestamos: 'flujo', proyectos: 'flujo', provisiones: 'flujo', proyeccion: 'flujo', migracion: 'cargas' };
   function vistaValida(v) { return AREAS.some(function (a) { return a.vistas.some(function (x) { return x[0] === v; }); }); }
   function nombreVista(v) { for (var i = 0; i < AREAS.length; i++) for (var j = 0; j < AREAS[i].vistas.length; j++) if (AREAS[i].vistas[j][0] === v) return AREAS[i].vistas[j][1]; return ''; }
   /**
@@ -54,7 +55,7 @@
   function registrarArbol() {
     if (!window.SigsoNav) return;
     SigsoNav.registrar('finanzas', { nombre: 'Finanzas', submodulos: AREAS.map(function (a) {
-      return { id: a.id, nombre: a.texto, icono: a.icono, plano: a.vistas.length === 1 ? false : undefined, items: a.vistas.map(function (v) { return { id: v[0], nombre: v[1] }; }) };
+      return { id: a.id, nombre: a.texto, icono: a.icono, plano: a.vistas.length === 1 ? true : undefined, items: a.vistas.map(function (v) { return { id: v[0], nombre: v[1] }; }) };
     }) });
   }
   registrarArbol();
@@ -73,6 +74,8 @@
     mes: ['El mes, paso a paso', 'Qué toca ahora y qué falta para dejar listo el mes, con sus fechas.'],
     // I08.1: sin bajada repetida en la pantalla más usada (la explicación vive en el manual): las filas suben.
     registro: ['Registro diario', ''],
+    flujo: ['Flujo por mes', 'Ingresos, gastos y fondos de clientes, mes a mes, como las hojas FLUJO de la planilla.'],
+    libro: ['Libro del banco', 'Cada movimiento de la cuenta con qué es, de quién y su grupo de fondos, como en la planilla BANCOS.'],
     pendientes: ['Pendientes', 'Lo que falta resolver en todo Finanzas; cada fila abre dónde se resuelve.'],
     tablero: ['Resumen financiero', 'El mes en 30 segundos, con su comparación, su calidad y lo que conviene revisar.'],
     exportar: ['Exportar', 'Descarga los datos en Excel o CSV, con su corte y su estado.'],
@@ -328,23 +331,18 @@
   // --- Bóveda abierta: enrutador de vistas ---------------------------------------------------
   var MODULOS = {
     mes: function () { return window.SigsoFinanzasMes && SigsoFinanzasMes.ver; },
+    libro: function () { return window.SigsoFinanzasLibro && SigsoFinanzasLibro.ver; },
+    flujo: function () { return window.SigsoFinanzasFlujo && SigsoFinanzasFlujo.ver; },
     registro: function () { return window.SigsoFinanzasRegistro && SigsoFinanzasRegistro.ver; },
-    pendientes: function () { return window.SigsoFinanzasPendientes && SigsoFinanzasPendientes.ver; },
     tablero: function () { return window.SigsoFinanzasInformes && SigsoFinanzasInformes.ver; },
     exportar: function () { return window.SigsoFinanzasInformes && SigsoFinanzasInformes.verExportar; },
     bancos: function () { return window.SigsoFinanzasBancos && SigsoFinanzasBancos.verBancos; },
     cargas: function () { return window.SigsoFinanzasCargas && SigsoFinanzasCargas.ver; },
     movimientos: function () { return window.SigsoFinanzasBancos && SigsoFinanzasBancos.verMovimientos; },
-    conciliacion: function () { return window.SigsoFinanzasConciliacion && SigsoFinanzasConciliacion.ver; },
     clientes: function () { return window.SigsoFinanzasClientes && SigsoFinanzasClientes.ver; },
     fondos: function () { return window.SigsoFinanzasFondos && SigsoFinanzasFondos.ver; },
     cobranza: function () { return window.SigsoFinanzasCobranza && SigsoFinanzasCobranza.ver; },
     presupuesto: function () { return window.SigsoFinanzasPresupuesto && SigsoFinanzasPresupuesto.ver; },
-    gastos: function () { return window.SigsoFinanzasPlan && SigsoFinanzasPlan.verGastos; },
-    prestamos: function () { return window.SigsoFinanzasPlan && SigsoFinanzasPlan.verPrestamos; },
-    proyectos: function () { return window.SigsoFinanzasPlan && SigsoFinanzasPlan.verProyectos; },
-    provisiones: function () { return window.SigsoFinanzasPlan && SigsoFinanzasPlan.verProvisiones; },
-    proyeccion: function () { return window.SigsoFinanzasPlan && SigsoFinanzasPlan.verProyeccion; },
     cierre: function () { return window.SigsoFinanzasCierre && SigsoFinanzasCierre.ver; },
     catalogos: function () { return window.SigsoFinanzasConfig && SigsoFinanzasConfig.verCatalogos; },
     reglas: function () { return window.SigsoFinanzasConfig && SigsoFinanzasConfig.verReglas; },
@@ -356,6 +354,8 @@
     catalogo();
     // I05.5: se llegó desde una obligación de Control interno → al Registro, con el pago precompletado.
     if (contexto().fuente_ci && vista_ !== 'registro') vista_ = 'registro';
+    // v3: una pantalla retirada (enlace viejo o vista recordada) abre la que la reemplaza.
+    else if (RETIRADAS[vista_]) vista_ = RETIRADAS[vista_];
     if (vista_ === 'bitacora') return verBitacora();
     publicar();
     var m = MODULOS[vista_] && MODULOS[vista_]();

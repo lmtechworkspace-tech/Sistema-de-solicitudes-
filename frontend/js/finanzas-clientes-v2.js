@@ -15,7 +15,7 @@
 
   var U = UIv2;
   var x_ = null, cat_ = null;
-  var est_ = { d: null, busca: '', filtro: '', f: null };
+  var est_ = { d: null, busca: '', filtro: '', f: null, modo: 'mes', periodo: '', mes: null };
   // I12.2/I12.4: al cerrarse la bóveda, la pantalla olvida las cifras que tenía cargadas.
   document.addEventListener('sigso-fin-cerrada', function () { est_.d = null; est_.f = null; });
 
@@ -28,10 +28,15 @@
     x_ = x; enlazar();
     var t = x.turno();
     x.pagina(x.cab('clientes') + U.esqueleto('tabla', 10));
-    Promise.all([x.catalogo(), x.api('finanzasClientes', { busca: est_.busca, estado: est_.filtro })]).then(function (rs) {
+    // v3: por defecto, los clientes con movimiento en el mes (honorarios, fondos y facturas); «Todos» muestra el catálogo.
+    est_.periodo = x.contexto().periodo_libro || est_.periodo || '';
+    Promise.all([x.catalogo(), x.api('finanzasClientes', { busca: est_.busca, estado: est_.filtro }), x.api('finanzasLibroClientes', { periodo: est_.periodo || new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date()).slice(0, 7) })]).then(function (rs) {
       if (!x.vigente(t)) return;
       cat_ = rs[0];
       var r = rs[1];
+      est_.mes = rs[2] && rs[2].ok ? rs[2].data : null;
+      if (est_.mes && !est_.periodo && !est_.mes.clientes.some(function (c) { return c.filas; }) && est_.mes.meses.length) { est_.periodo = est_.mes.meses[0]; return ver(x); }
+      if (est_.mes) est_.periodo = est_.mes.periodo;
       if (!r || !r.ok) { if (r && !r.boveda_cerrada) x.pagina(x.cab('clientes') + U.card({ cuerpo: U.vacio({ accion: '<button type="button" class="sx2-boton sx2-boton--secundario sx2-boton--sm js-fin-reintentar">Reintentar</button>', icono: 'alerta', titulo: 'No se pudo cargar', texto: (r && r.message) || '' }) })); return; }
       est_.d = r.data;
       pintar();
@@ -39,9 +44,31 @@
       if (abrir) { x.contexto({ cliente_ficha: '' }); ficha(abrir); }
     });
   }
+  function mesLargo(p) { var m = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']; var a = String(p || '').split('-'); return a.length === 2 ? m[Number(a[1]) - 1] + ' ' + a[0] : p; }
+  function modos() {
+    return '<div class="fin3-barra">' + U.segmento([{ id: 'mes', texto: 'Con movimiento en el mes' }, { id: 'todos', texto: 'Todos los clientes' }], est_.modo, 'js-fcl-modo') +
+      (est_.modo === 'mes' && est_.mes ? '<label class="fin2-campo fin2-campo--fila"><span>Mes</span><select class="fin2-input js-fcl-mes">' + opciones((est_.mes.meses.indexOf(est_.periodo) === -1 ? [est_.periodo] : []).concat(est_.mes.meses).map(function (m) { return [m, mesLargo(m)]; }), est_.periodo) + '</select></label>' : '') + '</div>';
+  }
+  function pintarMes() {
+    var l = est_.mes ? est_.mes.clientes : [];
+    var q = est_.busca.toLowerCase();
+    l = l.filter(function (c) { return !q || (c.cliente + ' ' + c.rut).toLowerCase().indexOf(q) !== -1; });
+    var tot = l.reduce(function (t, c) { t.h += c.honorarios; t.r += c.fondos_recibidos; t.p += c.fondos_pagados; t.s += c.fondos_saldo; t.d += c.deuda; return t; }, { h: 0, r: 0, p: 0, s: 0, d: 0 });
+    x_.pagina(x_.cab('clientes') + modos() +
+      '<div class="fin2-ctx"><label class="fin2-busca">' + U.ico('lupa', 14) + '<input class="js-fcl-busca" type="search" placeholder="Nombre o RUT" value="' + txt(est_.busca) + '" aria-label="Buscar cliente"></label><span class="fin2-ayuda">' + l.length + ' cliente(s)</span></div>' +
+      '<div class="fin3-tabla-envoltura"><table class="fin3-libro fin3-clientes"><thead><tr><th>Cliente</th><th class="fin2-der">Honorarios del mes</th><th class="fin2-der">Mandó para obligaciones</th><th class="fin2-der">Se pagó por él</th><th class="fin2-der">Saldo de sus fondos</th><th class="fin2-der">Facturas por cobrar</th></tr></thead><tbody>' +
+      (l.length ? l.map(function (c) {
+        return '<tr class="fin3-fila js-fcl-cli" data-id="' + txt(c.cliente_id) + '" tabindex="0"><td class="fin3-mov"><b>' + txt(c.cliente) + '</b><span class="fin3-glosa">' + txt(c.rut) + (c.filas ? ' · ' + c.filas + ' fila(s) del libro' : '') + '</span></td>' +
+          '<td class="fin2-der fin2-num">' + (c.honorarios ? plata(c.honorarios) : '—') + '</td><td class="fin2-der fin2-num">' + (c.fondos_recibidos ? plata(c.fondos_recibidos) : '—') + '</td><td class="fin2-der fin2-num">' + (c.fondos_pagados ? plata(c.fondos_pagados) : '—') + '</td>' +
+          '<td class="fin2-der fin2-num ' + (c.fondos_saldo < 0 ? 'fin2-neg' : '') + '">' + (c.fondos_saldo ? plata(c.fondos_saldo) : '—') + (c.fondos_parcial && c.fondos_saldo ? '<small class="fin3-sc" title="Falta su saldo inicial: el saldo puede no incluir lo que mandó antes"> parcial</small>' : '') + '</td>' +
+          '<td class="fin2-der fin2-num">' + (c.facturas_abiertas ? plata(c.deuda) + '<small class="fin2-ayuda"> · ' + c.facturas_abiertas + '</small>' : '—') + '</td></tr>';
+      }).join('') : '<tr><td colspan="6">' + U.vacio({ icono: 'persona', titulo: 'Ningún cliente con movimiento este mes', texto: 'Cambia el mes o mira «Todos los clientes».' }) + '</td></tr>') +
+      '</tbody><tfoot><tr><th>Total</th><th class="fin2-der fin2-num">' + plata(tot.h) + '</th><th class="fin2-der fin2-num">' + plata(tot.r) + '</th><th class="fin2-der fin2-num">' + plata(tot.p) + '</th><th class="fin2-der fin2-num">' + plata(tot.s) + '</th><th class="fin2-der fin2-num">' + plata(tot.d) + '</th></tr></tfoot></table></div>');
+  }
   function pintar() {
+    if (est_.modo === 'mes' && est_.mes) return pintarMes();
     var d = est_.d;
-    x_.pagina(x_.cab('clientes') +
+    x_.pagina(x_.cab('clientes') + modos() +
       '<div class="fin2-ctx"><label class="fin2-busca">' + U.ico('lupa', 14) + '<input class="js-fcl-busca" type="search" placeholder="Nombre, RUT, alias o código" value="' + txt(est_.busca) + '" aria-label="Buscar cliente"></label>' +
         '<label class="fin2-campo fin2-campo--fila"><span>Estado</span><select class="fin2-input fin2-input--sm js-fcl-estado">' + opciones(d.estados, est_.filtro, 'Todos') + '</select></label>' +
         '<span class="fin2-ayuda">' + d.total + ' cliente(s) de SIGSO</span></div>' +
@@ -231,8 +258,14 @@
         x_.api('finanzasClientes', { busca: v, estado: est_.filtro }).then(function (r) { if (r && r.ok && document.querySelector('.js-fcl-busca')) { est_.d = r.data; pintar(); var b = document.querySelector('.js-fcl-busca'); b.focus(); b.setSelectionRange(v.length, v.length); } });
       }, 250);
     });
-    raiz.addEventListener('change', function (ev) { if (ev.target.classList.contains('js-fcl-estado')) { est_.filtro = ev.target.value; ver(x_); } });
-    raiz.addEventListener('click', function (ev) { var tr = ev.target.closest('.js-fcl-cli'); if (tr) ficha(tr.dataset.id); });
+    raiz.addEventListener('change', function (ev) {
+      if (ev.target.classList.contains('js-fcl-estado')) { est_.filtro = ev.target.value; ver(x_); }
+      if (ev.target.classList.contains('js-fcl-mes')) { est_.periodo = ev.target.value; x_.contexto({ periodo_libro: ev.target.value }); ver(x_); }
+    });
+    raiz.addEventListener('click', function (ev) {
+      var m = ev.target.closest('.js-fcl-modo'); if (m) { est_.modo = m.dataset.id; pintar(); return; }
+      var tr = ev.target.closest('.js-fcl-cli'); if (tr) ficha(tr.dataset.id);
+    });
     raiz.addEventListener('keydown', function (ev) { var tr = ev.target.closest && ev.target.closest('.js-fcl-cli'); if (tr && ev.key === 'Enter') ficha(tr.dataset.id); });
   }
 

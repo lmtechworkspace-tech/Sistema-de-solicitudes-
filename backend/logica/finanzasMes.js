@@ -74,27 +74,27 @@ function pasos_(periodo, hoy) {
   const cartolasOk = !!(paso('cartolas').ok && paso('cuadra').ok);
   const pasos = [
     {
-      id: 'cartolas', titulo: 'Subir las cartolas del banco', ir: 'bancos', boton: 'Ir a subir cartolas', obligatorio: true,
+      id: 'cartolas', titulo: 'Subir las cartolas del banco', ir: 'cargas', boton: 'Subir la cartola', obligatorio: true,
       que: 'El Excel de la cartola de cada cuenta, del 1 al último día del mes. El sistema revisa que el saldo cuadre antes de guardar.',
       hecho: cartolasOk, avance: null, detalle: [paso('cartolas').detalle, paso('cuadra').detalle].filter(Boolean).join(' · '),
       plazo: plazo_(dia_(sig, 3), hoy, cartolasOk)
     },
     {
-      id: 'detalle', titulo: 'Agregar el detalle del banco', ir: 'bancos', boton: 'Ir a subir el detalle', obligatorio: false,
+      id: 'detalle', titulo: 'Agregar el detalle del banco', ir: 'cargas', boton: 'Subir el detalle', obligatorio: false,
       que: 'El Excel «Mis Movimientos» del BCI. Dice quién transfirió de verdad (muchos clientes pagan desde la cuenta de otra persona) y qué fue a Previred, SII o Tesorería.',
       hecho: c.total > 0 && c.con_detalle >= c.total * 0.8, avance: c.total ? { n: c.con_detalle, total: c.total } : null,
       detalle: c.total ? c.con_detalle + ' de ' + c.total + ' movimientos con nombre completo' + (c.con_detalle && c.con_detalle < c.total ? ' (el detalle no trae los traspasos a otros bancos; es normal que falten algunos)' : '') : 'Primero las cartolas.',
       plazo: plazo_(dia_(sig, 3), hoy, c.total > 0 && c.con_detalle >= c.total * 0.8)
     },
     {
-      id: 'excel', titulo: 'Excel BANCOS (solo mientras se acostumbran)', ir: 'bancos', boton: 'Ir a subir el Excel', obligatorio: false, opcional: true,
-      que: 'Si ese mes también se llenó el Excel BANCOS a mano, súbelo: lo que anotaron queda como propuesta y el sistema aprende quién paga por quién. Cuando ya no lo llenen, sáltate este paso.',
+      id: 'excel', titulo: 'Excel BANCOS (solo mientras se acostumbran)', ir: 'cargas', boton: 'Llevar el Excel al libro', obligatorio: false, opcional: true,
+      que: 'Si ese mes también se llenó el Excel BANCOS a mano, súbelo: cada fila se une a su movimiento del banco y se clasifica como la planilla dice (ABONO, IVA, IMPOSICIONES…), con sus grupos de fondos. Cuando ya no lo llenen, sáltate este paso.',
       hecho: c.con_excel > 0, avance: c.total && c.con_excel ? { n: c.con_excel, total: c.total } : null,
       detalle: c.con_excel ? c.con_excel + ' movimientos con lo que anotaron en el Excel' : 'No se ha subido (opcional).',
       plazo: null
     },
     {
-      id: 'revisar', titulo: 'Revisar los movimientos', ir: 'movimientos', boton: 'Ir a revisar', obligatorio: true,
+      id: 'revisar', titulo: 'Revisar el libro del banco', ir: 'libro', boton: 'Ir al libro', obligatorio: true,
       que: 'Confirmar qué es cada movimiento: ingreso de la empresa, plata de un cliente para sus imposiciones o IVA, gasto, traspaso… Las seguras se confirman de una vez; el resto, de a una, con la propuesta a la vista.',
       hecho: c.total > 0 && c.confirmados === c.total, avance: c.total ? { n: c.confirmados, total: c.total } : null,
       detalle: c.total ? (c.confirmados === c.total ? 'Los ' + c.total + ' movimientos confirmados' :

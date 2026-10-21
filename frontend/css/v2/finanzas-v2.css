@@ -892,3 +892,128 @@ form .fin2-exp__tipo { margin-bottom: 6px; }
 .fin2-plan .fin2-tabla .sx2-badge { white-space: nowrap; }
 .fin2-plan .fin2-tabla td.fin2-acciones-min { min-width: 0; }
 .fin2-plan .fin2-tabla td.fin2-acciones-min > .sx2-boton { display: flex; width: 100%; justify-content: center; }
+
+/* =====================================================================================
+   Finanzas v3 «banco primero» (21-10-2026): el libro del banco.
+   Se lee como la planilla BANCOS: filas densas, encabezado fijo, la categoría en color,
+   el saldo del mes al lado y el cuadre con la cartola arriba.
+   ===================================================================================== */
+.fin3 { display: flex; flex-direction: column; gap: 14px; }
+.fin3-barra { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.fin3-barra .fin2-input { width: auto; min-width: 150px; }
+.fin3-barra .fin2-busca { margin-left: auto; min-width: 240px; }
+
+.fin3-cuadre { border: 1px solid var(--sx-borde); border-radius: 14px; background: var(--sx-superficie); padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.fin3-cuadre__t { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--sx-texto); }
+.fin3-ecuacion { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.fin3-op { align-self: center; font-size: 1.25rem; color: var(--sx-texto-3); font-weight: 600; }
+.fin3-celda { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 10px; background: var(--sx-superficie-2); min-width: 130px; }
+.fin3-celda span { font-size: .75rem; color: var(--sx-texto-2); text-transform: uppercase; letter-spacing: .04em; }
+.fin3-celda b { font-size: 1.05rem; font-variant-numeric: tabular-nums; color: var(--sx-texto); }
+.fin3-celda--pos b { color: var(--sx-ok); }
+.fin3-celda--neg b { color: var(--sx-critico); }
+.fin3-celda--ok { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--sx-ok) 55%, transparent); }
+
+.fin3-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.fin3-res { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--sx-borde); background: var(--sx-superficie); border-left: 4px solid var(--fin3-c, var(--sx-borde-fuerte)); cursor: pointer; font: inherit; color: inherit; }
+.fin3-res:hover { background: var(--sx-superficie-hover, var(--sx-superficie-2)); }
+.fin3-res span { font-size: .78rem; color: var(--sx-texto-2); font-weight: 600; }
+.fin3-res b { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.fin3-res small { font-size: .72rem; color: var(--sx-texto-3); }
+.fin3-res--ok { --fin3-c: var(--sx-ok); }
+.fin3-res--critico { --fin3-c: var(--sx-critico); }
+.fin3-res--info { --fin3-c: var(--sx-primario); }
+.fin3-res--alerta { --fin3-c: var(--sx-alerta); }
+.fin3-res--neutro { --fin3-c: var(--sx-texto-3); }
+.fin3-res--total { cursor: default; background: var(--sx-superficie-2); --fin3-c: var(--sx-texto); }
+
+.fin3-filtros { display: flex; flex-wrap: wrap; gap: 6px; }
+.fin3-lote { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-radius: 10px; background: var(--sx-primario-suave); border: 1px solid var(--sx-borde); position: sticky; top: 8px; z-index: 3; }
+.fin3-lote span { margin-right: auto; }
+
+.fin3-tabla-envoltura { border: 1px solid var(--sx-borde); border-radius: 14px; background: var(--sx-superficie); overflow: auto; max-height: calc(100vh - 220px); }
+.fin3-libro { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .86rem; }
+.fin3-libro thead th { position: sticky; top: 0; z-index: 2; background: var(--sx-superficie-2); color: var(--sx-texto-2); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--sx-borde-fuerte); white-space: nowrap; }
+.fin3-libro td { padding: 6px 10px; border-bottom: 1px solid var(--sx-borde); vertical-align: top; }
+.fin3-libro tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--sx-superficie-2) 45%, transparent); }
+.fin3-fila { cursor: pointer; }
+.fin3-fila:hover td, .fin3-fila:focus td { background: var(--sx-superficie-hover, var(--sx-superficie-2)); outline: none; }
+.fin3-fila--revisar td:first-child { box-shadow: inset 3px 0 0 var(--sx-alerta); }
+.fin3-fila--sincartola .fin3-saldo { color: var(--sx-texto-3); }
+.fin3-chk { width: 34px; }
+.fin3-mov { max-width: 300px; }
+.fin3-mov b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin3-glosa { display: block; color: var(--sx-texto-3); font-size: .76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
+.fin3-plan { display: block; font-family: inherit; color: var(--sx-alerta); font-size: .72rem; }
+.fin3-concepto b { display: block; font-weight: 600; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin3-concepto small { color: var(--sx-texto-3); font-size: .74rem; }
+.fin3-saldo { color: var(--sx-texto-2); }
+.fin3-est { width: 70px; color: var(--sx-ok); text-align: center; }
+.fin3-sc { font-size: .7rem; color: var(--sx-alerta); white-space: nowrap; }
+.fin3-grupo { display: inline-block; margin-top: 3px; font-size: .72rem; padding: 2px 8px; border-radius: 999px; border: 1px dashed var(--sx-primario); color: var(--sx-primario); white-space: nowrap; }
+
+.fin3-cat { display: inline-block; font-size: .74rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; background: color-mix(in srgb, var(--fin3-c) 14%, transparent); color: color-mix(in srgb, var(--fin3-c) 85%, var(--sx-texto)); }
+.fin3-cat--ok { --fin3-c: var(--sx-ok); }
+.fin3-cat--critico { --fin3-c: var(--sx-critico); }
+.fin3-cat--info { --fin3-c: var(--sx-primario); }
+.fin3-cat--alerta { --fin3-c: var(--sx-alerta); }
+.fin3-cat--neutro { --fin3-c: var(--sx-texto-3); }
+
+.fin3-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 14px; font-size: .86rem; }
+.fin3-dl dt { color: var(--sx-texto-3); }
+.fin3-dl dd { margin: 0; }
+.fin3-tipos { border: 0; padding: 0; margin: 0 0 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; }
+.fin3-tipos legend { font-weight: 600; margin-bottom: 6px; }
+.fin3-tipo { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--sx-borde); border-radius: 10px; cursor: pointer; }
+.fin3-tipo:has(input:checked) { border-color: var(--sx-primario); background: var(--sx-primario-suave); }
+
+@media (max-width: 760px) {
+  .fin3-barra .fin2-busca { margin-left: 0; width: 100%; }
+  .fin3-glosa { display: none; }
+  .fin3-tabla-envoltura { max-height: none; }
+}
+
+/* v3 · El mes: el banco del mes y los nombres por enseñar */
+.fin3-mes, .fin3-nombres { border: 1px solid var(--sx-borde); border-radius: 14px; background: var(--sx-superficie); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.fin3-mes__cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fin3-mes__cab b { display: inline-flex; gap: 6px; align-items: center; }
+.fin3-mes__cab .sx2-enlace { margin-left: auto; }
+.fin3-mes__nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.fin3-mes__nums > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px; background: var(--sx-superficie-2); }
+.fin3-mes__nums span { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--sx-texto-2); }
+.fin3-mes__nums b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.fin3-mes__alerta { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--sx-alerta) 60%, transparent); }
+.fin3-nombres__que { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fin3-nombres__que .fin2-input { width: auto; min-width: 150px; }
+.fin3-nombres__que input.fin2-input { min-width: 220px; }
+details.fin3-nombres > summary { cursor: pointer; list-style: none; }
+details.fin3-nombres > summary::-webkit-details-marker { display: none; }
+details.fin3-nombres > summary::after { content: '▸'; margin-left: auto; color: var(--sx-texto-3); }
+details.fin3-nombres[open] > summary::after { content: '▾'; }
+details.fin3-nombres { border-color: color-mix(in srgb, var(--sx-alerta) 45%, var(--sx-borde)); }
+.fin3-hoja { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 0; border-top: 1px solid var(--sx-borde); }
+.fin3-hoja__meses { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* v3 · Totales al pie de las tablas tipo planilla (clientes del mes, flujo) */
+.fin3-libro tfoot th, .fin3-libro tfoot td { position: sticky; bottom: 0; background: var(--sx-superficie-2); border-top: 1px solid var(--sx-borde-fuerte); padding: 8px 10px; font-weight: 700; text-align: left; }
+.fin3-libro tfoot .fin2-der { text-align: right; }
+.fin3-cero { color: var(--sx-texto-3); }
+
+/* v3 · Flujo por mes (como las hojas FLUJO de la planilla) */
+.fin3-flujo th, .fin3-flujo td { white-space: nowrap; }
+.fin3-flujo tbody th { font-weight: 500; text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--sx-borde); }
+.fin3-flujo__sec th { background: var(--sx-superficie); color: var(--sx-texto); font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; padding-top: 14px !important; border-bottom: 2px solid var(--sx-borde-fuerte) !important; }
+.fin3-flujo__sub th, .fin3-flujo__sub td { font-weight: 700; background: color-mix(in srgb, var(--sx-superficie-2) 60%, transparent) !important; }
+.fin3-flujo__res th, .fin3-flujo__res td { font-weight: 800; background: color-mix(in srgb, var(--sx-primario) 10%, var(--sx-superficie)) !important; border-top: 2px solid var(--sx-primario); }
+.fin3-flujo__tot { font-weight: 700; border-left: 1px solid var(--sx-borde); }
+.fin3-flujo__ver th, .fin3-flujo__ver td { font-weight: 500 !important; font-size: .78rem; }
+.fin3-flujo tbody tr:nth-child(even) td { background: transparent; }
+.fin3-clientes .fin3-mov { max-width: 260px; }
+
+/* v3 · El mes: los pasos son una línea cada uno (la explicación va en «Lo que toca ahora») */
+.fin2m-paso { padding-bottom: 8px; }
+.fin2m-paso__cuerpo { padding: 8px 12px; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.fin2m-paso__cab { flex: 1 1 260px; }
+.fin2m-paso__det { flex: 1 1 100%; margin: 0; font-size: .8rem; color: var(--sx-texto-2); }
+.fin2m-paso__acc { margin-left: auto; }
+.fin2m-paso--hecho .fin2m-paso__det { display: none; }
