@@ -110,7 +110,7 @@ function construir_(db, cuenta, periodo, ctx) {
       banco: m.sin_cartola ? 'esperando' : (p || r.estado === 'CONFIRMADO') ? 'ok' : 'falta', anotada: !!p, deducida: !!ded,
       tipo_mov: p0 ? p0.tipo : '', en_gestion: piezas_(c).some((x) => x.gestion_id), partes: piezas_(c).length,
       cliente_id: p0 && p0.cliente_id ? p0.cliente_id : '', cliente: p0 && p0.cliente ? p0.cliente : '',
-      saldo_banco: m.saldo, verificado: !m.sin_cartola, _grupo_viejo: p && p.grupo ? p.grupo : null,
+      saldo_banco: m.saldo, verificado: !m.sin_cartola, _grupo_viejo: p && p.grupo ? p.grupo : null, _fila: p && !p.registro ? p.fila : null,
       // Fila que vino del Excel BANCOS: su UNITARIO (lo que la planilla sumaba en el resumen de arriba).
       con_fecha_tx: !!((m.detalle && m.detalle.fecha_tx) || (p && p.fecha) || m.unida),
       de_excel: !!(p && !p.registro && p.fila && p.fila < 100000), unitario: p && typeof p.unitario === 'number' && isFinite(p.unitario) ? p.unitario : null
@@ -125,6 +125,12 @@ function construir_(db, cuenta, periodo, ctx) {
   const usadas = new Set(filas.map((f) => f.grupo).filter(Boolean));
   const viejos = [...new Set(filas.filter((f) => !f.grupo && f._grupo_viejo).map((f) => f._grupo_viejo.cierre))].sort((a, b) => a - b);
   const letraDe = new Map(); let k = 0;
+  // Reparación (v5.4): una fila del Excel corregida en la hoja antes de esta versión perdió su grupo pero guardó su letra.
+  // Vuelve a su grupo por su N° de fila del Excel (los demás miembros la nombran), así el grupo no queda partido.
+  const deFila = new Map();
+  // (Al corregirla también se le cambió el archivo a «Registro en SIGSO»: por eso se busca solo por el N° de fila.)
+  filas.forEach((f) => { if (f._grupo_viejo && Array.isArray(f._grupo_viejo.miembros)) f._grupo_viejo.miembros.forEach((n) => { if (!deFila.has(n)) deFila.set(n, f._grupo_viejo); }); });
+  filas.forEach((f) => { if (!f._grupo_viejo && f.grupo && f._fila != null && deFila.has(f._fila)) f._grupo_viejo = deFila.get(f._fila); });
   // Si una fila del grupo ya se editó en la hoja, su letra vale para todo el grupo.
   filas.forEach((f) => { if (f.grupo && f._grupo_viejo && !letraDe.has(f._grupo_viejo.cierre)) letraDe.set(f._grupo_viejo.cierre, f.grupo); });
   viejos.forEach((cierre) => { if (letraDe.has(cierre)) return; let l; do { l = letras_(k++); } while (usadas.has(l)); letraDe.set(cierre, l); usadas.add(l); });
@@ -139,7 +145,7 @@ function construir_(db, cuenta, periodo, ctx) {
       if (!excelDe.has(l)) excelDe.set(l, { remanente: f._grupo_viejo.remanente, incompleto: !!f._grupo_viejo.incompleto || faltan });
     }
     if (!f.grupo && f._grupo_viejo) { f.grupo = letraDe.get(f._grupo_viejo.cierre); f.grupo_excel = true; obsCierre.set(f.grupo, f._grupo_viejo.obs || ''); }
-    delete f._grupo_viejo;
+    delete f._grupo_viejo; delete f._fila;
     f.que = que_(f);
   });
   // Decisiones de los grupos (lo que pasa con lo que sobra).
