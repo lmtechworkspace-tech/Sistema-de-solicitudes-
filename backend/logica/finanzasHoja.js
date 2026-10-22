@@ -522,4 +522,4 @@ const cobranza = B.conBoveda('', function (db, data, contexto, x) {
   return { totales: T, facturas: ver, total_facturas: l.length };
 });
 
-module.exports = { hoja, guardar, borrar, decidirGrupo, moverMes, flujo, clientes, cobranza, construir_, contexto_, que_, folios_, fechaHoja_, DECISIONES };
+module.exports = { hoja, guardar, borrar, decidirGrupo, moverMes, flujo, clientes, cobranza, construir_, contexto_, que_, folios_, fechaHoja_, planFlujo_, valorGrupo_, facturas_, DECISIONES };
