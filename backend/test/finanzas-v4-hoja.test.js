@@ -273,4 +273,9 @@ test('hoja · guardar devuelve la versión nueva (se puede seguir editando sin r
   assert.ok(!e2._validationError && e2.codigo !== 'CONFLICTO_VERSION', 'con la versión devuelta, la siguiente edición no choca');
   const h = H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx);
   assert.deepEqual([h.listas.memoria['ANDES MONTAJES'].obs, h.listas.memoria['ANDES MONTAJES'].plan], ['ABONO', 'Servicio Mensual']);
+  // Para sugerir el plan de un gasto solo sirve el plan de sus gastos, no el de sus fondos (IVA, imposiciones…).
+  H.guardar(db, D({ cuenta_ref: cuenta, campos: { fecha: '2026-09-03', monto: -90000, nombre: 'CONST MELO', obs: 'ABONO', plan: 'Convenios' } }), ctx);
+  H.guardar(db, D({ cuenta_ref: cuenta, campos: { fecha: '2026-09-04', monto: 500000, nombre: 'CONST MELO', obs: 'IVA', plan: 'IVA' } }), ctx);
+  const m = H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx).listas.memoria['CONST MELO'];
+  assert.deepEqual([m.plan, m.plan_gasto], ['IVA', 'Convenios']);
 });

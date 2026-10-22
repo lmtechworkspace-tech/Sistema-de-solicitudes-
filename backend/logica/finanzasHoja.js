@@ -249,7 +249,9 @@ const hoja = B.conBoveda('', function (db, data) {
     const m0 = I.des_(r.datos), p = m0.planilla; if (!p || !p.alias || !p.obs) return;
     const monto = (m0.abono || 0) - (m0.cargo || 0);
     const k = N(p.alias), x = memoria[k] || { veces: 0 };
-    memoria[k] = { obs: p.obs, plan: p.plan || x.plan || '', signo: monto < 0 ? -1 : 1, veces: x.veces + 1, fecha: r.fecha };
+    // plan_gasto: el último plan con que se anotó un GASTO de ese nombre (para sugerirlo; el plan de sus fondos no sirve).
+    const gasto = monto < 0 && /^ABONO/.test(p.obs) && p.plan;
+    memoria[k] = { obs: p.obs, plan: p.plan || x.plan || '', plan_gasto: gasto ? p.plan : x.plan_gasto || '', signo: monto < 0 ? -1 : 1, veces: x.veces + 1, fecha: r.fecha };
   });
   const listas = { memoria, obs: R.OBS, planes_ingreso: F.cuentasDe_('INGRESO'), planes_egreso: F.cuentasDe_('EGRESO'), planes_fondos: F.cuentasDe_('FONDO_RECIBIDO'), nombres: [...nombres.values()].sort((a, b) => a.n.localeCompare(b.n, 'es')), decisiones: DECISIONES };
   const cuentas = [...ctx.cuentas.values()].map((c) => ({ id: c.id, nombre: c.banco + ' ···' + c.ultimos4, empresa: c.empresa }));

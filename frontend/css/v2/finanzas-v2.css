@@ -1798,3 +1798,87 @@ td > .fin5-etq:first-child { margin-left: 0; }
 }
 /* El cajón de «¿cómo se calculó?» es más ancho: lleva la tabla de filas. */
 .sx2-drawer__panel:has(.fin5-inf-cajon) { width: min(820px, 100vw); max-width: 100vw; }
+
+/* ==== Finanzas v5.2 · planilla guiada: camino del mes, «?» por columna, montos y grupos claros ==== */
+.fin5-camino { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: var(--fin5-r); background: var(--sx-superficie); border: 1px solid var(--sx-borde); box-shadow: var(--fin5-sombra); }
+.fin5-camino__cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .8rem; color: var(--sx-texto-2); }
+.fin5-camino__cab b { font: 750 .86rem/1 var(--fuente); color: var(--sx-texto); }
+.fin5-camino__barra { flex: 1 1 120px; max-width: 260px; height: 6px; border-radius: 99px; background: var(--sx-superficie-2); overflow: hidden; }
+.fin5-camino__barra i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--sx-ok), color-mix(in srgb, var(--sx-ok) 70%, var(--fin))); transition: width .6s var(--sx-curva); }
+.fin5-camino__pasos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; counter-reset: paso; }
+.fin5-paso {
+  position: relative; width: 100%; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 12px; text-align: left; cursor: pointer;
+  border: 1px solid var(--sx-borde); background: var(--sx-superficie); color: var(--sx-texto-2); font-family: var(--fuente); transition: border-color .2s, background .2s, transform .2s var(--sx-curva);
+}
+.fin5-paso:hover:not(:disabled) { transform: translateY(-1px); border-color: color-mix(in srgb, var(--fin) 40%, var(--sx-borde)); }
+.fin5-paso:disabled { cursor: default; opacity: .7; }
+.fin5-paso__n { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font: 750 .78rem/1 var(--fuente); background: var(--sx-superficie-2); color: var(--sx-texto-3); }
+.fin5-paso__t { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fin5-paso__t b { font: 650 .78rem/1.15 var(--fuente); color: var(--sx-texto); }
+.fin5-paso__t small { font-size: .7rem; color: var(--sx-texto-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin5-paso[data-estado="hecho"] .fin5-paso__n { background: color-mix(in srgb, var(--sx-ok) 16%, transparent); color: var(--sx-ok); }
+.fin5-paso[data-estado="actual"] { border-color: var(--fin); background: color-mix(in srgb, var(--fin) 6%, var(--sx-superficie)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fin) 14%, transparent); }
+.fin5-paso[data-estado="actual"] .fin5-paso__n { background: var(--fin-solido, var(--fin)); color: #fff; }
+.fin5-paso[data-estado="actual"] small { color: color-mix(in srgb, var(--sx-alerta) 85%, var(--sx-texto)); font-weight: 600; }
+.fin5-camino__guia { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 10px; border-radius: 10px; font-size: .8rem; line-height: 1.4; color: var(--sx-texto-2); background: color-mix(in srgb, var(--fin) 6%, transparent); }
+.fin5-camino__guia svg { flex: none; margin-top: 1px; color: var(--fin); }
+.fin5-camino__guia b { color: var(--sx-texto); }
+@media (max-width: 1100px) { .fin5-camino__pasos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .fin5-camino__pasos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Guía sobre la tabla al filtrar algo pendiente */
+.fin5-guia { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--sx-alerta) 35%, var(--sx-borde)); background: color-mix(in srgb, var(--sx-alerta) 7%, var(--sx-superficie)); font-size: .8rem; line-height: 1.45; color: var(--sx-texto-2); animation: fin5-aparece .2s ease-out; }
+.fin5-guia[hidden] { display: none; }
+.fin5-guia > svg { flex: none; color: color-mix(in srgb, var(--sx-alerta) 85%, var(--sx-texto)); margin-top: 2px; }
+.fin5-guia h3 { margin: 0 0 4px; font: 700 .84rem/1.2 var(--fuente); color: var(--sx-texto); }
+.fin5-guia ul { margin: 0 0 4px; padding-left: 18px; } .fin5-guia p { margin: 0; }
+
+/* «?» en la cabecera y su ventanita */
+.fin5-th { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.fin5-th-ayuda {
+  display: inline-grid; place-items: center; width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 1px solid var(--sx-borde-fuerte); cursor: pointer;
+  background: var(--sx-superficie); color: var(--sx-texto-3); font: 750 .62rem/1 var(--fuente); vertical-align: middle; transition: all .15s;
+}
+.fin5-th-ayuda:hover, .fin5-th-ayuda[aria-expanded="true"] { background: var(--fin); border-color: var(--fin); color: #fff; }
+.fin5-th-ayuda:focus-visible { outline: 2px solid var(--fin); outline-offset: 2px; }
+.fin5-pop-ayuda {
+  position: fixed; z-index: 1300; width: min(340px, calc(100vw - 16px)); padding: 12px 14px; border-radius: 14px; background: var(--sx-superficie); border: 1px solid var(--sx-borde);
+  box-shadow: var(--sx-sombra-3); animation: fin5-pop .16s var(--sx-curva); font: 400 .8rem/1.45 var(--fuente); color: var(--sx-texto-2);
+  --fin: var(--mod-finanzas, var(--sx-primario));
+}
+.fin5-pop-ayuda__t { display: block; font: 750 .88rem/1.2 var(--fuente); color: var(--sx-texto); margin-bottom: 4px; }
+.fin5-pop-ayuda p { margin: 0 0 6px; color: var(--sx-texto); }
+.fin5-pop-ayuda ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.fin5-pop-ayuda .fin4-que--alerta { color: color-mix(in srgb, var(--sx-alerta) 85%, var(--sx-texto)); }
+.fin5-pop-ayuda .fin4-que--info { color: var(--fin); }
+
+/* Monto como en un estado de cuenta */
+.fin5-mt { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fin5-mt i { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 6px; font: 800 .78rem/1 var(--fuente); font-style: normal; }
+.fin5-mt--entra { color: var(--sx-ok); } .fin5-mt--entra i { background: color-mix(in srgb, var(--sx-ok) 15%, transparent); }
+.fin5-mt--sale { color: var(--sx-critico); } .fin5-mt--sale i { background: color-mix(in srgb, var(--sx-critico) 13%, transparent); }
+.fin4-c-monto .fin4-v { white-space: nowrap; }
+
+/* Grupo: la letra con su cliente al pasar el mouse, y las filas del mismo grupo marcadas */
+.fin4-c-grupo .fin4-v:not(:empty) { width: auto; min-width: 26px; padding: 0; background: none; }
+.fin5-gr { display: inline-block; min-width: 26px; padding: 4px 6px; border-radius: 8px; font: 800 .72rem/1 var(--fuente); color: var(--fin); background: var(--fin-suave); cursor: help; }
+tr.fin5-mismo-grupo td { background: color-mix(in srgb, var(--fin) 6%, var(--sx-superficie)); }
+tr.fin5-mismo-grupo .fin5-gr { background: var(--fin-solido, var(--fin)); color: #fff; }
+.fin5-grupo.fin5-mismo-grupo { border-color: var(--fin); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fin) 14%, transparent); }
+.fin5-grupo--cuadrado { opacity: .78; }
+.fin5-grupo--abierto { border-color: color-mix(in srgb, var(--sx-alerta) 55%, var(--sx-borde)); }
+.fin5-grupo__ok { display: flex; align-items: center; gap: 6px; margin: 0; font-size: .76rem; color: var(--sx-ok); }
+@keyframes fin5-resalta { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--sx-alerta) 40%, transparent); } }
+.fin5-resalta { animation: fin5-resalta 1.4s ease-in-out 2; }
+.fin5-grupos h2 { display: inline-flex; align-items: center; gap: 6px; }
+
+/* «Qué es» que falta: se toca y lleva a la celda */
+.fin5-que-btn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 8px; cursor: pointer; font: 650 .72rem/1.1 var(--fuente);
+  border: 1px dashed color-mix(in srgb, var(--sx-alerta) 70%, transparent); color: color-mix(in srgb, var(--sx-alerta) 85%, var(--sx-texto));
+  background: color-mix(in srgb, var(--sx-alerta) 9%, transparent); transition: background .15s;
+}
+.fin5-que-btn:hover { background: color-mix(in srgb, var(--sx-alerta) 18%, transparent); border-style: solid; }
+.fin5-con-ph:empty::before { content: attr(data-ph); color: color-mix(in srgb, var(--sx-alerta) 70%, var(--sx-texto-3)); font-style: italic; font-weight: 400; font-size: .78rem; }
+.fin5-mini--acento { background: var(--fin-solido, var(--fin)); color: #fff; border-color: transparent; }
+@media (prefers-reduced-motion: reduce) { .fin5-resalta, .fin5-guia, .fin5-pop-ayuda { animation: none; } .fin5-paso { transition: none; } }
