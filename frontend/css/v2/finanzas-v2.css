@@ -1279,7 +1279,8 @@ details.fin3-nombres { border-color: color-mix(in srgb, var(--sx-alerta) 45%, va
 .fin4-c-nombre .fin4-v { max-width: 210px; font-weight: 600; color: var(--sx-texto); }
 .fin4-c-plan .fin4-v { max-width: 160px; }
 .fin4-c-glosa .fin4-v { max-width: 190px; }
-@media (min-width: 1800px) { .fin4-c-nombre .fin4-v { max-width: 280px; } .fin4-c-glosa .fin4-v { max-width: 300px; } .fin4-c-plan .fin4-v { max-width: 220px; } }
+/* Columnas más anchas solo si la planilla tiene espacio de verdad (según su contenedor, no la ventana). */
+@container (min-width: 1700px) { .fin4-c-nombre .fin4-v { max-width: 280px; } .fin4-c-glosa .fin4-v { max-width: 300px; } .fin4-c-plan .fin4-v { max-width: 220px; } }
 .fin4-c-fecha .fin4-v { color: var(--sx-texto-2); font-variant-numeric: tabular-nums; }
 .fin4-c-grupo { width: 64px; }
 .fin4-c-grupo .fin4-v { text-align: center; }
@@ -1469,3 +1470,101 @@ td > .fin5-etq:first-child { margin-left: 0; }
 .fin5-grupo--neg .fin5-grupo__sobra b { color: var(--sx-critico); }
 .fin5-grupo--neg .fin5-progreso span { background: var(--sx-critico); }
 .fin5-buscar input:focus, .fin5-buscar input:focus-visible, .fin5-select select:focus, .fin5-select select:focus-visible { outline: 0; box-shadow: none; border: 0; }
+
+/* ---- v5.1: sin recargas, meses a elección y llenado fluido -------------------------------------- */
+/* Lo que se cambia en el lugar (después de guardar, de filtrar o de cambiar de mes) no vuelve a entrar animado. */
+.fin5[data-quieto] .fin5-entra, .fin5[data-quieto] .fin5-tab-fact tbody tr, .fin5[data-quieto] .fin5-tab-cli tbody tr { animation: none; }
+.fin5 { transition: opacity .2s; }
+.fin5.fin5-cargando { opacity: .55; pointer-events: none; }
+.fin5.fin5-cargando .fin4-hoja-env, .fin5.fin5-cargando .fin4-rep { filter: saturate(.6); }
+
+/* Pestañas de meses + «Mes» para abrir cualquiera */
+.fin5-meses-env { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.fin5-meses { scroll-behavior: smooth; }
+.fin5-mes[data-vacio] { color: var(--sx-texto-3); font-style: italic; }
+.fin5-mes-mas {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; height: 38px; padding: 0 12px; border-radius: 999px; cursor: pointer;
+  font: 600 .8rem/1 var(--fuente); color: var(--fin); background: var(--fin-suave); border: 1px dashed color-mix(in srgb, var(--fin) 45%, transparent); transition: background .2s, transform .2s var(--sx-curva);
+}
+.fin5-mes-mas:hover { background: color-mix(in srgb, var(--fin) 18%, transparent); transform: translateY(-1px); }
+.fin5-pop-meses {
+  position: fixed; z-index: 1300; width: 272px; padding: 12px; border-radius: 16px; background: var(--sx-superficie); border: 1px solid var(--sx-borde);
+  box-shadow: var(--sx-sombra-3); animation: fin5-pop .18s var(--sx-curva); display: flex; flex-direction: column; gap: 10px; font-family: var(--fuente);
+}
+@keyframes fin5-pop { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
+.fin5-pop-meses__cab { display: flex; align-items: center; justify-content: space-between; }
+.fin5-pop-meses__cab b { font: 750 .95rem/1 var(--fuente); color: var(--sx-texto); }
+.fin5-pop-meses__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.fin5-pop-mes {
+  position: relative; height: 38px; border-radius: 10px; border: 1px solid var(--sx-borde); background: var(--sx-superficie); color: var(--sx-texto-2);
+  font: 600 .8rem/1 var(--fuente); text-transform: capitalize; cursor: pointer; transition: all .15s;
+}
+.fin5-pop-mes:hover, .fin5-pop-mes:focus-visible { border-color: var(--fin); color: var(--fin); outline: 0; box-shadow: 0 0 0 3px var(--fin-suave); }
+.fin5-pop-mes--hoy { border-style: dashed; }
+.fin5-pop-mes--sel { background: var(--fin-solido, var(--fin)); border-color: var(--fin-solido, var(--fin)); color: #fff; }
+.fin5-pop-mes i { position: absolute; top: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--fin); }
+.fin5-pop-mes--sel i { background: #fff; }
+.fin5-mini {
+  display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px; border-radius: 8px; border: 1px solid var(--sx-borde); background: var(--sx-superficie);
+  color: var(--sx-texto-2); font: 600 .72rem/1 var(--fuente); cursor: pointer; white-space: nowrap; transition: all .15s;
+}
+.fin5-mini:hover { border-color: var(--fin); color: var(--fin); }
+
+/* Autocompletar */
+.fin5-ac {
+  position: fixed; z-index: 1300; max-width: 440px; max-height: 320px; overflow: auto; padding: 6px; border-radius: 14px; font-family: var(--fuente);
+  background: var(--sx-superficie); border: 1px solid var(--sx-borde); box-shadow: var(--sx-sombra-3); animation: fin5-pop .14s var(--sx-curva);
+}
+.fin5-ac__pista { padding: 7px 10px; font: 600 .78rem/1.3 var(--fuente); color: var(--fin); }
+.fin5-ac__op { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 9px; cursor: pointer; color: var(--sx-texto); }
+.fin5-ac__op > div { min-width: 0; display: flex; flex-direction: column; }
+.fin5-ac__op b { font: 600 .82rem/1.25 var(--fuente); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin5-ac__op small { font-size: .7rem; color: var(--sx-texto-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin5-ac__op mark { background: color-mix(in srgb, var(--fin) 22%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.fin5-ac__op:hover { background: var(--sx-superficie-2); }
+.fin5-ac__op--sel { background: var(--fin-suave) !important; box-shadow: inset 3px 0 0 var(--fin); }
+.fin5-ac__op--sug b::after { content: '  · sugerido'; font-weight: 500; font-size: .7rem; color: var(--fin); }
+.fin5-ac__mem { flex: none; font-size: .68rem; font-weight: 600; color: var(--sx-texto-2); background: var(--sx-superficie-2); padding: 3px 7px; border-radius: 6px; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin5-ac kbd { font: 600 .66rem/1 var(--fin4-num, monospace); background: var(--sx-superficie); border: 1px solid var(--sx-borde-fuerte); border-bottom-width: 2px; border-radius: 5px; padding: 2px 5px; color: var(--sx-texto); }
+.fin5-ac__pie { margin-top: 4px; padding: 6px 10px 2px; border-top: 1px solid var(--sx-borde); font-size: .68rem; color: var(--sx-texto-3); }
+
+/* Celdas: guardando, error y filas que se están guardando */
+@keyframes fin5-respira { 50% { background: color-mix(in srgb, var(--fin) 12%, var(--sx-superficie)); } }
+.fin4-hoja td.fin5-guardando { animation: fin5-respira 1s ease-in-out infinite; }
+@keyframes fin5-sacude { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+.fin4-hoja td.fin5-err { animation: fin5-sacude .35s; box-shadow: inset 0 0 0 2px var(--sx-critico) !important; }
+.fin5-pendiente td { color: var(--sx-texto-3); background: repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in srgb, var(--fin) 5%, transparent) 8px 16px); }
+.fin5-pendiente td .fin4-v { color: var(--sx-texto-2); }
+.fin4-fila--nueva td.fin4-c-fecha .fin4-v:empty::before { content: attr(data-ph); }
+.fin5-fbanco { display: inline-block; margin-left: 6px; padding: 2px 6px; border-radius: 6px; font: 650 .64rem/1.2 var(--fuente); color: var(--sx-texto-2); background: var(--sx-superficie-2); vertical-align: 1px; }
+.fin5-fbanco--movida { color: var(--fin); background: var(--fin-suave); }
+.fin4-c-banco { width: auto; }
+
+/* Pie de la tabla: ayuda, acciones de la fila y estado del guardado */
+.fin5-tabla__pie { flex-wrap: wrap; }
+.fin5-acc-fila { display: inline-flex; gap: 6px; }
+.fin5-acc-fila:empty { display: none; }
+.fin5-guardado { display: inline-flex; align-items: center; gap: 6px; font: 600 .74rem/1 var(--fuente); color: var(--sx-texto-3); min-width: 0; opacity: 0; transition: opacity .25s; }
+.fin5-guardado--on, .fin5-guardado--ok { opacity: 1; }
+.fin5-guardado--ok { color: var(--sx-ok); }
+.fin5-giro { width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--fin) 25%, transparent); border-top-color: var(--fin); animation: fin5-gira .7s linear infinite; }
+@keyframes fin5-gira { to { transform: rotate(360deg); } }
+.fin5-ayuda-ok { display: inline-flex; align-items: center; gap: 5px; color: var(--sx-ok); font-weight: 600; }
+.fin5-ayuda-err { display: inline-flex; align-items: center; gap: 5px; color: var(--sx-critico); font-weight: 600; }
+
+/* Banco: revisiones de la cartola y sugerencia de pasar filas al mes anterior */
+.fin5-aviso--critico { background: color-mix(in srgb, var(--sx-critico) 10%, var(--sx-superficie)); color: color-mix(in srgb, var(--sx-critico) 85%, var(--sx-texto)); border: 1px solid color-mix(in srgb, var(--sx-critico) 22%, transparent); }
+.fin5-nota svg { vertical-align: -2px; margin-right: 2px; }
+.fin5-nota--ok { color: var(--sx-ok); }
+.fin5-sugerencia { display: flex; gap: 10px; padding: 12px; border-radius: 12px; font-size: .8rem; line-height: 1.45; color: var(--sx-texto-2); background: linear-gradient(135deg, var(--fin-suave), transparent); border: 1px solid color-mix(in srgb, var(--fin) 25%, var(--sx-borde)); }
+.fin5-sugerencia b { color: var(--sx-texto); }
+.fin5-sugerencia__ico { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; color: var(--fin); background: var(--sx-superficie); }
+.fin5-sugerencia__acc { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .fin5-pop-meses, .fin5-ac, .fin4-hoja td.fin5-guardando, .fin4-hoja td.fin5-err, .fin5-giro { animation: none !important; }
+}
+/* El autocompletar y el selector de meses viven en <body> (fuera de .fin4): llevan sus propios colores del módulo. */
+.fin5-ac, .fin5-pop-meses { --fin: var(--mod-finanzas, var(--sx-primario)); --fin-suave: color-mix(in srgb, var(--fin) 12%, transparent); --fin-solido: var(--fin); }
+:root[data-tema="oscuro"] .fin5-ac, :root[data-tema="oscuro"] .fin5-pop-meses, :root[data-theme="dark"] .fin5-ac, :root[data-theme="dark"] .fin5-pop-meses { --fin-solido: color-mix(in srgb, var(--fin) 55%, #0B1A3A); }
+@media (prefers-color-scheme: dark) { :root:not([data-tema="claro"]):not([data-theme="light"]) .fin5-ac, :root:not([data-tema="claro"]):not([data-theme="light"]) .fin5-pop-meses { --fin-solido: color-mix(in srgb, var(--fin) 55%, #0B1A3A); } }
+.fin5-mes-mas b { font-size: 1rem; line-height: 1; font-weight: 700; }

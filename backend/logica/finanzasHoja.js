@@ -70,20 +70,40 @@ function cuentaElegida_(ctx, ref) {
   return ctx.cuentas.get(txt_(ref)) || l[0] || null;
 }
 
+/**
+ * Fecha con la que un movimiento va en la planilla: la de la transacción, no la contable del banco. El BCI contabiliza al
+ * día hábil siguiente (lo del 30 de junio sale en la cartola el 1 de julio) y la planilla BANCOS va por la fecha en que
+ * pasó. Manda, en orden: el mes elegido a mano en la hoja, la fecha anotada en la planilla, la del registro antes de
+ * unirse con la cartola y la fecha de transacción de «Mis Movimientos»; si no hay ninguna, la del banco.
+ */
+function fechaHoja_(r, m) {
+  const p = m.planilla || {};
+  const f = p.fecha || (m.unida && m.unida.fecha_anotada) || (m.detalle && m.detalle.fecha_tx) || r.fecha;
+  return { fecha: m.mes_hoja && m.mes_hoja !== String(f).slice(0, 7) ? (m.mes_hoja < String(f).slice(0, 7) ? ultimoDia_(m.mes_hoja) : m.mes_hoja + '-01') : f, movida: !!m.mes_hoja };
+}
+function ultimoDia_(p) { const [a, mm] = p.split('-').map(Number); return new Date(Date.UTC(a, mm, 0)).toISOString().slice(0, 10); }
+function ventana_(periodo) { return [Base.sumarDias_(periodo + '-01', -20), Base.sumarDias_(ultimoDia_(periodo), 20)]; }
+
 /** La hoja de una cuenta en un mes: filas, grupos, totales y cuadre con la cartola. */
 function construir_(db, cuenta, periodo, ctx) {
   asegurar_();
   const d = I.db_();
   const filas = [];
-  const movs = d.prepare('SELECT * FROM FIN_MOVIMIENTOS WHERE periodo = ? AND cuenta_ref = ? ORDER BY fecha, orden').all(periodo, cuenta.id);
-  movs.forEach((r) => {
-    const m = I.des_(r.datos);
+  const [desde, hasta] = ventana_(periodo);
+  const todos = d.prepare('SELECT * FROM FIN_MOVIMIENTOS WHERE cuenta_ref = ? AND (periodo = ? OR fecha BETWEEN ? AND ?) ORDER BY fecha, orden').all(cuenta.id, periodo, desde, hasta)
+    .map((r) => { const m = I.des_(r.datos); return { r, m, h: fechaHoja_(r, m) }; });
+  // Lo que la cartola de este mes trae (para el cuadre con el banco), aunque alguna fila se vea en otro mes.
+  const delBanco = todos.filter((x) => x.r.periodo === periodo && !x.m.sin_cartola);
+  const movs = todos.filter((x) => x.h.fecha.slice(0, 7) === periodo)
+    .sort((a, b) => a.h.fecha.localeCompare(b.h.fecha) || a.r.fecha.localeCompare(b.r.fecha) || (a.r.orden || 0) - (b.r.orden || 0));
+  movs.forEach((x) => {
+    const r = x.r, m = x.m;
     const c = r.estado === 'CONFIRMADO' ? m.clasif : null;
     const p0 = piezas_(c)[0] || null;
     const p = m.planilla || null;
     const ded = !p ? deducir_(p0) : null;
     const f = {
-      id: r.id, version: r.version || 0, fecha: r.fecha, monto: (m.abono || 0) - (m.cargo || 0),
+      id: r.id, version: r.version || 0, fecha: x.h.fecha, fecha_banco: x.h.fecha !== r.fecha && !m.sin_cartola ? r.fecha : '', movida: x.h.movida, monto: (m.abono || 0) - (m.cargo || 0),
       nombre: p ? (p.alias || '') : ded ? ded.nombre : '', obs: p ? (p.obs || '') : ded ? ded.obs : '', plan: p ? (p.plan || '') : ded ? ded.plan : '',
       fact: p ? (p.fact || '') : '', nota: p ? (p.nota || '') : '', grupo: p ? (p.grupo_letra || '') : '',
       glosa: m.sin_cartola ? (p && p.glosa) || '' : m.glosa || '', quien_banco: (m.detalle && m.detalle.pagador) || '',
@@ -92,6 +112,7 @@ function construir_(db, cuenta, periodo, ctx) {
       cliente_id: p0 && p0.cliente_id ? p0.cliente_id : '', cliente: p0 && p0.cliente ? p0.cliente : '',
       saldo_banco: m.saldo, verificado: !m.sin_cartola, _grupo_viejo: p && p.grupo ? p.grupo : null,
       // Fila que vino del Excel BANCOS: su UNITARIO (lo que la planilla sumaba en el resumen de arriba).
+      con_fecha_tx: !!((m.detalle && m.detalle.fecha_tx) || (p && p.fecha) || m.unida),
       de_excel: !!(p && !p.registro && p.fila && p.fila < 100000), unitario: p && typeof p.unitario === 'number' && isFinite(p.unitario) ? p.unitario : null
     };
     if (!f.cliente_id && f.nombre) {
@@ -170,12 +191,33 @@ function construir_(db, cuenta, periodo, ctx) {
   });
   // Saldo acumulado del mes (la columna SALDO del Excel) y cuadre con la cartola.
   let acc = 0; filas.forEach((f) => { acc += f.monto; f.saldo = acc; });
-  const conSaldo = filas.filter((f) => f.verificado && f.saldo_banco !== null && f.saldo_banco !== undefined);
-  const cartola = conSaldo.length ? { saldo_inicial: conSaldo[0].saldo_banco - conSaldo[0].monto, saldo_final: conSaldo[conSaldo.length - 1].saldo_banco, movimientos: filas.filter((f) => f.verificado).reduce((s, f) => s + f.monto, 0) } : null;
+  const cartola = cuadreBanco_(delBanco, periodo);
   const estado = { ok: 0, esperando: 0, falta: 0, por_completar: 0 };
   filas.forEach((f) => { if (f.banco === 'ok') estado.ok++; else if (f.banco === 'esperando') estado.esperando++; else estado.falta++; if (f.que.k === 'rev') estado.por_completar++; });
   filas.forEach((f) => { delete f.saldo_banco; });
   return { filas, grupos, totales: t, cartola, estado };
+}
+
+/**
+ * Cuadre con la cartola del mes (por fecha contable, como la trae el banco): saldo inicial, movimientos y saldo final,
+ * y la cadena de saldos fila a fila. Si un saldo no sigue del anterior, hay movimientos repetidos o faltantes.
+ * También cuenta lo del banco de este mes que se ve en otro mes de la planilla (y lo de otros meses que se ve en este).
+ */
+function cuadreBanco_(delBanco, periodo) {
+  const conSaldo = delBanco.filter((x) => x.m.saldo !== null && x.m.saldo !== undefined && x.m.saldo !== '');
+  if (!conSaldo.length) return null;
+  const monto = (x) => (x.m.abono || 0) - (x.m.cargo || 0);
+  const ini = conSaldo[0].m.saldo - monto(conSaldo[0]), fin = conSaldo[conSaldo.length - 1].m.saldo;
+  const movimientos = delBanco.reduce((s, x) => s + monto(x), 0);
+  let previo = ini; const cortes = [];
+  conSaldo.forEach((x) => { if (previo + monto(x) !== x.m.saldo) cortes.push({ id: x.r.id, fecha: x.r.fecha, monto: monto(x) }); previo = x.m.saldo; });
+  // Movimientos con la misma fecha, monto y glosa más de una vez: candidatos a repetidos (se avisan, no se borran).
+  const vistos = new Map();
+  delBanco.forEach((x) => { const k = [x.r.fecha, monto(x), N(x.m.glosa || '')].join('|'); vistos.set(k, (vistos.get(k) || 0) + 1); });
+  const repetidos = [...vistos.entries()].filter((e) => e[1] > 1).map((e) => { const [fecha, mto, glosa] = e[0].split('|'); return { fecha, monto: Number(mto), glosa, veces: e[1] }; });
+  const fuera = delBanco.filter((x) => x.h.fecha.slice(0, 7) !== periodo);
+  return { saldo_inicial: ini, saldo_final: fin, movimientos, filas: delBanco.length, cuadra: ini + movimientos === fin, cortes: cortes.slice(0, 20), n_cortes: cortes.length,
+    repetidos: repetidos.slice(0, 20), en_otro_mes: { filas: fuera.length, monto: fuera.reduce((s, x) => s + monto(x), 0) } };
 }
 
 /** Lo que sobra de un grupo: la suma de sus filas, o lo que dice el Excel si el grupo tiene filas de otro mes. */
@@ -201,7 +243,15 @@ const hoja = B.conBoveda('', function (db, data) {
   const nombres = new Map();
   P.aliasMapa_().forEach((a) => { if (a.destino && a.destino.clase !== 'ignorar') nombres.set(N(a.alias), { n: N(a.alias), quien: a.destino.cliente || a.destino.empresa || a.destino.cuenta || '' }); });
   ctx.clientes.forEach((c) => { if (!nombres.has(c.n)) nombres.set(c.n, { n: c.n, quien: c.rut || '' }); });
-  const listas = { obs: R.OBS, planes_ingreso: F.cuentasDe_('INGRESO'), planes_egreso: F.cuentasDe_('EGRESO'), planes_fondos: F.cuentasDe_('FONDO_RECIBIDO'), nombres: [...nombres.values()].sort((a, b) => a.n.localeCompare(b.n, 'es')), decisiones: DECISIONES };
+  // Lo último que se anotó con cada nombre (OBS y plan): la hoja lo propone al escribir el nombre otra vez.
+  const memoria = {};
+  I.db_().prepare('SELECT fecha, datos FROM FIN_MOVIMIENTOS WHERE fecha >= ? ORDER BY fecha, orden').all(Base.sumarDias_(periodo + '-01', -120)).forEach((r) => {
+    const m0 = I.des_(r.datos), p = m0.planilla; if (!p || !p.alias || !p.obs) return;
+    const monto = (m0.abono || 0) - (m0.cargo || 0);
+    const k = N(p.alias), x = memoria[k] || { veces: 0 };
+    memoria[k] = { obs: p.obs, plan: p.plan || x.plan || '', signo: monto < 0 ? -1 : 1, veces: x.veces + 1, fecha: r.fecha };
+  });
+  const listas = { memoria, obs: R.OBS, planes_ingreso: F.cuentasDe_('INGRESO'), planes_egreso: F.cuentasDe_('EGRESO'), planes_fondos: F.cuentasDe_('FONDO_RECIBIDO'), nombres: [...nombres.values()].sort((a, b) => a.n.localeCompare(b.n, 'es')), decisiones: DECISIONES };
   const cuentas = [...ctx.cuentas.values()].map((c) => ({ id: c.id, nombre: c.banco + ' ···' + c.ultimos4, empresa: c.empresa }));
   if (!cuenta) return { periodo, meses, cuentas, cuenta_ref: '', filas: [], grupos: [], totales: null, cartola: null, estado: { ok: 0, esperando: 0, falta: 0, por_completar: 0 }, listas, cerrado: false };
   const h = construir_(db, cuenta, periodo, ctx);
@@ -224,7 +274,8 @@ const guardar = Base.conCapacidad('REGISTRAR', '', function (db, data, contexto)
     if (!cuenta) return errorValidacion('cuenta_ref', 'Primero sube una cartola para crear la cuenta del banco.');
     const r = R.registrar(db, Object.assign({}, data, { cuenta_ref: cuenta.id, filas: [nueva({ fecha: '', monto: '', nombre: '', obs: '', plan: '', grupo: '', fact: '', glosa: '', nota: '' })] }), contexto);
     if (r._validationError || r._forbidden) return r;
-    return { id: r.filas[0].id, nueva: true, en_banco: r.filas[0].en_banco };
+    const v0 = I.db_().prepare('SELECT version FROM FIN_MOVIMIENTOS WHERE id = ?').get(r.filas[0].id);
+    return { id: r.filas[0].id, nueva: true, en_banco: r.filas[0].en_banco, version: v0 ? v0.version || 0 : 0 };
   }
   const d = I.db_();
   const row = d.prepare('SELECT * FROM FIN_MOVIMIENTOS WHERE id = ?').get(id);
@@ -253,7 +304,7 @@ const guardar = Base.conCapacidad('REGISTRAR', '', function (db, data, contexto)
     const r = R.editar(db, Object.assign({}, data, { id, expected_version: versionAhora(), alias: v.alias, obs: v.obs, plan: v.plan, glosa: v.glosa, nota: v.nota, grupo: v.grupo, fact: v.fact,
       fecha: m.sin_cartola ? v.fecha : undefined, monto: m.sin_cartola ? v.monto : undefined }), contexto);
     if (r._validationError || r._forbidden) return r;
-    return { id, reclasificada: r.reclasificada };
+    return { id, reclasificada: r.reclasificada, version: versionAhora() };
   }
   // Fila del banco sin anotar (o clasificada a mano antes): se anota; si estaba confirmada y cambia qué es, se vuelve a clasificar.
   if (row.estado === 'CONFIRMADO' && cambiaQue && !(m.clasif && m.clasif.conciliado)) {
@@ -262,7 +313,7 @@ const guardar = Base.conCapacidad('REGISTRAR', '', function (db, data, contexto)
   }
   const r = R.registrar(db, Object.assign({}, data, { cuenta_ref: row.cuenta_ref, filas: [Object.assign(nueva(actual), { fecha: row.fecha, monto: actual.monto, mov_id: id })] }), contexto);
   if (r._validationError || r._forbidden) return r;
-  return { id, anotada: true };
+  return { id, anotada: true, version: versionAhora() };
 });
 
 /** Borra una fila (si espera la cartola) o lo anotado (si ya está en el banco). data: { id, expected_version } */
@@ -282,6 +333,41 @@ const borrar = Base.conCapacidad('REGISTRAR', '', function (db, data, contexto) 
   }
   const v = d.prepare('SELECT version FROM FIN_MOVIMIENTOS WHERE id = ?').get(row.id).version || 0;
   return R.eliminar(db, Object.assign({}, data, { id: row.id, expected_version: v }), contexto);
+});
+
+/**
+ * Pasa filas del banco a la planilla de otro mes (el mes anterior o el siguiente al de su fecha), sin tocar la cartola:
+ * lo del 30 de junio que el BCI contabilizó el 1 de julio se ve en junio, como en la planilla BANCOS.
+ * data: { ids: [...], periodo: 'AAAA-MM' (vacío = volver a su mes) }
+ */
+const moverMes = Base.conCapacidad('REGISTRAR', '', function (db, data, contexto, x) {
+  const ids = (Array.isArray(data && data.ids) ? data.ids : []).map(txt_).filter(Boolean).slice(0, 500);
+  if (!ids.length) return errorValidacion('ids', 'Elige las filas que se mueven.');
+  const destino = txt_(data.periodo);
+  if (destino && !PER_.test(destino)) return errorValidacion('periodo', 'Indica el mes (AAAA-MM).');
+  const d = I.db_();
+  const mesDe = (iso, n) => { const [a, m] = iso.slice(0, 7).split('-').map(Number); return new Date(Date.UTC(a, m - 1 + n, 1)).toISOString().slice(0, 7); };
+  const cambios = [];
+  for (const id of ids) {
+    const r = d.prepare('SELECT * FROM FIN_MOVIMIENTOS WHERE id = ?').get(id);
+    if (!r) return errorValidacion('ids', 'Una de las filas ya no existe: recarga la hoja.');
+    const m = I.des_(r.datos);
+    const antes = fechaHoja_(r, m).fecha.slice(0, 7);
+    const sinMover = fechaHoja_(r, Object.assign({}, m, { mes_hoja: null })).fecha.slice(0, 7);
+    if (destino && [mesDe(sinMover, -1), sinMover, mesDe(sinMover, 1)].indexOf(destino) === -1) return errorValidacion('periodo', 'Una fila del ' + r.fecha.split('-').reverse().join('-') + ' solo puede ir al mes anterior o al siguiente.');
+    if (cerrado_(antes) || (destino && cerrado_(destino))) return errorValidacion('periodo', 'El mes ' + (cerrado_(antes) ? antes : destino) + ' está cerrado.');
+    cambios.push({ r, m, valor: destino && destino !== sinMover ? destino : null });
+  }
+  d.exec('BEGIN');
+  try {
+    cambios.forEach((c) => {
+      if (c.valor) c.m.mes_hoja = c.valor; else delete c.m.mes_hoja;
+      d.prepare('UPDATE FIN_MOVIMIENTOS SET datos = ?, version = COALESCE(version, 0) + 1, actualizado_en = ?, actualizado_por = ? WHERE id = ?').run(I.cif_(c.m), new Date().toISOString(), x.nombre, c.r.id);
+    });
+    d.exec('COMMIT');
+  } catch (e) { d.exec('ROLLBACK'); throw e; }
+  x.registrar('HOJA_MOVER_MES', cambios.length + ' fila(s) → ' + (destino || 'su mes'));
+  return { movidas: cambios.length, periodo: destino };
 });
 
 /** Qué pasa con lo que sobra de un grupo. data: { cuenta_ref, periodo, letra, decision } */
@@ -436,4 +522,4 @@ const cobranza = B.conBoveda('', function (db, data, contexto, x) {
   return { totales: T, facturas: ver, total_facturas: l.length };
 });
 
-module.exports = { hoja, guardar, borrar, decidirGrupo, flujo, clientes, cobranza, construir_, contexto_, que_, folios_, DECISIONES };
+module.exports = { hoja, guardar, borrar, decidirGrupo, moverMes, flujo, clientes, cobranza, construir_, contexto_, que_, folios_, fechaHoja_, DECISIONES };

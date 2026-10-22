@@ -56,8 +56,9 @@ test('v3 · un mes del Excel BANCOS al libro: empareja por nombre, clasifica por
   ]);
   const r = Lb.llevarMes(db, D({ filas: h.filas, formulas: h.formulas, periodo: '2026-08', cuenta_ref: cuenta, archivo: 'BANCOS demo' }), ctx);
   assert.equal(r.emparejadas, 6);
-  assert.deepEqual(r.sin_banco.map((x) => x.monto), [-500000], 'lo que el banco no trae se informa, no se inventa');
-  assert.equal(r.creadas_sin_cartola, 0);
+  // Lo que el banco no trae queda en la planilla marcado «sin cartola» (antes se perdía y el mes no cuadraba con el Excel).
+  assert.deepEqual(r.sin_banco, []);
+  assert.equal(r.creadas_sin_cartola, 1);
   assert.equal(r.por_revisar.length, 1, 'el nombre que no se conoce queda por revisar');
   // Cada abono de $5.000.000 quedó con SU cliente (se emparejó por el nombre, no por el orden).
   const movs = F.movimientos(db, D({ periodo: '2026-08' }), ctx).movimientos;
@@ -71,8 +72,8 @@ test('v3 · un mes del Excel BANCOS al libro: empareja por nombre, clasifica por
   assert.equal(gP.saldo_sigso, 0);
   // El libro: categorías como el Excel y saldo del mes acumulado.
   const lb = Lb.libro(db, D({ periodo: '2026-08' }), ctx);
-  assert.equal(lb.lineas.length, 6);
-  assert.equal(lb.neto, 150000 + 5000000 + 5000000 - 4900000 - 5000000 + 88000);
+  assert.equal(lb.lineas.length, 7, 'las 6 del banco y la del arriendo, que espera la cartola');
+  assert.equal(lb.neto, 150000 + 5000000 + 5000000 - 4900000 - 5000000 + 88000 - 500000);
   assert.equal(lb.resumen.ABONO, 150000, 'el honorario por remanente no pasa por el banco: se suma aparte');
   assert.equal(lb.fuera_banco.resumen.ABONO, 100000, 'el remanente de Norte quedó como honorario sin banco');
   assert.equal(lb.fuera_banco.resumen.FONDOS, -100000, 'y salió de los fondos del cliente');
@@ -82,7 +83,7 @@ test('v3 · un mes del Excel BANCOS al libro: empareja por nombre, clasifica por
   // Repetir no duplica ni vuelve a clasificar lo confirmado.
   const r2 = Lb.llevarMes(db, D({ filas: h.filas, formulas: h.formulas, periodo: '2026-08', cuenta_ref: cuenta, archivo: 'BANCOS demo' }), ctx);
   assert.equal(r2.clasificadas, 0);
-  assert.equal(F.movimientos(db, D({ periodo: '2026-08' }), ctx).movimientos.length, 6);
+  assert.equal(F.movimientos(db, D({ periodo: '2026-08' }), ctx).movimientos.length, 7, 'el arriendo sin cartola no se duplica');
   void Fo;
 });
 
