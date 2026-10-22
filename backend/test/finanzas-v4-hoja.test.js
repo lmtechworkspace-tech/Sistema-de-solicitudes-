@@ -226,3 +226,51 @@ test('hoja · la planilla del mes se descarga en Excel (filas, resumen y grupos)
   const c = E.exportar(db, D({ tipo: 'planilla', formato: 'csv', filtros: { periodo: '2026-09', cuenta_ref: cuenta } }), ctx);
   assert.match(Buffer.from(c.base64, 'base64').toString('utf8'), /ANDES MONTAJES;ABONO/);
 });
+
+test('hoja · manda la fecha de la planilla (no la contable del banco) y una fila del banco se puede pasar al mes vecino', (t) => {
+  const { db, ctx, D, cuenta } = base(t);
+  // El banco contabiliza el 01-09 dos movimientos: uno es del 31-08 (según la planilla), el otro nadie lo anotó.
+  F.importarCartola(db, D({ filas: cartola([['01/09/2026', 'PAGO CUENTAS VIA INTERNET', 120000, 0, '21'], ['01/09/2026', 'TRANSFER DE ANDES MONTAJE', 0, 357000, '22']], SEP) }), ctx);
+  const serial = (iso) => String(Math.round((Date.parse(iso) - Date.UTC(1899, 11, 30)) / 864e5));
+  const CAB = ['AB', '.', 'TOTAL', 'SALDO', 'FECHA', 'DETALLE', 'PLAN DE CUENTA', 'UNITARIO', 'OBS', 'DETALLE BANCO'];
+  const filas = [[], ['', '', '', '', '', 'ABONO', '0'], CAB,
+    ['1', '', '88000', '', serial('2026-08-04'), 'ELECTRICA PACIFICO', '', '88000', 'ABONO', ''],
+    ['2', '', '357000', '', serial('2026-08-31'), 'ANDES MONTAJES', '', '357000', 'ABONO', ''],
+    ['3', '', '-450000', '', serial('2026-08-30'), 'ARRIENDO', 'Arriendo Mensual', '-450000', 'ABONO', '']];
+  const r = Lb.llevarMes(db, D({ filas, formulas: [], periodo: '2026-08', cuenta_ref: cuenta, archivo: 'BANCOS demo' }), ctx);
+  assert.ok(!r._validationError, r.message);
+  assert.equal(r.creadas_sin_cartola, 1, 'el arriendo que el banco no trae queda en la planilla, esperando la cartola');
+  let ago = H.hoja(db, D({ periodo: '2026-08', cuenta_ref: cuenta }), ctx);
+  const andes = ago.filas.find((f) => f.monto === 357000);
+  assert.deepEqual([andes.fecha, andes.fecha_banco, andes.banco], ['2026-08-31', '2026-09-01', 'ok'], 'va en agosto, con la fecha del banco a la vista');
+  assert.equal(ago.totales.TOTAL, 88000 + 357000 - 450000, 'agosto cuadra con el Excel');
+  assert.equal(ago.cartola.cuadra, true);
+  assert.equal(ago.cartola.n_cortes, 0, 'la cadena de saldos del banco no se corta: no hay repetidos ni faltantes');
+  let sep = H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx);
+  assert.deepEqual(sep.filas.map((f) => f.monto), [-120000]);
+  assert.equal(sep.cartola.en_otro_mes.filas, 1, 'la cartola de septiembre avisa que una fila se ve en agosto');
+  // El cargo del 01-09 era del 31-08: se pasa a agosto (solo al mes vecino).
+  const cargo = sep.filas[0];
+  assert.equal(cargo.con_fecha_tx, false, 'sin fecha de transacción: candidato a ser del mes anterior');
+  assert.ok(H.moverMes(db, D({ ids: [cargo.id], periodo: '2026-11' }), ctx)._validationError, 'no a cualquier mes');
+  assert.equal(H.moverMes(db, D({ ids: [cargo.id], periodo: '2026-08' }), ctx).movidas, 1);
+  sep = H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx);
+  ago = H.hoja(db, D({ periodo: '2026-08', cuenta_ref: cuenta }), ctx);
+  assert.equal(sep.filas.length, 0);
+  assert.deepEqual([ago.filas.find((f) => f.monto === -120000).fecha, ago.filas.find((f) => f.monto === -120000).movida], ['2026-08-31', true]);
+  // Volver a su mes.
+  H.moverMes(db, D({ ids: [cargo.id], periodo: '' }), ctx);
+  assert.equal(H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx).filas.length, 1);
+});
+
+test('hoja · guardar devuelve la versión nueva (se puede seguir editando sin recargar) y la hoja recuerda lo último de cada nombre', (t) => {
+  const { db, ctx, D, cuenta } = base(t);
+  const n = H.guardar(db, D({ cuenta_ref: cuenta, campos: { fecha: '2026-09-02', monto: 357000, nombre: 'andes montajes', obs: 'ABONO', plan: 'Servicio Mensual' } }), ctx);
+  assert.equal(typeof n.version, 'number');
+  const e1 = H.guardar(db, D({ id: n.id, expected_version: n.version, campos: { fact: '77' } }), ctx);
+  assert.ok(!e1._validationError && !e1._conflict, e1.message);
+  const e2 = H.guardar(db, D({ id: n.id, expected_version: e1.version, campos: { nota: 'sin recargar' } }), ctx);
+  assert.ok(!e2._validationError && e2.codigo !== 'CONFLICTO_VERSION', 'con la versión devuelta, la siguiente edición no choca');
+  const h = H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx);
+  assert.deepEqual([h.listas.memoria['ANDES MONTAJES'].obs, h.listas.memoria['ANDES MONTAJES'].plan], ['ABONO', 'Servicio Mensual']);
+});

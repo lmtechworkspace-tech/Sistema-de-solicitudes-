@@ -898,6 +898,7 @@ const ACCIONES = {
   finanzasHojaGuardar: (db, data, contexto) => FinanzasHoja.guardar(db, data, contexto),
   finanzasHojaBorrar: (db, data, contexto) => FinanzasHoja.borrar(db, data, contexto),
   finanzasHojaGrupo: (db, data, contexto) => FinanzasHoja.decidirGrupo(db, data, contexto),
+  finanzasHojaMoverMes: (db, data, contexto) => FinanzasHoja.moverMes(db, data, contexto),
   finanzasHojaFlujo: (db, data, contexto) => FinanzasHoja.flujo(db, data, contexto),
   finanzasHojaClientes: (db, data, contexto) => FinanzasHoja.clientes(db, data, contexto),
   finanzasHojaCobranza: (db, data, contexto) => FinanzasHoja.cobranza(db, data, contexto),

@@ -212,8 +212,10 @@ const llevarMes = Base.conCapacidad('MIGRAR', '', function (db, data, contexto, 
     if (mejor >= 0) { usados.add(mejor); par.set(r.fila, movs[mejor]); }
   }));
 
-  // 2) Sin cartola del mes: el movimiento se crea desde la planilla, marcado «sin cartola».
-  const sinCartola = deCartola === 0 && data.crear_sin_cartola !== false;
+  // 2) Lo que la cartola no trae se crea desde la planilla, marcado «sin cartola» (espera la cartola). Antes, con
+  //    cartola del mes, esas filas se perdían en silencio y la planilla de SIGSO dejaba de cuadrar con el Excel
+  //    (p. ej. transferencias del 31 que el banco pasa el mes siguiente). Se unen solas cuando llegue esa cartola.
+  const sinCartola = data.crear_sin_cartola !== false;
   let creados = 0;
   const sinBanco = [];
   if (sinCartola) {
@@ -240,7 +242,8 @@ const llevarMes = Base.conCapacidad('MIGRAR', '', function (db, data, contexto, 
   const gr = grupos_(hoja.filas.filter((r) => r.fecha.slice(0, 7) === periodo));
   const res = clasificarYAgrupar_(db, data, contexto, { filas, par, gr, cuenta, periodo, lote, archivo });
   x.registrar('LIBRO_DESDE_BANCOS', periodo + ' · ' + filas.length + ' filas · ' + res.clasificadas + ' clasificadas · ' + creados + ' sin cartola');
-  return Object.assign({ periodo, filas: filas.length, emparejadas: filas.length - sinBanco.length - creados, creadas_sin_cartola: creados, sin_banco: sinBanco, resumen_planilla: hoja.resumen }, res);
+  const unidas = sinCartola && creados && deCartola ? require('./finanzasRegistro').unirConCartola_(cuenta.id, desde, Base.sumarDias_(periodo + '-01', 45)) : 0;
+  return Object.assign({ periodo, filas: filas.length, emparejadas: filas.length - sinBanco.length - creados, creadas_sin_cartola: creados, unidas_despues: unidas, sin_banco: sinBanco, cartola_del_mes: deCartola, resumen_planilla: hoja.resumen }, res);
 });
 
 /**
@@ -267,7 +270,8 @@ function clasificarYAgrupar_(db, data, contexto, P0) {
       const m = par.get(r.fila); if (!m) return;
       const gg = grupoDe.get(r.fila);
       const antes = m.d.planilla || {};
-      m.d.planilla = { alias: r.alias, obs: r.obs, plan: r.plan, glosa: r.banco, fila: r.fila, archivo: antes.registro ? antes.archivo : archivo, unitario: isFinite(r.unitario) ? r.unitario : null,
+      // fecha: la de la planilla (fecha de la transacción); el banco puede contabilizarla otro día u otro mes.
+      m.d.planilla = { alias: r.alias, obs: r.obs, plan: r.plan, glosa: r.banco, fila: r.fila, fecha: r.fecha, archivo: antes.registro ? antes.archivo : archivo, unitario: isFinite(r.unitario) ? r.unitario : null,
         grupo: gg ? { cierre: gg.cierre, miembros: gg.miembros, incompleto: gg.incompleto, remanente: gg.remanente_planilla, obs: gg.obs } : null };
       // Lo anotado a mano en SIGSO (registro diario) conserva quién lo anotó y su nota.
       if (antes.registro) { m.d.planilla.registro = antes.registro; m.d.planilla.nota = antes.nota || ''; }
@@ -372,7 +376,7 @@ const reaplicar = Base.conCapacidad('CONFIRMAR', '', function (db, data, context
     const par = new Map(); const filas = []; const gs = new Map();
     lista.forEach((m) => {
       const p = m.d.planilla;
-      filas.push({ fila: p.fila, fecha: m.r.fecha, monto: (m.d.abono || 0) - (m.d.cargo || 0), alias: p.alias || '', plan: p.plan || '', obs: p.obs || '', banco: p.glosa || '', unitario: p.unitario });
+      filas.push({ fila: p.fila, fecha: p.fecha || m.r.fecha, monto: (m.d.abono || 0) - (m.d.cargo || 0), alias: p.alias || '', plan: p.plan || '', obs: p.obs || '', banco: p.glosa || '', unitario: p.unitario });
       par.set(p.fila, m);
       if (p.grupo) gs.set(p.grupo.cierre, { cierre: p.grupo.cierre, miembros: p.grupo.miembros, incompleto: p.grupo.incompleto, remanente_planilla: p.grupo.remanente, obs: p.grupo.obs });
     });
