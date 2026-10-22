@@ -1966,3 +1966,95 @@ tr.fin5-mismo-grupo .fin5-gr { background: var(--fin-solido, var(--fin)); color:
   .fin5-camino__guia { flex-wrap: wrap; }
   .fin5-camino__guia .sx2-enlace { margin-left: 0; }
 }
+
+/* ==== Finanzas v5.4 · planilla: franja por tipo, barra compacta, separador por día, colores de grupo,
+        panel plegable, modo pendiente, letra grande, celebraciones y ajustes del tema oscuro ==== */
+/* 1) Franja de color por «Qué es» */
+.fin4-hoja tr[data-k] td.fin4-idx { box-shadow: inset 3px 0 0 var(--franja, transparent); }
+.fin4-hoja tr[data-k="ing"] { --franja: var(--sx-ok); }
+.fin4-hoja tr[data-k="gas"] { --franja: var(--sx-critico); }
+.fin4-hoja tr[data-k="fon"] { --franja: var(--fin5-violeta); }
+.fin4-hoja tr[data-k="tra"] { --franja: var(--sx-texto-3); }
+.fin4-hoja tr[data-k="pend"], .fin4-hoja tr[data-k="falta"], .fin4-hoja tr[data-k="rev"] { --franja: var(--sx-alerta); }
+
+/* 2) Barra compacta al bajar */
+.fin5-mini-env { position: sticky; top: 0; height: 0; z-index: 40; }
+.fin5-mini-barra {
+  position: absolute; left: 0; right: 0; top: 8px; display: flex; align-items: center; gap: 18px; padding: 8px 10px 8px 16px; border-radius: 14px;
+  background: color-mix(in srgb, var(--sx-superficie) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--sx-borde); box-shadow: var(--fin5-sombra-alta); font-size: .82rem; color: var(--sx-texto);
+  opacity: 0; transform: translateY(-14px); pointer-events: none; transition: opacity .22s, transform .22s var(--sx-curva);
+}
+.fin5-mini-barra--ver { opacity: 1; transform: none; pointer-events: auto; }
+.fin5-mini-barra__mes { font: 750 .9rem/1 var(--fuente); text-transform: capitalize; }
+.fin5-mini-barra > span { display: flex; flex-direction: column; gap: 1px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fin5-mini-barra > span small { font: 700 .6rem/1 var(--fuente); letter-spacing: .06em; color: var(--sx-texto-3); }
+.fin5-mini-barra .fin5-mini-barra__pend { flex-direction: row; padding: 4px 9px; border-radius: 99px; font-size: .72rem; color: color-mix(in srgb, var(--sx-alerta) 85%, var(--sx-texto)); background: color-mix(in srgb, var(--sx-alerta) 13%, transparent); }
+.fin5-mini-barra__paso, .fin5-mini-barra__ok { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; font: 650 .76rem/1 var(--fuente); border: 0; }
+.fin5-mini-barra__paso { cursor: pointer; background: var(--fin-solido, var(--fin)); color: #fff; }
+.fin5-mini-barra__ok { color: var(--sx-ok); background: color-mix(in srgb, var(--sx-ok) 13%, transparent); }
+@media (max-width: 900px) { .fin5-mini-barra > span:not(.fin5-mini-barra__pend):nth-of-type(2) { display: none; } }
+@media (max-width: 640px) { .fin5-mini-barra { gap: 10px; } .fin5-mini-barra > span:not(.fin5-mini-barra__pend) { display: none; } }
+
+/* 3) Separador por día (el encabezado de la tabla ya queda fijo al bajar) */
+.fin4-hoja tr.fin5-dia td { position: sticky; top: 33px; z-index: 1; height: auto; padding: 0 !important; border-bottom: 0; background: none; }
+.fin4-hoja tr.fin5-dia td > span { display: flex; align-items: baseline; gap: 10px; padding: 7px 14px 5px; background: color-mix(in srgb, var(--sx-superficie-2) 70%, var(--sx-superficie)); border-bottom: 1px solid var(--sx-borde); }
+.fin4-hoja tr.fin5-dia b { font: 700 .74rem/1 var(--fuente); color: var(--sx-texto); }
+.fin4-hoja tr.fin5-dia small { font-size: .7rem; color: var(--sx-texto-3); }
+.fin4-hoja tr.fin5-dia i { font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fin4-hoja tr.fin5-dia:first-child td { top: 33px; }
+
+/* 4) Cada grupo con su color */
+.fin5-gr[style*="--gh"], .fin5-grupo__letra[style*="--gh"] { color: hsl(var(--gh) 62% 34%); background: hsl(var(--gh) 75% 93%); }
+tr.fin5-mismo-grupo .fin5-gr[style*="--gh"] { color: #fff; background: hsl(var(--gh) 58% 45%); }
+:root[data-tema="oscuro"] .fin5-gr[style*="--gh"], :root[data-tema="oscuro"] .fin5-grupo__letra[style*="--gh"], :root[data-theme="dark"] .fin5-gr[style*="--gh"], :root[data-theme="dark"] .fin5-grupo__letra[style*="--gh"] { color: hsl(var(--gh) 80% 78%); background: hsl(var(--gh) 35% 22%); }
+@media (prefers-color-scheme: dark) { :root:not([data-tema="claro"]):not([data-theme="light"]) .fin5-gr[style*="--gh"], :root:not([data-tema="claro"]):not([data-theme="light"]) .fin5-grupo__letra[style*="--gh"] { color: hsl(var(--gh) 80% 78%); background: hsl(var(--gh) 35% 22%); } }
+
+/* 5–6) Herramientas de vista: panel plegable, solo lo pendiente, letra grande */
+.fin5-vista { display: inline-flex; gap: 4px; padding: 3px; border-radius: 12px; background: var(--sx-superficie-2); margin-left: auto; }
+.fin5-vista__b { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 0; border-radius: 9px; cursor: pointer; background: none; color: var(--sx-texto-2); font: 600 .74rem/1 var(--fuente); transition: background .15s, color .15s; }
+.fin5-vista__b:hover { color: var(--sx-texto); }
+.fin5-vista__b[aria-pressed="true"] { background: var(--sx-superficie); color: var(--fin); box-shadow: var(--fin5-sombra); }
+.fin5-vista__aa { font: 800 .8rem/1 var(--fuente); }
+.fin5-filtros .fin5-buscar { margin-left: 0; }
+@media (max-width: 1100px) { .fin5-vista__b span { display: none; } }
+.fin5-sin-lado .fin5-lado { display: none !important; }
+.fin5-sin-lado .fin5-planilla { grid-template-columns: minmax(0, 1fr) !important; }
+.fin5-sin-lado .fin4-hoja-env { max-height: calc(100vh - 300px); }
+.fin5-foco .fin4-hoja tr.fin4-fila:not([data-pend]):not(.fin4-fila--nueva):not(.fin5-pendiente) td { opacity: .32; transition: opacity .2s; }
+.fin5-foco .fin4-hoja tr.fin4-fila:not([data-pend]):hover td { opacity: .8; }
+.fin5-foco .fin4-hoja tr.fin5-dia td { opacity: .6; }
+.fin5-grande .fin4-hoja { font-size: .95rem; }
+.fin5-grande .fin4-hoja .fin4-v { min-height: 44px; padding: 12px 9px; }
+.fin5-grande .fin4-hoja .fin5-obs, .fin5-grande .fin4-que, .fin5-grande .fin4-chip { font-size: .8rem; }
+.fin5-grande .fin4-hoja th { font-size: .72rem; }
+
+/* 7) Celebraciones */
+@keyframes fin5-logro { 0% { transform: scale(1); } 35% { transform: scale(1.06); box-shadow: 0 0 0 6px color-mix(in srgb, var(--sx-ok) 25%, transparent); } 100% { transform: scale(1); } }
+.fin5-paso--logro { animation: fin5-logro .7s var(--sx-curva); }
+.fin5-paso--logro .fin5-paso__n { animation: fin5-pop .5s var(--sx-curva); }
+.fin5-confeti { position: fixed; z-index: 1500; width: 0; height: 0; pointer-events: none; }
+.fin5-confeti i { position: absolute; width: 7px; height: 11px; border-radius: 2px; animation: fin5-confeti 1.1s cubic-bezier(.2, .7, .3, 1) forwards; }
+@keyframes fin5-confeti { 0% { transform: translate(0, 0) rotate(0); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(var(--dx), calc(var(--dy) + 60px)) rotate(var(--r)); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .fin5-paso--logro, .fin5-paso--logro .fin5-paso__n, .fin5-mini-barra { animation: none; transition: none; } .fin5-confeti { display: none; } }
+
+/* 8) Tema oscuro: más contraste en lo que se lee todo el día */
+:root[data-tema="oscuro"] .fin4, :root[data-theme="dark"] .fin4 { --fin5-sombra-alta: 0 2px 6px rgba(0, 0, 0, .5), 0 18px 40px -16px rgba(0, 0, 0, .6); }
+:root[data-tema="oscuro"] .fin4-hoja td, :root[data-theme="dark"] .fin4-hoja td { border-bottom-color: color-mix(in srgb, var(--sx-borde) 70%, transparent); }
+:root[data-tema="oscuro"] .fin5-mt--entra, :root[data-theme="dark"] .fin5-mt--entra { color: #4ADE80; }
+:root[data-tema="oscuro"] .fin5-mt--sale, :root[data-theme="dark"] .fin5-mt--sale { color: #F87171; }
+:root[data-tema="oscuro"] .fin5-obs, :root[data-theme="dark"] .fin5-obs { background: color-mix(in srgb, var(--t) 22%, transparent); }
+:root[data-tema="oscuro"] .fin4-fila--falta td, :root[data-theme="dark"] .fin4-fila--falta td { background: color-mix(in srgb, var(--sx-alerta) 12%, var(--sx-superficie)); }
+:root[data-tema="oscuro"] .fin5-mini-barra, :root[data-theme="dark"] .fin5-mini-barra { background: color-mix(in srgb, var(--sx-superficie) 92%, transparent); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]):not([data-theme="light"]) .fin5-mt--entra { color: #4ADE80; }
+  :root:not([data-tema="claro"]):not([data-theme="light"]) .fin5-mt--sale { color: #F87171; }
+  :root:not([data-tema="claro"]):not([data-theme="light"]) .fin5-obs { background: color-mix(in srgb, var(--t) 22%, transparent); }
+}
+/* Celular: el separador de día también como tarjeta */
+@media (max-width: 760px) {
+  .fin4-hoja tr.fin5-dia { display: block; }
+  .fin4-hoja tr.fin5-dia td { display: block; position: static; }
+  .fin5-vista { margin-left: 0; }
+}
+.fin5-rv-nota { flex-basis: 100%; display: flex; align-items: center; gap: 6px; margin: 2px 0 0 !important; }

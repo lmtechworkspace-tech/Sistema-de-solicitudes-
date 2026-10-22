@@ -136,7 +136,7 @@ function verificar_(periodo) {
       detalle: cobertura.length ? cobertura.map((c) => c.cuenta + (c.completa ? ': completa' : c.excepcion ? ': fuera de alcance (' + c.excepcion.motivo + ')' : ': falta' + (c.hasta ? ' desde el ' + siguienteDia_(c.hasta).slice(8) : ' todo el mes'))).join(' · ') : 'No hay cuentas cargadas.' },
     { id: 'cuadra', nombre: 'Saldos cuadran con el banco', ok: delMes.length > 0 && !descuadradas, obligatorio: true,
       detalle: delMes.length ? (descuadradas ? descuadradas + ' cartola(s) no cuadraron' : delMes.length + ' cartola(s), todas cuadran') : 'Sin cartolas del mes.' },
-    { id: 'revisado', nombre: 'Todo revisado', ok: total > 0 && pend === 0, obligatorio: true,
+    { id: 'revisado', nombre: 'Todas las filas con su OBS (o revisadas)', ok: total > 0 && pend === 0, obligatorio: true,
       detalle: total ? (pend ? 'Faltan ' + pend + ' de ' + total + ' movimientos' : 'Los ' + total + ' movimientos anotados en la planilla o confirmados') : 'Sin movimientos.' },
     { id: 'aperturas', nombre: 'Saldos iniciales de fondos de clientes', ok: !sinApertura || !!exc.aperturas, obligatorio: true,
       detalle: !sinApertura ? 'Todos los clientes con fondos tienen saldo inicial aprobado.' : exc.aperturas ? sinApertura + ' sin saldo inicial; excepción aceptada por ' + exc.aperturas.por + ': ' + exc.aperturas.motivo : sinApertura + ' cliente(s) sin saldo inicial aprobado: cárgalos en Fondos o acepta la excepción con su motivo.' },

@@ -256,7 +256,7 @@ function clasificarYAgrupar_(db, data, contexto, P0) {
   // Grupos de fondos (columna UNITARIO): una fila que pertenece a un grupo es dinero del cliente aunque su OBS esté vacía.
   const grupoDe = new Map();
   gr.forEach((g) => g.miembros.forEach((n) => grupoDe.set(n, g)));
-  const conceptoGrupo = (g) => { const ms = g.miembros.map((n) => filas.find((r) => r.fila === n)).filter(Boolean); return conceptoFondo_(ms.find((r) => r.plan) || ms.find((r) => r.obs && r.obs !== 'SALDO') || ms[ms.length - 1]); };
+  const conceptoGrupo = (g, r0) => { const ms = (g.miembros || []).map((n) => filas.find((r) => r.fila === n)).filter(Boolean); if (!ms.length && r0) ms.push(r0); return conceptoFondo_(ms.find((r) => r.plan) || ms.find((r) => r.obs && r.obs !== 'SALDO') || ms[ms.length - 1]); };
 
   // 3) Lo que dice la planilla queda en cada movimiento, y la clasificación se confirma si alcanza.
   const ctx = { alias: P.aliasMapa_(), clientes: I.clientes_(db) };
@@ -268,11 +268,14 @@ function clasificarYAgrupar_(db, data, contexto, P0) {
   try {
     filas.forEach((r) => {
       const m = par.get(r.fila); if (!m) return;
-      const gg = grupoDe.get(r.fila);
       const antes = m.d.planilla || {};
+      // Al corregir una fila en la hoja (registro) no se lee la columna UNITARIO: su grupo del Excel se conserva.
+      // Antes se perdía, y el grupo quedaba partido en dos letras (y las demás letras se corrían).
+      const previo = !grupoDe.get(r.fila) && lote === 'registro' && antes.grupo && antes.grupo.cierre != null ? antes.grupo : null;
+      const gg = grupoDe.get(r.fila) || (previo ? Object.assign({}, previo, { miembros: previo.miembros || [r.fila] }) : null);
       // fecha: la de la planilla (fecha de la transacción); el banco puede contabilizarla otro día u otro mes.
-      m.d.planilla = { alias: r.alias, obs: r.obs, plan: r.plan, glosa: r.banco, fila: r.fila, fecha: r.fecha, archivo: antes.registro ? antes.archivo : archivo, unitario: isFinite(r.unitario) ? r.unitario : null,
-        grupo: gg ? { cierre: gg.cierre, miembros: gg.miembros, incompleto: gg.incompleto, remanente: gg.remanente_planilla, obs: gg.obs } : null };
+      m.d.planilla = { alias: r.alias, obs: r.obs, plan: r.plan, glosa: r.banco, fila: r.fila, fecha: r.fecha, archivo: antes.registro || (lote === 'registro' && antes.archivo) ? antes.archivo : archivo, unitario: isFinite(r.unitario) ? r.unitario : null,
+        grupo: previo || (gg ? { cierre: gg.cierre, miembros: gg.miembros, incompleto: gg.incompleto, remanente: gg.remanente_planilla, obs: gg.obs } : null) };
       // Lo anotado a mano en SIGSO (registro diario) conserva quién lo anotó y su nota.
       if (antes.registro) { m.d.planilla.registro = antes.registro; m.d.planilla.nota = antes.nota || ''; }
       // La letra del grupo y el N° de factura de la hoja se conservan.
@@ -281,7 +284,7 @@ function clasificarYAgrupar_(db, data, contexto, P0) {
       d.prepare('UPDATE FIN_MOVIMIENTOS SET datos = ? WHERE id = ?').run(I.cif_(m.d), m.r.id);
       if (m.r.estado !== 'PENDIENTE') return; // lo ya confirmado no se toca
       let c = clasifDeFila_(r, quien.get(r.alias), cuenta.empresa);
-      const g = grupoDe.get(r.fila);
+      const g = gg;
       // En un grupo, todas sus filas son del cliente del grupo (aunque alguna use otro nombre corto o ninguno).
       const qg = g ? clienteGrupo(g) : null;
       if (g && qg && c && (c.tipo === 'FONDO_RECIBIDO' || c.tipo === 'FONDO_PAGADO')) { delete c.falta; c.cliente_id = qg.cliente_id; }
@@ -289,7 +292,7 @@ function clasificarYAgrupar_(db, data, contexto, P0) {
       // que lo que sobra del grupo se cobra como honorario (se decide en el paso 4), no que el pago sea un gasto.
       if (g && (!c || (c.tipo !== 'FONDO_RECIBIDO' && c.tipo !== 'FONDO_PAGADO'))) {
         const q = qg || quien.get(r.alias);
-        c = Object.assign(r.monto > 0 ? { tipo: 'FONDO_RECIBIDO', subtipo: 'RECEPCION' } : { tipo: 'FONDO_PAGADO', subtipo: 'PAGO_OBLIGACION' }, { cuenta: conceptoGrupo(g) },
+        c = Object.assign(r.monto > 0 ? { tipo: 'FONDO_RECIBIDO', subtipo: 'RECEPCION' } : { tipo: 'FONDO_PAGADO', subtipo: 'PAGO_OBLIGACION' }, { cuenta: conceptoGrupo(g, r) },
           q && q.clase === 'cliente' ? { cliente_id: q.cliente_id } : { falta: 'cliente' });
       }
       if (!c || c.falta) { porRevisar.push({ fila: r.fila, mov: m.r.id, motivo: !c ? 'La planilla no dice qué es (OBS vacía).' : 'Falta saber de qué cliente es «' + r.alias + '».', propuesta: c || null }); return; }

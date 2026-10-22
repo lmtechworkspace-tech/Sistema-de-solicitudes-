@@ -14,6 +14,12 @@
 
   var U = UIv2;
   var x_ = null, cat_ = null;
+  var PREF_ = (function () { try { return JSON.parse(localStorage.getItem('sigso_fin_planilla_vista') || '{}') || {}; } catch (e) { return {}; } })();
+  function guardarPref() { try { localStorage.setItem('sigso_fin_planilla_vista', JSON.stringify(PREF_)); } catch (e) { /* sin almacenamiento */ } }
+  function prefClases() { return (PREF_.foco ? ' fin5-foco' : '') + (PREF_.grande ? ' fin5-grande' : '') + (PREF_.sinLado ? ' fin5-sin-lado' : ''); }
+  var DIAS_ = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  // Color propio de cada letra de grupo (el mismo en la fila y en el panel).
+  function tonoGrupo(letra) { var n = 0; String(letra || '').split('').forEach(function (ch) { n = n * 26 + (ch.charCodeAt(0) - 64); }); return (n * 47) % 360; }
   var est_ = { periodo: '', cuenta: '', datos: null, sel: { r: 0, c: 1 }, editando: null, borrador: {}, filtro: 'todas', busca: '', extras: [], temporales: [], guardados: [], ultimaFecha: '', mensaje: null };
   document.addEventListener('sigso-fin-cerrada', function () { est_.datos = null; est_.borrador = {}; est_.temporales = []; est_.oferta = null; cerrarAc(); cerrarMeses(); cerrarAyudaCol(); });
 
@@ -201,8 +207,8 @@
       (d.cuenta_ref && d.filas.length ? U.boton({ texto: 'Descargar Excel', icono: 'descargar', sm: true, variante: 'secundario', clase: 'js-f4-excel', datos: { cap: 'EXPORTAR' } }) : '') +
       U.boton({ texto: 'Subir cartola', icono: 'subir', sm: true, variante: 'primario', clase: 'js-f4-cargar', datos: { cap: 'REGISTRAR' } });
     if (est_.filtro !== 'todas' && !d.filas.some(function (f) { return pasaFiltro(f); })) est_.filtro = 'todas';
-    var interior = d.cuentas.length ? barraHtml(d, mesesVisibles(d)) + caminoHtml(d) + kpisHtml(d) +
-        '<div class="fin5-planilla-env"><div class="fin5-planilla"><div class="fin5-principal">' + filtrosHtml(d) + guiaHtml(d) + hojaHtml(d, animar) + '</div>' +
+    var interior = d.cuentas.length ? miniHtml(d) + barraHtml(d, mesesVisibles(d)) + caminoHtml(d) + kpisHtml(d) +
+        '<div class="fin5-planilla-env' + prefClases() + '"><div class="fin5-planilla"><div class="fin5-principal">' + filtrosHtml(d) + guiaHtml(d) + hojaHtml(d, animar) + '</div>' +
         '<aside class="fin5-lado" aria-label="Banco y grupos">' + bancoHtml(d) + gruposHtml(d) + atajosHtml() + '</aside></div></div>'
       : vacioHtml('subir', 'Todavía no hay una cuenta del banco', 'Sube la primera cartola del banco: con ella se crea la cuenta y empieza la planilla.', U.boton({ texto: 'Subir cartola', icono: 'subir', variante: 'primario', clase: 'js-f4-cargar' }));
     var c = cuerpoPlanilla();
@@ -220,6 +226,8 @@
     est_.accPrevias = acciones;
     x_.aplicarCapacidades(x_.raiz());
     activar(cuerpoPlanilla() || x_.raiz());
+    observarResumen();
+    if (d.cuentas.length) celebrar(d);
     var sel = x_.raiz().querySelector('.fin5-mes[aria-selected="true"]'); if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
   // Meses en las pestañas: los que tienen datos, los que se abrieron a mano y el elegido.
@@ -234,7 +242,7 @@
         '<button type="button" class="fin5-mes-mas js-f5-mes-mas" aria-haspopup="dialog" title="Abrir otro mes"><b>+</b><span>Mes</span></button></div>' +
       (d.cuentas.length > 1 ? '<label class="fin5-select">' + U.ico('empresa', 15) + '<select class="js-f4-cuenta" aria-label="Cuenta del banco">' + d.cuentas.map(function (c) { return '<option value="' + txt(c.id) + '"' + (c.id === d.cuenta_ref ? ' selected' : '') + '>' + txt(c.empresa + ' · ' + c.nombre) + '</option>'; }).join('') + '</select></label>'
         : (d.cuentas[0] ? '<span class="fin5-pildora fin5-pildora--suave">' + U.ico('empresa', 14) + txt(d.cuentas[0].empresa + ' · ' + d.cuentas[0].nombre) + '</span>' : '')) +
-      (d.cerrado ? '<span class="fin5-pildora fin5-pildora--neutro">' + U.ico('candado', 14) + 'Mes cerrado</span>' : '') +
+      (d.cerrado ? '<span class="fin5-pildora fin5-pildora--neutro">' + U.ico('candado', 14) + 'Mes cerrado</span><button type="button" class="fin5-mini fin5-mini--acento js-f5-portada">' + U.ico('documento', 13) + 'Portada del mes</button>' : '') +
       '<span class="fin5-barra__mes js-f5-barra-mes">' + txt(mesLargo(d.periodo)) + ' · ' + d.filas.length + ' fila(s)</span>' +
     '</div>';
   }
@@ -300,11 +308,11 @@
     return null;
   }
   function gruposAbiertos(d) { return (d.grupos || []).filter(function (g) { return g.decision === 'PENDIENTE' && g.suma; }); }
-  function caminoHtml(d) {
-    var e = d.estado, c = d.cartola, ed = editable();
+  function caminoPasos(d) {
+    var e = d.estado, c = d.cartola;
     var comp = d.filas.filter(function (f) { return pasaFiltro(f, 'completar'); }).length, ga = gruposAbiertos(d).length;
     var cuadra = !!c && !e.falta && !e.esperando;
-    var pasos = [
+    return [
       { id: 'cartola', t: 'Sube la cartola', hecho: !!c, sub: c ? 'Cargada' : 'Del banco, en Excel', guia: 'Sube la cartola del banco en Excel (botón «Subir cartola» arriba). Con ella SIGSO comprueba cada fila.' },
       { id: 'falta', t: 'Anota lo del banco', hecho: !!c && !e.falta, n: e.falta, sub: e.falta ? e.falta + ' sin anotar' : c ? 'Todo anotado' : 'Espera la cartola', guia: 'El banco trae movimientos que nadie anotó (en naranjo). Escribe quién es y la OBS: SIGSO te sugiere el nombre.' },
       { id: 'completar', t: 'Completa los datos', hecho: !comp && d.filas.length > 0, n: comp, sub: comp ? comp + ' por completar' : d.filas.length ? 'Nada pendiente' : 'Sin filas', guia: 'A algunas filas les falta un dato. En la columna «Qué es» el texto naranjo dice cuál (el plan, la OBS o el nombre): tócalo y SIGSO te lleva a la celda.' },
@@ -312,6 +320,9 @@
       { id: 'esperando', t: 'Cuadra con el banco', hecho: cuadra, n: e.esperando, sub: cuadra ? 'Cuadra' : e.esperando ? e.esperando + ' esperan la cartola' : 'Faltan pasos', guia: e.esperando ? 'Hay filas anotadas que el banco no trae. Si ya subiste la cartola completa, revisa su fecha o su monto.' : 'Cuando todo lo anotado esté en el banco, el mes cuadra.' },
       { id: 'cierre', t: 'Revisa y cierra', hecho: !!d.cerrado, sub: d.cerrado ? 'Cerrado' : estadoRev(d) === 'EN_REVISION' ? 'En revisión' : estadoRev(d) === 'OBSERVADO' ? 'Con observaciones' : 'Al final', guia: estadoRev(d) === 'EN_REVISION' ? 'El mes está en revisión: quien revisa lo cierra o lo devuelve con observaciones.' : 'Todo listo: toca «Revisa y cierra» para ver la revisión final, enviarlo a revisión o cerrarlo.' }
     ];
+  }
+  function caminoHtml(d) {
+    var ed = editable(), pasos = caminoPasos(d);
     var actual = -1; pasos.forEach(function (p, i) { if (actual === -1 && !p.hecho) actual = i; });
     var listos = pasos.filter(function (p) { return p.hecho; }).length;
     var guia = actual === -1 ? 'El mes está completo y cerrado.' : pasos[actual].guia;
@@ -356,6 +367,93 @@
     var l = lineas(), i = l.findIndex(function (z) { return z.f && faltaDe(z.f); });
     if (i >= 0) { var q = faltaDe(l[i].f); seleccionar(i, colDe(q.col), true); }
   }
+  // ---- Barra compacta: cuando el resumen sale de la vista, arriba queda lo esencial del mes ----------------
+  function miniHtml(d) {
+    if (!d.totales) return '<div class="fin5-mini-env"></div>';
+    var pasos = caminoPasos(d), act = pasos.filter(function (p) { return !p.hecho; })[0];
+    var t = d.totales, comp = d.filas.filter(function (f) { return pasaFiltro(f, 'completar'); }).length;
+    return '<div class="fin5-mini-env"><div class="fin5-mini-barra' + (est_.miniVer ? ' fin5-mini-barra--ver' : '') + '" aria-hidden="' + !est_.miniVer + '">' +
+      '<b class="fin5-mini-barra__mes">' + txt(mesLargo(d.periodo)) + '</b>' +
+      '<span><small>ABONO</small>' + txt(plata(t.ABONO)) + '</span><span><small>ABONO RENTA</small>' + txt(plata(t['ABONO RENTA'])) + '</span><span><small>TOTAL</small>' + txt(plata(t.TOTAL)) + '</span>' +
+      (comp ? '<span class="fin5-mini-barra__pend">' + comp + ' por completar</span>' : '') +
+      (act ? '<button type="button" class="fin5-mini-barra__paso js-f5-paso" data-paso="' + act.id + '" tabindex="' + (est_.miniVer ? 0 : -1) + '">' + U.ico('bombilla', 13) + 'Ahora: ' + txt(act.t) + '</button>' : '<span class="fin5-mini-barra__ok">' + U.ico('check', 13) + 'Mes completo</span>') +
+      '<button type="button" class="fin5-mini js-f5-arriba" tabindex="' + (est_.miniVer ? 0 : -1) + '" title="Volver arriba">' + U.ico('arriba', 13) + '</button></div></div>';
+  }
+  var io_ = null;
+  function observarResumen() {
+    if (io_) { io_.disconnect(); io_ = null; }
+    var k = x_.raiz().querySelector('.fin5-kpis'); if (!k || !window.IntersectionObserver) return;
+    io_ = new IntersectionObserver(function (es) {
+      var ver = !es[0].isIntersecting && es[0].boundingClientRect.top < 0;
+      if (ver === !!est_.miniVer) return;
+      est_.miniVer = ver;
+      var b = x_.raiz().querySelector('.fin5-mini-barra'); if (!b) return;
+      b.classList.toggle('fin5-mini-barra--ver', ver); b.setAttribute('aria-hidden', String(!ver));
+      Array.prototype.forEach.call(b.querySelectorAll('button'), function (x) { x.tabIndex = ver ? 0 : -1; });
+    });
+    io_.observe(k);
+  }
+  // ---- Celebraciones: un paso del camino recién logrado se anima; cuadrar el mes trae confeti ----------------
+  var hechos_ = {};
+  function celebrar(d) {
+    var clave = d.periodo + '|' + d.cuenta_ref, ahora = caminoPasos(d).filter(function (p) { return p.hecho; }).map(function (p) { return p.id; });
+    var antes = hechos_[clave]; hechos_[clave] = ahora;
+    if (!antes) return;
+    var nuevos = ahora.filter(function (id) { return antes.indexOf(id) === -1; });
+    if (!nuevos.length) return;
+    nuevos.forEach(function (id) {
+      var b = x_.raiz().querySelector('.fin5-camino .js-f5-paso[data-paso="' + id + '"]'); if (!b) return;
+      b.classList.remove('fin5-paso--logro'); void b.offsetWidth; b.classList.add('fin5-paso--logro');
+      confeti(b, nuevos.indexOf('esperando') !== -1 || nuevos.indexOf('cierre') !== -1 ? 34 : 14);
+    });
+    var t = { falta: 'Todo lo del banco quedó anotado', completar: 'Todas las filas tienen sus datos', grupos: 'Grupos resueltos', esperando: '¡El mes cuadra con el banco!', cierre: '¡Mes cerrado!' };
+    var ult = nuevos[nuevos.length - 1]; if (t[ult]) mensaje(t[ult]);
+  }
+  function confeti(el, n) {
+    if (reducido() || !el) return;
+    var r = el.getBoundingClientRect(), cont = document.createElement('div');
+    cont.className = 'fin5-confeti'; cont.style.left = (r.left + r.width / 2) + 'px'; cont.style.top = (r.top + r.height / 2) + 'px';
+    var colores = ['var(--sx-ok)', 'var(--fin)', 'var(--fin5-violeta)', 'var(--sx-alerta)', '#F43F5E'];
+    for (var k = 0; k < n; k++) {
+      var a = Math.random() * Math.PI * 2, dist = 40 + Math.random() * (n > 20 ? 120 : 60), sp = document.createElement('i');
+      sp.style.cssText = '--dx:' + Math.round(Math.cos(a) * dist) + 'px;--dy:' + Math.round(Math.sin(a) * dist - 30) + 'px;--r:' + Math.round(Math.random() * 540) + 'deg;background:' + colores[k % colores.length] + ';animation-delay:' + Math.round(Math.random() * 90) + 'ms';
+      cont.appendChild(sp);
+    }
+    (cuerpoPlanilla() || document.body).appendChild(cont);
+    setTimeout(function () { if (cont.parentNode) cont.parentNode.removeChild(cont); }, 1400);
+  }
+  // ---- Portada del mes: una hoja para compartir o guardar en PDF, con el resultado y quién lo revisó ----------------
+  function portada() {
+    var d = est_.datos; if (!d || !d.totales) return;
+    var t = d.totales, c = d.cartola, e = d.estado, r = d.revision || {}, cuenta = (d.cuentas || []).filter(function (x) { return x.id === d.cuenta_ref; })[0] || {};
+    var n = e.ok + e.esperando + e.falta, cuadra = !!c && !e.falta && !e.esperando;
+    var tile = function (t2, v, sub, tono) { return '<div class="t ' + (tono || '') + '"><small>' + txt(t2) + '</small><b>' + txt(plata(v)) + '</b>' + (sub ? '<span>' + txt(sub) + '</span>' : '') + '</div>'; };
+    var html = '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>' + txt('Planilla ' + mesLargo(d.periodo)) + '</title><style>' +
+      '*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:#0f172a;background:#eef2f7}' +
+      '.hoja{max-width:860px;margin:24px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 20px 50px -20px rgba(15,23,42,.35)}' +
+      '.cab{padding:28px 32px;color:#fff;background:linear-gradient(135deg,#1e3a8a,#2563eb 60%,#7c3aed)}.cab small{opacity:.8;letter-spacing:.08em;text-transform:uppercase;font-weight:700;font-size:11px}' +
+      '.cab h1{margin:6px 0 2px;font-size:30px;text-transform:capitalize}.cab p{margin:0;opacity:.85}' +
+      '.res{display:flex;align-items:center;gap:18px;margin:-1px 0 0;padding:22px 32px;background:#f8fafc;border-bottom:1px solid #e2e8f0}.res b{font-size:34px;color:#15803d}.res span{color:#475569}' +
+      '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:22px 32px}.t{padding:14px;border:1px solid #e2e8f0;border-radius:14px}.t small{display:block;color:#64748b;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}' +
+      '.t b{display:block;font-size:19px;margin-top:4px}.t span{font-size:12px;color:#64748b}.t.ok b{color:#15803d}.t.mal b{color:#b91c1c}.t.ac{background:#eff6ff;border-color:#bfdbfe}' +
+      '.sec{padding:4px 32px 22px;display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{padding:14px 16px;border-radius:14px;background:#f8fafc}.box h3{margin:0 0 6px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.06em}' +
+      '.sello{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;font-weight:700;font-size:12px}.sello.ok{background:#dcfce7;color:#15803d}.sello.no{background:#fef3c7;color:#92400e}' +
+      '.pie{padding:14px 32px;color:#94a3b8;font-size:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between}' +
+      '.acc{max-width:860px;margin:0 auto 24px;text-align:right}.acc button{font:inherit;font-weight:600;padding:10px 18px;border-radius:10px;border:0;background:#2563eb;color:#fff;cursor:pointer}' +
+      '@media print{body{background:#fff}.hoja{box-shadow:none;margin:0;border-radius:0}.acc{display:none}}@media(max-width:640px){.grid{grid-template-columns:1fr 1fr}.sec{grid-template-columns:1fr}}' +
+      '</style></head><body><div class="hoja">' +
+      '<div class="cab"><small>Planilla del banco · ' + txt(d.empresa || cuenta.empresa || '') + '</small><h1>' + txt(mesLargo(d.periodo)) + '</h1><p>' + txt(cuenta.nombre || '') + ' · ' + n + ' movimientos</p></div>' +
+      '<div class="res"><div><span>Resultado del mes (ABONO + ABONO RENTA)</span><br><b>' + txt(plata(t.ABONO + t['ABONO RENTA'])) + '</b></div><div style="margin-left:auto"><span class="sello ' + (cuadra ? 'ok">✓ Cuadra con el banco' : 'no">Por cuadrar') + '</span></div></div>' +
+      '<div class="grid">' + tile('Honorarios', t.HONORARIOS, 'lo que entró de la empresa', 'ok') + tile('Gastos', t.GASTOS, 'lo que salió de la empresa', 'mal') + tile('ABONO', t.ABONO, 'honorarios − gastos') + tile('ABONO RENTA', t['ABONO RENTA'], 'honorarios de renta') +
+        tile('SALDO', t.SALDO, 'a favor de clientes') + tile('PENDIENTE', t.PENDIENTE, 'grupos abiertos') + tile('Saldo final del banco', c ? c.saldo_final : 0, c ? 'inicial ' + plata(c.saldo_inicial) : 'sin cartola') + tile('TOTAL', t.TOTAL, 'neto del banco del mes', 'ac') + '</div>' +
+      '<div class="sec"><div class="box"><h3>Verificación con la cartola</h3>' + e.ok + ' de ' + n + ' filas coinciden con el banco' + (e.esperando ? ' · ' + e.esperando + ' esperando' : '') + (e.falta ? ' · ' + e.falta + ' sin anotar' : '') + '.</div>' +
+        '<div class="box"><h3>Revisión</h3>' + (r.revision ? 'Preparó: ' + txt(r.revision.enviado_por) + ' (' + txt(fechaCorta(r.revision.en)) + ')<br>' : '') + (r.estado === 'CERRADO' ? 'Cerró: ' + txt(r.cerrado_por) + ' (' + txt(fechaCorta(r.en)) + ')' : 'Estado: ' + txt(r.nombre || 'Abierto')) + '</div></div>' +
+      '<div class="pie"><span>SIGSO · Finanzas</span><span>Generado el ' + txt(hoy().split('-').reverse().join('-')) + '</span></div></div>' +
+      '<div class="acc"><button onclick="window.print()">Imprimir o guardar PDF</button></div></body></html>';
+    var w = window.open('', '_blank');
+    if (!w) { x_.aviso('El navegador bloqueó la ventana: permite ventanas emergentes para SIGSO.', 'alerta'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+  }
   // ---- Revisión del mes: pasos, avisos, nombres parecidos y enviar / devolver / cerrar --------------------
   function estadoRev(d) { return (d && d.revision && d.revision.estado) || 'ABIERTO'; }
   function fechaCorta(iso) { return iso ? String(iso).slice(8, 10) + '-' + String(iso).slice(5, 7) : ''; }
@@ -380,6 +478,7 @@
       else if (b.classList.contains('js-rv-observar')) accionRevision('observar');
       else if (b.classList.contains('js-rv-cerrar')) accionRevision('cerrar');
       else if (b.classList.contains('js-f5-resolver')) resolverObs(+b.dataset.i);
+      else if (b.classList.contains('js-f5-portada')) portada();
     });
     dr.el.addEventListener('change', function (ev) { var t = ev.target; if (t.name && t.name.indexOf('rv-par-') === 0) rev_.eleccion[t.name.slice(7)] = t.value; });
   }
@@ -412,12 +511,15 @@
     // Qué puede hacer cada quien: quien anota lo envía a revisión; quien revisa lo devuelve o lo cierra.
     var abiertas = (c.observaciones || []).filter(function (o) { return !o.resuelta; }).length;
     var acciones = '', estadoTxt = '';
-    if (c.estado === 'CERRADO') estadoTxt = 'Cerrado por ' + (c.cerrado_por || '—') + ' el ' + fechaCorta(c.en) + '. Para cambiar algo hay que reabrirlo en «Más → Cierre de meses».';
+    if (c.estado === 'CERRADO') { estadoTxt = 'Cerrado por ' + (c.cerrado_por || '—') + ' el ' + fechaCorta(c.en) + '. Para cambiar algo hay que reabrirlo en «Más → Cierre de meses».'; acciones = U.boton({ texto: 'Ver la portada del mes', icono: 'documento', variante: 'primario', clase: 'js-f5-portada' }); }
     else {
       estadoTxt = c.estado === 'EN_REVISION' ? 'En revisión: lo envió ' + ((c.revision && c.revision.enviado_por) || '—') + ' el ' + fechaCorta(c.revision && c.revision.en) + '.' : c.estado === 'OBSERVADO' ? 'Devuelto con observaciones (' + abiertas + ' sin corregir).' : 'Abierto: se puede seguir anotando.';
-      if (pz.enviar && c.estado !== 'EN_REVISION') acciones += U.boton({ texto: 'Enviar a revisión', icono: 'derivar', variante: v.listo ? 'primario' : 'secundario', clase: 'js-rv-enviar' });
+      // Enviar y cerrar piden el mes completo: mientras falte algo, los botones se ven pero dicen por qué no.
+      var listoTodo = v.listo && v.cierre_listo, por = listoTodo ? '' : ' disabled title="Primero completa los pasos de arriba"';
+      if (pz.enviar && c.estado !== 'EN_REVISION') acciones += U.boton({ texto: 'Enviar a revisión', icono: 'derivar', variante: listoTodo ? 'primario' : 'secundario', clase: 'js-rv-enviar' }).replace('<button', '<button' + por);
       if (pz.revisar && c.estado === 'EN_REVISION') acciones += U.boton({ texto: 'Devolver con observaciones', icono: 'editar', variante: 'secundario', clase: 'js-rv-observar' });
-      if (pz.revisar && (c.estado === 'EN_REVISION' || !c.politica.exige_revision)) acciones += U.boton({ texto: 'Cerrar el mes', icono: 'candado', variante: c.estado === 'EN_REVISION' ? 'primario' : 'secundario', clase: 'js-rv-cerrar' });
+      if (pz.revisar && (c.estado === 'EN_REVISION' || !c.politica.exige_revision)) acciones += U.boton({ texto: 'Cerrar el mes', icono: 'candado', variante: c.estado === 'EN_REVISION' && listoTodo ? 'primario' : 'secundario', clase: 'js-rv-cerrar' }).replace('<button', '<button' + por);
+      if (!listoTodo && acciones) acciones += '<p class="fin2-ayuda fin5-rv-nota">' + U.ico('info', 13) + ' Para enviar o cerrar, primero deja los pasos de arriba en verde' + (v.cierre_faltan.length && v.listo ? ' (falta: ' + txt(v.cierre_faltan.map(function (x) { return x.nombre.toLowerCase(); }).join(', ')) + ')' : '') + '.</p>';
     }
     var resumen = v.listo ? '<div class="fin5-rv-res fin5-rv-res--ok">' + U.ico('check', 22) + '<div><b>La planilla de ' + txt(v.nombre_mes) + ' está lista.</b><span>' + txt(v.cuenta) + ' · los ' + v.pasos.length + ' pasos completos.</span></div></div>'
       : '<div class="fin5-rv-res">' + '<b class="fin5-rv-res__n">' + ok + '/' + v.pasos.length + '</b><div><b>' + (v.pasos.length - ok === 1 ? 'Falta 1 paso' : 'Faltan ' + (v.pasos.length - ok) + ' pasos') + ' para dejarla lista.</b><span>Toca «Ir a corregir» y SIGSO te lleva a las filas.</span></div></div>';
@@ -574,7 +676,10 @@
   }
   function mesVecino(p, n) { var a = String(p).split('-').map(Number); return new Date(Date.UTC(a[0], a[1] - 1 + n, 1)).toISOString().slice(0, 7); }
   function filtrosHtml(d) {
+    var pref = function (k, t, ico, tit) { return '<button type="button" class="fin5-vista__b js-f5-pref" data-p="' + k + '" aria-pressed="' + !!(k === 'sinLado' ? !PREF_.sinLado : PREF_[k]) + '" title="' + tit + '">' + ico + '<span>' + t + '</span></button>'; };
     return '<div class="fin5-filtros fin5-entra" style="--i:2">' + chipsHtml(d) +
+      '<div class="fin5-vista" role="group" aria-label="Cómo se ve la planilla">' + pref('foco', 'Solo lo pendiente', U.ico('diana', 14), 'Atenúa lo que está bien y deja a la vista lo que hay que tocar') +
+        pref('grande', 'Letra grande', '<b class="fin5-vista__aa">Aa</b>', 'Letra y filas más grandes') + pref('sinLado', 'Panel', U.ico('panel', 14), 'Muestra u oculta el panel del banco y los grupos') + '</div>' +
       '<label class="fin5-buscar">' + U.ico('lupa', 15) + '<input type="search" class="js-f5-buscar" placeholder="Buscar nombre, monto, plan o factura…" value="' + txt(est_.busca) + '" aria-label="Buscar en la planilla"></label></div>';
   }
   function chipsHtml(d) {
@@ -598,9 +703,19 @@
     var l = lineas();
     var vacia = (est_.datos.filas || []).length && !l.some(function (z) { return z.f; });
     return (vacia ? '<tr class="fin5-sin"><td colspan="' + (COLS.length + 4) + '">' + U.ico('lupa', 16) + ' Ninguna fila coincide con el filtro. <button type="button" class="sx2-enlace js-f5-limpiar">Ver todas</button></td></tr>' : '') +
-      l.map(function (z, i) { return filaHtml(z, i, ed); }).join('');
+      l.map(function (z, i) { return separadorDia(l, i) + filaHtml(z, i, ed); }).join('');
   }
 
+  // Separador entre días: «lunes 21 de septiembre · 5 movimientos · neto +$…» (los totales del día completo).
+  function separadorDia(l, i) {
+    var z = l[i]; if (!z.f || z.f.temp || !z.f.fecha) return '';
+    var ant = i > 0 && l[i - 1].f ? l[i - 1].f.fecha : '';
+    if (ant === z.f.fecha) return '';
+    var f = z.f.fecha, del = est_.datos.filas.filter(function (x) { return x.fecha === f; }), neto = del.reduce(function (a, x) { return a + (x.monto || 0); }, 0);
+    var dia = DIAS_[new Date(f + 'T12:00:00Z').getUTCDay()];
+    return '<tr class="fin5-dia" aria-hidden="true"><td colspan="' + (COLS.length + 4) + '"><span><b>' + txt(dia.charAt(0).toUpperCase() + dia.slice(1) + ' ' + Number(f.slice(8)) + ' de ' + MESES_[Number(f.slice(5, 7)) - 1]) + '</b>' +
+      '<small>' + del.length + ' movimiento' + (del.length === 1 ? '' : 's') + ' · neto <i class="' + (neto < 0 ? 'fin2-neg' : 'fin2-pos') + '">' + (neto < 0 ? '−' : '+') + txt(plata(Math.abs(neto))) + '</i></small></span></td></tr>';
+  }
   function atajosHtml() {
     if (!editable()) return '';
     return '<section class="fin5-card fin5-atajos fin5-entra" style="--i:5"><header class="fin5-card__cab"><h2>Atajos</h2></header>' +
@@ -639,7 +754,7 @@
       : '<span class="fin4-que fin4-que--' + (falta ? 'alerta' : QUE_TONO[f.que.k] || 'neutro') + '">' + txt(falta ? falta.t : f.que.t) + '</span>') + (f.cliente && f.cliente !== f.nombre ? '<small class="fin4-que-cli">' + txt(f.cliente) + '</small>' : '');
     var obs = z.nueva ? est_.borrador.obs : f.obs;
     var firma = z.nueva ? JSON.stringify(est_.borrador) + listo() : [f.version, f.saldo, f.banco, f.que && f.que.t, f.cliente, f.fecha, f.fecha_banco, f.movida, v.nombre, v.obs, v.plan, v.monto, v.grupo, v.fact, v.glosa, sug, sugPlan, grupo && grupo.cliente].join('|');
-    return '<tr class="fin4-fila ' + clase + '" data-i="' + i + '"' + (f.id ? ' data-id="' + txt(f.id) + '"' : '') + (f.grupo ? ' data-grupo="' + txt(f.grupo) + '"' : '') + ' data-firma="' + txt(firma) + '" style="--i:' + Math.min(i, 24) + '"><td class="fin4-idx">' + (z.nueva ? '+' : f.temp ? '…' : f._n) + '</td>' +
+    return '<tr class="fin4-fila ' + clase + '" data-i="' + i + '"' + (f.id ? ' data-id="' + txt(f.id) + '"' : '') + (f.grupo ? ' data-grupo="' + txt(f.grupo) + '"' : '') + (z.nueva || f.temp ? '' : ' data-k="' + (falta ? 'pend' : f.que.k) + '"' + (falta || f.banco === 'esperando' ? ' data-pend="1"' : '')) + ' data-firma="' + txt(firma) + '" style="--i:' + Math.min(i, 24) + '"><td class="fin4-idx">' + (z.nueva ? '+' : f.temp ? '…' : f._n) + '</td>' +
       COLS.map(function (k, j) {
         var b = bloqueada(z, k[0]);
         var num = k[0] === 'monto';
@@ -648,7 +763,7 @@
         var m = num ? (z.nueva ? est_.borrador.monto : f.monto) : 0;
         // El monto se ve como en un estado de cuenta: verde con + si entró, rojo con − si salió.
         var contenido = num && m ? '<span class="fin5-mt fin5-mt--' + (m < 0 ? 'sale' : 'entra') + '" title="' + (m < 0 ? 'Salió de la cuenta' : 'Entró a la cuenta') + '"><i aria-hidden="true">' + (m < 0 ? '−' : '+') + '</i>' + txt(plata(Math.abs(m))) + '</span>'
-          : k[0] === 'grupo' && v.grupo ? '<span class="fin5-gr" title="Grupo ' + txt(v.grupo) + (grupo ? ' · ' + txt(grupo.cliente || 'sin nombre') + ' · ' + grupo.filas + ' fila(s) · sobra ' + txt(plata(grupo.suma)) : '') + '">' + txt(v.grupo) + '</span>'
+          : k[0] === 'grupo' && v.grupo ? '<span class="fin5-gr" style="--gh:' + tonoGrupo(v.grupo) + '" title="Grupo ' + txt(v.grupo) + (grupo ? ' · ' + txt(grupo.cliente || 'sin nombre') + ' · ' + grupo.filas + ' fila(s) · sobra ' + txt(plata(grupo.suma)) : '') + '">' + txt(v.grupo) + '</span>'
             : txt(v[k[0]]);
         return '<td class="fin4-cel fin4-c-' + k[0] + (num ? ' fin4-n' : '') + (b ? ' fin4-bloq' : '') + (k[0] === 'glosa' && !z.nueva && f.banco !== 'esperando' ? ' fin4-tenue' : '') + '" data-r="' + i + '" data-c="' + j + '" data-l="' + k[1] + '"' + (ed && !b ? '' : ' aria-readonly="true"') + '>' +
           '<span class="fin4-v' + (num ? '' : tono) + extra + (ph[k[0]] ? ' fin5-con-ph' : '') + '" data-ph="' + txt(ph[k[0]] || '') + '">' + contenido + '</span></td>';
@@ -664,7 +779,7 @@
       (g.length ? '<p class="fin5-nota">Cada letra junta lo que mandó un cliente y lo que se pagó por él. Si entró lo mismo que salió, está cuadrado y no hay nada que decidir.</p><div class="fin5-grupos__lista">' + g.map(function (x) {
         var pct = x.entra ? x.sale / x.entra * 100 : 100, cuadrado = !x.suma;
         return '<article class="fin5-grupo' + (x.suma < 0 ? ' fin5-grupo--neg' : '') + (cuadrado ? ' fin5-grupo--cuadrado' : x.decision === 'PENDIENTE' ? ' fin5-grupo--abierto' : '') + '" data-letra="' + txt(x.letra) + '">' +
-          '<div class="fin5-grupo__cab"><span class="fin5-grupo__letra">' + txt(x.letra) + '</span><div class="fin5-grupo__quien"><b>' + txt(x.cliente || 'sin nombre') + '</b><small>' + x.filas + ' fila(s)</small></div>' +
+          '<div class="fin5-grupo__cab"><span class="fin5-grupo__letra" style="--gh:' + tonoGrupo(x.letra) + '">' + txt(x.letra) + '</span><div class="fin5-grupo__quien"><b>' + txt(x.cliente || 'sin nombre') + '</b><small>' + x.filas + ' fila(s)</small></div>' +
             '<div class="fin5-grupo__sobra"><small>sobra</small><b class="' + (x.suma < 0 ? 'fin2-neg' : '') + '">' + plata(x.suma) + '</b></div></div>' +
           '<div class="fin5-progreso" title="Se pagó el ' + Math.round(pct) + '% de lo recibido"><span' + crece('g-' + d.periodo + '-' + x.letra, pct, 'width') + '></span></div>' +
           '<div class="fin5-grupo__nums"><span>Entró <b>' + plata(x.entra) + '</b></span><span>Salió <b>' + plata(x.sale) + '</b></span></div>' +
@@ -906,8 +1021,10 @@
   // Cambia en la página solo lo que cambió: cifras de arriba, chips, banco, grupos y las filas distintas.
   function parchar(destellar) {
     var c = cuerpoPlanilla(), d = est_.datos; if (!c) return;
+    // Si lo filtrado ya no tiene filas (se completó lo último), se vuelve a ver todo en vez de una tabla vacía.
+    if (est_.filtro !== 'todas' && !d.filas.some(function (f) { return pasaFiltro(f); })) { est_.filtro = 'todas'; est_.sel.r = 0; }
     c.setAttribute('data-quieto', '1');
-    [['.fin5-camino', caminoHtml(d)], ['.fin5-guia', guiaHtml(d)], ['.fin5-kpis', kpisHtml(d)], ['.fin5-chips', chipsHtml(d)], ['.fin5-banco', bancoHtml(d)], ['.fin5-grupos', gruposHtml(d)]].forEach(function (x) { reemplazarEn(c, x[0], x[1]); });
+    [['.fin5-mini-env', miniHtml(d)], ['.fin5-camino', caminoHtml(d)], ['.fin5-guia', guiaHtml(d)], ['.fin5-kpis', kpisHtml(d)], ['.fin5-chips', chipsHtml(d)], ['.fin5-banco', bancoHtml(d)], ['.fin5-grupos', gruposHtml(d)]].forEach(function (x) { reemplazarEn(c, x[0], x[1]); });
     var bm = c.querySelector('.js-f5-barra-mes'); if (bm) bm.textContent = mesLargo(d.periodo) + ' · ' + d.filas.length + ' fila(s)';
     var tb = c.querySelector('.fin4-hoja tbody');
     if (tb) {
@@ -924,6 +1041,8 @@
     }
     x_.aplicarCapacidades(c);
     activar(c);
+    observarResumen();
+    celebrar(d);
   }
   function reemplazarEn(cont, sel, html) {
     var el = cont.querySelector(sel); if (!el) return;
@@ -1331,6 +1450,14 @@
       if (b && b.classList.contains('js-f5-revisar')) { abrirRevision(); return; }
       if (b && b.classList.contains('js-f5-resolver')) { resolverObs(+b.dataset.i); return; }
       if (b && b.classList.contains('js-f5-tour')) { tour(true); return; }
+      if (b && b.classList.contains('js-f5-portada')) { portada(); return; }
+      if (b && b.classList.contains('js-f5-arriba')) { var bar = x_.raiz().querySelector('.fin5-barra'); if (bar) bar.scrollIntoView({ block: 'start', behavior: reducido() ? 'auto' : 'smooth' }); return; }
+      if (b && b.classList.contains('js-f5-pref')) {
+        var k = b.dataset.p; PREF_[k] = !PREF_[k]; guardarPref();
+        b.setAttribute('aria-pressed', String(k === 'sinLado' ? !PREF_.sinLado : PREF_[k]));
+        var env = x_.raiz().querySelector('.fin5-planilla-env'); if (env) env.className = 'fin5-planilla-env' + prefClases();
+        return;
+      }
       if (b && b.classList.contains('js-f5-oferta')) { aplicarOferta(); return; }
       if (b && b.classList.contains('js-f5-completar')) { if (est_.editando) confirmar(); seleccionar(+b.dataset.i, colDe(b.dataset.col)); editar(); return; }
       if (b && b.classList.contains('js-f5-mover')) { moverFilas([b.dataset.id], b.dataset.p); return; }

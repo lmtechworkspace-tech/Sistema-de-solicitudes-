@@ -279,3 +279,39 @@ test('hoja · guardar devuelve la versión nueva (se puede seguir editando sin r
   const m = H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx).listas.memoria['CONST MELO'];
   assert.deepEqual([m.plan, m.plan_gasto], ['IVA', 'Convenios']);
 });
+
+test('hoja · corregir una sola fila de un grupo del Excel no lo parte ni corre las letras de los demás grupos', (t) => {
+  const { db, ctx, D, cuenta } = base(t);
+  const g = (campos, extra) => H.guardar(db, D(Object.assign({ cuenta_ref: cuenta, campos }, extra || {})), ctx);
+  const CAB = ['AB', '.', 'TOTAL', 'SALDO', 'FECHA', 'DETALLE', 'PLAN DE CUENTA', 'UNITARIO', 'OBS', 'DETALLE BANCO'];
+  const d0 = 46238 + 31;
+  const filas = [[], ['', '', '', '', '', 'ABONO', '0'], CAB,
+    ['1', '', '900000', '', String(d0), 'CONSTRUCTORA NORTE', '', '', 'IMPOSICIONES', ''],
+    ['2', '', '-870000', '', String(d0 + 1), 'CONSTRUCTORA NORTE', '', '30000', 'ABONO', ''],
+    ['3', '', '28655', '', String(d0 + 2), 'SERVICE TECH', '', '', 'IVA', ''],
+    ['4', '', '-28655', '', String(d0 + 3), 'SERVICE TECH', '', '0', '', ''],
+    ['5', '', '500000', '', String(d0 + 4), 'PANADERIA SOL', '', '', 'IVA', ''],
+    ['6', '', '-499000', '', String(d0 + 5), 'PANADERIA SOL', '', '1000', 'SALDO', '']];
+  const formulas = [[], [], [], [], ['', '', '', '', '', '', '', '=+C4+C5'], [], ['', '', '', '', '', '', '', '=+C6+C7'], [], ['', '', '', '', '', '', '', '=+C8+C9']];
+  const r = Lb.llevarMes(db, D({ filas, formulas, periodo: '2026-09', cuenta_ref: cuenta, archivo: 'BANCOS demo' }), ctx);
+  assert.ok(!r._validationError, r.message);
+  let h = H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx);
+  const antes = h.grupos.map((x) => [x.letra, x.cliente, x.decision]);
+  assert.equal(antes.length, 3);
+  // Se completa la OBS que faltaba en la fila de cierre del grupo de SERVICE TECH (como en septiembre).
+  const st = h.filas.find((f) => f.monto === -28655);
+  const e = g({ obs: 'IVA' }, { id: st.id, expected_version: st.version });
+  assert.equal(e._validationError, undefined, e.message);
+  h = H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx);
+  assert.deepEqual(h.grupos.map((x) => [x.letra, x.cliente, x.decision]), antes, 'mismos grupos, mismas letras y decisiones');
+  assert.equal(new Set(h.filas.filter((f) => /SERVICE/.test(f.nombre)).map((f) => f.grupo)).size, 1, 'el grupo no se parte');
+  assert.equal(h.totales.PENDIENTE, 0);
+  // Reparación: una fila que se corrigió con la versión anterior quedó sin su grupo del Excel (solo con su letra):
+  // vuelve sola a su grupo por su N° de fila del Excel.
+  const I = F.interno, pan = h.filas.find((f) => f.monto === -499000);
+  const row = B.dbFin().prepare('SELECT datos FROM FIN_MOVIMIENTOS WHERE id = ?').get(pan.id), m = I.des_(row.datos);
+  m.planilla.grupo = null; m.planilla.grupo_letra = pan.grupo; m.planilla.archivo = 'Registro en SIGSO';
+  B.dbFin().prepare('UPDATE FIN_MOVIMIENTOS SET datos = ? WHERE id = ?').run(I.cif_(m), pan.id);
+  h = H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx);
+  assert.deepEqual(h.grupos.map((x) => [x.letra, x.cliente, x.decision]), antes, 'el grupo dañado se repara al leer la hoja');
+});
