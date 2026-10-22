@@ -52,7 +52,8 @@ function deducir_(c) {
 /** Qué es una fila para los totales (sin mirar su grupo). */
 function que_(f) {
   if (f.banco === 'falta') return { k: 'falta', t: 'Falta anotar' };
-  if (f.tipo_mov === 'TRASPASO' || f.tipo_mov === 'PRESTAMO' || /^(TRASPASO|PRESTAMO)$/.test(N(f.plan))) return { k: 'tra', t: /PRESTAMO/.test(N(f.plan)) || f.tipo_mov === 'PRESTAMO' ? 'Préstamo' : 'Traspaso' };
+  // La OBS anotada manda (como en el Excel): una fila con empresa del grupo y OBS ABONO suma en ABONO.
+  if (/^(TRASPASO|PRESTAMO)$/.test(N(f.plan)) || (!f.obs && (f.tipo_mov === 'TRASPASO' || f.tipo_mov === 'PRESTAMO'))) return { k: 'tra', t: /PRESTAMO/.test(N(f.plan)) || f.tipo_mov === 'PRESTAMO' ? 'Préstamo' : 'Traspaso' };
   if (!f.obs) return { k: 'rev', t: 'Falta OBS' };
   // Como en el Excel, la OBS manda: una fila con OBS cuenta aunque le falte el nombre o el plan (se avisa).
   if (f.obs === 'ABONO' || f.obs === 'ABONO RENTA') {

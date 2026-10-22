@@ -125,6 +125,13 @@ test('hoja · corregir, borrar, versión vieja y un grupo que viene del Excel BA
   assert.equal(h.filas.find((f) => f.monto === 900000).nota, 'transferencia de la gerente');
 });
 
+test('hoja · la OBS anotada manda sobre la clasificación (empresa del grupo con OBS ABONO suma en ABONO, como el Excel)', () => {
+  assert.equal(H.que_({ banco: 'ok', tipo_mov: 'PRESTAMO', obs: 'ABONO', monto: -500000, plan: '', nombre: 'VIRTUAL BASE' }).k, 'gas');
+  assert.equal(H.que_({ banco: 'ok', tipo_mov: 'TRASPASO', obs: 'ABONO', monto: 500000, plan: '', nombre: 'HOMEPYMES' }).k, 'ing');
+  assert.equal(H.que_({ banco: 'ok', tipo_mov: 'PRESTAMO', obs: '', monto: 500000, plan: 'Préstamo', nombre: 'GDE' }).k, 'tra', 'sin OBS, sigue siendo préstamo');
+  assert.equal(H.que_({ banco: 'falta', obs: '', monto: 1 }).k, 'falta');
+});
+
 test('hoja · cobranza: una factura queda pagada con su N° en la fila del abono', (t) => {
   const { db, ctx, D, cuenta } = base(t);
   const C = require('../logica/finanzasCobranza');
