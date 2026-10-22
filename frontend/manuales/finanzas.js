@@ -1,20 +1,19 @@
 /**
- * Manual de Finanzas (la bóveda) — v3 «banco primero» (21-10-2026): anotar cada movimiento como en la planilla
- * BANCOS, la cartola que se une con lo anotado, El mes paso a paso, subir archivos, grupos de fondos,
- * enseñar nombres, clientes del mes,
- * cobranza, flujo por mes, cierre, errores y seguridad.
+ * Manual de Finanzas (la bóveda) — v4 «la planilla del banco» (22-10-2026): se llena como el Excel BANCOS
+ * (fecha, nombre, OBS, plan de cuenta, monto, grupo, N° factura), la cartola que comprueba lo anotado, los
+ * grupos de fondos por letra, pegar desde Excel, y los tres reportes: FLUJO, saldo por cliente y cobranza.
  * Capturas de la empresa de demostración (clientes, personas y montos ficticios).
  */
 (function () {
   'use strict';
 
   SigsoManual.registrar({
-    id: 'finanzas', titulo: 'Finanzas: el libro del banco, los fondos de los clientes, la cobranza y el cierre del mes',
+    id: 'finanzas', titulo: 'Finanzas: la planilla del banco, el FLUJO, los saldos por cliente y la cobranza',
     para: 'Quienes llevan las finanzas del grupo (y la gerencia, en modo lectura)',
-    resumen: ['Finanzas funciona como la planilla BANCOS: cada movimiento se **anota** con su fecha, nombre, plan de cuenta, OBS y monto, apenas pasa. Cuando llega la **cartola**, SIGSO une sola cada fila anotada con su movimiento del banco y muestra lo que el banco trae y nadie anotó. Los totales, el saldo del mes y los grupos de fondos se calculan solos, y lo que se enseña una vez se recuerda.'],
+    resumen: ['Finanzas es la planilla BANCOS dentro de SIGSO: una hoja por mes donde cada movimiento se anota con su **fecha, nombre, OBS, plan de cuenta y monto**, escribiendo celda por celda como en Excel. Arriba se calcula solo el resumen (ABONO, ABONO RENTA, SALDO, PENDIENTE, TOTAL). Al subir la **cartola**, cada fila se comprueba con el banco. Y de la misma hoja salen el **FLUJO**, el **saldo por cliente** y la **cobranza**: no hay otras hojas que llenar.'],
     antes: ['Finanzas solo lo ven las personas de una **lista fija** que vive en el servidor. Si no está en tu barra lateral, no tienes acceso.',
       'Para abrirla necesitas **Google Authenticator** en tu teléfono, activado la primera vez con tu contraseña de SIGSO.',
-      'Las palabras son las de la planilla: **ABONO** es honorario (plata de la empresa); **IVA**, **IMPOSICIONES** y **convenios** son plata del cliente que se paga por él; un **grupo** junta lo que el cliente mandó con lo que se pagó, y lo que sobra es el **remanente**.',
+      'Las palabras son las de la planilla: **ABONO** es plata de la empresa (honorario si entra, gasto si sale); **IVA**, **IMPOSICIONES**, **SALDO** y **PENDIENTE** son plata del cliente; un **grupo** junta lo que el cliente mandó con lo que se pagó por él.',
       'Para practicar con datos inventados, toca **Ver ejemplo**, al lado de «Manual de uso».'],
     capitulos: [
       { id: 'abrir', titulo: 'Abre la bóveda', ruta: '#/finanzas',
@@ -25,118 +24,80 @@
             marcas: [{ n: 1, t: 'Los 6 dígitos: cambian cada 30 segundos.' }, { n: 2, t: '[[Abrir bóveda]].' }],
             ojo: ['Cada código sirve **una sola vez**. Tras 5 códigos incorrectos, la bóveda se bloquea 15 minutos para tu cuenta.'] }
         ] },
-      { id: 'mapa', titulo: 'Las cinco partes de Finanzas', ruta: '#/finanzas',
+      { id: 'mapa', titulo: 'Las partes de Finanzas', ruta: '#/finanzas',
         pasos: [
           { titulo: 'La columna de Finanzas', img: 'mapa',
-            marcas: [{ n: 1, t: '**El mes**: qué toca ahora, el banco del mes y lo que falta para cerrarlo. Empieza aquí.' },
-              { n: 2, t: '**Libro del banco**: la planilla BANCOS de SIGSO. Aquí se trabaja casi todo.' },
-              { n: 3, t: '**Clientes**: los clientes con movimiento en el mes, sus fondos y sus facturas.' },
-              { n: 4, t: '**Informes**: el flujo mes a mes (como las hojas FLUJO), el informe del mes en PDF, el presupuesto y la exportación a Excel.' },
-              { n: 5, t: '**Configuración**: subir archivos, cierre de meses, cuentas, catálogos, nombres, seguridad y bitácora.' },
+            marcas: [{ n: 1, t: '**Planilla**: la hoja del banco. Aquí se trabaja todos los días.' },
+              { n: 2, t: '**FLUJO**: ingresos y egresos por plan de cuenta, mes a mes, como las hojas FLUJO de SIGECO.' },
+              { n: 3, t: '**Saldo por cliente**: cuánta plata de cada cliente hay en la cuenta y lo que debe.' },
+              { n: 4, t: '**Cobranza**: las facturas, lo pagado y lo que falta cobrar.' },
+              { n: 5, t: '**Más**: subir archivos, cierre de meses, informe en PDF, presupuesto, exportar, catálogos, seguridad y bitácora.' },
               { n: 6, t: '[[Manual de uso]] y [[Ver ejemplo]].' }] }
         ] },
-      { id: 'mes', titulo: 'El mes, paso a paso', ruta: '#/finanzas',
-        intro: ['La portada de quien opera. Dice cómo está el banco del mes, qué toca ahora y qué falta para dejarlo cerrado. Nada se marca a mano: cada paso queda listo cuando SIGSO ve que está hecho.'],
+      { id: 'planilla', titulo: 'La planilla del mes', ruta: '#/finanzas',
+        intro: ['Es la misma hoja del Excel BANCOS, con una pestaña por mes. Las filas se escriben con el teclado y se guardan solas.'],
         pasos: [
-          { titulo: 'Qué toca ahora', img: 'mes',
-            marcas: [{ n: 1, t: 'El mes con que trabajas.' }, { n: 2, t: '**El banco este mes**: lo que entró y salió, el saldo final, honorarios, gastos, fondos de clientes y cuántas filas faltan revisar.' },
-              { n: 3, t: '**Lo que toca ahora**, con su botón.' }, { n: 4, t: 'Los pasos del mes, en orden: anotar los movimientos, subir la cartola, el detalle del banco, Excel BANCOS (solo meses llenados en la planilla), completar lo que quedó por revisar, ventas del SII y cerrar.' }],
-            consejo: ['Si aparece **N nombre(s) de la planilla por enseñar**, ábrelo: ahí se dice una sola vez de quién es cada nombre corto (ver el capítulo «Enseña los nombres cortos»).'] }
-        ] },
-      { id: 'subir', titulo: 'Sube la cartola, el detalle o el Excel BANCOS', ruta: '#/finanzas',
-        intro: ['Todo se sube en un solo lugar: **Configuración → Subir archivos** (o el botón [[Subir cartola o planilla]] del libro). SIGSO reconoce qué archivo es.'],
-        pasos: [
-          { titulo: 'El centro de cargas', img: 'cargas',
-            texto: [['**Cartola del banco** (Excel, no PDF): revisa que los saldos cuadren y toca [[Importar]]. Cada fila que ya anotaste se **une sola** con su movimiento (mismo monto, hasta 3 días de diferencia) y pasa a ✓; lo que el banco trae y nadie anotó queda **falta anotar**. Subirla dos veces no duplica nada.', '**Mis Movimientos** del BCI: completa el nombre de quien transfirió de verdad.',
-              '**Excel BANCOS** (solo los meses que se llenaron en la planilla): elige la cuenta de la hoja y toca [[Llevar AAAA-MM]] por cada mes. Cada fila se une a su movimiento de la cartola, se clasifica como dice la columna OBS y se arman sus grupos (las fórmulas de UNITARIO). Si ese mes no tiene cartola, las filas quedan **esperando cartola** hasta que llegue.']],
-            marcas: [{ n: 1, t: 'Aquí se suelta cualquier archivo.' }, { n: 2, t: 'Qué se puede subir y dónde queda.' }],
-            ojo: ['Al llevar un mes, SIGSO avisa las filas de la planilla que **el banco no trae ese mes** (por ejemplo, un pago anotado el 31 que el banco registró el 1 del mes siguiente). No se inventan: se revisan.'] }
-        ] },
-      { id: 'libro', titulo: 'El libro del banco', ruta: '#/finanzas',
-        intro: ['Es la planilla BANCOS dentro de SIGSO: cada fila es un movimiento de la cuenta, con las mismas columnas (fecha, nombre, plan de cuenta, OBS, monto, saldo y detalle del banco) y lo que SIGSO entiende de ella.'],
-        pasos: [
-          { titulo: 'El libro del mes', img: 'libro',
-            marcas: [{ n: 1, t: '**Cómo va el mes**: cuántas filas están en el banco ✓, cuántas esperan la cartola, cuántas trae el banco sin anotar y cuántas quedaron por revisar. Tocar una filtra la tabla.' },
-              { n: 2, t: '**Anotar movimiento**: la fila nueva, como en la planilla (ver el capítulo siguiente).' },
-              { n: 3, t: '**Cuadre del mes**: saldo inicial + entró − salió = saldo final, contra lo que dice la cartola. Lo que espera la cartola no entra al cuadre hasta que el banco lo traiga.' },
-              { n: 4, t: 'Los totales por categoría, como el resumen de arriba de la planilla (ABONO, gastos, fondos de clientes…).' },
-              { n: 5, t: 'Qué mostrar: falta anotar, esperando cartola, por revisar, honorarios, gastos, fondos o traspasos.' },
-              { n: 6, t: 'Una fila: fecha, nombre, plan de cuenta, OBS, monto, el saldo acumulado del mes (la columna SALDO), lo que dice el banco y **qué es**.' },
-              { n: 7, t: 'En el banco: ✓ (está en la cartola), **esperando** (anotada, falta la cartola) o [[Anotar]] (el banco la trae y nadie la anotó).' }],
-            texto: ['Las filas con borde naranjo están **por revisar** o **falta anotar**.'] }
-        ] },
-      { id: 'anotar', titulo: 'Anota cada movimiento (día a día)', ruta: '#/finanzas',
-        intro: ['Esto reemplaza llenar la planilla BANCOS. Se anota apenas pasa algo en la cuenta (llegó una transferencia, se pagó un Previred, un sueldo…), sin esperar la cartola. Con el nombre y la OBS, SIGSO sabe qué es, igual que la planilla.'],
-        pasos: [
-          { titulo: 'Anotar una fila', img: 'libro-anotar',
-            texto: [['En el **Libro del banco**, completa la fila de arriba: fecha ((1)), nombre ((2)), plan de cuenta si corresponde ((3)), OBS ((4)), monto ((5)) y, si quieres, lo que dice el banco ((6)).', 'Toca [[Anotar]] ((7)) o presiona **Enter**. La fila queda lista para la siguiente, con la misma fecha.']],
-            marcas: [{ n: 1, t: 'La fecha del movimiento.' }, { n: 2, t: 'El **nombre** como en la planilla: el cliente («ANDES MONTAJES»), «ARRIENDO», «SUELDO»… Al escribir, SIGSO sugiere los que ya conoce.' },
-              { n: 3, t: 'El **plan de cuenta** (ARRIENDO, ANTICIPO SUELDO, CONVENIO…): opcional, ayuda a saber qué gasto u obligación es.' },
-              { n: 4, t: 'La **OBS**: ABONO (honorario si entra, gasto si sale), ABONO RENTA, IMPOSICIONES, IVA, SALDO o PENDIENTE (plata del cliente).' },
-              { n: 5, t: 'El **monto**: positivo si entró, **negativo si salió** (como la columna TOTAL).' }, { n: 6, t: 'Lo que dice el banco (opcional).' }, { n: 7, t: '[[Anotar]].' },
-              { n: 8, t: 'Mientras escribes, SIGSO dice si entra o sale, de quién es el nombre y qué significa la OBS.' }],
-            consejo: ['Si el nombre es nuevo, la fila queda **por revisar**: ábrela, di de qué cliente es y SIGSO lo recordará para siempre.'] },
-          { titulo: 'Pegar varias filas desde Excel', img: 'libro-pegar',
-            texto: [['Toca [[Pegar desde Excel]] arriba del libro.', 'Copia las filas de la planilla BANCOS (desde TOTAL hasta DETALLE BANCO) y pégalas ((1)). También sirve en el orden de esta pantalla: fecha, nombre, plan, OBS, monto, detalle.', 'Revisa la vista previa ((2)): las filas sin fecha o sin monto (como los totales) se saltan solas.', 'Toca [[Anotar filas]] ((3)).']],
-            marcas: [{ n: 1, t: 'Aquí se pega (Ctrl+V).' }, { n: 2, t: 'Cuántas filas entran, cuánto suman y cuáles se saltan.' }, { n: 3, t: '[[Anotar filas]].' }],
-            ojo: ['Los grupos de la columna UNITARIO no viajan al pegar (solo los valores): se forman después en el libro. Para traer un mes completo con sus grupos, sube el Excel en **Subir archivos**.'] }
+          { titulo: 'Lo que hay en la pantalla', img: 'planilla',
+            marcas: [{ n: 1, t: 'Las **pestañas de los meses**, como las hojas del Excel, y los atajos de la OBS.' },
+              { n: 2, t: '**Resumen del mes**, como arriba en el Excel: ABONO (lo que entró menos los gastos), ABONO RENTA, SALDO, PENDIENTE y el TOTAL, que es el neto del banco.' },
+              { n: 3, t: '**Banco · cartola**: saldo inicial y final según la cartola, y si cuadra con lo anotado.' },
+              { n: 4, t: 'La hoja: fecha, nombre, OBS, plan de cuenta, monto, grupo, N° de factura y lo que dice el banco. A la derecha, el saldo acumulado (la columna SALDO), qué es la fila y si está en el banco.' },
+              { n: 5, t: 'La **fila nueva**: aquí se escribe lo siguiente.' },
+              { n: 6, t: 'La ayuda de la fila elegida: dice qué le falta.' }] },
+          { titulo: 'Escribir una fila', img: 'planilla-escribir',
+            texto: [['Haz clic en la fila nueva ((1)) y escribe el **día** (por ejemplo 24) o la fecha (24-10).', 'Pasa a la celda siguiente con **Tab** y escribe el **nombre** ((2)): el cliente, «ARRIENDO», «SUELDO»… Al escribir aparecen los que SIGSO ya conoce.', 'En la **OBS** ((3)) basta una letra: **A** = ABONO, **R** = ABONO RENTA, **I** = IVA, **M** = IMPOSICIONES, **S** = SALDO, **P** = PENDIENTE.', 'Si es un gasto, escribe el **plan de cuenta** ((4)): Arriendo Mensual, Sueldos, Cuentas Básicas…', 'Escribe el **monto** ((5)): positivo si entró, **negativo si salió** (como la columna TOTAL). Con fecha y monto, la fila se guarda sola.']],
+            marcas: [{ n: 1, t: 'La fila nueva.' }, { n: 2, t: 'Nombre.' }, { n: 3, t: 'OBS (una letra basta).' }, { n: 4, t: 'Plan de cuenta.' }, { n: 5, t: 'Monto: + entra / − sale.' }, { n: 6, t: 'Grupo y N° de factura (ver más abajo).' }],
+            consejo: ['Para corregir cualquier celda: haz clic en ella y escribe encima, o presiona **Enter** para editar lo que tiene. **Supr** borra la celda; en la fecha o el monto, pregunta si quieres borrar la fila.', 'Las teclas son las de Excel: **Enter** guarda y baja, **Tab** pasa a la derecha, las flechas mueven la celda elegida.'] },
+          { titulo: 'Pegar varias filas desde el Excel', img: 'planilla-pegar',
+            texto: [['En el Excel, copia las filas (desde la columna TOTAL hasta DETALLE BANCO).', 'En la planilla, presiona **Ctrl+V** (o toca [[Pegar desde Excel]] y pégalas en el cuadro ((1))).', 'SIGSO dice cuántas filas son y cuánto suman: confirma y quedan anotadas.']],
+            marcas: [{ n: 1, t: 'Aquí se pegan.' }, { n: 2, t: '[[Revisar y anotar]].' }],
+            ojo: ['No pegues un mes que ya está anotado: quedarían filas repetidas.'] }
         ] },
       { id: 'cartola', titulo: 'Cuando llega la cartola', ruta: '#/finanzas',
-        intro: ['La cartola es la verdad. Al subirla, cada fila anotada se une con su movimiento del banco y pasa a ✓. Lo que no se pueda unir queda a la vista para revisarlo.'],
+        intro: ['La cartola es la verdad. Se sube en **Más → Subir archivos** (o con [[Subir cartola]] arriba de la planilla). Cada fila anotada se une sola con su movimiento del banco (mismo monto, hasta 3 días de diferencia) y pasa a **✓ banco**.'],
         pasos: [
-          { titulo: 'Lo que el banco trae y nadie anotó', img: 'libro-falta',
-            texto: [['Toca **Falta anotar** ((1)): son movimientos de la cartola sin anotación ((2)), por ejemplo un «pago cuentas vía internet» que el banco no explica.', 'Toca [[Anotar]] ((3)) y complétala como cualquier fila (el monto y la fecha ya vienen del banco).']],
-            marcas: [{ n: 1, t: 'El filtro **Falta anotar**.' }, { n: 2, t: 'La fila del banco sin anotar.' }, { n: 3, t: '[[Anotar]].' }],
-            ojo: ['Si una fila anotada sigue **esperando** después de subir la cartola, revisa su fecha o su monto: puede que el banco la haya registrado otro día, o que se anotara con un error.'] },
-          { titulo: 'Corregir o completar una fila', img: 'libro-panel',
-            texto: [['Toca la fila (o Enter con el teclado).', 'Arriba ves si está en el banco y quién la anotó ((1)).', 'Corrige el nombre, el plan, la OBS, el detalle o la nota ((2)); si todavía espera la cartola, también la fecha y el monto. Toca [[Guardar]] ((5)).', 'Si el nombre es nuevo, di **de qué cliente es** ((3)): SIGSO lo recuerda y clasifica todas las filas del mes con ese nombre.']],
-            marcas: [{ n: 1, t: 'Banco: ✓, esperando o sin anotar; y quién la anotó.' }, { n: 2, t: 'Lo anotado, como en la planilla.' }, { n: 3, t: '¿De qué cliente es este nombre?' }, { n: 4, t: '**Decirlo a mano**: para casos especiales (traspaso, préstamo, repartir en partes…).' }, { n: 5, t: '[[Guardar]] y [[Borrar fila]].' }],
-            consejo: ['Borrar una fila que ya está en el banco solo borra lo anotado: el movimiento queda «falta anotar».'] }
+          { titulo: 'Lo que el banco trae y nadie anotó', img: 'planilla-falta',
+            texto: [['Las filas **naranjas** ((1)) están en la cartola y nadie las anotó (por ejemplo, un «pago cuentas vía internet» que el banco no explica). La fecha y el monto ya vienen del banco.', 'Escribe **quién es** ((2)) y la **OBS** ((3)), como cualquier fila.', 'Cuando no queda nada en naranjo ni «esperando», arriba dice **Cuadra con la cartola**.']],
+            marcas: [{ n: 1, t: 'Fila del banco sin anotar.' }, { n: 2, t: 'Quién es.' }, { n: 3, t: 'OBS.' }, { n: 4, t: 'En el banco: ✓, esperando o falta anotar.' }],
+            ojo: ['Si una fila anotada sigue **esperando** después de subir la cartola, revisa su fecha o su monto: el banco puede haberla registrado otro día, o se anotó con un error.'] }
         ] },
-      { id: 'grupos', titulo: 'Forma los grupos de fondos (lo que hacía UNITARIO)', ruta: '#/finanzas',
-        intro: ['Cuando un cliente manda plata para sus imposiciones o su IVA y después se paga por él, esas filas forman un **grupo**: lo que entró menos lo que se pagó es el **remanente**. Es lo mismo que la fórmula de la columna UNITARIO de la planilla.'],
+      { id: 'grupos', titulo: 'Los grupos de fondos (lo que hacía UNITARIO)', ruta: '#/finanzas',
+        intro: ['Cuando un cliente manda plata para sus imposiciones o su IVA y después se paga por él, esas filas son un **grupo**. En vez de una fórmula, se pone **la misma letra** en la columna Grupo.'],
         pasos: [
-          { titulo: 'Formar un grupo', img: 'libro-grupo',
-            texto: [['En el libro, marca las filas del grupo con su casilla (lo que el cliente mandó y lo que se pagó).', 'Arriba de la tabla aparece cuánto suman: eso es lo que sobra (o falta).', 'Toca [[Formar grupo de fondos]], elige el cliente ((1)), la obligación ((2)) y su período ((3)).', 'Di qué pasa con lo que sobra ((4)), como la OBS de la fila que cerraba el grupo en la planilla, y toca [[Guardar grupo]] ((5)).']],
-            marcas: [{ n: 1, t: 'El cliente.' }, { n: 2, t: 'La obligación: imposiciones, IVA, convenio, renta…' }, { n: 3, t: 'El mes de la obligación (normalmente, el anterior al pago).' },
-              { n: 4, t: 'Lo que sobra: **Pendiente** (el grupo sigue abierto), **ABONO** o **ABONO RENTA** (se cobra como honorario) o **SALDO** (queda a favor del cliente).' }, { n: 5, t: '[[Guardar grupo]].' }],
-            consejo: ['Si el cliente manda más plata después, marca la fila nueva y elige **Sumar a** su grupo. Para sacar una fila de un grupo, ábrela y toca [[Sacar del grupo]].', 'Los grupos del Excel BANCOS se arman solos al llevar el mes.'] },
-          { titulo: 'Los fondos de cada cliente', img: 'fondos',
-            marcas: [{ n: 1, t: 'Saldos iniciales, aprobaciones y nueva gestión.' }, { n: 2, t: 'Quién puede aprobar un saldo inicial.' }, { n: 3, t: 'Clientes sin saldo inicial aprobado: su saldo es **parcial**.' }, { n: 4, t: 'A favor, en negativo, sin saldo inicial.' }, { n: 5, t: 'Un cliente: su ficha con cada grupo y su remanente.' }],
-            ojo: ['Una diferencia, aunque sea de $1, **se conserva**: no se ajusta sola. El remanente se decide por escrito: mantenerlo, devolverlo o cobrarlo como honorario con respaldo.'] }
+          { titulo: 'Formar un grupo y decidir lo que sobra', img: 'planilla-grupos',
+            texto: [['Escribe la misma letra (por ejemplo **A**) en la columna **Grupo** de lo que el cliente mandó y de lo que se pagó por él.', 'Abajo de la hoja aparece el grupo ((1)) con lo que entró, lo que salió y **lo que sobra** ((2)).', 'Elige qué pasa con lo que sobra ((3)), como la OBS de la fila que cerraba el grupo en el Excel: **PENDIENTE** (sigue abierto), **ABONO** o **ABONO RENTA** (se cobra como honorario) o **SALDO** (queda a favor del cliente).']],
+            marcas: [{ n: 1, t: 'El grupo y su cliente.' }, { n: 2, t: 'Entró, salió y lo que sobra.' }, { n: 3, t: 'Qué pasa con lo que sobra.' }],
+            consejo: ['Las letras son de cada mes: el grupo A de septiembre no tiene que ver con el A de octubre.', 'Los grupos que vinieron del Excel BANCOS ya tienen su letra. Si un grupo tiene filas de otro mes, lo dice y muestra lo que el Excel calculaba.'] }
         ] },
-      { id: 'nombres', titulo: 'Enseña los nombres cortos', ruta: '#/finanzas',
-        intro: ['En la planilla cada fila tiene un nombre corto («ARMA HIERRO», «VYE», «JB»…). SIGSO reconoce solo la mayoría; los que no conoce aparecen en **El mes** como **nombres por enseñar**, y también se enseñan desde la fila misma («¿De qué cliente es…?»).'],
+      { id: 'flujo', titulo: 'El FLUJO', ruta: '#/finanzas',
         pasos: [
-          { titulo: 'Decir de quién es cada nombre', texto: [['En **El mes**, abre **N nombre(s) de la planilla por enseñar**.', 'Para cada nombre: elige si es **un cliente** (y cuál), **una empresa del grupo**, **un gasto de la empresa** o **nadie**. Al lado ves cuántas filas tiene y quién pagó según el banco.', 'Toca [[Guardar y clasificar esas filas]]: SIGSO clasifica solas todas las filas con esos nombres, sin volver a subir el Excel.']],
-            consejo: ['Si SIGSO propone un cliente por parecido, revísalo antes de guardar: un nombre corto puede parecerse a otro cliente.'] }
+          { titulo: 'Ingresos y egresos por plan de cuenta', img: 'flujo',
+            marcas: [{ n: 1, t: 'Hasta qué mes, cuántos meses y de qué empresa (o todo el grupo).' },
+              { n: 2, t: 'Ingresos y egresos por plan de cuenta, como en SIGECO.' }, { n: 3, t: '**Margen del mes**: ingresos menos egresos de la empresa.' }, { n: 4, t: 'La plata de los clientes va aparte, para no inflar ingresos ni gastos.' }],
+            consejo: ['Un gasto anotado sin plan de cuenta cae en **Otros Egresos**: escribe el plan en la planilla para que caiga donde corresponde.', 'Si hay filas sin completar (sin OBS o del banco sin anotar), arriba aparece un aviso: esas filas todavía no entran al FLUJO.'] }
         ] },
-      { id: 'clientes', titulo: 'Los clientes del mes', ruta: '#/finanzas',
+      { id: 'saldos', titulo: 'El saldo por cliente', ruta: '#/finanzas',
         pasos: [
-          { titulo: 'Con movimiento en el mes', img: 'clientes-mes',
-            marcas: [{ n: 1, t: '**Con movimiento en el mes** o **Todos los clientes** (el catálogo completo).' }, { n: 2, t: 'El mes.' },
-              { n: 3, t: 'Un cliente: honorarios del mes, lo que mandó para sus obligaciones, lo que se pagó por él, el saldo de sus fondos y lo que debe en facturas. Tócalo para abrir su ficha.' }, { n: 4, t: 'Los totales.' }] }
+          { titulo: 'Cuánta plata de cada cliente hay', img: 'saldos',
+            marcas: [{ n: 1, t: 'Hasta qué mes (el saldo se acumula desde el primer mes con datos).' }, { n: 2, t: 'Los totales: plata de clientes en la cuenta, honorarios del mes, facturas por cobrar y clientes en negativo.' },
+              { n: 3, t: 'Cada cliente: honorarios, fondos recibidos, lo pagado por él, lo que sobró y se cobró, su **saldo de fondos** y lo que debe en facturas.' }],
+            ojo: ['Un saldo **negativo** es plata que se pagó por el cliente sin que la haya mandado: hay que pedírsela.', '**Sin ficha**: el nombre de la planilla no está enlazado a un cliente de SIGSO. Se enseña en **Más → Nombres y reglas**.'] }
         ] },
-      { id: 'cobranza', titulo: 'Aplica los cobros a sus facturas', ruta: '#/finanzas',
-        intro: ['**Clientes → Facturas y cobranza** muestra lo que falta cobrar, factura por factura. Un cobro recibido no paga una factura hasta que una persona lo **aplica**.'],
+      { id: 'cobranza', titulo: 'La cobranza', ruta: '#/finanzas',
         pasos: [
-          { titulo: 'La bandeja de cobranza', img: 'cobranza',
-            marcas: [{ n: 1, t: 'Emisor, cliente, vencimiento y búsqueda.' }, { n: 2, t: 'Facturado, saldo, vencido, cobros sin aplicar y lo propuesto (aparte).' }, { n: 3, t: 'Abiertas, vencidas, pagadas…' },
-              { n: 4, t: 'Una factura con su saldo y estado.' }, { n: 5, t: '[[Aplicar cobro]] a las marcadas.' }, { n: 6, t: '[[Ver]]: aplicaciones, desaplicar con motivo, vencimiento.' }, { n: 7, t: '[[Relaciones de terceros]]: quién paga por quién.' }] },
-          { titulo: 'Aplicar un pago (también uno parcial)', img: 'aplicar',
-            texto: [['En la factura, toca [[Aplicar]].', 'Marca el cobro ((2)) y reparte el importe ((4)): si es menos que el saldo, la factura queda en **Pago parcial**.', 'Toca [[Confirmar aplicación]] ((5)).']],
-            marcas: [{ n: 1, t: 'Las facturas y lo que falta.' }, { n: 2, t: 'Los cobros que se pueden usar.' }, { n: 3, t: 'Fecha de la aplicación.' }, { n: 4, t: 'Cuánto va a cada factura.' }, { n: 5, t: '[[Confirmar aplicación]].' }] }
+          { titulo: 'Facturas pagadas y por cobrar', img: 'cobros',
+            marcas: [{ n: 1, t: 'Facturado, pagado, por cobrar y vencido.' }, { n: 2, t: 'Ver solo lo por cobrar, o todas.' }, { n: 3, t: 'Cada factura con su saldo y estado.' }],
+            texto: [['Las facturas entran con el Registro de Ventas del SII (o la hoja FACTURAS de SIGECO), en **Más → Subir archivos**.', 'Una factura queda **pagada** cuando, en la planilla, la fila del abono lleva su número en la columna **N° factura**. No hay otra hoja de pagos.']] }
         ] },
-      { id: 'informes', titulo: 'El flujo por mes y el informe', ruta: '#/finanzas',
+      { id: 'subir', titulo: 'Subir archivos', ruta: '#/finanzas',
         pasos: [
-          { titulo: 'Flujo por mes (como las hojas FLUJO)', img: 'flujo',
-            marcas: [{ n: 1, t: 'Hasta qué mes.' }, { n: 2, t: 'Cuántos meses mirar.' }, { n: 3, t: 'Cada sección: ingresos, gastos, fondos de clientes, traspasos.' },
-              { n: 4, t: '**Resultado propio**: ingresos menos gastos de la empresa (sin la plata de los clientes).' }, { n: 5, t: 'Si cada mes está verificado contra la cartola, sin cartola o con filas por revisar.' }] },
-          { titulo: 'El informe del mes y el PDF', img: 'resumen',
-            marcas: [{ n: 1, t: '[[Exportar]] y [[Descargar PDF]].' }, { n: 2, t: 'Mes, alcance, base y comparación.' }, { n: 3, t: 'Si los datos son provisorios y por qué.' }, { n: 4, t: 'Flujo del mes.' }, { n: 5, t: 'Liquidez: banco, fondos de clientes y disponibilidad propia.' }, { n: 6, t: 'Lo que conviene revisar.' }] }
+          { titulo: 'El centro de cargas', img: 'cargas',
+            texto: [['**Cartola del banco** (Excel, no PDF): revisa que los saldos cuadren y toca [[Importar]]. Subirla dos veces no duplica nada.', '**Mis Movimientos** del BCI: completa el nombre de quien transfirió de verdad.',
+              '**Excel BANCOS** (solo los meses que se llenaron en el Excel): elige la cuenta y toca [[Llevar AAAA-MM]] por cada mes. Las filas llegan a la planilla con su OBS y sus grupos.', '**Ventas del SII** o la planilla **SIGECO**: facturas y clientes.']],
+            marcas: [{ n: 1, t: 'Aquí se suelta cualquier archivo.' }, { n: 2, t: 'Qué se puede subir y dónde queda.' }] }
         ] },
       { id: 'cierre', titulo: 'Cierra el mes', ruta: '#/finanzas',
-        intro: ['Un mes cerrado queda **fijo**. Se puede reabrir con motivo; la versión anterior se conserva.'],
+        intro: ['En **Más → Cierre de meses**. Un mes cerrado queda **fijo**: la planilla se ve, pero no se edita. Se puede reabrir con motivo; la versión anterior se conserva.'],
         pasos: [
           { titulo: 'La revisión del período', img: 'cierre',
             marcas: [{ n: 1, t: 'La política de cierre.' }, { n: 2, t: 'Los meses y su estado.' }, { n: 3, t: 'El siguiente paso.' }, { n: 4, t: 'Lo que bloquea el cierre.' }, { n: 5, t: 'Lo que está listo.' }, { n: 6, t: 'Aceptar una excepción con motivo.' }, { n: 7, t: 'Cerrar.' }] }
@@ -144,24 +105,23 @@
       { id: 'errores', titulo: 'Cuando algo falla', ruta: '#/finanzas',
         pasos: [
           { titulo: 'Qué hacer', texto: [[
-            '**No cuadra con la cartola**: falta o sobra un movimiento. Revisa que estén todas las cartolas del mes (del 1 al último día) y sube la que falte.',
-            '**Sin cartola**: esas filas vienen de la planilla; cuando subas la cartola de ese mes se verifican.',
-            '**«No se pudo cargar» con [[Reintentar]]**: la pantalla no recibió los datos. Toca [[Reintentar]].',
-            '**«Otra persona cambió este movimiento»**: alguien guardó antes que tú. Vuelve a abrirlo y guarda de nuevo.',
-            '**Un botón apagado**: tu acceso no incluye esa acción. Pídelo a la administración.']] }
+            '**«No entiendo el monto»**: escribe solo números, con punto de miles si quieres (450.000) y el signo menos si salió (-450.000).',
+            '**«La OBS es una de estas»**: usa una letra (A, R, I, M, S, P) o la palabra completa.',
+            '**«Otra persona cambió esta fila»**: alguien guardó antes que tú. La hoja se recarga sola; vuelve a escribir.',
+            '**No cuadra con la cartola**: completa las filas naranjas y revisa las que siguen «esperando». Fíjate también en que estén todas las cartolas del mes.',
+            '**Una celda no deja escribir**: la fecha, el monto y el detalle de una fila que ya está en el banco vienen de la cartola; o el mes está cerrado; o tu acceso es de lectura.']] }
         ] },
       { id: 'seguridad', titulo: 'Seguridad y bitácora', ruta: '#/finanzas',
         pasos: [
-          { titulo: 'Buenas prácticas', texto: [['Cierra la bóveda con el candado al dejar el computador.', 'No compartas tu código ni tu teléfono.', 'En **Configuración → Bitácora** queda todo lo que se hizo; si ves un ingreso que no reconoces, avisa de inmediato.']] }
+          { titulo: 'Buenas prácticas', texto: [['Cierra la bóveda con el candado al dejar el computador.', 'No compartas tu código ni tu teléfono.', 'En **Más → Bitácora** queda todo lo que se hizo; si ves un ingreso que no reconoces, avisa de inmediato.']] }
         ] }
     ],
     preguntas: [
-      { p: '¿Dónde quedó el «Registro diario»?', r: ['Ahora se anota directo en el **libro del banco**, en la fila **Anotar movimiento** de arriba, como en la planilla BANCOS. Al subir la cartola, cada fila anotada se une con su movimiento del banco. Lo que no pasa por el banco (efectivo, compensaciones) aparece en «Fuera del banco».'] },
-      { p: '¿Hay que seguir llenando el Excel BANCOS?', r: ['No. Desde que se empieza a anotar en SIGSO, el Excel ya no hace falta. El Excel solo se sube para los meses que ya estaban llenados en la planilla (por ejemplo, septiembre y la primera mitad de octubre). No subas el Excel de un mes que ya anotaste en SIGSO: quedarían filas repetidas.'] },
-      { p: '¿Por qué una fila de la planilla no aparece en el libro?', r: ['Porque el banco no la trae ese mes (por ejemplo, la registró al día siguiente, en el mes que viene). Al llevar el mes, SIGSO la lista como «no está en el banco».'] },
-      { p: '¿Qué pasa si llevo el mismo mes dos veces?', r: ['Nada: lo ya unido y clasificado no se toca y los grupos no se duplican.'] },
-      { p: 'Un cliente pagó desde la cuenta de otra persona.', r: ['Clasifica la fila con el cliente correcto y deja marcado **Recordar**: la próxima vez SIGSO lo propone.'] },
-      { p: '¿Por qué el saldo de fondos de un cliente dice «parcial»?', r: ['Falta su saldo inicial aprobado: puede haber mandado plata antes de la primera cartola. Cárgalo en **Fondos de clientes → Cargar saldos iniciales**.'] }
+      { p: '¿Hay que seguir llenando el Excel BANCOS o la planilla SIGECO?', r: ['No. La planilla de SIGSO reemplaza a las dos: se llena igual que el Excel BANCOS, y de ella salen el FLUJO, los saldos por cliente y la cobranza que antes se armaban en SIGECO. El Excel solo se sube para los meses que ya estaban llenados ahí.'] },
+      { p: '¿Por qué el ABONO de arriba es menor que lo que entró?', r: ['Porque, como en el Excel, ABONO es neto: lo que entró menos los gastos anotados con OBS ABONO. Debajo dice cuánto entró y cuánto fueron los gastos.'] },
+      { p: '¿Qué es «De otros meses» en el resumen?', r: ['Filas de grupos que empezaron o terminan en otro mes (por ejemplo, el cliente mandó la plata en junio y se pagó en julio). Para esos grupos vale lo que el Excel calculaba que sobró; lo demás se muestra aparte para que el TOTAL siga cuadrando con el banco.'] },
+      { p: '¿Dónde quedaron «El mes» y el «Libro del banco»?', r: ['Se reemplazaron por la planilla: todo lo que mostraban (cuadre con la cartola, lo que falta anotar, el resumen) está ahora en la misma hoja.'] },
+      { p: 'Un cliente pagó desde la cuenta de otra persona.', r: ['En la planilla escribe el nombre del cliente, no el de quien transfirió. Lo que dice el banco queda a la derecha, en «Detalle banco».'] }
     ]
   });
 })();

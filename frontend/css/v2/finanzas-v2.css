@@ -1083,3 +1083,111 @@ details.fin3-nombres { border-color: color-mix(in srgb, var(--sx-alerta) 45%, va
   .fin3-form__2 { grid-template-columns: 1fr; }
   .fin3-estado { grid-template-columns: 1fr 1fr; }
 }
+
+/* =====================================================================================
+   v4 · La planilla del banco (22-10-2026): se ve y se llena como el Excel BANCOS.
+   Hoja densa con celdas, pestañas de mes, la franja de totales arriba y los grupos abajo.
+   ===================================================================================== */
+.fin4 { display: flex; flex-direction: column; gap: 12px; --fin4-num: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+.fin4-barra { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.fin4-meses { display: flex; gap: 2px; flex-wrap: wrap; }
+.fin4-mes { font: inherit; font-size: .82rem; font-weight: 600; padding: 6px 12px; border: 1px solid var(--sx-borde); border-bottom-color: transparent; border-radius: 8px 8px 0 0; background: var(--sx-superficie-2); color: var(--sx-texto-2); cursor: pointer; text-transform: capitalize; }
+.fin4-mes[aria-selected="true"] { background: var(--sx-superficie); color: var(--sx-texto); border-color: var(--sx-borde-fuerte); box-shadow: inset 0 3px 0 var(--sx-primario); }
+.fin4-mes:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: 1px; }
+.fin4-cuenta { display: inline-flex; gap: 6px; align-items: center; font-size: .8rem; color: var(--sx-texto-2); }
+.fin4-cuenta .fin2-input { width: auto; }
+.fin4-cuenta-1 { font-size: .8rem; color: var(--sx-texto-2); font-weight: 600; }
+.fin4-obs { margin-left: auto; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .74rem; color: var(--sx-texto-2); align-items: center; }
+.fin4 kbd { font-family: var(--fin4-num); font-size: .7rem; background: var(--sx-superficie); border: 1px solid var(--sx-borde-fuerte); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--sx-texto); }
+
+.fin4-franja { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px; }
+.fin4-caja { background: var(--sx-superficie); border: 1px solid var(--sx-borde); border-radius: 12px; padding: 10px 14px; min-width: 0; }
+.fin4-caja h2 { margin: 0 0 6px; font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--sx-texto-2); }
+.fin4-caja--alerta { border-color: color-mix(in srgb, var(--sx-alerta) 55%, var(--sx-borde)); }
+.fin4-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 6px 14px; }
+.fin4-banco { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 14px; }
+.fin4-cifra { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.fin4-cifra span { font-size: .7rem; font-weight: 600; color: var(--sx-texto-2); text-transform: uppercase; letter-spacing: .04em; }
+.fin4-cifra b { font-family: var(--fin4-num); font-size: 1.02rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--sx-texto); }
+.fin4-cifra small { font-size: .72rem; color: var(--sx-texto-3); }
+.fin4-cifra--total b { color: var(--sx-primario); }
+.fin4-cifra--alerta b, .fin4-cifra--alerta span { color: var(--sx-alerta); }
+.fin4-estado { grid-column: 1 / -1; display: flex; gap: 8px; align-items: flex-start; font-size: .82rem; padding: 7px 10px; border-radius: 8px; }
+.fin4-estado > svg { flex: none; margin-top: 2px; }
+.fin4-estado--ok { background: color-mix(in srgb, var(--sx-ok) 13%, var(--sx-superficie)); color: var(--sx-ok); }
+.fin4-estado--alerta { background: color-mix(in srgb, var(--sx-alerta) 13%, var(--sx-superficie)); color: color-mix(in srgb, var(--sx-alerta) 80%, var(--sx-texto)); }
+.fin4-estado--neutro { background: var(--sx-superficie-2); color: var(--sx-texto-2); }
+
+.fin4-hoja-env { background: var(--sx-superficie); border: 1px solid var(--sx-borde-fuerte); border-radius: 0 12px 12px 12px; overflow: auto; max-height: calc(100vh - 300px); min-height: 260px; }
+.fin4-hoja { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 1120px; font-size: .84rem; }
+.fin4-hoja th { position: sticky; top: 0; z-index: 2; background: var(--sx-superficie-2); color: var(--sx-texto-2); font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--sx-borde-fuerte); border-right: 1px solid var(--sx-borde); white-space: nowrap; }
+.fin4-hoja th.fin4-n { text-align: right; }
+.fin4-hoja td { padding: 0; border-bottom: 1px solid var(--sx-borde); border-right: 1px solid var(--sx-borde); height: 30px; position: relative; white-space: nowrap; }
+.fin4-v { display: block; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; min-height: 29px; }
+.fin4-n .fin4-v, td.fin4-n { text-align: right; font-family: var(--fin4-num); font-variant-numeric: tabular-nums; }
+.fin4-idx { width: 36px; text-align: right; color: var(--sx-texto-3); font-family: var(--fin4-num); font-size: .72rem; background: var(--sx-superficie-2); padding: 0 6px !important; }
+.fin4-cel { cursor: cell; }
+.fin4-cel.fin4-sel { box-shadow: inset 0 0 0 2px var(--sx-primario); z-index: 1; }
+.fin4-bloq .fin4-v { color: var(--sx-texto-2); }
+.fin4-tenue .fin4-v { color: var(--sx-texto-3); font-size: .78rem; }
+.fin4-c-nombre .fin4-v { max-width: 210px; font-weight: 600; }
+.fin4-c-plan .fin4-v { max-width: 170px; }
+.fin4-c-glosa .fin4-v { max-width: 220px; }
+.fin4-c-grupo .fin4-v { font-family: var(--fin4-num); font-weight: 700; color: var(--sx-primario); text-align: center; }
+.fin4-c-grupo { width: 56px; }
+.fin4-saldo .fin4-v { color: var(--sx-texto-2); }
+.fin4-editor { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; outline: 2px solid var(--sx-primario); padding: 6px 8px; font: inherit; background: var(--sx-superficie); color: var(--sx-texto); z-index: 3; }
+.fin4-n .fin4-editor { text-align: right; font-family: var(--fin4-num); }
+.fin4-fila--falta td { background: color-mix(in srgb, var(--sx-alerta) 11%, var(--sx-superficie)); }
+.fin4-fila--rev td.fin4-idx { box-shadow: inset 3px 0 0 var(--sx-alerta); }
+.fin4-fila--nueva td { background: color-mix(in srgb, var(--sx-primario) 6%, var(--sx-superficie)); }
+.fin4-fila--falta .fin4-v:empty::before, .fin4-fila--nueva .fin4-v:empty::before { content: attr(data-ph); color: var(--sx-texto-3); font-style: italic; }
+.fin4-que { font-size: .76rem; font-weight: 600; }
+.fin4-que--ok { color: var(--sx-ok); }
+.fin4-que--critico { color: var(--sx-critico); }
+.fin4-que--info { color: var(--sx-primario); }
+.fin4-que--alerta { color: var(--sx-alerta); }
+.fin4-que--neutro { color: var(--sx-texto-2); }
+.fin4-que-cli { display: block; font-size: .7rem; color: var(--sx-texto-3); max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+.fin4-c-que .fin4-v { padding-block: 4px; }
+.fin4-c-banco { width: 100px; text-align: center; }
+.fin4-chip { display: inline-block; font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.fin4-chip--ok { background: color-mix(in srgb, var(--sx-ok) 14%, transparent); color: var(--sx-ok); }
+.fin4-chip--esp { background: color-mix(in srgb, var(--sx-primario) 12%, transparent); color: var(--sx-primario); }
+.fin4-chip--falta { background: color-mix(in srgb, var(--sx-alerta) 16%, transparent); color: color-mix(in srgb, var(--sx-alerta) 85%, var(--sx-texto)); }
+.fin4-chip--borr { background: var(--sx-superficie-2); color: var(--sx-texto-2); border: 1px dashed var(--sx-borde-fuerte); }
+.fin4-pie-hoja { display: flex; flex-direction: column; gap: 4px; }
+.fin4-ayuda { margin: 0; min-height: 1.3em; font-size: .82rem; color: var(--sx-texto); }
+.fin4-teclas { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .74rem; color: var(--sx-texto-3); }
+
+.fin4-sub { margin: 0; font-size: .78rem; color: var(--sx-texto-3); }
+.fin4-grupos { display: flex; flex-direction: column; gap: 8px; }
+.fin4-grupos__lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.fin4-grupo { border: 1px dashed var(--sx-primario); border-radius: 10px; padding: 9px 12px; display: flex; flex-direction: column; gap: 6px; font-size: .82rem; }
+.fin4-grupo__cab { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; }
+.fin4-grupo__cab span { color: var(--sx-texto-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin4-grupo__nums { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--sx-texto-2); }
+.fin4-grupo__nums b { font-family: var(--fin4-num); color: var(--sx-texto); }
+.fin4-grupo__dec { display: flex; flex-direction: column; gap: 3px; font-size: .72rem; color: var(--sx-texto-2); }
+.fin4-pegado { font-family: var(--fin4-num); font-size: .78rem; white-space: pre; }
+
+.fin4-tarjetas { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.fin4-rep { background: var(--sx-superficie); border: 1px solid var(--sx-borde); border-radius: 12px; overflow: auto; max-height: calc(100vh - 260px); }
+.fin4-tab { border-collapse: separate; border-spacing: 0; width: 100%; font-size: .84rem; min-width: 640px; }
+.fin4-tab th, .fin4-tab td { padding: 6px 10px; border-bottom: 1px solid var(--sx-borde); text-align: left; white-space: nowrap; }
+.fin4-tab thead th { position: sticky; top: 0; z-index: 1; background: var(--sx-superficie-2); font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--sx-texto-2); }
+.fin4-tab tbody th { font-weight: 500; }
+.fin4-tab .fin4-n { text-align: right; }
+.fin4-tab .fin4-cero { color: var(--sx-texto-3); }
+.fin4-tab .fin4-tot { font-weight: 700; border-left: 1px solid var(--sx-borde); }
+.fin4-sec th { background: var(--sx-superficie); font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; padding-top: 14px; border-bottom: 2px solid var(--sx-borde-fuerte); color: var(--sx-texto); }
+.fin4-subt th, .fin4-subt td { font-weight: 700; background: var(--sx-superficie-2); }
+.fin4-res th, .fin4-res td { font-weight: 800; background: var(--sx-primario-suave); border-top: 2px solid var(--sx-primario); }
+
+@media (max-width: 900px) {
+  .fin4-franja { grid-template-columns: 1fr; }
+  .fin4-obs { margin-left: 0; }
+  .fin4-hoja-env { max-height: none; }
+}
+@media (max-width: 520px) { .fin4-banco { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fin4-grupo__aviso { display: flex; gap: 4px; align-items: center; font-size: .74rem; color: color-mix(in srgb, var(--sx-alerta) 85%, var(--sx-texto)); }

@@ -45,9 +45,10 @@ function leerFila_(f) {
   if (!m.ok || !m.valor) return { error: 'Falta el monto: positivo si entró, negativo si salió.' };
   const obs = N(f.obs);
   if (obs && OBS.indexOf(obs) === -1) return { error: 'OBS no válida: usa ' + OBS.join(', ') + ' o déjala vacía.' };
-  const alias = txt_(f.alias).slice(0, 80);
-  if (!alias) return { error: 'Falta el nombre (como lo anotan en la planilla: el cliente, «ARRIENDO», «SUELDO»…).' };
-  return { fecha, monto: m.valor, alias, plan: txt_(f.plan).slice(0, 80).toUpperCase(), obs, glosa: txt_(f.glosa).slice(0, 200), nota: txt_(f.nota).slice(0, 300) };
+  // El nombre puede quedar para después (la fila queda por completar), como en la planilla.
+  const alias = txt_(f.alias).slice(0, 80).toUpperCase();
+  const grupo = txt_(f.grupo).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+  return { fecha, monto: m.valor, alias, plan: txt_(f.plan).slice(0, 80), obs, glosa: txt_(f.glosa).slice(0, 200), nota: txt_(f.nota).slice(0, 300), grupo, fact: txt_(f.fact).replace(/[^0-9A-Za-z\-]/g, '').slice(0, 20) };
 }
 
 /** Movimientos de la cuenta alrededor de unas fechas, descifrados. */
@@ -124,7 +125,7 @@ const registrar = Base.conCapacidad('REGISTRAR', '', function (db, data, context
       const periodo = f.fecha.slice(0, 7);
       const n = numeros.has(periodo) ? numeros.get(periodo) : siguienteFila_(cuenta.id, periodo);
       numeros.set(periodo, n + 1);
-      const anot = { alias: f.alias, obs: f.obs, plan: f.plan, glosa: f.glosa, nota: f.nota, fila: n, archivo: 'Registro en SIGSO', unitario: null, grupo: null, registro: { por: x.nombre, en: ahora } };
+      const anot = { alias: f.alias, obs: f.obs, plan: f.plan, glosa: f.glosa, nota: f.nota, grupo_letra: f.grupo, fact: f.fact, fila: n, archivo: 'Registro en SIGSO', unitario: null, grupo: null, registro: { por: x.nombre, en: ahora } };
       let m = null;
       if (f.mov_id) {
         m = movs.find((y) => y.r.id === f.mov_id) || null;
@@ -176,13 +177,14 @@ const editar = Base.conCapacidad('REGISTRAR', '', function (db, data, contexto, 
   if (!m.planilla) return errorValidacion('id', 'Esta fila no está anotada todavía.');
   const montoAntes = (m.abono || 0) - (m.cargo || 0);
   const f = leerFila_({ fecha: m.sin_cartola && data.fecha ? data.fecha : r.fecha, monto: m.sin_cartola && data.monto !== undefined && data.monto !== '' ? data.monto : montoAntes,
-    alias: data.alias, plan: data.plan, obs: data.obs, glosa: data.glosa, nota: data.nota });
+    alias: data.alias, plan: data.plan, obs: data.obs, glosa: data.glosa, nota: data.nota,
+    grupo: data.grupo !== undefined ? data.grupo : m.planilla.grupo_letra, fact: data.fact !== undefined ? data.fact : m.planilla.fact });
   if (f.error) return errorValidacion('fila', f.error);
   if (cerrado_(f.fecha.slice(0, 7))) return errorValidacion('fecha', 'El mes ' + f.fecha.slice(0, 7) + ' está cerrado.');
   const cambiaQue = N(f.alias) !== N(m.planilla.alias) || f.obs !== (m.planilla.obs || '') || N(f.plan) !== N(m.planilla.plan || '') || f.monto !== montoAntes;
   if (cambiaQue && enGrupo_(m)) return errorValidacion('fila', 'Esta fila está en un grupo de fondos: sácala del grupo antes de cambiar el nombre, la OBS, el plan o el monto.');
   if (f.monto !== montoAntes && m.clasif && m.clasif.partes) return errorValidacion('monto', 'Está repartida en partes: quita el reparto antes de cambiar el monto.');
-  Object.assign(m.planilla, { alias: f.alias, obs: f.obs, plan: f.plan, glosa: f.glosa, nota: f.nota });
+  Object.assign(m.planilla, { alias: f.alias, obs: f.obs, plan: f.plan, glosa: f.glosa, nota: f.nota, grupo_letra: f.grupo, fact: f.fact });
   if (m.sin_cartola) { m.abono = f.monto > 0 ? f.monto : 0; m.cargo = f.monto < 0 ? -f.monto : 0; if (!m.fuente || m.fuente.tipo === 'REGISTRO') m.glosa = f.glosa || f.alias; }
   let estado = r.estado;
   if (cambiaQue) { estado = 'PENDIENTE'; m.clasif = null; }

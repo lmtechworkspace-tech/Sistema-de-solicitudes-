@@ -59,7 +59,7 @@
           '<tr><td>Saldos iniciales de fondos (.xlsx)</td><td>Cliente/RUT, fecha de corte, monto y fuente</td><td>Saldos propuestos (Fondos)</td></tr>' +
           '<tr><td>Planilla SIGECO o Excel BANCOS (.xlsx)</td><td>Sus hojas conocidas</td><td>Revisión por hoja antes de publicar</td></tr>' +
           '<tr><td>Detalle del banco</td><td>—</td><td>Se sube en <button type="button" class="sx2-enlace js-fca-ir" data-vista="bancos">Bancos</button> (hay que elegir la cuenta)</td></tr>' +
-          '<tr><td>Filas sueltas de Excel</td><td>—</td><td><button type="button" class="sx2-enlace js-fca-ir" data-vista="libro">Libro del banco · Pegar desde Excel</button></td></tr>' +
+          '<tr><td>Filas sueltas de Excel</td><td>—</td><td><button type="button" class="sx2-enlace js-fca-ir" data-vista="planilla">Planilla · Ctrl+V o «Pegar desde Excel»</button></td></tr>' +
           '<tr><td>Cartola de Santander</td><td colspan="2"><b>Aún no se puede leer:</b> falta una cartola real para construir y probar su lector. Mientras tanto, los movimientos de Santander anotados en el Excel BANCOS entran como borradores con su origen.</td></tr>' +
         '</tbody></table>' +
         '<div class="js-fca-progreso" aria-live="polite"></div></div>' }) +
@@ -129,8 +129,8 @@
         if (!r || !r.ok) { prog.innerHTML = cinta('critico', txt((r && r.message) || 'No se pudo importar.')); return; }
         var u = r.data.unidas || 0, falta = r.data.nuevas - u;
         prog.innerHTML = cinta('ok', '<b>Importada:</b> ' + r.data.nuevas + ' movimiento(s) del banco' + (u ? ' · <b>' + u + '</b> se unieron con lo anotado ✓' : '') +
-          (falta ? ' · <b>' + falta + '</b> quedan «falta anotar»' : '') + '. <button type="button" class="sx2-enlace js-fca-ir" data-vista="libro">Ir al libro del banco</button>');
-        if (r.data.periodo) x_.contexto({ periodo_libro: r.data.periodo });
+          (falta ? ' · <b>' + falta + '</b> quedan «falta anotar»' : '') + '. <button type="button" class="sx2-enlace js-fca-ir" data-vista="planilla">Ir a la planilla</button>');
+        if (r.data.periodo) x_.contexto({ periodo_hoja: r.data.periodo });
       });
     });
   }
@@ -158,7 +158,7 @@
     var lista = hojas.filter(esHojaBancos);
     x_.api('finanzasResumenBancos', {}).then(function (rb) {
       var cuentas = rb && rb.ok ? (rb.data.cuentas || []) : [];
-      prog.innerHTML = cinta('info', '<b>Excel BANCOS · ' + txt(nombre) + '</b>: cada mes se lleva al <b>libro del banco</b>. Cada fila se une a su movimiento de la cartola (o, si ese mes no tiene cartola, entra marcada «sin cartola»), se clasifica como dice la columna OBS y se arman sus grupos de fondos. Repetirlo no duplica nada.') +
+      prog.innerHTML = cinta('info', '<b>Excel BANCOS · ' + txt(nombre) + '</b>: cada mes se lleva a la <b>planilla</b>. Cada fila se une a su movimiento de la cartola (o, si ese mes no tiene cartola, queda «esperando» la cartola), se clasifica como dice la columna OBS y se arman sus grupos de fondos. Repetirlo no duplica nada.') +
         lista.map(function (h, i) {
           return '<div class="fin3-hoja" data-i="' + i + '"><b>' + txt(h.nombre) + (h.oculta ? ' <small class="fin2-ayuda">(oculta)</small>' : '') + '</b>' +
             '<label class="fin2-campo fin2-campo--fila"><span>Cuenta</span><select class="fin2-input fin2-input--sm js-fca-bcta">' + opciones(cuentas.map(function (c) { return [c.id, c.banco + ' ···' + c.ultimos4 + ' · ' + c.empresa]; }), /BCI/i.test(h.nombre) && cuentas[0] ? cuentas[0].id : '', 'Elige la cuenta…') + '</select></label>' +
@@ -179,8 +179,8 @@
               (d.creadas_sin_cartola ? ' · ' + d.creadas_sin_cartola + ' sin cartola (no verificadas)' : '') + (d.sin_banco.length ? ' · <b>' + d.sin_banco.length + ' que el banco no trae este mes</b>' : '') +
               ' · ' + d.clasificadas + ' clasificadas · ' + d.por_revisar.length + ' por revisar · ' + gr.length + ' grupos de fondos.') +
               (d.sin_banco.length ? '<details class="fin2-p"><summary>Filas de la planilla que no están en el banco de ' + txt(d.periodo) + '</summary><ul class="fin2-lista-saldos">' + d.sin_banco.map(function (s) { return '<li><span>' + txt(s.fecha) + ' · ' + txt(s.alias) + ' · ' + txt(s.obs) + '</span><b>' + txt(String(s.monto)) + '</b></li>'; }).join('') + '</ul></details>' : '') +
-              '<div class="fin2-acciones" style="justify-content:flex-start">' + U.boton({ texto: 'Abrir el libro de ' + d.periodo, icono: 'derecha', sm: true, variante: 'primario', clase: 'js-fca-alibro', datos: { mes: d.periodo } }) + '</div>';
-            res.querySelector('.js-fca-alibro').addEventListener('click', function (ev) { x_.ir('libro', { periodo_libro: ev.currentTarget.dataset.mes }); });
+              '<div class="fin2-acciones" style="justify-content:flex-start">' + U.boton({ texto: 'Abrir la planilla de ' + d.periodo, icono: 'derecha', sm: true, variante: 'primario', clase: 'js-fca-alibro', datos: { mes: d.periodo } }) + '</div>';
+            res.querySelector('.js-fca-alibro').addEventListener('click', function (ev) { x_.ir('planilla', { periodo_hoja: ev.currentTarget.dataset.mes }); });
           });
         });
       });

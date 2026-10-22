@@ -21,7 +21,7 @@ const Cat = require('../logica/finanzasCatalogos');
 const R = require('../logica/finanzasReportes');
 
 // Lecturas conocidas (todo lo demás escribe y debe pedir capacidad). Si se agrega una escritura sin capacidad, esta prueba falla.
-const LECTURAS = ['finanzasResumen', 'finanzasLibro', 'finanzasLibroNombres', 'finanzasLibroFlujo', 'finanzasLibroClientes', 'finanzasBitacora', 'finanzasCatalogo', 'finanzasRevisarCartola', 'finanzasMovimientos', 'finanzasResumenBancos', 'finanzasRevisarVentas', 'finanzasCobranza',
+const LECTURAS = ['finanzasResumen', 'finanzasLibro', 'finanzasLibroNombres', 'finanzasLibroFlujo', 'finanzasLibroClientes', 'finanzasHoja', 'finanzasHojaFlujo', 'finanzasHojaClientes', 'finanzasHojaCobranza', 'finanzasBitacora', 'finanzasCatalogo', 'finanzasRevisarCartola', 'finanzasMovimientos', 'finanzasResumenBancos', 'finanzasRevisarVentas', 'finanzasCobranza',
   'finanzasFichaCliente', 'finanzasInformePdf', 'finanzasPresupuesto', 'finanzasCierre', 'finanzasRevisarAntes', 'finanzasElMes', 'finanzasRevisarExcelBancos', 'finanzasCatalogos', 'finanzasOperaciones',
   'finanzasOperacion', 'finanzasPerfiles', 'finanzasRevisarOperacion', 'finanzasFuentesObligacion', 'finanzasFuenteObligacion', 'finanzasPrevisualizarPlantillas', 'finanzasConciliacion', 'finanzasCandidatos',
   'finanzasFondos', 'finanzasFichaFondos', 'finanzasClientes', 'finanzasCliente', 'finanzasDescargarAdjunto', 'finanzasRelacionesCobro', 'finanzasFacturas', 'finanzasCobrosElegibles', 'finanzasPendientes',

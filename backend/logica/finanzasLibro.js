@@ -99,12 +99,21 @@ function conceptoFondo_(r) {
 /** Cuenta de gasto de la empresa según el plan de cuenta de la planilla. */
 function cuentaGasto_(r) {
   const p = N(r.plan);
+  // El plan escrito tal cual es una cuenta del catálogo (como en la hoja FLUJO): se usa esa.
+  const exacta = F.cuentasDe_('EGRESO').find((c) => N(c) === p);
+  if (exacta) return exacta;
   const mapa = [[/SUELDO|ANTICIPO/, 'Sueldos'], [/FINIQUITO/, 'Finiquitos'], [/ARRIENDO/, 'Arriendo Mensual'], [/CUENTAS BASICAS|LUZ|AGUA|INTERNET|TELEF/, 'Cuentas Básicas'],
     [/HOSTING|SERVIDOR|SISTEMA|SOFTWARE/, 'Servidores y Sistemas'], [/COMISION/, 'Comisión Banco'], [/PATENTE/, 'Patente Comercial'], [/CAJA CHICA/, 'Caja Chica'],
     [/IMPOSIC/, 'Imposiciones'], [/IVA/, 'IVA'], [/RENTA/, 'Renta'], [/MULTA/, 'Multas Clientes']];
   const m = mapa.find((x) => x[0].test(p));
   const cuentas = F.cuentasDe_('EGRESO');
   return m && cuentas.indexOf(m[1]) !== -1 ? m[1] : (cuentas.indexOf('Otros Egresos') !== -1 ? 'Otros Egresos' : cuentas[cuentas.length - 1]);
+}
+
+/** Cuenta de ingreso: el plan si es una cuenta de ingreso del catálogo; si no, según la OBS. */
+function cuentaIngreso_(r) {
+  const exacta = F.cuentasDe_('INGRESO').find((c) => N(c) === N(r.plan));
+  return exacta || (r.obs === 'ABONO RENTA' ? 'Servicio Renta' : 'Servicio Mensual');
 }
 
 /** Quién es un nombre corto: lo enseñado (FIN_ALIAS), una empresa del grupo, o el cliente por nombre (único). */
@@ -132,8 +141,9 @@ function clasifDeFila_(r, quien, empresaCuenta) {
   }
   if (r.obs === 'ABONO' || r.obs === 'ABONO RENTA') {
     if (entra) {
-      if (!quien || quien.clase !== 'cliente') return { tipo: 'INGRESO', cuenta: r.obs === 'ABONO RENTA' ? 'Servicio Renta' : 'Servicio Mensual', falta: 'cliente' };
-      return { tipo: 'INGRESO', cuenta: r.obs === 'ABONO RENTA' ? 'Servicio Renta' : 'Servicio Mensual', cliente_id: quien.cliente_id };
+      const cuentaIng = cuentaIngreso_(r);
+      if (!quien || quien.clase !== 'cliente') return { tipo: 'INGRESO', cuenta: cuentaIng, falta: 'cliente' };
+      return { tipo: 'INGRESO', cuenta: cuentaIng, cliente_id: quien.cliente_id };
     }
     return { tipo: 'EGRESO', cuenta: cuentaGasto_(r) };
   }
@@ -261,6 +271,9 @@ function clasificarYAgrupar_(db, data, contexto, P0) {
         grupo: gg ? { cierre: gg.cierre, miembros: gg.miembros, incompleto: gg.incompleto, remanente: gg.remanente_planilla, obs: gg.obs } : null };
       // Lo anotado a mano en SIGSO (registro diario) conserva quién lo anotó y su nota.
       if (antes.registro) { m.d.planilla.registro = antes.registro; m.d.planilla.nota = antes.nota || ''; }
+      // La letra del grupo y el N° de factura de la hoja se conservan.
+      if (antes.grupo_letra) m.d.planilla.grupo_letra = antes.grupo_letra;
+      if (antes.fact) m.d.planilla.fact = antes.fact;
       d.prepare('UPDATE FIN_MOVIMIENTOS SET datos = ? WHERE id = ?').run(I.cif_(m.d), m.r.id);
       if (m.r.estado !== 'PENDIENTE') return; // lo ya confirmado no se toca
       let c = clasifDeFila_(r, quien.get(r.alias), cuenta.empresa);
@@ -632,4 +645,4 @@ const clientesMes = B.conBoveda('', function (db, data, contexto) {
 });
 
 module.exports = { llevarMes, libro, agrupar, sacarDeGrupo, reaplicar, nombres, flujo, clientesMes, leerHoja_, grupos_, clasifDeFila_, conceptoFondo_, cuentaGasto_, categoria_,
-  interno: { clasificarYAgrupar_, nombreCalza_, resolverAlias_, COMUNES_ } };
+  interno: { clasificarYAgrupar_, nombreCalza_, resolverAlias_, cuentaIngreso_, COMUNES_ } };

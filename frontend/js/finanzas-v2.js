@@ -31,20 +31,24 @@
   var LLAVE_CONTEXTO = 'sigso_fin_contexto';
   var QR_SRC = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
   var QR_SRI = 'sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k';
-  var raiz_ = null, vista_ = 'mes', turno_ = 0, reloj_ = null, ultimoUso_ = 0, inactividadMin_ = 15;
+  var raiz_ = null, vista_ = 'planilla', turno_ = 0, reloj_ = null, ultimoUso_ = 0, inactividadMin_ = 15;
   var cat_ = null, catP_ = null, observador_ = null;
 
   // ---- Áreas y subvistas (FIN-31) ----------------------------------------------------------
   // v3 «banco primero» (21-10-2026): cinco áreas. El libro del banco es la tabla principal (como el Excel BANCOS);
   // el registro paralelo, la conciliación aparte, Pendientes y Planificación se retiraron (sus rutas llevan a su reemplazo).
+  // v4 (22-10-2026): la planilla del banco al centro, como el Excel BANCOS, y los tres reportes que el equipo usa
+  // (FLUJO, saldo por cliente y cobranza). Lo demás queda en «Más». El mes, el libro y los fondos se reemplazaron.
   var AREAS = [
-    { id: 'mes', texto: 'El mes', icono: 'calendario', vistas: [['mes', 'El mes']] },
-    { id: 'libro', texto: 'Libro del banco', icono: 'dinero', vistas: [['libro', 'Libro del banco']] },
-    { id: 'clientes', texto: 'Clientes', icono: 'equipo', vistas: [['clientes', 'Clientes'], ['fondos', 'Fondos de clientes'], ['cobranza', 'Facturas y cobranza']] },
-    { id: 'informes', texto: 'Informes', icono: 'grafico', vistas: [['flujo', 'Flujo por mes'], ['tablero', 'Informe del mes'], ['presupuesto', 'Presupuesto'], ['exportar', 'Exportar']] },
-    { id: 'config', texto: 'Configuración', icono: 'ajustes', vistas: [['cargas', 'Subir archivos'], ['cierre', 'Cierre de meses'], ['bancos', 'Cuentas del banco'], ['catalogos', 'Catálogos'], ['reglas', 'Nombres y reglas'], ['inicio', 'Seguridad'], ['bitacora', 'Bitácora']] }
+    { id: 'planilla', texto: 'Planilla', icono: 'tabla', vistas: [['planilla', 'Planilla del banco']] },
+    { id: 'flujo', texto: 'FLUJO', icono: 'grafico', vistas: [['flujo', 'FLUJO']] },
+    { id: 'saldos', texto: 'Saldo por cliente', icono: 'equipo', vistas: [['saldos', 'Saldo por cliente']] },
+    { id: 'cobros', texto: 'Cobranza', icono: 'recibo', vistas: [['cobros', 'Cobranza']] },
+    { id: 'mas', texto: 'Más', icono: 'ajustes', vistas: [['cargas', 'Subir archivos'], ['cierre', 'Cierre de meses'], ['clientes', 'Fichas de clientes'], ['cobranza', 'Aplicar pagos a facturas'],
+      ['tablero', 'Informe del mes (PDF)'], ['presupuesto', 'Presupuesto'], ['exportar', 'Exportar'], ['bancos', 'Cuentas del banco'], ['catalogos', 'Catálogos'], ['reglas', 'Nombres y reglas'], ['inicio', 'Seguridad'], ['bitacora', 'Bitácora']] }
   ];
-  var RETIRADAS = { registro: 'libro', movimientos: 'libro', conciliacion: 'libro', pendientes: 'mes', gastos: 'flujo', prestamos: 'flujo', proyectos: 'flujo', provisiones: 'flujo', proyeccion: 'flujo', migracion: 'cargas' };
+  var RETIRADAS = { mes: 'planilla', libro: 'planilla', registro: 'planilla', movimientos: 'planilla', conciliacion: 'planilla', pendientes: 'planilla', fondos: 'saldos',
+    gastos: 'flujo', prestamos: 'flujo', proyectos: 'flujo', provisiones: 'flujo', proyeccion: 'flujo', migracion: 'cargas' };
   function vistaValida(v) { return AREAS.some(function (a) { return a.vistas.some(function (x) { return x[0] === v; }); }); }
   function nombreVista(v) { for (var i = 0; i < AREAS.length; i++) for (var j = 0; j < AREAS[i].vistas.length; j++) if (AREAS[i].vistas[j][0] === v) return AREAS[i].vistas[j][1]; return ''; }
   /**
@@ -74,7 +78,10 @@
     mes: ['El mes, paso a paso', 'Qué toca ahora y qué falta para dejar listo el mes, con sus fechas.'],
     // I08.1: sin bajada repetida en la pantalla más usada (la explicación vive en el manual): las filas suben.
     registro: ['Registro diario', ''],
-    flujo: ['Flujo por mes', 'Ingresos, gastos y fondos de clientes, mes a mes, como las hojas FLUJO de la planilla.'],
+    planilla: ['Planilla del banco', 'Se llena como el Excel BANCOS. El resumen, el FLUJO, los saldos por cliente y la cobranza salen solos.'],
+    saldos: ['Saldo por cliente', 'Cuánta plata de cada cliente hay en la cuenta, sus honorarios y lo que debe en facturas.'],
+    cobros: ['Cobranza', 'Las facturas, lo pagado según la planilla y lo que falta cobrar.'],
+    flujo: ['FLUJO', 'Ingresos y egresos por plan de cuenta, mes a mes, como las hojas FLUJO de SIGECO.'],
     libro: ['Libro del banco', 'La planilla BANCOS dentro de SIGSO: se anota cada movimiento y, al subir la cartola, SIGSO lo comprueba con el banco.'],
     pendientes: ['Pendientes', 'Lo que falta resolver en todo Finanzas; cada fila abre dónde se resuelve.'],
     tablero: ['Resumen financiero', 'El mes en 30 segundos, con su comparación, su calidad y lo que conviene revisar.'],
@@ -330,9 +337,10 @@
 
   // --- Bóveda abierta: enrutador de vistas ---------------------------------------------------
   var MODULOS = {
-    mes: function () { return window.SigsoFinanzasMes && SigsoFinanzasMes.ver; },
-    libro: function () { return window.SigsoFinanzasLibro && SigsoFinanzasLibro.ver; },
-    flujo: function () { return window.SigsoFinanzasFlujo && SigsoFinanzasFlujo.ver; },
+    planilla: function () { return window.SigsoFinanzasHoja && SigsoFinanzasHoja.ver; },
+    flujo: function () { return window.SigsoFinanzasHoja && SigsoFinanzasHoja.verFlujo; },
+    saldos: function () { return window.SigsoFinanzasHoja && SigsoFinanzasHoja.verSaldos; },
+    cobros: function () { return window.SigsoFinanzasHoja && SigsoFinanzasHoja.verCobros; },
     registro: function () { return window.SigsoFinanzasRegistro && SigsoFinanzasRegistro.ver; },
     tablero: function () { return window.SigsoFinanzasInformes && SigsoFinanzasInformes.ver; },
     exportar: function () { return window.SigsoFinanzasInformes && SigsoFinanzasInformes.verExportar; },
@@ -383,7 +391,7 @@
     };
   }
   // Compatibilidad: las vistas anteriores llamaban cab('Bancos'), cab('Tablero'), etc.
-  var COMPAT_ = { 'El mes': 'mes', Tablero: 'tablero', Bancos: 'bancos', Movimientos: 'movimientos', Cobranza: 'cobranza', Presupuesto: 'presupuesto', Cierre: 'cierre', Resumen: 'inicio', 'Bitácora': 'bitacora' };
+  var COMPAT_ = { 'El mes': 'planilla', Tablero: 'tablero', Bancos: 'bancos', Movimientos: 'movimientos', Cobranza: 'cobranza', Presupuesto: 'presupuesto', Cierre: 'cierre', Resumen: 'inicio', 'Bitácora': 'bitacora' };
   function cabAbierta(seccion, extra) {
     var id = COMPAT_[seccion] || seccion;
     var tt = TITULOS_[id] || TITULOS_.inicio;

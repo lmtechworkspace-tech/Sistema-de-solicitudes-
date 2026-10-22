@@ -36,4 +36,4 @@ SigsoManual.indice([
     resumen: 'Calendario, reporte de salida a terreno con su dinero, Estudio TikTok, marcas colaboradoras y reporte del mes.' },
   { id: 'finanzas', archivo: 'finanzas', grupo: 'Finanzas', titulo: 'Finanzas (la bóveda)', icono: 'candado', color: 'var(--mod-finanzas)', modulos: ['finanzas'],
     resumen: 'Abrir la bóveda, El mes, subir cartola y Excel BANCOS, el libro del banco, grupos de fondos, nombres cortos, clientes, cobranza, flujo por mes y cierre.' }
-], '2026-10-21c');
+], '2026-10-22');
