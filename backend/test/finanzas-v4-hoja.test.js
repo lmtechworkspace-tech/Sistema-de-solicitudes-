@@ -142,3 +142,87 @@ test('hoja · cobranza: una factura queda pagada con su N° en la fila del abono
   H.guardar(db, D({ cuenta_ref: cuenta, campos: { fecha: '2026-09-02', monto: 100000, nombre: 'ANDES MONTAJES', obs: 'ABONO', fact: '9001' } }), ctx);
   assert.equal(H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx).filas[0].fact, '9001');
 });
+
+test('hoja · en un mes cerrado no se toca nada: la clasificación no se pierde aunque se intente anotar', (t) => {
+  const { db, ctx, D, cuenta } = base(t);
+  const mov = () => B.dbFin().prepare('SELECT * FROM FIN_MOVIMIENTOS WHERE periodo = ?').get('2026-08');
+  const r0 = mov();
+  const c = F.clasificar(db, D({ items: [{ id: r0.id, expected_version: r0.version || 0, tipo: 'INGRESO', cuenta: 'Servicio Mensual', cliente_id: 'CL-4' }] }), ctx);
+  assert.ok(!c._validationError, c.message);
+  const Ci = require('../logica/finanzasCierre');
+  Ci.mesCerrado_('2026-08'); // crea la tabla de cierres
+  B.dbFin().prepare("INSERT INTO FIN_CIERRES (periodo, estado, datos) VALUES ('2026-08', 'CERRADO', '{}')").run();
+  const r1 = mov();
+  const g = H.guardar(db, D({ cuenta_ref: cuenta, id: r1.id, expected_version: r1.version, campos: { nombre: 'OTRO NOMBRE', obs: 'IVA' } }), ctx);
+  assert.ok(g._validationError, 'el mes cerrado se rechaza');
+  assert.match(g.message, /cerrado/);
+  const r2 = mov();
+  assert.equal(r2.estado, 'CONFIRMADO', 'sigue confirmado');
+  assert.equal(r2.version, r1.version, 'no se tocó');
+  assert.ok(require('../logica/finanzasBancos').interno.des_(r2.datos).clasif, 'la clasificación sigue ahí');
+});
+
+test('hoja · una OBS que no sirve no deja a medias una fila del banco ya clasificada', (t) => {
+  const { db, ctx, D, cuenta } = base(t);
+  const mov = () => B.dbFin().prepare('SELECT * FROM FIN_MOVIMIENTOS WHERE periodo = ?').get('2026-08');
+  const r0 = mov();
+  F.clasificar(db, D({ items: [{ id: r0.id, expected_version: r0.version || 0, tipo: 'INGRESO', cuenta: 'Servicio Mensual', cliente_id: 'CL-4' }] }), ctx);
+  const r1 = mov();
+  const g = H.guardar(db, D({ cuenta_ref: cuenta, id: r1.id, expected_version: r1.version, campos: { obs: 'CUALQUIERA' } }), ctx);
+  assert.ok(g._validationError);
+  assert.equal(mov().estado, 'CONFIRMADO');
+  assert.equal(mov().version, r1.version);
+});
+
+test('hoja · borrar revisa todo antes: una fila del banco sin anotar no sale de su grupo de fondos', (t) => {
+  const { db, ctx, D } = base(t);
+  const r0 = B.dbFin().prepare('SELECT * FROM FIN_MOVIMIENTOS WHERE periodo = ?').get('2026-08');
+  assert.ok(H.borrar(db, D({ id: r0.id }), ctx)._validationError, 'no hay nada anotado que borrar');
+  assert.equal(H.borrar(db, D({ id: r0.id, expected_version: 99 }), ctx)._validationError, true);
+});
+
+test('hoja · cobranza: el folio es de la empresa del banco, las notas de crédito no se cobran y un abono paga varias facturas', (t) => {
+  const { db, ctx, D, cuenta } = base(t);
+  const C = require('../logica/finanzasCobranza');
+  const fact = (docs, empresa) => C.guardarFacturas_(db, empresa, docs, 'rcv', 'prueba');
+  fact([{ tipo_doc: 33, folio: '100', fecha: '2026-09-01', cliente_id: 'CL-1', total: 300000 },
+    { tipo_doc: 33, folio: '101', fecha: '2026-09-01', cliente_id: 'CL-2', total: 50000 },
+    { tipo_doc: 33, folio: '102', fecha: '2026-09-01', cliente_id: 'CL-2', total: 50000 },
+    { tipo_doc: 61, folio: '7', fecha: '2026-09-02', cliente_id: 'CL-2', total: 10000, referencia: '101' }], 'HomePymes');
+  fact([{ tipo_doc: 33, folio: '100', fecha: '2026-09-01', cliente_id: 'CL-1', total: 90000 }], 'GDE');
+  const g = (campos) => H.guardar(db, D({ cuenta_ref: cuenta, campos }), ctx);
+  g({ fecha: '2026-09-03', monto: 300000, nombre: 'ANDES MONTAJES', obs: 'ABONO', fact: '100' });
+  g({ fecha: '2026-09-04', monto: 90000, nombre: 'CONSTRUCTORA NORTE', obs: 'ABONO', fact: '101 y 102' });
+  const cob = H.cobranza(db, D({ estado: 'todas' }), ctx);
+  const de = (empresa, folio) => cob.facturas.find((f) => f.empresa === empresa && f.folio === folio);
+  assert.equal(cob.total_facturas, 4, 'la nota de crédito no es una factura por cobrar');
+  assert.equal(de('HomePymes', '100').estado, 'Pagada');
+  assert.deepEqual([de('GDE', '100').pagado, de('GDE', '100').saldo], [0, 90000], 'el mismo folio en otra empresa sigue abierto');
+  assert.deepEqual([de('HomePymes', '101').estado, de('HomePymes', '101').pagado], ['Pagada', 40000], 'la 101 tenía una nota de crédito de 10.000');
+  assert.deepEqual([de('HomePymes', '102').estado, de('HomePymes', '102').pagado], ['Pagada', 50000]);
+  assert.equal(cob.totales.por_cobrar, 90000);
+  assert.equal(H.hoja(db, D({ periodo: '2026-09', cuenta_ref: cuenta }), ctx).filas.find((f) => f.monto === 90000).fact, '101 y 102', 'el N° factura guarda varios folios');
+  const cl = H.clientes(db, D({ periodo: '2026-09' }), ctx).clientes;
+  assert.equal(cl.find((c) => c.cliente_id === 'CL-1').deuda, 90000, 'Andes debe la factura 100 de GDE');
+});
+
+test('hoja · la planilla del mes se descarga en Excel (filas, resumen y grupos) y en CSV', (t) => {
+  const { db, ctx, D, cuenta } = base(t);
+  const E = require('../logica/finanzasExportar');
+  const g = (campos) => H.guardar(db, D({ cuenta_ref: cuenta, campos }), ctx);
+  g({ fecha: '2026-09-02', monto: 357000, nombre: 'ANDES MONTAJES', obs: 'ABONO', fact: '9001' });
+  g({ fecha: '2026-09-05', monto: 900000, nombre: 'CONSTRUCTORA NORTE', obs: 'IMPOSICIONES', grupo: 'A' });
+  g({ fecha: '2026-09-09', monto: -870000, nombre: 'CONSTRUCTORA NORTE', obs: 'IMPOSICIONES', grupo: 'A' });
+  assert.ok(E.exportar(db, D({ tipo: 'planilla', filtros: {} }), ctx)._validationError, 'pide el mes');
+  const d = E.datos_(db, 'planilla', { periodo: '2026-09', cuenta_ref: cuenta });
+  assert.equal(d.filas.length, 3);
+  assert.deepEqual(d.filas[0].slice(1, 8), ['2026-09-02', 'ANDES MONTAJES', 'ABONO', '', 357000, '', '9001']);
+  assert.equal(d.extra[0].filas[0][11], 357000 + 900000 - 870000, 'el resumen trae el TOTAL');
+  assert.deepEqual(d.extra[1].filas[0].slice(1, 7), ['A', 'CONSTRUCTORA NORTE SPA', 2, 900000, -870000, 30000]);
+  const x = E.exportar(db, D({ tipo: 'planilla', formato: 'xlsx', filtros: { periodo: '2026-09', cuenta_ref: cuenta } }), ctx);
+  assert.ok(!x._validationError, x.message);
+  assert.match(x.nombre, /^finanzas-planilla-2026-09-\d{4}\.xlsx$/);
+  assert.ok(Buffer.from(x.base64, 'base64').slice(0, 2).toString() === 'PK', 'es un xlsx');
+  const c = E.exportar(db, D({ tipo: 'planilla', formato: 'csv', filtros: { periodo: '2026-09', cuenta_ref: cuenta } }), ctx);
+  assert.match(Buffer.from(c.base64, 'base64').toString('utf8'), /ANDES MONTAJES;ABONO/);
+});

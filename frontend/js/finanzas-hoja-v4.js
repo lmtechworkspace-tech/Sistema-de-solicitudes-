@@ -41,6 +41,19 @@
   function puede(cap) { return !!(cat_ && (cat_.capacidades || []).indexOf(cap) !== -1); }
   function cifra(t, v, sub, clase, vacio) { return '<div class="fin4-cifra' + (clase ? ' ' + clase : '') + '"><span>' + txt(t) + '</span><b class="' + (v < 0 ? 'fin2-neg' : '') + '">' + (v === null || v === undefined ? txt(vacio || '—') : plata(v)) + '</b>' + (sub ? '<small>' + txt(sub) + '</small>' : '') + '</div>'; }
   function error(r, msg) { x_.aviso((r && r.message) || msg, 'error'); }
+  // La planilla del mes (filas, resumen y grupos) en Excel, como la hoja BANCOS.
+  function descargarExcel(b) {
+    b.disabled = true;
+    x_.api('finanzasExportar', { tipo: 'planilla', formato: 'xlsx', filtros: { periodo: est_.periodo, cuenta_ref: est_.cuenta } }).then(function (r) {
+      b.disabled = false;
+      if (!r || !r.ok) { error(r, 'No se pudo descargar.'); return; }
+      var bin = atob(r.data.base64), u = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      var url = URL.createObjectURL(new Blob([u], { type: r.data.mime }));
+      var a = document.createElement('a'); a.href = url; a.download = r.data.nombre; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    });
+  }
 
   // =====================================================================================
   //  La planilla
@@ -82,6 +95,7 @@
   function pintar() {
     var d = est_.datos;
     var acciones = (editable() ? U.boton({ texto: 'Pegar desde Excel', icono: 'copiar', sm: true, variante: 'secundario', clase: 'js-f4-pegar' }) : '') +
+      (d.cuenta_ref && d.filas.length ? U.boton({ texto: 'Descargar Excel', icono: 'descargar', sm: true, variante: 'secundario', clase: 'js-f4-excel', datos: { cap: 'EXPORTAR' } }) : '') +
       U.boton({ texto: 'Subir cartola', icono: 'subir', sm: true, clase: 'js-f4-cargar', datos: { cap: 'REGISTRAR' } });
     var meses = d.meses.slice(-8);
     if (meses.indexOf(d.periodo) === -1) meses.push(d.periodo);
@@ -299,7 +313,7 @@
       var f = z.f;
       U.confirmar({ titulo: f.banco === 'esperando' ? '¿Borrar esta fila?' : '¿Borrar lo anotado en esta fila?', texto: corta(f.fecha) + ' · ' + plata(f.monto) + (f.nombre ? ' · ' + f.nombre : '') + (f.banco === 'esperando' ? '' : '. El movimiento del banco queda «falta anotar».'), boton: 'Borrar', peligro: true }).then(function (si) {
         if (!si) return;
-        x_.api('finanzasHojaBorrar', { id: f.id }).then(function (r) { if (!r || !r.ok) error(r, 'No se pudo borrar.'); else x_.aviso('Borrado.', 'exito'); recargar(null); });
+        x_.api('finanzasHojaBorrar', { id: f.id, expected_version: f.version }).then(function (r) { if (!r || !r.ok) error(r, 'No se pudo borrar.'); else x_.aviso('Borrado.', 'exito'); recargar(null); });
       });
       return;
     }
@@ -432,7 +446,7 @@
         (d.facturas.length ? '<div class="fin4-rep"><table class="fin4-tab"><thead><tr><th>N°</th><th>Cliente</th><th>Empresa</th><th>Emisión</th><th>Vence</th><th class="fin4-n">Total</th><th class="fin4-n">Pagado</th><th class="fin4-n">Saldo</th><th>Estado</th></tr></thead><tbody>' +
           d.facturas.map(function (f) { return '<tr><th>' + txt(f.folio) + '</th><td>' + txt(f.cliente) + '</td><td>' + txt(f.empresa) + '</td><td class="fin2-num">' + txt(f.fecha) + '</td><td class="fin2-num">' + txt(f.vence || '') + '</td><td class="fin4-n">' + plata(f.total) + '</td><td class="fin4-n">' + plata(f.pagado, '—') + '</td><td class="fin4-n"><b>' + plata(f.saldo, '—') + '</b></td><td>' + U.badge(f.estado, tono[f.estado] || 'neutro') + '</td></tr>'; }).join('') +
           '</tbody></table></div>' : U.card({ cuerpo: U.vacio({ icono: 'recibo', titulo: rep_.facturas === 'abiertas' ? 'No hay facturas por cobrar' : 'Todavía no hay facturas', texto: 'Las facturas entran con el Registro de Ventas del SII o la hoja FACTURAS de la planilla, en «Subir archivos».' }) })) +
-        '<p class="fin4-sub">Una factura queda pagada cuando, en la planilla, la fila del abono lleva su número en la columna «N° factura». No hay otra hoja de pagos que llenar.</p></div>');
+        '<p class="fin4-sub">Una factura queda pagada cuando, en la planilla, la fila del abono lleva su número en la columna «N° factura» (varias: «1052-1053»). No hay otra hoja de pagos que llenar.</p></div>');
       x.aplicarCapacidades(x.raiz());
     });
   }
@@ -452,6 +466,7 @@
       if (b && b.classList.contains('js-f4-mes')) { est_.periodo = b.dataset.mes; est_.borrador = {}; x_.contexto({ periodo_hoja: est_.periodo }); ver(x_); return; }
       if (b && b.classList.contains('js-f4-cargar')) { x_.ir('cargas'); return; }
       if (b && b.classList.contains('js-f4-pegar')) { pegarDialogo(); return; }
+      if (b && b.classList.contains('js-f4-excel')) { descargarExcel(b); return; }
       if (b && b.classList.contains('js-f4-fact')) { rep_.facturas = b.dataset.id || rep_.facturas; verCobros(x_); return; }
       var cel = t.closest('.fin4-hoja td.fin4-cel');
       if (cel && !t.closest('input')) {

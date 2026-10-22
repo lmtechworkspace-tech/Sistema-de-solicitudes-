@@ -87,7 +87,7 @@
         pasos: [
           { titulo: 'Facturas pagadas y por cobrar', img: 'cobros',
             marcas: [{ n: 1, t: 'Facturado, pagado, por cobrar y vencido.' }, { n: 2, t: 'Ver solo lo por cobrar, o todas.' }, { n: 3, t: 'Cada factura con su saldo y estado.' }],
-            texto: [['Las facturas entran con el Registro de Ventas del SII (o la hoja FACTURAS de SIGECO), en **Más → Subir archivos**.', 'Una factura queda **pagada** cuando, en la planilla, la fila del abono lleva su número en la columna **N° factura**. No hay otra hoja de pagos.']] }
+            texto: [['Las facturas entran con el Registro de Ventas del SII (o la hoja FACTURAS de SIGECO), en **Más → Subir archivos**.', 'Una factura queda **pagada** cuando, en la planilla, la fila del abono lleva su número en la columna **N° factura**. No hay otra hoja de pagos.', 'Si una transferencia paga varias facturas, anota todos los números: «1052-1053» o «1052 y 1053». Se pagan en ese orden, hasta lo que falta de cada una. El número es de la empresa de la cuenta donde entró la plata.']] }
         ] },
       { id: 'subir', titulo: 'Subir archivos', ruta: '#/finanzas',
         pasos: [

@@ -38,6 +38,7 @@ function asegurar_() { I.db_().exec('CREATE TABLE IF NOT EXISTS FIN_AJUSTES (cla
 function hoyMes_() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date()).slice(0, 7); }
 function letras_(n) { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
 function piezas_(c) { return c && c.partes ? c.partes : c ? [c] : []; }
+function cerrado_(periodo) { try { return require('./finanzasCierre').mesCerrado_(periodo); } catch (e) { return false; } }
 
 /** Lo que se ve en la hoja de un movimiento confirmado que nadie anotó (clasificado a mano antes): sus columnas, deducidas. */
 function deducir_(c) {
@@ -204,8 +205,7 @@ const hoja = B.conBoveda('', function (db, data) {
   const cuentas = [...ctx.cuentas.values()].map((c) => ({ id: c.id, nombre: c.banco + ' ···' + c.ultimos4, empresa: c.empresa }));
   if (!cuenta) return { periodo, meses, cuentas, cuenta_ref: '', filas: [], grupos: [], totales: null, cartola: null, estado: { ok: 0, esperando: 0, falta: 0, por_completar: 0 }, listas, cerrado: false };
   const h = construir_(db, cuenta, periodo, ctx);
-  let cerrado = false; try { cerrado = require('./finanzasCierre').mesCerrado_(periodo); } catch (e) { cerrado = false; }
-  return Object.assign({ periodo, meses, cuentas, cuenta_ref: cuenta.id, empresa: cuenta.empresa, listas, cerrado }, h);
+  return Object.assign({ periodo, meses, cuentas, cuenta_ref: cuenta.id, empresa: cuenta.empresa, listas, cerrado: cerrado_(periodo) }, h);
 });
 
 /**
@@ -234,6 +234,13 @@ const guardar = Base.conCapacidad('REGISTRAR', '', function (db, data, contexto)
   const cuenta = ctx.cuentas.get(row.cuenta_ref);
   const actual = construir_(db, cuenta, row.periodo, ctx).filas.find((f) => f.id === id);
   const v = nueva(actual);
+  // Todo se valida antes de tocar nada: sacar la fila de su grupo o reabrir su clasificación no se deshace si
+  // después la anotación no se puede guardar (mes cerrado, OBS o monto que no sirven).
+  if (cerrado_(row.periodo)) return errorValidacion('id', 'El mes ' + row.periodo + ' está cerrado. Reábrelo en «Cierre» para corregir.');
+  const prueba = R.leerFila_({ fecha: m.sin_cartola && v.fecha ? v.fecha : row.fecha, monto: m.sin_cartola && v.monto !== '' && v.monto !== undefined ? v.monto : actual.monto,
+    alias: v.alias, obs: v.obs, plan: v.plan, grupo: v.grupo, fact: v.fact, glosa: v.glosa, nota: v.nota });
+  if (prueba.error) return errorValidacion('fila', prueba.error);
+  if (cerrado_(prueba.fecha.slice(0, 7))) return errorValidacion('fecha', 'El mes ' + prueba.fecha.slice(0, 7) + ' está cerrado.');
   // Cambiar qué es una fila que estaba en un grupo de fondos del Excel: sale primero de esa gestión.
   const cambiaQue = N(v.alias) !== N(actual.nombre) || v.obs !== actual.obs || N(v.plan) !== N(actual.plan) || (c.monto !== undefined && Number(F.monto_(String(c.monto))) !== actual.monto) || (c.grupo !== undefined && N(c.grupo) !== N(actual.grupo));
   if (cambiaQue && actual.en_gestion) {
@@ -264,12 +271,16 @@ const borrar = Base.conCapacidad('REGISTRAR', '', function (db, data, contexto) 
   const row = d.prepare('SELECT * FROM FIN_MOVIMIENTOS WHERE id = ?').get(txt_(data && data.id));
   if (!row) return errorValidacion('id', 'Esa fila ya no existe: recarga la hoja.');
   const m = I.des_(row.datos);
+  // Lo que impide borrar se revisa antes de sacar la fila de su grupo (eso no se deshace).
+  if (!m.planilla) return errorValidacion('id', 'Esta fila viene del banco y no tiene nada anotado.');
+  if (data.expected_version !== undefined && Number(data.expected_version) !== Number(row.version || 0)) return Base.errConflicto('Otra persona cambió esta fila mientras la editabas (' + (row.actualizado_por || '') + '). Se recargó la hoja.');
+  if (cerrado_(row.periodo)) return errorValidacion('id', 'El mes ' + row.periodo + ' está cerrado.');
+  if (m.clasif && m.clasif.conciliado) return errorValidacion('id', 'Está vinculada con operaciones registradas: deshaz el vínculo primero.');
   if (piezas_(m.clasif).some((x) => x.gestion_id)) {
     const s = Lb.sacarDeGrupo(db, Object.assign({}, data, { ids: [row.id] }), contexto);
     if (s._validationError || s._forbidden) return s;
   }
   const v = d.prepare('SELECT version FROM FIN_MOVIMIENTOS WHERE id = ?').get(row.id).version || 0;
-  if (!m.planilla) return errorValidacion('id', 'Esta fila viene del banco y no tiene nada anotado.');
   return R.eliminar(db, Object.assign({}, data, { id: row.id, expected_version: v }), contexto);
 });
 
@@ -285,7 +296,7 @@ const decidirGrupo = Base.conCapacidad('REGISTRAR', '', function (db, data, cont
   const decision = txt_(data.decision).toUpperCase();
   if (!letra) return errorValidacion('letra', 'Falta el grupo.');
   if (DECISIONES.indexOf(decision) === -1) return errorValidacion('decision', 'Elige: ' + DECISIONES.join(', ') + '.');
-  try { if (require('./finanzasCierre').mesCerrado_(periodo)) return errorValidacion('periodo', 'El mes ' + periodo + ' está cerrado.'); } catch (e) { /* sin cierre */ }
+  if (cerrado_(periodo)) return errorValidacion('periodo', 'El mes ' + periodo + ' está cerrado.');
   I.db_().prepare('INSERT INTO FIN_AJUSTES (clave, datos, actualizado_en, actualizado_por) VALUES (?,?,?,?) ON CONFLICT(clave) DO UPDATE SET datos = excluded.datos, actualizado_en = excluded.actualizado_en, actualizado_por = excluded.actualizado_por')
     .run('hoja-grupo|' + cuenta.id + '|' + periodo + '|' + letra, I.cif_({ decision }), new Date().toISOString(), x.nombre);
   x.registrar('HOJA_GRUPO', periodo + ' · grupo ' + letra + ' → ' + decision);
@@ -334,19 +345,45 @@ const flujo = B.conBoveda('', function (db, data) {
   return { meses, empresa, empresas: [...new Set([...ctx.cuentas.values()].map((c) => c.empresa))], ingresos: filas(ing), egresos: filas(egr), fondos: fon, otros, resumen };
 });
 
-/** Facturas con lo pagado según la hoja (columna N° factura) y lo aplicado en Cobranza. */
-function facturas_(db, data, contexto) {
+/** Folios anotados en la columna N° factura: «1052», «1052-1053», «1052/1053», «1052 y 1053»… */
+function folios_(fact) {
+  // normalizar_ deja los separadores (guion, barra, coma) como espacios: cada palabra que no sea «Y» es un folio.
+  return [...new Set(N(fact).split(/[^0-9A-Z]+/).filter((x) => x && x !== 'Y'))];
+}
+
+/**
+ * Facturas con lo pagado según la hoja (columna N° factura) y lo aplicado en Cobranza.
+ * Un folio es de la empresa de la cuenta donde entró el abono (el mismo folio en dos empresas son dos facturas); si la
+ * empresa no calza pero el folio es de una sola factura, se usa esa (cobro por otra empresa del grupo). Un abono con
+ * varios folios paga las facturas en el orden anotado, hasta lo que falta de cada una (descontadas sus notas de crédito).
+ */
+function facturas_(db, x) {
   let lista = [];
-  try { lista = require('./finanzasCobranza').facturas(db, Object.assign({}, data, { estado: 'todas' }), contexto).facturas || []; } catch (e) { lista = []; }
-  const pagos = new Map();
-  I.db_().prepare('SELECT datos FROM FIN_MOVIMIENTOS').all().forEach((r) => {
+  try { require('./finanzasCobranza').cartera_(db).forEach((n) => n.facturas.forEach((f) => lista.push(Object.assign({}, f, { cliente: n.cliente, cliente_id: n.cliente_id })))); } catch (e) { lista = []; }
+  if (x) x.registrar('VER_COBRANZA', '');
+  const porClave = new Map(), porFolio = new Map();
+  lista.forEach((f) => {
+    porClave.set(f.empresa + '|' + N(f.folio), f);
+    const l = porFolio.get(N(f.folio)) || []; l.push(f); porFolio.set(N(f.folio), l);
+  });
+  const buscar = (empresa, folio) => porClave.get(empresa + '|' + folio) || ((porFolio.get(folio) || []).length === 1 ? porFolio.get(folio)[0] : null);
+  const cuentas = I.cuentasMapa_();
+  const enHoja = new Map();
+  I.db_().prepare('SELECT cuenta_ref, datos FROM FIN_MOVIMIENTOS ORDER BY fecha, orden').all().forEach((r) => {
     const m = I.des_(r.datos); const fa = m.planilla && m.planilla.fact;
-    if (fa && (m.abono || 0) > 0) pagos.set(N(fa), (pagos.get(N(fa)) || 0) + m.abono);
+    if (!fa || !((m.abono || 0) > 0)) return;
+    const empresa = (cuentas.get(r.cuenta_ref) || {}).empresa || '';
+    const fs = folios_(fa).map((fo) => buscar(empresa, fo)).filter(Boolean);
+    let resto = m.abono;
+    fs.forEach((f, i) => {
+      const ya = enHoja.get(f) || 0;
+      const v = i === fs.length - 1 ? resto : Math.min(resto, Math.max(0, f.total - (f.creditos || 0) - ya));
+      enHoja.set(f, ya + v); resto -= v;
+    });
   });
   const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
-  return lista.filter((f) => !/NOTA|CREDITO/.test(N(f.tipo_doc || ''))).map((f) => {
-    const enHoja = pagos.get(N(f.folio)) || 0;
-    const pagado = Math.min(f.total, Math.max(f.aplicado || 0, enHoja));
+  return lista.map((f) => {
+    const pagado = Math.min(f.total, Math.max(f.aplicado_confirmado || 0, enHoja.get(f) || 0));
     const saldo = f.estado === 'INCOBRABLE' ? f.total : Math.max(0, f.total - pagado - (f.creditos || 0));
     const estado = f.estado === 'INCOBRABLE' ? 'Incobrable' : saldo === 0 ? 'Pagada' : pagado > 0 ? 'Parcial' : f.vence && f.vence < hoy ? 'Vencida' : 'Pendiente';
     return { folio: f.folio, cliente: f.cliente, cliente_id: f.cliente_id, empresa: f.empresa, fecha: f.fecha, vence: f.vence, total: f.total, pagado, saldo, estado };
@@ -358,7 +395,7 @@ function facturas_(db, data, contexto) {
  * de lo que sobró y su saldo de fondos (acumulado desde el primer mes con datos), más lo que debe en facturas.
  * data: { periodo }
  */
-const clientes = B.conBoveda('', function (db, data, contexto) {
+const clientes = B.conBoveda('', function (db, data, contexto, x) {
   const ctx = contexto_(db);
   const periodo = PER_.test(txt_(data && data.periodo)) ? data.periodo : hoyMes_();
   const meses = I.db_().prepare('SELECT DISTINCT periodo FROM FIN_MOVIMIENTOS WHERE periodo <= ? ORDER BY periodo').all(periodo).map((x) => x.periodo);
@@ -382,7 +419,7 @@ const clientes = B.conBoveda('', function (db, data, contexto) {
       });
     });
   });
-  facturas_(db, data, contexto).forEach((f) => { if (f.saldo > 0 && f.estado !== 'Incobrable') { const x = cli({ cliente_id: f.cliente_id, cliente: f.cliente, nombre: f.cliente }); x.deuda += f.saldo; x.facturas++; } });
+  facturas_(db, x).forEach((f) => { if (f.saldo > 0 && f.estado !== 'Incobrable') { const x = cli({ cliente_id: f.cliente_id, cliente: f.cliente, nombre: f.cliente }); x.deuda += f.saldo; x.facturas++; } });
   const lista = [...c.values()].map((x) => Object.assign(x, { saldo: x.recibido - x.pagado - x.cobrado }))
     .filter((x) => x.saldo || x.honorarios_mes || x.deuda || x.recibido)
     .sort((a, b) => Math.abs(b.saldo) - Math.abs(a.saldo) || b.deuda - a.deuda);
@@ -390,8 +427,8 @@ const clientes = B.conBoveda('', function (db, data, contexto) {
 });
 
 /** Cobranza: las facturas con su estado según la hoja. data: { estado: 'abiertas'|'todas' } */
-const cobranza = B.conBoveda('', function (db, data, contexto) {
-  const l = facturas_(db, data, contexto);
+const cobranza = B.conBoveda('', function (db, data, contexto, x) {
+  const l = facturas_(db, x);
   const T = { facturado: 0, pagado: 0, por_cobrar: 0, vencido: 0 };
   l.forEach((f) => { if (f.estado === 'Incobrable') return; T.facturado += f.total; T.pagado += f.pagado; T.por_cobrar += f.saldo; if (f.estado === 'Vencida') T.vencido += f.saldo; });
   const ver = txt_(data && data.estado) === 'todas' ? l : l.filter((f) => f.saldo > 0);
@@ -399,4 +436,4 @@ const cobranza = B.conBoveda('', function (db, data, contexto) {
   return { totales: T, facturas: ver, total_facturas: l.length };
 });
 
-module.exports = { hoja, guardar, borrar, decidirGrupo, flujo, clientes, cobranza, construir_, que_, DECISIONES };
+module.exports = { hoja, guardar, borrar, decidirGrupo, flujo, clientes, cobranza, construir_, contexto_, que_, folios_, DECISIONES };
