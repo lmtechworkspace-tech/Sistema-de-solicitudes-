@@ -40,12 +40,15 @@ function mesDeTrabajo_(hoy) {
 
 /** Cuántos movimientos del mes tienen detalle, Excel, propuesta, etc. */
 function conteos_(periodo) {
-  const c = { total: 0, confirmados: 0, con_detalle: 0, con_excel: 0, seguras: 0, con_propuesta: 0, sin_pista: 0 };
+  const c = { total: 0, confirmados: 0, con_detalle: 0, con_excel: 0, seguras: 0, con_propuesta: 0, sin_pista: 0, anotados: 0, del_banco: 0, esperando: 0, falta_anotar: 0 };
   I.db_().prepare('SELECT estado, datos FROM FIN_MOVIMIENTOS WHERE periodo = ?').all(periodo).forEach((r) => {
     const d = I.des_(r.datos);
     c.total++;
     if (d.detalle) c.con_detalle++;
-    if (d.planilla) c.con_excel++;
+    if (d.planilla && !d.planilla.registro) c.con_excel++;
+    if (d.planilla) c.anotados++;
+    if (d.sin_cartola) c.esperando++; else c.del_banco++;
+    if (!d.sin_cartola && !d.planilla && r.estado !== 'CONFIRMADO') c.falta_anotar++;
     if (r.estado === 'CONFIRMADO') { c.confirmados++; return; }
     const s = d.sugerencia || {};
     const completa = FB.completa_(s, d.abono > 0 ? 'abono' : 'cargo');
@@ -72,11 +75,20 @@ function pasos_(periodo, hoy) {
   const cerrado = FC.mesCerrado_(periodo);
   const sig = mesSiguiente_(periodo);
   const cartolasOk = !!(paso('cartolas').ok && paso('cuadra').ok);
+  // Anotado = todo lo del banco tiene su anotación (y hay algo anotado). Antes de la cartola basta con haber anotado.
+  const anotadoOk = (c.anotados > 0 || c.confirmados > 0) && c.falta_anotar === 0;
   const pasos = [
     {
+      id: 'anotar', titulo: 'Anotar los movimientos (día a día)', ir: 'libro', boton: 'Ir a anotar', obligatorio: true,
+      que: 'En el libro del banco, cada movimiento con su fecha, nombre, plan de cuenta, OBS y monto, como en la planilla BANCOS. Se anota apenas pasa, sin esperar la cartola. Lo que la cartola trae y nadie anotó aparece como «falta anotar».',
+      hecho: anotadoOk, avance: c.total ? { n: c.anotados, total: c.total } : null,
+      detalle: c.total ? c.anotados + ' de ' + c.total + ' anotados' + (c.esperando ? ' · ' + c.esperando + ' esperan la cartola' : '') + (c.falta_anotar ? ' · ' + c.falta_anotar + ' del banco falta anotar' : '') : 'Todavía no hay nada anotado.',
+      plazo: plazo_(dia_(sig, 3), hoy, anotadoOk)
+    },
+    {
       id: 'cartolas', titulo: 'Subir las cartolas del banco', ir: 'cargas', boton: 'Subir la cartola', obligatorio: true,
-      que: 'El Excel de la cartola de cada cuenta, del 1 al último día del mes. El sistema revisa que el saldo cuadre antes de guardar.',
-      hecho: cartolasOk, avance: null, detalle: [paso('cartolas').detalle, paso('cuadra').detalle].filter(Boolean).join(' · '),
+      que: 'El Excel de la cartola de cada cuenta, del 1 al último día del mes. El sistema revisa que el saldo cuadre, y une cada fila anotada con su movimiento del banco.',
+      hecho: cartolasOk, avance: null, detalle: [paso('cartolas').detalle, paso('cuadra').detalle, c.esperando && c.del_banco ? c.esperando + ' anotadas no aparecen en la cartola (revisa la fecha o el monto)' : ''].filter(Boolean).join(' · '),
       plazo: plazo_(dia_(sig, 3), hoy, cartolasOk)
     },
     {
@@ -87,15 +99,15 @@ function pasos_(periodo, hoy) {
       plazo: plazo_(dia_(sig, 3), hoy, c.total > 0 && c.con_detalle >= c.total * 0.8)
     },
     {
-      id: 'excel', titulo: 'Excel BANCOS (solo mientras se acostumbran)', ir: 'cargas', boton: 'Llevar el Excel al libro', obligatorio: false, opcional: true,
-      que: 'Si ese mes también se llenó el Excel BANCOS a mano, súbelo: cada fila se une a su movimiento del banco y se clasifica como la planilla dice (ABONO, IVA, IMPOSICIONES…), con sus grupos de fondos. Cuando ya no lo llenen, sáltate este paso.',
+      id: 'excel', titulo: 'Excel BANCOS (meses llenados en la planilla)', ir: 'cargas', boton: 'Llevar el Excel al libro', obligatorio: false, opcional: true,
+      que: 'Solo para los meses que se llenaron en el Excel BANCOS (antes de anotar en SIGSO): cada fila se une a su movimiento del banco y se clasifica como la planilla dice, con sus grupos de fondos. Si el mes ya se anota en SIGSO, sáltate este paso.',
       hecho: c.con_excel > 0, avance: c.total && c.con_excel ? { n: c.con_excel, total: c.total } : null,
       detalle: c.con_excel ? c.con_excel + ' movimientos con lo que anotaron en el Excel' : 'No se ha subido (opcional).',
       plazo: null
     },
     {
-      id: 'revisar', titulo: 'Revisar el libro del banco', ir: 'libro', boton: 'Ir al libro', obligatorio: true,
-      que: 'Confirmar qué es cada movimiento: ingreso de la empresa, plata de un cliente para sus imposiciones o IVA, gasto, traspaso… Las seguras se confirman de una vez; el resto, de a una, con la propuesta a la vista.',
+      id: 'revisar', titulo: 'Completar lo que quedó por revisar', ir: 'libro', boton: 'Ir al libro', obligatorio: true,
+      que: 'Las filas anotadas que SIGSO no entendió: un nombre nuevo (dile de qué cliente es y lo recordará) o una fila sin OBS. Filtra «Por revisar» en el libro y ábrelas de a una.',
       hecho: c.total > 0 && c.confirmados === c.total, avance: c.total ? { n: c.confirmados, total: c.total } : null,
       detalle: c.total ? (c.confirmados === c.total ? 'Los ' + c.total + ' movimientos confirmados' :
         c.confirmados + ' de ' + c.total + ' confirmados · por revisar: ' + [c.seguras ? c.seguras + ' seguras' : '', c.con_propuesta ? c.con_propuesta + ' con propuesta' : '', c.sin_pista ? c.sin_pista + ' sin pista' : ''].filter(Boolean).join(', ')) : 'Primero las cartolas.',

@@ -54,12 +54,12 @@
         '<div data-cap="MIGRAR|REGISTRAR|FONDOS"><label class="fin2-soltar js-fca-soltar" tabindex="0"><input type="file" class="js-fca-archivo" accept=".xlsx,.xlsm,.csv,.gz,.txt" hidden>' + U.ico('subir', 26) +
           '<b>Arrastra aquí el archivo</b><span>SIGSO reconoce qué es y te muestra qué hará antes de guardar nada. Se lee en tu navegador (con fórmulas y hojas ocultas); al servidor viaja cifrado.</span></label>' +
         '<table class="fin2-tabla fin2-tabla--chica fin2-cargas__tipos"><thead><tr><th>Qué subes</th><th>Cómo lo reconoce</th><th>Dónde queda</th></tr></thead><tbody>' +
-          '<tr><td>Cartola del BCI (.xlsx)</td><td>Formato de cartola con saldos</td><td>Movimientos por revisar (Bancos)</td></tr>' +
+          '<tr><td>Cartola del BCI (.xlsx)</td><td>Formato de cartola con saldos</td><td>Libro del banco: se une con lo anotado; lo demás queda «falta anotar»</td></tr>' +
           '<tr><td>Registro de Ventas del SII (.csv, .gz)</td><td>Columnas «Tipo Doc» y «Folio»</td><td>Facturas (Cobranza)</td></tr>' +
           '<tr><td>Saldos iniciales de fondos (.xlsx)</td><td>Cliente/RUT, fecha de corte, monto y fuente</td><td>Saldos propuestos (Fondos)</td></tr>' +
           '<tr><td>Planilla SIGECO o Excel BANCOS (.xlsx)</td><td>Sus hojas conocidas</td><td>Revisión por hoja antes de publicar</td></tr>' +
           '<tr><td>Detalle del banco</td><td>—</td><td>Se sube en <button type="button" class="sx2-enlace js-fca-ir" data-vista="bancos">Bancos</button> (hay que elegir la cuenta)</td></tr>' +
-          '<tr><td>Filas sueltas de Excel</td><td>—</td><td><button type="button" class="sx2-enlace js-fca-ir" data-vista="registro">Registro diario · Pegar</button></td></tr>' +
+          '<tr><td>Filas sueltas de Excel</td><td>—</td><td><button type="button" class="sx2-enlace js-fca-ir" data-vista="libro">Libro del banco · Pegar desde Excel</button></td></tr>' +
           '<tr><td>Cartola de Santander</td><td colspan="2"><b>Aún no se puede leer:</b> falta una cartola real para construir y probar su lector. Mientras tanto, los movimientos de Santander anotados en el Excel BANCOS entran como borradores con su origen.</td></tr>' +
         '</tbody></table>' +
         '<div class="js-fca-progreso" aria-live="polite"></div></div>' }) +
@@ -127,7 +127,10 @@
       ev.currentTarget.disabled = true;
       x_.api('finanzasImportarCartola', { filas: filas, empresa: e, nombre_archivo: nombre }).then(function (r) {
         if (!r || !r.ok) { prog.innerHTML = cinta('critico', txt((r && r.message) || 'No se pudo importar.')); return; }
-        prog.innerHTML = cinta('ok', '<b>Importada:</b> ' + r.data.nuevas + ' movimiento(s) nuevos quedaron por revisar. <button type="button" class="sx2-enlace js-fca-ir" data-vista="movimientos">Ir a Por revisar</button>');
+        var u = r.data.unidas || 0, falta = r.data.nuevas - u;
+        prog.innerHTML = cinta('ok', '<b>Importada:</b> ' + r.data.nuevas + ' movimiento(s) del banco' + (u ? ' · <b>' + u + '</b> se unieron con lo anotado ✓' : '') +
+          (falta ? ' · <b>' + falta + '</b> quedan «falta anotar»' : '') + '. <button type="button" class="sx2-enlace js-fca-ir" data-vista="libro">Ir al libro del banco</button>');
+        if (r.data.periodo) x_.contexto({ periodo_libro: r.data.periodo });
       });
     });
   }

@@ -75,7 +75,7 @@
     // I08.1: sin bajada repetida en la pantalla más usada (la explicación vive en el manual): las filas suben.
     registro: ['Registro diario', ''],
     flujo: ['Flujo por mes', 'Ingresos, gastos y fondos de clientes, mes a mes, como las hojas FLUJO de la planilla.'],
-    libro: ['Libro del banco', 'Cada movimiento de la cuenta con qué es, de quién y su grupo de fondos, como en la planilla BANCOS.'],
+    libro: ['Libro del banco', 'La planilla BANCOS dentro de SIGSO: se anota cada movimiento y, al subir la cartola, SIGSO lo comprueba con el banco.'],
     pendientes: ['Pendientes', 'Lo que falta resolver en todo Finanzas; cada fila abre dónde se resuelve.'],
     tablero: ['Resumen financiero', 'El mes en 30 segundos, con su comparación, su calidad y lo que conviene revisar.'],
     exportar: ['Exportar', 'Descarga los datos en Excel o CSV, con su corte y su estado.'],

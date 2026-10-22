@@ -62,12 +62,13 @@ function preparar(t) {
 
 const paso = (r, id) => r.pasos.filter((p) => p.id === id)[0];
 
-test('sin nada cargado: toca subir las cartolas, con su fecha', (t) => {
+test('sin nada cargado: toca anotar, y después subir las cartolas, con su fecha', (t) => {
   const { db, ctx, D } = preparar(t);
   const r = M.elMes(db, D({ periodo: '2026-08' }), ctx);
   assert.equal(r.periodo, '2026-08');
-  assert.equal(r.siguiente, 'cartolas');
-  assert.equal(paso(r, 'cartolas').estado, 'ahora');
+  assert.equal(r.siguiente, 'anotar');
+  assert.equal(paso(r, 'anotar').estado, 'ahora');
+  assert.equal(paso(r, 'cartolas').estado, 'pendiente');
   assert.equal(paso(r, 'cartolas').plazo.fecha, '2026-09-03');
   assert.equal(paso(r, 'revisar').plazo.fecha, '2026-09-05');
   assert.equal(paso(r, 'excel').opcional, true);
@@ -80,7 +81,8 @@ test('con la cartola completa: toca el detalle; revisado todo: toca cerrar; cerr
   F.importarCartola(db, D({ filas: cartola(movs, '01-08-2026', '31-08-2026', 1000000), empresa: 'HomePymes' }), ctx);
   let r = M.elMes(db, D({ periodo: '2026-08' }), ctx);
   assert.equal(paso(r, 'cartolas').estado, 'hecho');
-  assert.equal(r.siguiente, 'detalle');
+  assert.equal(r.siguiente, 'anotar', 'lo que trae la cartola y nadie anotó');
+  assert.match(paso(r, 'anotar').detalle, /2 del banco falta anotar/);
   assert.deepEqual(paso(r, 'revisar').avance, { n: 0, total: 2 });
   assert.match(paso(r, 'revisar').detalle, /por revisar/);
 

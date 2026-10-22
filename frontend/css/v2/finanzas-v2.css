@@ -1017,3 +1017,69 @@ details.fin3-nombres { border-color: color-mix(in srgb, var(--sx-alerta) 45%, va
 .fin2m-paso__det { flex: 1 1 100%; margin: 0; font-size: .8rem; color: var(--sx-texto-2); }
 .fin2m-paso__acc { margin-left: auto; }
 .fin2m-paso--hecho .fin2m-paso__det { display: none; }
+
+/* =====================================================================================
+   v3 · Registro diario en el libro (21-10-2026): anotar como en la planilla BANCOS,
+   cómo va el mes frente al banco y la hoja con sus columnas (nombre, plan, OBS, monto, saldo).
+   ===================================================================================== */
+.fin3-estado { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.fin3-est-t { display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--sx-borde); background: var(--sx-superficie); font: inherit; color: var(--sx-texto); cursor: pointer; }
+.fin3-est-t:hover { background: var(--sx-superficie-hover, var(--sx-superficie-2)); }
+.fin3-est-t > svg { flex: none; color: var(--fin3-c); }
+.fin3-est-t span { display: flex; flex-direction: column; font-size: .86rem; }
+.fin3-est-t b { font-size: 1.25rem; font-variant-numeric: tabular-nums; line-height: 1.1; color: var(--fin3-c); }
+.fin3-est-t small { font-size: .72rem; color: var(--sx-texto-3); }
+.fin3-est-t--ok { --fin3-c: var(--sx-ok); }
+.fin3-est-t--info { --fin3-c: var(--sx-primario); }
+.fin3-est-t--alerta { --fin3-c: var(--sx-alerta); border-color: color-mix(in srgb, var(--sx-alerta) 45%, var(--sx-borde)); }
+.fin3-est-t--neutro { --fin3-c: var(--sx-texto-3); }
+.fin3-est-t--cero { opacity: .7; }
+
+.fin3-anotar { border: 1px solid color-mix(in srgb, var(--sx-primario) 35%, var(--sx-borde)); border-radius: 14px; background: color-mix(in srgb, var(--sx-primario) 5%, var(--sx-superficie)); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.fin3-anotar__t { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--sx-primario); }
+.fin3-anotar__t b { color: var(--sx-texto); }
+.fin3-anotar__t .fin2-ayuda { margin-left: 4px; }
+.fin3-anotar__fila { display: grid; grid-template-columns: 136px minmax(0, 1.6fr) minmax(0, 1fr) 118px 128px minmax(0, 1.3fr) auto; gap: 8px; align-items: end; }
+.fin3-anotar__fila:has(.fin3-fa-c) { grid-template-columns: 130px 136px minmax(0, 1.6fr) minmax(0, 1fr) 118px 128px minmax(0, 1.3fr) auto; }
+.fin3-anotar__fila label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fin3-anotar__fila label > span { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--sx-texto-2); font-weight: 600; }
+.fin3-anotar__fila .fin2-input { width: 100%; }
+.fin3-fa-m .fin2-input { text-align: right; }
+.fin3-fa-b { height: 38px; white-space: nowrap; }
+.fin3-anotar__ayuda { margin: 0; min-height: 1.2em; font-size: .8rem; color: var(--sx-texto-2); }
+
+.fin3-libro--hoja td.fin3-txt { font-size: .76rem; color: var(--sx-texto-2); white-space: nowrap; text-transform: uppercase; }
+.fin3-libro--hoja td.fin3-det { max-width: 220px; }
+.fin3-libro--hoja .fin3-mov { max-width: 220px; }
+.fin3-que { display: block; color: var(--sx-texto-2); font-size: .74rem; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin3-falta { display: inline-block; font-size: .74rem; font-weight: 700; color: var(--sx-alerta); }
+.fin3-fila--falta td { background: color-mix(in srgb, var(--sx-alerta) 7%, var(--sx-superficie)) !important; }
+.fin3-fila--falta td:first-child { box-shadow: inset 3px 0 0 var(--sx-alerta); }
+.fin3-est { width: 92px; }
+.fin3-b { display: inline-flex; align-items: center; justify-content: center; }
+.fin3-b--ok { color: var(--sx-ok); }
+.fin3-b--esp { font-size: .7rem; font-weight: 600; color: var(--sx-primario); padding: 1px 8px; border-radius: 999px; border: 1px dashed var(--sx-primario); white-space: nowrap; }
+
+.fin3-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.fin3-form__2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fin3-que-sec { border-top: 1px solid var(--sx-borde); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.fin3-que-sec h3 { margin: 0; font-size: .9rem; }
+.fin3-que-sec p { margin: 0; }
+.fin3-quien { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--sx-alerta) 9%, var(--sx-superficie)); border: 1px solid color-mix(in srgb, var(--sx-alerta) 40%, var(--sx-borde)); }
+.fin3-quien__f { display: flex; gap: 8px; flex-wrap: wrap; }
+.fin3-quien__f .fin2-input { flex: 1 1 220px; }
+.fin3-amano summary { cursor: pointer; color: var(--sx-texto-2); font-size: .84rem; }
+.fin3-amano[open] summary { margin-bottom: 8px; }
+.fin3-pegado { font-family: ui-monospace, Consolas, monospace; font-size: .8rem; white-space: pre; }
+.fin3-pg-mala td { color: var(--sx-texto-3); text-decoration: line-through; }
+.fin3-pg-mala td:last-child { text-decoration: none; color: var(--sx-alerta); }
+
+@media (max-width: 1100px) {
+  .fin3-anotar__fila, .fin3-anotar__fila:has(.fin3-fa-c) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fin3-fa-n, .fin3-fa-g { grid-column: span 2; }
+  .fin3-fa-b { grid-column: span 2; }
+}
+@media (max-width: 520px) {
+  .fin3-form__2 { grid-template-columns: 1fr; }
+  .fin3-estado { grid-template-columns: 1fr 1fr; }
+}

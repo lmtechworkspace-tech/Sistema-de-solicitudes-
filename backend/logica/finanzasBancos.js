@@ -473,8 +473,10 @@ const importarCartola = B.conBoveda('', function (db, data, contexto, x) {
       .run(impId, cuenta.id, ahora, x.nombre, c.desde, c.hasta, cif_({ archivo: texto_(data && data.nombre_archivo).slice(0, 120), saldo_anterior: c.saldo_anterior, saldo_final: c.saldo_final, movimientos: c.movimientos.length, nuevas, cuadra: c.cuadra }));
     d.exec('COMMIT');
   } catch (e) { d.exec('ROLLBACK'); throw e; }
-  x.registrar('IMPORTAR_CARTOLA', c.banco + ' ···' + c.numero.slice(-4) + ' ' + c.desde + ' a ' + c.hasta + ': ' + nuevas + ' nuevos de ' + c.movimientos.length);
-  return { cuenta: { empresa: cuenta.empresa, banco: cuenta.banco, ultimos4: cuenta.ultimos4 }, nuevas, repetidas: c.movimientos.length - nuevas, periodo: c.desde.slice(0, 7) };
+  // Lo anotado antes en el registro (o llevado del Excel sin cartola) se une con su movimiento del banco.
+  const unidas = nuevas ? require('./finanzasRegistro').unirConCartola_(cuenta.id, c.desde, c.hasta) : 0;
+  x.registrar('IMPORTAR_CARTOLA', c.banco + ' ···' + c.numero.slice(-4) + ' ' + c.desde + ' a ' + c.hasta + ': ' + nuevas + ' nuevos de ' + c.movimientos.length + (unidas ? ' · ' + unidas + ' unidos con lo anotado' : ''));
+  return { cuenta: { empresa: cuenta.empresa, banco: cuenta.banco, ultimos4: cuenta.ultimos4 }, nuevas, repetidas: c.movimientos.length - nuevas, unidas, periodo: c.desde.slice(0, 7) };
 });
 
 function movimientoPublico_(r, cuentas) {

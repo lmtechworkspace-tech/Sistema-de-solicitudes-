@@ -256,8 +256,11 @@ function clasificarYAgrupar_(db, data, contexto, P0) {
     filas.forEach((r) => {
       const m = par.get(r.fila); if (!m) return;
       const gg = grupoDe.get(r.fila);
-      m.d.planilla = { alias: r.alias, obs: r.obs, plan: r.plan, glosa: r.banco, fila: r.fila, archivo: archivo, unitario: isFinite(r.unitario) ? r.unitario : null,
+      const antes = m.d.planilla || {};
+      m.d.planilla = { alias: r.alias, obs: r.obs, plan: r.plan, glosa: r.banco, fila: r.fila, archivo: antes.registro ? antes.archivo : archivo, unitario: isFinite(r.unitario) ? r.unitario : null,
         grupo: gg ? { cierre: gg.cierre, miembros: gg.miembros, incompleto: gg.incompleto, remanente: gg.remanente_planilla, obs: gg.obs } : null };
+      // Lo anotado a mano en SIGSO (registro diario) conserva quién lo anotó y su nota.
+      if (antes.registro) { m.d.planilla.registro = antes.registro; m.d.planilla.nota = antes.nota || ''; }
       d.prepare('UPDATE FIN_MOVIMIENTOS SET datos = ? WHERE id = ?').run(I.cif_(m.d), m.r.id);
       if (m.r.estado !== 'PENDIENTE') return; // lo ya confirmado no se toca
       let c = clasifDeFila_(r, quien.get(r.alias), cuenta.empresa);
@@ -420,11 +423,15 @@ const libro = B.conBoveda('', function (db, data, contexto) {
     const p0 = piezas[0] || null;
     const g = p0 && p0.gestion_id ? gestiones.get(p0.gestion_id) : null;
     const cu = cuentas.get(r.cuenta_ref) || {};
-    return { id: r.id, version: r.version || 0, fecha: r.fecha, cuenta: (cu.banco || '') + ' ···' + (cu.ultimos4 || ''), empresa: cu.empresa, glosa: m.glosa,
+    return { id: r.id, version: r.version || 0, fecha: r.fecha, cuenta_ref: r.cuenta_ref, cuenta: (cu.banco || '') + ' ···' + (cu.ultimos4 || ''), empresa: cu.empresa, glosa: m.glosa,
       quien: (m.detalle && m.detalle.pagador) || (m.planilla && m.planilla.alias) || '', monto, saldo_mes: acumulado, saldo_banco: m.saldo,
       estado: r.estado, verificado: !m.sin_cartola, categoria: categoria_(p0), partes: piezas.length,
       cliente: p0 ? (p0.cliente || '') : '', cuenta_concepto: p0 ? (p0.cuenta || '') : '', grupo: g ? { id: g.id, obligacion: g.obligacion, periodo: g.periodo_obligacion } : null,
-      planilla: m.planilla ? { alias: m.planilla.alias, obs: m.planilla.obs, plan: m.planilla.plan } : null, sugerencia: m.sugerencia || null };
+      planilla: m.planilla ? { alias: m.planilla.alias, obs: m.planilla.obs, plan: m.planilla.plan, glosa: m.planilla.glosa || '', nota: m.planilla.nota || '', registro: !!m.planilla.registro,
+        por: m.planilla.registro ? m.planilla.registro.por : '', archivo: m.planilla.archivo || '' } : null,
+      // Dónde está la fila: en la cartola (y anotada), anotada esperando la cartola, o en la cartola sin anotar.
+      banco: m.sin_cartola ? 'esperando' : (m.planilla || r.estado === 'CONFIRMADO') ? 'ok' : 'falta_anotar',
+      en_grupo: piezas.some((p) => p.gestion_id), unida: !!m.unida, sugerencia: m.sugerencia || null };
   });
   // Lo que no pasa por el banco (efectivo, compensaciones, remanentes cobrados como honorario): va en el libro con su
   // categoría, pero no mueve el saldo del banco.
@@ -444,8 +451,16 @@ const libro = B.conBoveda('', function (db, data, contexto) {
   const cartola = conSaldo.length ? { saldo_inicial: conSaldo[0].saldo_banco - conSaldo[0].monto, saldo_final: conSaldo[conSaldo.length - 1].saldo_banco } : null;
   const meses = d.prepare('SELECT DISTINCT periodo FROM FIN_MOVIMIENTOS ORDER BY periodo DESC').all().map((x) => x.periodo);
   const listaCuentas = [...cuentas.values()].map((c) => ({ id: c.id, nombre: (c.banco || '') + ' ···' + (c.ultimos4 || ''), empresa: c.empresa }));
+  // Para anotar rápido: los planes de cuenta ya usados y los nombres cortos que SIGSO ya sabe de quién son.
+  const planes = new Set(['ABONO', 'ARRIENDO', 'SUELDO', 'ANTICIPO SUELDO', 'IMPOSICIONES', 'IVA', 'CONVENIO', 'RENTA', 'CUENTAS BASICAS', 'COMISION', 'CAJA CHICA', 'FINIQUITO']);
+  d.prepare('SELECT datos FROM FIN_MOVIMIENTOS WHERE periodo >= ?').all(Base.sumarDias_(periodo + '-01', -100).slice(0, 7)).forEach((r) => { const p = I.des_(r.datos).planilla; if (p && p.plan) planes.add(N(p.plan)); });
+  const alias = [...P.aliasMapa_().values()].map((a) => ({ alias: a.alias, quien: a.destino ? (a.destino.cliente || a.destino.empresa || a.destino.cuenta || '') : '', clase: a.destino ? a.destino.clase : '' }))
+    .filter((a) => a.clase !== 'ignorar').sort((a, b) => a.alias.localeCompare(b.alias, 'es'));
+  const cuenta_ = (k) => lineas.filter((l) => l.banco === k).length;
   return { periodo, meses, cuentas: listaCuentas, conceptos: Object.values(conceptos), por_cliente: Object.values(porCliente), lineas, resumen: res, neto: acumulado, sin_cartola: sinCartola, verificados, cartola, fuera_banco: { lineas: lineasSinBanco, resumen: fueraBanco },
-    por_revisar: lineas.filter((l) => l.estado !== 'CONFIRMADO').length };
+    por_revisar: lineas.filter((l) => l.estado !== 'CONFIRMADO').length,
+    estado_banco: { ok: cuenta_('ok'), esperando: cuenta_('esperando'), falta_anotar: cuenta_('falta_anotar') },
+    obs: require('./finanzasRegistro').OBS, planes: [...planes].sort(), alias };
 });
 
 /**
@@ -458,7 +473,8 @@ const agrupar = Base.conCapacidad('FONDOS', '', function (db, data, contexto) {
   if (ids.length < 1) return errorValidacion('ids', 'Marca las filas del grupo.');
   const cli = I.clientes_(db).find((c) => c.id === txt_(data.cliente_id));
   if (!cli) return errorValidacion('cliente_id', 'Elige el cliente del grupo.');
-  const obligacion = txt_(data.obligacion);
+  const previa = txt_(data.gestion_id) ? require('./finanzasFondos').gestionesMapa_().get(txt_(data.gestion_id)) : null;
+  const obligacion = previa ? previa.obligacion : txt_(data.obligacion);
   if (F.cuentasDe_('FONDO_RECIBIDO').indexOf(obligacion) === -1) return errorValidacion('obligacion', 'Elige qué obligación es (imposiciones, IVA, convenio…).');
   const d = I.db_();
   const versiones = data.versiones || {};
@@ -482,13 +498,53 @@ const agrupar = Base.conCapacidad('FONDOS', '', function (db, data, contexto) {
     if (r._validationError || r._forbidden) return r;
     if (r.errores && r.errores.length) return errorValidacion('ids', r.errores[0].mensaje || 'No se pudo clasificar una fila.');
   }
-  // 2) La gestión del grupo y sus filas.
+  // 2) La gestión del grupo (nueva, o una que ya existe: el cliente mandó más plata después) y sus filas.
   const Fo = require('./finanzasFondos');
-  const gest = Fo.guardarGestion(db, Object.assign({}, data, { cliente_id: cli.id, empresa, obligacion, periodo_obligacion: txt_(data.periodo_obligacion) || '', nota: 'Grupo formado en el libro del banco' }), contexto);
-  if (gest._validationError || gest._forbidden) return gest;
+  let gest;
+  if (txt_(data.gestion_id)) {
+    gest = Fo.gestionesMapa_().get(txt_(data.gestion_id));
+    if (!gest || gest.cliente_id !== cli.id) return errorValidacion('gestion_id', 'Ese grupo no es de este cliente.');
+  } else {
+    gest = Fo.guardarGestion(db, Object.assign({}, data, { cliente_id: cli.id, empresa, obligacion, periodo_obligacion: txt_(data.periodo_obligacion) || '', nota: 'Grupo formado en el libro del banco' }), contexto);
+    if (gest._validationError || gest._forbidden) return gest;
+  }
   const a = Fo.asignarGestion(db, Object.assign({}, data, { refs: ids.map((id) => 'mov:' + id + ':0'), gestion_id: gest.id }), contexto);
-  const ge = (Fo.fichaCliente_(cli.id, '').gestiones || []).find((y) => y.id === gest.id);
-  return { gestion_id: gest.id, asignadas: a.hechos || 0, errores: a.errores || [], saldo: ge ? ge.saldo : null, cliente: cli.nombre };
+  let ge = (Fo.fichaCliente_(cli.id, '').gestiones || []).find((y) => y.id === gest.id);
+  // 3) Lo que sobra, como dice la OBS de la fila que cierra el grupo en el Excel: ABONO = se cobra como honorario,
+  //    SALDO = queda a favor del cliente, PENDIENTE (o nada) = el grupo sigue abierto.
+  const remanente = txt_(data.remanente).toUpperCase();
+  const saldo = ge ? ge.saldo : 0;
+  const ver = () => (I.db_().prepare('SELECT version FROM FIN_GESTIONES WHERE id = ?').get(gest.id) || {}).version;
+  let honorario = 0;
+  if ((remanente === 'ABONO' || remanente === 'ABONO RENTA') && saldo > 0) {
+    const fecha = movs.map((r) => r.fecha).sort().pop();
+    const dec = Fo.decidirRemanente(db, Object.assign({}, data, { gestion_id: gest.id, decision: 'HONORARIO', respaldo: 'Grupo del libro del banco (OBS ' + remanente + ')', expected_version: ver() }), contexto);
+    if (dec._validationError) return dec;
+    const cv = Fo.convertirRemanente(db, Object.assign({}, data, { gestion_id: gest.id, monto: saldo, fecha, cuenta: remanente === 'ABONO RENTA' ? 'Servicio Renta' : 'Servicio Mensual',
+      idempotency_key: 'grupo|' + gest.id + '|' + saldo + '|' + fecha, expected_version: ver() }), contexto);
+    if (cv._validationError) return cv;
+    honorario = saldo;
+  } else if (remanente === 'SALDO' && saldo) {
+    Fo.decidirRemanente(db, Object.assign({}, data, { gestion_id: gest.id, decision: 'MANTENER', nota: 'Grupo del libro del banco (OBS SALDO)', expected_version: ver() }), contexto);
+  }
+  if (honorario) ge = (Fo.fichaCliente_(cli.id, '').gestiones || []).find((y) => y.id === gest.id);
+  return { gestion_id: gest.id, asignadas: a.hechos || 0, errores: a.errores || [], saldo: ge ? ge.saldo : null, honorario, cliente: cli.nombre };
+});
+
+/** Saca filas de su grupo de fondos (siguen siendo plata del cliente, sin grupo). data: { ids } */
+const sacarDeGrupo = Base.conCapacidad('FONDOS', '', function (db, data, contexto) {
+  const ids = (Array.isArray(data && data.ids) ? data.ids : []).map(txt_).filter(Boolean).slice(0, 60);
+  if (!ids.length) return errorValidacion('ids', 'Marca las filas que salen del grupo.');
+  const d = I.db_();
+  const refs = [];
+  ids.forEach((id) => {
+    const r = d.prepare('SELECT datos FROM FIN_MOVIMIENTOS WHERE id = ?').get(id); if (!r) return;
+    const c = I.des_(r.datos).clasif;
+    (c && c.partes ? c.partes : c ? [c] : []).forEach((p, k) => { if (p.gestion_id) refs.push('mov:' + id + ':' + k); });
+  });
+  if (!refs.length) return errorValidacion('ids', 'Ninguna de esas filas está en un grupo.');
+  const r = require('./finanzasFondos').asignarGestion(db, Object.assign({}, data, { refs, gestion_id: '' }), contexto);
+  return { sacadas: r.hechos || 0, errores: r.errores || [] };
 });
 
 /**
@@ -575,4 +631,5 @@ const clientesMes = B.conBoveda('', function (db, data, contexto) {
   return { periodo: l.periodo, meses: l.meses, clientes: lista };
 });
 
-module.exports = { llevarMes, libro, agrupar, reaplicar, nombres, flujo, clientesMes, leerHoja_, grupos_, clasifDeFila_, conceptoFondo_, cuentaGasto_, categoria_ };
+module.exports = { llevarMes, libro, agrupar, sacarDeGrupo, reaplicar, nombres, flujo, clientesMes, leerHoja_, grupos_, clasifDeFila_, conceptoFondo_, cuentaGasto_, categoria_,
+  interno: { clasificarYAgrupar_, nombreCalza_, resolverAlias_, COMUNES_ } };
