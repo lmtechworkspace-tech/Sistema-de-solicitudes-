@@ -48,7 +48,8 @@ function leerFila_(f) {
   // El nombre puede quedar para después (la fila queda por completar), como en la planilla.
   const alias = txt_(f.alias).slice(0, 80).toUpperCase();
   const grupo = txt_(f.grupo).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
-  return { fecha, monto: m.valor, alias, plan: txt_(f.plan).slice(0, 80), obs, glosa: txt_(f.glosa).slice(0, 200), nota: txt_(f.nota).slice(0, 300), grupo, fact: txt_(f.fact).replace(/[^0-9A-Za-z\-]/g, '').slice(0, 20) };
+  return { fecha, monto: m.valor, alias, plan: txt_(f.plan).slice(0, 80), obs, glosa: txt_(f.glosa).slice(0, 200), nota: txt_(f.nota).slice(0, 300), grupo, // N° factura: uno o varios folios («1052», «1052-1053», «1052, 1053»).
+    fact: txt_(f.fact).replace(/[^0-9A-Za-z\-\/, ]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40) };
 }
 
 /** Movimientos de la cuenta alrededor de unas fechas, descifrados. */

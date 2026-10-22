@@ -1560,8 +1560,9 @@
   // <main> se adapta al modulo en vez de ser fijo.
   var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad', 'hompy', 'finanzas', 'portal_clientes'].concat(IDS_DEPARTAMENTO);
   // 2026-10-19: módulos que no son v2 pero igual van a pantalla completa
-  // (Credenciales: la tabla de claves de clientes aprovecha todo el ancho).
-  var MODULOS_ANCHO_TOTAL = ['credenciales'];
+  // (Credenciales: la tabla de claves de clientes aprovecha todo el ancho; Finanzas: la planilla
+  // del banco y sus reportes usan toda la pantalla, 2026-10-22).
+  var MODULOS_ANCHO_TOTAL = ['credenciales', 'finanzas'];
 
   // SIGSO v2 (documentacion/SIGSO-v2-hoja-de-ruta.md). Desde el 2026-09-25 la
   // versión clásica está retirada: cada módulo tiene UNA implementación, la v2.

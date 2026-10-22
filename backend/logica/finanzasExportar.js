@@ -30,7 +30,8 @@ const { errorValidacion } = require('./errores');
 const I = FB.interno;
 const TIPOS = {
   movimientos: 'Movimientos del banco', operaciones: 'Operaciones registradas', aplicaciones: 'Aplicaciones a facturas',
-  cartera: 'Cartera por factura', fondos: 'Fondos por gestión', presupuesto: 'Presupuesto y real', informe: 'Informe del mes'
+  cartera: 'Cartera por factura', fondos: 'Fondos por gestión', presupuesto: 'Presupuesto y real', informe: 'Informe del mes',
+  planilla: 'Planilla del banco'
 };
 
 /** Neutraliza un texto que una planilla tomaría como fórmula. Los números no se tocan. */
@@ -57,10 +58,40 @@ function clasifTxt_(c) {
 }
 
 const POR_MES_ = ['movimientos', 'operaciones', 'aplicaciones'];
+const BANCO_TXT_ = { ok: 'En el banco', esperando: 'Espera la cartola', falta: 'Falta anotar' };
 function datos_(db, tipo, f) {
   const periodo = Base.periodo_(f.periodo) || '';
   const emp = Cat.empresa_(f.empresa) || '';
   if (POR_MES_.indexOf(tipo) !== -1 && !periodo && !f.todo) return { error: errorValidacion('periodo', 'Elige el mes, o marca «Todo el historial» si de verdad lo necesitas.') };
+  if (tipo === 'planilla') {
+    // La planilla del mes como el Excel BANCOS: las filas de cada cuenta, el resumen de arriba y los grupos.
+    if (!periodo) return { error: errorValidacion('periodo', 'Elige el mes de la planilla.') };
+    const Ho = require('./finanzasHoja');
+    const ctx = Ho.contexto_(db);
+    const ref = Base.txt_(f.cuenta_ref);
+    const cuentas = [...ctx.cuentas.values()].filter((c) => (!ref || c.id === ref) && (!emp || c.empresa === emp))
+      .sort((a, b) => (a.empresa + a.banco).localeCompare(b.empresa + b.banco));
+    if (ref && !cuentas.length) return { error: errorValidacion('cuenta_ref', 'Esa cuenta no existe.') };
+    const out = [], resumen = [], grupos = [];
+    const DEC = { PENDIENTE: 'PENDIENTE · sigue abierto', ABONO: 'ABONO · honorario', 'ABONO RENTA': 'ABONO RENTA · honorario de renta', SALDO: 'SALDO · a favor del cliente' };
+    cuentas.forEach((cu) => {
+      const h = Ho.construir_(db, cu, periodo, ctx);
+      const nombre = cu.empresa + ' · ' + cu.banco + ' ···' + cu.ultimos4;
+      h.filas.forEach((x) => out.push([nombre, x.fecha, x.nombre, x.obs, x.plan, x.monto, x.grupo, x.fact, x.glosa, x.nota, x.saldo, x.que.t, BANCO_TXT_[x.banco] || x.banco, x.id]));
+      const t = h.totales, c = h.cartola;
+      resumen.push([nombre, t.ABONO, t.HONORARIOS, t.GASTOS, t['ABONO RENTA'], t.SALDO, t.PENDIENTE, t.FONDOS, t.OTRO_MES, t.TRASPASOS, t.SIN_COMPLETAR, t.TOTAL,
+        c ? c.saldo_inicial : null, c ? c.saldo_final : null, h.estado.falta, h.estado.esperando, h.estado.por_completar]);
+      h.grupos.forEach((g) => grupos.push([nombre, g.letra, g.cliente, g.filas, g.entra, -g.sale, g.suma, DEC[g.decision] || g.decision, g.otro_mes ? 'Sí' : '', g.remanente_excel]));
+    });
+    return {
+      columnas: ['Cuenta', 'Fecha', 'Nombre', 'OBS', 'Plan de cuenta', 'Monto (+ entra / − sale)', 'Grupo', 'N° factura', 'Detalle banco', 'Nota', 'Saldo acumulado', 'Qué es', 'Banco', 'ID'], filas: out,
+      extra: [
+        { nombre: 'Resumen', columnas: ['Cuenta', 'ABONO (neto)', 'Honorarios', 'Gastos', 'ABONO RENTA', 'SALDO', 'PENDIENTE', 'IVA e imposiciones', 'De otros meses', 'Traspasos', 'Sin completar', 'TOTAL',
+          'Saldo inicial banco', 'Saldo final banco', 'Falta anotar', 'Espera la cartola', 'Falta OBS'], filas: resumen },
+        { nombre: 'Grupos', columnas: ['Cuenta', 'Grupo', 'Cliente', 'Filas', 'Entra', 'Sale', 'Sobra', 'Qué pasa con lo que sobra', 'Con filas de otro mes', 'Sobra según el Excel'], filas: grupos }
+      ]
+    };
+  }
   if (tipo === 'movimientos') {
     const cuentas = I.cuentasMapa_();
     const filas = I.db_().prepare('SELECT * FROM FIN_MOVIMIENTOS' + (periodo ? ' WHERE periodo = ?' : '') + ' ORDER BY fecha, orden').all(...(periodo ? [periodo] : [])).filter((r) => !emp || (cuentas.get(r.cuenta_ref) || {}).empresa === emp);
@@ -172,16 +203,17 @@ const exportar = Base.conCapacidad('EXPORTAR', '', function (db, data, contexto,
   // El informe lleva los metadatos de su contrato (los mismos de la pantalla y el PDF).
   const k = r.contrato;
   const meta = [['Exportación', TIPOS[tipo]], ['Filtros', [k ? k.period : f.periodo || (f.todo ? 'todo el historial' : 'hoy'), f.empresa || 'grupo', tipo === 'presupuesto' ? f.anio || '' : ''].filter(Boolean).join(' · ')],
-    ['Corte', k ? k.as_of : Base.hoy_()], ['Base', k ? (require('./finanzasReportes').BASES[k.basis] || k.basis) : tipo === 'cartera' ? 'Cartera de hoy' : 'Caja bruta / registros'], ['Moneda', 'CLP (pesos chilenos)'],
+    ['Corte', k ? k.as_of : Base.hoy_()], ['Base', k ? (require('./finanzasReportes').BASES[k.basis] || k.basis) : tipo === 'cartera' ? 'Cartera de hoy' : tipo === 'planilla' ? 'Planilla del banco (como el Excel BANCOS)' : 'Caja bruta / registros'], ['Moneda', 'CLP (pesos chilenos)'],
     ['Estado de los datos', estado || '—'], ['Revisión de datos', k ? k.data_revision : Base.revision_()], ['Versión de reglas', k ? 'v' + k.rule_version : '—'],
     ['Generado por', x.nombre], ['Confidencial', 'Datos de la bóveda de Finanzas']];
-  const nombre = 'finanzas-' + tipo + (f.periodo ? '-' + f.periodo : '') + (f.empresa ? '-' + f.empresa : '');
+  const nombre = 'finanzas-' + tipo + (f.periodo ? '-' + f.periodo : '') + (f.empresa ? '-' + f.empresa : '') + (tipo === 'planilla' && f.cuenta_ref ? '-' + ((I.cuentasMapa_().get(f.cuenta_ref) || {}).ultimos4 || '') : '');
   x.registrar('EXPORTAR_' + tipo.toUpperCase(), formato + ' · ' + r.filas.length + ' fila(s)');
   if (formato === 'csv') return { nombre: nombre + '.csv', mime: 'text/csv;charset=utf-8', base64: Buffer.from(csv_(r.columnas, r.filas, meta), 'utf8').toString('base64'), filas: r.filas.length };
   const L = require('./libroExcel');
   const buf = L.construirLibro({ titulo: TIPOS[tipo], subtitulo: meta.map((m) => m.join(': ')).join(' · '), meta,
     // En XLSX los textos van como texto en línea (inlineStr): Excel no los ejecuta, no hace falta el apóstrofo.
-    hojas: [{ nombre: TIPOS[tipo].slice(0, 30), columnas: r.columnas, filas: r.filas.map((fila) => fila.map((v) => (v === null ? '' : v))) }] });
+    hojas: [{ nombre: TIPOS[tipo].slice(0, 30), columnas: r.columnas, filas: r.filas }].concat(r.extra || [])
+      .map((h) => ({ nombre: h.nombre, columnas: h.columnas, filas: h.filas.map((fila) => fila.map((v) => (v === null ? '' : v))) })) });
   return { nombre: nombre + '.xlsx', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', base64: buf.toString('base64'), filas: r.filas.length };
 });
 
