@@ -54,6 +54,17 @@
             marcas: [{ n: 1, t: 'Aquí se pegan.' }, { n: 2, t: '[[Revisar y anotar]].' }],
             ojo: ['No pegues un mes que ya está anotado: quedarían filas repetidas.'] }
         ] },
+      { id: 'informes', titulo: 'Informes: lo que dicen los datos', ruta: '#/finanzas',
+        intro: ['**Informes** convierte la planilla en información. Se arma solo con lo anotado (con las mismas reglas de la planilla): el **resultado** es el ABONO + ABONO RENTA del resumen, así que se puede comparar con el Excel.'],
+        pasos: [
+          { titulo: 'Un mes',
+            texto: [['Arriba, una frase con lo esencial: cuánto se ganó, cuánto se gastó, cuánto quedó y cuánta plata del banco es de la empresa.', 'Las tarjetas muestran las cifras clave con su comparación con el mes anterior y la tendencia de los últimos meses. Toca cualquiera (o su **?**) para ver **qué es, cómo se calcula con los números reales y las filas de la planilla que la componen**.', '**Lo que dicen los datos**: comentarios automáticos, lo crítico primero (clientes que deben fondos, facturas vencidas, gastos inusuales, pérdida del mes…). Cada uno tiene **¿Cómo se llegó a esto?**.', 'Más abajo: cómo se movió la plata del banco (del saldo inicial al final), la **verificación con la cartola** (lo que coincide, lo anotado que el banco no trae, lo del banco sin anotar y los posibles montos mal digitados), gastos por plan, honorarios por cliente, fondos de clientes y cobranza.']],
+            consejo: ['Si arriba dice **Informe provisorio**, la lista explica qué falta (cartola, filas sin anotar o sin verificar). Las cifras pueden cambiar hasta completarlo.'] },
+          { titulo: 'Comparar períodos',
+            texto: [['Toca **Comparar períodos** y elige desde y hasta (o «Últimos 3, 6 o 12» / «Este año»).', 'Se ven los totales y promedios del período, el gráfico mes a mes (barras de honorarios y gastos; el punto es el resultado), la tabla comparativa con el mejor y el peor mes, el mapa de gastos por plan, los clientes que más aportan y la evolución de la caja.', 'Los meses sin honorarios ni gastos anotados se dejan fuera de promedios y tendencias, y se avisa cuáles son.']] },
+          { titulo: 'Imprimir o guardar en PDF',
+            texto: [['Toca **Imprimir o guardar PDF**: sale solo el informe, con los «¿cómo se llegó?» abiertos. En el diálogo de impresión elige «Guardar como PDF».']] }
+        ] },
       { id: 'cartola', titulo: 'Cuando llega la cartola', ruta: '#/finanzas',
         intro: ['La cartola es la verdad. Se sube en **Más → Subir archivos** (o con [[Subir cartola]] arriba de la planilla). Cada fila anotada se une sola con su movimiento del banco (mismo monto, hasta 3 días de diferencia) y pasa a **✓ banco**.'],
         pasos: [

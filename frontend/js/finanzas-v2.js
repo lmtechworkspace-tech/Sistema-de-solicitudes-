@@ -41,6 +41,7 @@
   // (FLUJO, saldo por cliente y cobranza). Lo demás queda en «Más». El mes, el libro y los fondos se reemplazaron.
   var AREAS = [
     { id: 'planilla', texto: 'Planilla', icono: 'tabla', vistas: [['planilla', 'Planilla del banco']] },
+    { id: 'informe', texto: 'Informes', icono: 'dona', vistas: [['informe', 'Informes']] },
     { id: 'flujo', texto: 'FLUJO', icono: 'grafico', vistas: [['flujo', 'FLUJO']] },
     { id: 'saldos', texto: 'Saldo por cliente', icono: 'equipo', vistas: [['saldos', 'Saldo por cliente']] },
     { id: 'cobros', texto: 'Cobranza', icono: 'recibo', vistas: [['cobros', 'Cobranza']] },
@@ -81,6 +82,7 @@
     planilla: ['Planilla del banco', 'Se llena como el Excel BANCOS. El resumen, el FLUJO, los saldos por cliente y la cobranza salen solos.'],
     saldos: ['Saldo por cliente', 'Cuánta plata de cada cliente hay en la cuenta, sus honorarios y lo que debe en facturas.'],
     cobros: ['Cobranza', 'Las facturas, lo pagado según la planilla y lo que falta cobrar.'],
+    informe: ['Informes', 'Lo que dicen los datos de la planilla: el mes en una frase, sus cifras clave explicadas, lo crítico y la verificación con la cartola. O compara un período de meses.'],
     flujo: ['FLUJO', 'Ingresos y egresos por plan de cuenta, mes a mes, como las hojas FLUJO de SIGECO.'],
     libro: ['Libro del banco', 'La planilla BANCOS dentro de SIGSO: se anota cada movimiento y, al subir la cartola, SIGSO lo comprueba con el banco.'],
     pendientes: ['Pendientes', 'Lo que falta resolver en todo Finanzas; cada fila abre dónde se resuelve.'],
@@ -338,6 +340,7 @@
   // --- Bóveda abierta: enrutador de vistas ---------------------------------------------------
   var MODULOS = {
     planilla: function () { return window.SigsoFinanzasHoja && SigsoFinanzasHoja.ver; },
+    informe: function () { return window.SigsoFinanzasInforme && SigsoFinanzasInforme.ver; },
     flujo: function () { return window.SigsoFinanzasHoja && SigsoFinanzasHoja.verFlujo; },
     saldos: function () { return window.SigsoFinanzasHoja && SigsoFinanzasHoja.verSaldos; },
     cobros: function () { return window.SigsoFinanzasHoja && SigsoFinanzasHoja.verCobros; },
