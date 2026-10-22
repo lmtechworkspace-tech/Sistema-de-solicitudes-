@@ -34,7 +34,7 @@ const FILA_BASE_ = 100000;
 
 const cerrado_ = (periodo) => { try { return require('./finanzasCierre').mesCerrado_(periodo); } catch (e) { return false; } };
 const enGrupo_ = (d) => { const c = d.clasif; const ps = c && c.partes ? c.partes : c ? [c] : []; return ps.some((p) => p.gestion_id); };
-const dias_ = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) / 864e5;
+const dias_ = (a, b) => Base.diasHabiles_(a, b); // días hábiles: lo anotado el viernes que el banco pasa el lunes calza
 
 /** Una fila escrita por la persona → { fecha, monto, alias, plan, obs, glosa, nota } o { error }. */
 function leerFila_(f) {

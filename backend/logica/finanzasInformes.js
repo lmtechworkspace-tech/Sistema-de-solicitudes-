@@ -64,8 +64,11 @@ function mes_(db, ctx, cuentas, periodo) {
   cuentas.forEach((cu) => {
     const h = H.construir_(db, cu, periodo, ctx);
     const cuenta = cu.banco + ' ···' + cu.ultimos4;
+    // Un grupo es de un solo cliente: si una fila lo escribe distinto («ARMANDO LAEL» y «CONST ARMANDO Y LAEL»), sus
+    // fondos se cuentan con el nombre del grupo y no aparece una deuda falsa de un «cliente» que solo pagó.
+    const delGrupo = new Map(h.grupos.filter((g) => g.cliente).map((g) => [g.letra, g.cliente]));
     h.filas.forEach((f) => {
-      const fila = { p: periodo, id: f.id, f: f.fecha, fb: f.fecha_banco || '', n: f.cliente || f.nombre || '', nom: f.nombre || '', o: f.obs || '', pl: f.plan || '', m: f.monto, c: 'sin', b: f.banco, g: f.grupo || '', cu: cuenta, gl: f.glosa || '' };
+      const fila = { p: periodo, id: f.id, f: f.fecha, fb: f.fecha_banco || '', n: (f.grupo && delGrupo.get(f.grupo)) || f.cliente || f.nombre || '', nom: f.nombre || '', o: f.obs || '', pl: f.plan || '', m: f.monto, c: 'sin', b: f.banco, g: f.grupo || '', cu: cuenta, gl: f.glosa || '' };
       if (f.grupo) fila.c = f.monto > 0 ? 'fon_rec' : 'fon_pag';
       else if (f.que.k === 'ing') { fila.c = 'hon'; fila.pl = H.planFlujo_(f) || 'Otros Ingresos'; }
       else if (f.que.k === 'gas') { fila.c = 'gas'; fila.pl = H.planFlujo_(f) || 'Sin plan de cuenta'; }

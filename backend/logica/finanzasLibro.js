@@ -199,7 +199,7 @@ const llevarMes = Base.conCapacidad('MIGRAR', '', function (db, data, contexto, 
   const usados = new Set();
   const par = new Map();
   const mismoMonto = (r, m) => (r.monto > 0 ? m.d.abono === r.monto : m.d.cargo === -r.monto);
-  const dias = (r, m) => Math.abs(Date.parse(m.r.fecha) - Date.parse(r.fecha)) / 864e5;
+  const dias = (r, m) => Base.diasHabiles_(m.r.fecha, r.fecha); // hábiles: el fin de semana no aleja al banco
   const fases = [
     { tol: 5, ok: (r, m) => r.banco && m.d.detalle && N(m.d.detalle.descripcion) === N(r.banco) },
     { tol: 3, ok: (r, m) => nombreCalza_(r, m) },
