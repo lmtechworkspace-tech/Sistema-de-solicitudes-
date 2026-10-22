@@ -89,9 +89,9 @@
       '<div id="finb-revision"></div>' +
       '<div id="finb-nombres"></div>' +
       '<div class="fin2-grid fin2-grid--2">' +
-        U.card({ titulo: 'Plata de clientes en custodia', icono: 'equipo', sub: 'lo que mandan para sus imposiciones o IVA', cuerpo:
+        U.card({ titulo: 'Dinero de clientes en custodia', icono: 'equipo', sub: 'lo que mandan para sus imposiciones o IVA', cuerpo:
           (fondos ? '<div class="fin2-tabla-envoltura"><table class="fin2-tabla"><thead><tr><th>Cliente</th><th>Recibido</th><th>Pagado por su cuenta</th><th>Saldo</th></tr></thead><tbody>' + fondos + '</tbody></table></div>' +
-            '<p class="fin2-ayuda" style="margin-top:8px">Un saldo negativo es plata que la empresa puso por el cliente: hay que cobrársela.</p>'
+            '<p class="fin2-ayuda" style="margin-top:8px">Un saldo negativo es dinero que la empresa puso por el cliente: hay que cobrársela.</p>'
             : U.vacio({ icono: 'equipo', texto: 'Aparece cuando se confirmen movimientos como «Fondo de cliente».' })) }) +
         U.card({ titulo: 'Aprender del Excel BANCOS', icono: 'bombilla', sub: 'lo que se anotaba a mano', cuerpo:
           '<p class="fin2-ayuda">Sube el Excel «BANCOS» del mes. Primero se enseña una sola vez quién es cada nombre corto que usan (por ejemplo, «ANDES» = Andes Montajes SpA). Después cada fila queda como sugerencia en su movimiento y el sistema aprende <b>quién paga por quién</b>.</p>' +
@@ -304,10 +304,10 @@
   // lateral con todo lo que se sabe del movimiento para clasificarlo con calma.
   // =====================================================================================
   var AYUDA_TIPO = {
-    INGRESO: 'Plata que la empresa ganó: honorarios, servicio mensual, renta.',
+    INGRESO: 'Dinero que la empresa ganó: honorarios, servicio mensual, renta.',
     EGRESO: 'Lo que la empresa gasta para funcionar: sueldos, arriendo, banco…',
-    FONDO_RECIBIDO: 'Plata que un cliente manda para pagar SUS imposiciones, IVA, sueldos…',
-    FONDO_PAGADO: 'Pago a Previred, SII, Tesorería o sueldos hecho con la plata de un cliente.',
+    FONDO_RECIBIDO: 'Dinero que un cliente manda para pagar SUS imposiciones, IVA, sueldos…',
+    FONDO_PAGADO: 'Pago a Previred, SII, Tesorería o sueldos hecho con el dinero de un cliente.',
     TRASPASO: 'Entre dos cuentas de la MISMA empresa.',
     PRESTAMO: 'Con otra empresa del grupo (se lleva la cuenta de lo que se deben).'
   };
@@ -551,7 +551,7 @@
       U.boton({ texto: 'Guardar y siguiente', icono: 'derecha', variante: 'primario', clase: 'js-finm-p-ok-sig' });
     var previo = panel_;
     panel_ = { id: id };
-    panel_.api = U.drawer({ titulo: m.abono ? 'Entrada de plata' : 'Salida de plata', subtitulo: '<span class="fin2-ayuda">' + txt(mesTexto(mov_.periodo)) + '</span>', cuerpo: cuerpo, pie: pie,
+    panel_.api = U.drawer({ titulo: m.abono ? 'Entrada de dinero' : 'Salida de dinero', subtitulo: '<span class="fin2-ayuda">' + txt(mesTexto(mov_.periodo)) + '</span>', cuerpo: cuerpo, pie: pie,
       alCerrar: function () { if (panel_ && panel_.id === id && !panel_.cambiando) { panel_ = null; marcarAbierto(); } } });
     void previo;
     panel_.api.el.classList.add('fin2-panel');
@@ -693,7 +693,7 @@
   function cajaDividir(m, base) {
     return '<div class="fin2-dividir" data-total="' + (m.abono || m.cargo) + '" data-sentido="' + sentidoDe(m) + '">' +
       '<h3>Dividir ' + plata(m.abono || m.cargo) + '</h3>' +
-      '<p class="fin2-ayuda">Por ejemplo, una transferencia que paga a dos clientes, o que trae honorario y plata para imposiciones. Las partes tienen que sumar exacto.</p>' +
+      '<p class="fin2-ayuda">Por ejemplo, una transferencia que paga a dos clientes, o que trae honorario y dinero para imposiciones. Las partes tienen que sumar exacto.</p>' +
       '<div class="js-finm-partes">' + base.map(function (p) { return parte(p, sentidoDe(m)); }).join('') + '</div>' +
       '<div class="fin2-acciones" style="align-items:center;justify-content:space-between">' + U.boton({ texto: 'Agregar parte', icono: 'nueva', sm: true, clase: 'js-finm-pmas' }) +
         '<span class="fin2-ayuda js-finm-pfalta"></span>' + U.boton({ texto: 'No dividir', sm: true, variante: 'fantasma', clase: 'js-finm-pcancelar' }) + '</div></div>';

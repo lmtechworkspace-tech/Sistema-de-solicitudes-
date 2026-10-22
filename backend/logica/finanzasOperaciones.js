@@ -4,7 +4,7 @@
  * finanzasOperaciones.js — el registro operativo (2026-10-20; FIN-05, FIN-06,
  * FIN-08, FIN-09 a FIN-12, FIN-16).
  *
- * La cartola dice que entró o salió plata, pero no de qué cliente, obligación
+ * La cartola dice que entró o salió dinero, pero no de qué cliente, obligación
  * o período. Quien hace la gestión sí lo sabe en ese momento. Aquí lo anota
  * UNA vez, y el banco después lo confirma (conciliación):
  *
@@ -48,7 +48,7 @@ const SIN_BANCO_ = ['EFECTIVO', 'COMPENSACION'];
 const ACCIONES = {
   COBRAR_HONORARIOS: { nombre: 'Cobrar honorarios', sentido: 'ENTRADA', tipo: 'INGRESO', cuenta: 'Servicio Mensual', ayuda: 'Lo que el cliente paga por nuestro servicio. El pagador puede ser distinto del cliente.' },
   RECIBIR_FONDOS: { nombre: 'Recibir fondos de un cliente', sentido: 'ENTRADA', tipo: 'FONDO_RECIBIDO', subtipo: 'RECEPCION', ayuda: 'Este dinero se administra por cuenta del cliente: no es ingreso de la empresa.' },
-  PAGAR_OBLIGACION: { nombre: 'Pagar una obligación del cliente', sentido: 'SALIDA', tipo: 'FONDO_PAGADO', subtipo: 'PAGO_OBLIGACION', ayuda: 'Previred, IVA, Tesorería, sueldos… con la plata del cliente. La obligación puede ser de un mes anterior.' },
+  PAGAR_OBLIGACION: { nombre: 'Pagar una obligación del cliente', sentido: 'SALIDA', tipo: 'FONDO_PAGADO', subtipo: 'PAGO_OBLIGACION', ayuda: 'Previred, IVA, Tesorería, sueldos… con el dinero del cliente. La obligación puede ser de un mes anterior.' },
   DEVOLVER_FONDOS: { nombre: 'Devolver fondos al cliente', sentido: 'SALIDA', tipo: 'FONDO_PAGADO', subtipo: 'DEVOLUCION', ayuda: 'Sale de los fondos del cliente sin pagar una obligación.' },
   REINTEGRO: { nombre: 'Registrar un reintegro', sentido: 'ENTRADA', tipo: 'FONDO_RECIBIDO', subtipo: 'REINTEGRO', ayuda: 'Vuelve dinero de un pago hecho por el cliente (p. ej. un pago rechazado).' },
   GASTO_PROPIO: { nombre: 'Registrar un gasto de la empresa', sentido: 'SALIDA', tipo: 'EGRESO', ayuda: 'Un gasto para funcionar. No pide cliente.' },
@@ -171,7 +171,7 @@ function normalizar_(db, data, ctxN) {
   if (!op.fecha) falta('fecha', Base.txt_(data.fecha) ? 'La fecha no existe o no se entiende.' : 'Falta la fecha.');
   op.periodo = op.fecha ? op.fecha.slice(0, 7) : '';
   op.sentido = Base.txt_(data.sentido).toUpperCase() === 'SALIDA' ? 'SALIDA' : Base.txt_(data.sentido).toUpperCase() === 'ENTRADA' ? 'ENTRADA' : '';
-  if (!op.sentido) falta('sentido', 'Indica si entra o sale plata.');
+  if (!op.sentido) falta('sentido', 'Indica si entra o sale dinero.');
   const medio = Cat.buscar_('MEDIO', data.medio || 'TRANSFERENCIA');
   op.medio = medio ? medio.id : '';
   if (!op.medio) falta('medio', 'Medio de pago desconocido.');

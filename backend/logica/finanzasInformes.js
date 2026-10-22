@@ -196,12 +196,12 @@ function comentariosMes_(m, ant, prom3, extra) {
       'Participación = honorarios del cliente ÷ honorarios del mes. Se avisa desde el 30 %.', { c: ['hon', 'hon_grupo'], n: tops[0].k }));
   }
   // Fondos de clientes y caja libre
-  if (extra.deudores && extra.deudores.n) out.push(c_('critico', 'deudores', extra.deudores.n + ' cliente(s) deben ' + plata_(extra.deudores.monto) + ' de fondos', 'Se pagó por ellos más de lo que mandaron: esa plata salió de la empresa (o de otros clientes) y hay que pedírsela. El mayor: ' + extra.deudores.top + '.',
-    'Por cliente, acumulado desde ' + nombreMes_(extra.deudores.desde) + ': recibido − pagado por él − lo que sobró y se cobró. Un saldo negativo es una deuda del cliente. Ojo: si el cliente mandó la plata antes de ' + nombreMes_(extra.deudores.desde) + ' (meses no cargados en SIGSO), aparece como deuda sin serlo: carga esos meses o revisa su grupo.', { vista: 'clientes' }));
+  if (extra.deudores && extra.deudores.n) out.push(c_('critico', 'deudores', extra.deudores.n + ' cliente(s) deben ' + plata_(extra.deudores.monto) + ' de fondos', 'Se pagó por ellos más de lo que mandaron: ese dinero salió de la empresa (o de otros clientes) y hay que pedírsela. El mayor: ' + extra.deudores.top + '.',
+    'Por cliente, acumulado desde ' + nombreMes_(extra.deudores.desde) + ': recibido − pagado por él − lo que sobró y se cobró. Un saldo negativo es una deuda del cliente. Ojo: si el cliente mandó el dinero antes de ' + nombreMes_(extra.deudores.desde) + ' (meses no cargados en SIGSO), aparece como deuda sin serlo: carga esos meses o revisa su grupo.', { vista: 'clientes' }));
   if (extra.caja_libre !== null && extra.caja_libre !== undefined) {
-    if (extra.caja_libre < 0) out.push(c_('critico', 'caja_libre', 'La cuenta tiene menos plata que la que es de los clientes', 'Al cierre, el banco tenía ' + plata_(extra.saldo) + ' y los clientes tienen ' + plata_(extra.custodia) + ' a su favor: faltan ' + plata_(-extra.caja_libre) + ' para cubrirlos.',
+    if (extra.caja_libre < 0) out.push(c_('critico', 'caja_libre', 'La cuenta tiene menos dinero que el que es de los clientes', 'Al cierre, el banco tenía ' + plata_(extra.saldo) + ' y los clientes tienen ' + plata_(extra.custodia) + ' a su favor: faltan ' + plata_(-extra.caja_libre) + ' para cubrirlos.',
       'Caja libre = saldo final de la cartola − suma de los saldos a favor de los clientes.', { vista: 'clientes' }));
-    else if (extra.meses_caja !== null && extra.meses_caja < 1) out.push(c_('alerta', 'meses_caja', 'La plata propia alcanza para menos de un mes de gastos', 'Caja libre ' + plata_(extra.caja_libre) + ' frente a gastos promedio de ' + plata_(extra.gasto_prom) + ' al mes.',
+    else if (extra.meses_caja !== null && extra.meses_caja < 1) out.push(c_('alerta', 'meses_caja', 'El dinero propio alcanza para menos de un mes de gastos', 'Caja libre ' + plata_(extra.caja_libre) + ' frente a gastos promedio de ' + plata_(extra.gasto_prom) + ' al mes.',
       'Meses de caja = caja libre ÷ gastos promedio de los últimos 3 meses.', null));
   }
   // Cobranza

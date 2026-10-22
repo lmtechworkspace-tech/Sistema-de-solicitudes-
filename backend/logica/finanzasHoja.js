@@ -13,7 +13,7 @@
  *     que sobra del grupo es honorario (ABONO / ABONO RENTA), queda a favor del cliente (SALDO) o
  *     sigue abierto (PENDIENTE), según lo que se elija para ese grupo.
  *   - Sin grupo: OBS ABONO entra = honorario; ABONO sale = gasto (con su plan de cuenta);
- *     ABONO RENTA = honorario de renta; IVA / IMPOSICIONES / SALDO / PENDIENTE = plata del cliente.
+ *     ABONO RENTA = honorario de renta; IVA / IMPOSICIONES / SALDO / PENDIENTE = dinero del cliente.
  *   - TOTAL = suma de todo = neto del banco del mes (control).
  * Cada fila es un movimiento de FIN_MOVIMIENTOS con su anotación (`datos.planilla`); lo que trae la
  * cartola sin anotar aparece en la hoja para completarlo. Anotar, corregir, unir con la cartola y
@@ -257,7 +257,9 @@ const hoja = B.conBoveda('', function (db, data) {
   const cuentas = [...ctx.cuentas.values()].map((c) => ({ id: c.id, nombre: c.banco + ' ···' + c.ultimos4, empresa: c.empresa }));
   if (!cuenta) return { periodo, meses, cuentas, cuenta_ref: '', filas: [], grupos: [], totales: null, cartola: null, estado: { ok: 0, esperando: 0, falta: 0, por_completar: 0 }, listas, cerrado: false };
   const h = construir_(db, cuenta, periodo, ctx);
-  return Object.assign({ periodo, meses, cuentas, cuenta_ref: cuenta.id, empresa: cuenta.empresa, listas, cerrado: cerrado_(periodo) }, h);
+  let revision = null;
+  try { revision = require('./finanzasCierre').estadoMes_(periodo); } catch (e) { revision = null; }
+  return Object.assign({ periodo, meses, cuentas, cuenta_ref: cuenta.id, empresa: cuenta.empresa, listas, cerrado: cerrado_(periodo), revision }, h);
 });
 
 /**

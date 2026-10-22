@@ -150,7 +150,7 @@ test('clasificar: valida el sentido y el cliente, aprende la glosa y la vuelve a
   const andes = por('TRANSFER DE ANDES MONTAJE'), pago = por('PAGO CUENTAS VIA INTERNET');
   const malo = F.clasificar(db, D({ items: [{ id: andes.id, tipo: 'EGRESO', cuenta: 'Sueldos' }] }), ctx);
   assert.equal(malo.hechos, 0);
-  assert.match(malo.errores[0].mensaje, /no puede ser plata que entra/);
+  assert.match(malo.errores[0].mensaje, /no puede ser dinero que entra/);
   assert.match(F.clasificar(db, D({ items: [{ id: andes.id, tipo: 'FONDO_RECIBIDO', cuenta: 'Imposiciones' }] }), ctx).errores[0].mensaje, /cliente/);
   const ok = F.clasificar(db, D({ items: [
     { id: andes.id, tipo: 'FONDO_RECIBIDO', cuenta: 'Imposiciones', cliente_id: 'CL-1', nota: 'imposiciones de agosto' },

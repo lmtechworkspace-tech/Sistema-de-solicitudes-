@@ -98,7 +98,7 @@ test('Previred marcado como otra cosa, y custodia que queda en negativo', (t) =>
   assert.equal(revisar([{ id: prev, tipo: 'EGRESO', cuenta: 'Imposiciones' }]).alertas, 0, 'imposiciones propias de la empresa: bien');
   r = revisar([{ id: prev, tipo: 'FONDO_PAGADO', cuenta: 'Imposiciones', cliente_id: 'CL-2' }]);
   assert.equal(r.alertas, 0, 'sin ningún registro previo solo informa (puede ser saldo inicial)');
-  assert.match(textos(r).join('|'), /^info: No hay registro de plata de CONSTRUCTORA NORTE SPA en custodia/);
+  assert.match(textos(r).join('|'), /^info: No hay registro de dinero de CONSTRUCTORA NORTE SPA en custodia/);
   // Con algo registrado pero no alcanza: alerta.
   F.clasificar(db, D({ items: [{ id: id('TRANSFER DE CONSTRUCTORA'), partes: [
     { monto: 20000, tipo: 'FONDO_RECIBIDO', cuenta: 'Imposiciones', cliente_id: 'CL-2' }, { monto: 100000, tipo: 'INGRESO', cuenta: 'Servicio Mensual', cliente_id: 'CL-2' }] }] }), ctx);
@@ -110,7 +110,7 @@ test('Previred marcado como otra cosa, y custodia que queda en negativo', (t) =>
   // En un lote, lo que el cliente manda en el mismo lote cuenta para su pago.
   P.registrarPagador_('Juan Pérez Soto', 'CL-3', 'CONSTRUCTORA SUR LTDA', 'persona');
   const juan = id('TRANSFER DE JUAN PEREZ SO');
-  assert.match(textos(revisar([{ id: prev, tipo: 'FONDO_PAGADO', cuenta: 'Imposiciones', cliente_id: 'CL-3' }])).join('|'), /No hay registro de plata de CONSTRUCTORA SUR/);
+  assert.match(textos(revisar([{ id: prev, tipo: 'FONDO_PAGADO', cuenta: 'Imposiciones', cliente_id: 'CL-3' }])).join('|'), /No hay registro de dinero de CONSTRUCTORA SUR/);
   const lote = revisar([{ id: juan, tipo: 'FONDO_RECIBIDO', cuenta: 'Imposiciones', cliente_id: 'CL-3' }, { id: prev, tipo: 'FONDO_PAGADO', cuenta: 'Imposiciones', cliente_id: 'CL-3' }]);
   assert.equal(lote.alertas, 0);
   assert.ok(!textos(lote, 1).join('|').includes('custodia'), 'en el lote ya se ve lo que mandó');

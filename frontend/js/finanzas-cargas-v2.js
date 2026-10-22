@@ -357,7 +357,7 @@
       var c = el.querySelector('.js-fca-cand'); if (!c || !r || !r.ok) return;
       var g = r.data.grupos || [];
       est_.grupos = g;
-      c.innerHTML = '<section class="fin2-p-sec"><h3>Grupos de fondos candidatos (columna UNITARIO)</h3>' + (g.length ? '<p class="fin2-ayuda">La planilla sumaba estas filas con una fórmula: probablemente son la plata de un cliente para una obligación. Créalos como gestión si corresponde; nada se crea solo.</p><ul class="fin2-lista-saldos">' + g.map(function (y, i) {
+      c.innerHTML = '<section class="fin2-p-sec"><h3>Grupos de fondos candidatos (columna UNITARIO)</h3>' + (g.length ? '<p class="fin2-ayuda">La planilla sumaba estas filas con una fórmula: probablemente son el dinero de un cliente para una obligación. Créalos como gestión si corresponde; nada se crea solo.</p><ul class="fin2-lista-saldos">' + g.map(function (y, i) {
         return '<li><span><b>' + txt(y.alias || 'Grupo ' + (i + 1)) + '</b> <code>' + txt(y.formula) + '</code><small>' + y.miembros.length + ' fila(s): ' + y.miembros.slice(0, 4).map(function (m) { return 'f' + m.fila + ' ' + (m.monto || 0).toLocaleString('es-CL'); }).join(' · ') + ' · remanente en la planilla ' + (y.remanente_planilla === null ? '—' : y.remanente_planilla.toLocaleString('es-CL')) + '</small></span>' +
           U.boton({ texto: 'Crear gestión', sm: true, clase: 'js-fca-crear', datos: { i: i, cap: 'FONDOS' } }) + '</li>';
       }).join('') + '</ul>' : '<p class="fin2-ayuda">Se arman al publicar esta hoja.</p>') + '</section>';

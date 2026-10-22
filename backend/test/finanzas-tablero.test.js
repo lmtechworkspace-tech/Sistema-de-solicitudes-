@@ -2,7 +2,7 @@
 
 /**
  * Finanzas, Etapa 4 (2026-10-06): tablero de gerencia e informe mensual.
- * Datos FICTICIOS. Lo central: el resultado no mezcla la plata de los
+ * Datos FICTICIOS. Lo central: el resultado no mezcla el dinero de los
  * clientes, la caja sale del último saldo de cada cuenta, las cifras se
  * marcan provisorias si falta revisar, y el PDF lleva marca de agua y queda
  * en la bitácora.
@@ -81,7 +81,7 @@ function preparar(t) {
   return { db, ctx, D };
 }
 
-test('el resultado no mezcla la plata de los clientes; caja, custodia y obligaciones del mes', (t) => {
+test('el resultado no mezcla el dinero de los clientes; caja, custodia y obligaciones del mes', (t) => {
   const { db, ctx, D } = preparar(t);
   const jul = T.tablero(db, D({ periodo: '2026-07', empresa: 'HomePymes' }), ctx);
   assert.deepEqual([jul.mes.ingresos, jul.mes.egresos, jul.mes.resultado], [500000, 300000, 200000], 'el fondo de 1.000.000 y su pago de 900.000 no cuentan');

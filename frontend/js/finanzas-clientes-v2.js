@@ -7,7 +7,7 @@
  * factura), los servicios con su historia, los documentos (nota de venta,
  * contrato…) con adjuntos cifrados y la asignación a proyectos con
  * porcentaje y vigencia. La ficha muestra cobranza y fondos POR SEPARADO:
- * lo que el cliente debe y la plata suya que la empresa administra no se
+ * lo que el cliente debe y el dinero suyo que la empresa administra no se
  * compensan.
  */
 (function () {
@@ -101,7 +101,7 @@
       '<div class="fin2-ficha-grid">' +
         '<div class="fin2-ficha-caja"><small>Cobranza (lo que debe)</small>' + (f.cobranza ? '<b class="fin2-num">' + plata(f.cobranza.por_cobrar) + '</b><span>Vencido ' + plata(f.cobranza.vencido) + ' · ' + f.cobranza.facturas_abiertas + ' factura(s) abiertas' + (f.cobranza.sin_aplicar ? ' · ' + plata(f.cobranza.sin_aplicar) + ' cobrados sin aplicar' : '') + '</span>' +
           '<button type="button" class="sx2-enlace js-fcl-ir" data-vista="cobranza">Ver cobranza</button>' : '<span class="fin2-ayuda">Sin facturas.</span>') + '</div>' +
-        '<div class="fin2-ficha-caja"><small>Fondos del cliente (plata de él)</small>' + (f.fondos ? '<b class="fin2-num ' + (f.fondos.saldo < 0 ? 'fin2-neg' : '') + '">' + plata(f.fondos.saldo) + '</b><span>' + f.fondos.abiertas + ' gestión(es) abiertas' + (f.fondos.parcial ? ' · ' + U.badge('Parcial', 'alerta') : '') + '</span>' +
+        '<div class="fin2-ficha-caja"><small>Fondos del cliente (dinero suyo)</small>' + (f.fondos ? '<b class="fin2-num ' + (f.fondos.saldo < 0 ? 'fin2-neg' : '') + '">' + plata(f.fondos.saldo) + '</b><span>' + f.fondos.abiertas + ' gestión(es) abiertas' + (f.fondos.parcial ? ' · ' + U.badge('Parcial', 'alerta') : '') + '</span>' +
           '<button type="button" class="sx2-enlace js-fcl-ir" data-vista="fondos">Ver fondos</button>' : '<span class="fin2-ayuda">Sin fondos.</span>') + '</div>' +
       '</div><p class="fin2-ayuda">Son cuentas distintas: un saldo a favor en fondos no paga sus facturas, ni al revés.</p>' +
       '<div class="fin2-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + SECC.map(function (p) {

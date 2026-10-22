@@ -43,7 +43,7 @@ test('QA-R01 · registro primero: el pendiente del banco no suma y, tras vincula
   assert.equal(H.todos_().filter((h) => h.clasif && h.clasif.tipo === 'INGRESO').length, 1, 'un solo hecho');
 });
 
-test('QA-R02 · banco primero: registrar después la misma plata es un POSIBLE DUPLICADO; no se suma dos veces', (t) => {
+test('QA-R02 · banco primero: registrar después el mismo dinero es un POSIBLE DUPLICADO; no se suma dos veces', (t) => {
   const { db, ctx, D } = preparar(t);
   const m = bancoClasificado(db, D, ctx, [['02/08/2026', 'TRANSFER DE ANDES MONTAJE', 0, 357000, '1']], 'TRANSFER DE ANDES MONTAJE', { tipo: 'INGRESO', cuenta: 'Servicio Mensual', cliente_id: 'CL-1' });
   assert.equal(ingresos(db, '2026-08'), 357000);

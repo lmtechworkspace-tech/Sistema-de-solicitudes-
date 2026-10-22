@@ -27,7 +27,7 @@
  *    vuelve explícito.
  *  - NOTAS DE CRÉDITO: con folio de referencia, rebajan ESA factura una vez;
  *    sin referencia, quedan como crédito del cliente.
- *  - FONDO_RECIBIDO no paga facturas: es plata del cliente.
+ *  - FONDO_RECIBIDO no paga facturas: es dinero del cliente.
  */
 
 const crypto = require('node:crypto');

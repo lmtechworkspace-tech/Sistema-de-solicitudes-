@@ -140,7 +140,7 @@ function fechas_(hoy) {
   [mes, mesSiguiente_(mes)].forEach((p) => {
     cand.push({ fecha: dia_(p, 3), titulo: 'Cartolas y detalle de ' + nombreMes_(mesAnterior_(p)), tipo: 'interno' });
     cand.push({ fecha: dia_(p, 5), titulo: 'Cerrar ' + nombreMes_(mesAnterior_(p)), tipo: 'interno' });
-    cand.push({ fecha: dia_(p, 10), titulo: 'Previred (día 13 si es electrónico): la plata de los clientes para imposiciones tiene que haber llegado', tipo: 'clientes' });
+    cand.push({ fecha: dia_(p, 10), titulo: 'Previred (día 13 si es electrónico): el dinero de los clientes para imposiciones tiene que haber llegado', tipo: 'clientes' });
     cand.push({ fecha: dia_(p, 20), titulo: 'IVA (F29) de los clientes', tipo: 'clientes' });
   });
   return cand.filter((f) => f.fecha >= hoy).sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).slice(0, 4)

@@ -43,16 +43,16 @@ const DEFINICIONES = {
   ingresos: { nombre: 'Cobros propios', formula: 'Suma de «Ingreso de la empresa» confirmados del mes (banco y registro sin conciliar), sin compensaciones. Lo registrado que podría ser el mismo dinero que un movimiento del banco ya clasificado no se suma: cuenta el banco y lo registrado queda como «pendiente de identidad».', base: 'CASH_GROSS' },
   pendiente_identidad: { nombre: 'Pendiente de identidad', formula: 'Operaciones registradas con el mismo monto, sentido y empresa que un movimiento del banco ya clasificado (±N días). No se suman hasta que una persona las vincule (un solo hecho) o marque que son pagos distintos (cuentan los dos).' },
   egresos: { nombre: 'Pagos propios', formula: 'Suma de «Gasto de la empresa» confirmados del mes; un gasto compartido cuenta solo la parte de la empresa.', base: 'CASH_GROSS' },
-  flujo_propio: { nombre: 'Flujo propio', formula: 'Cobros propios − pagos propios. No es utilidad contable: la plata de clientes, los traspasos y los préstamos van aparte.', base: 'CASH_GROSS' },
+  flujo_propio: { nombre: 'Flujo propio', formula: 'Cobros propios − pagos propios. No es utilidad contable: el dinero de clientes, los traspasos y los préstamos van aparte.', base: 'CASH_GROSS' },
   ventas_netas: { nombre: 'Ventas netas facturadas', formula: 'Neto + exento de las facturas emitidas en el mes, menos notas de crédito del mes.', base: 'DOCUMENT_NET' },
-  fondos_recibidos: { nombre: 'Fondos de clientes recibidos', formula: 'Plata que los clientes mandaron para sus obligaciones (no es ingreso).' },
-  fondos_pagados: { nombre: 'Pagado por cuenta de clientes', formula: 'Pagos hechos con la plata de los clientes (no es gasto).' },
-  caja: { nombre: 'Saldo bancario al corte', formula: 'Último saldo de cada cuenta bancaria incluida en sus cartolas hasta el corte (fecha del banco), con la cobertura de cada una. Solo cuentas bancarias: no incluye caja chica. No es, por sí solo, plata propia.' },
+  fondos_recibidos: { nombre: 'Fondos de clientes recibidos', formula: 'Dinero que los clientes mandaron para sus obligaciones (no es ingreso).' },
+  fondos_pagados: { nombre: 'Pagado por cuenta de clientes', formula: 'Pagos hechos con el dinero de los clientes (no es gasto).' },
+  caja: { nombre: 'Saldo bancario al corte', formula: 'Último saldo de cada cuenta bancaria incluida en sus cartolas hasta el corte (fecha del banco), con la cobertura de cada una. Solo cuentas bancarias: no incluye caja chica. No es, por sí solo, dinero propio.' },
   custodia: { nombre: 'Fondos administrados de clientes', formula: 'Por cliente: saldo inicial aprobado + recibido − pagado. Se suman por separado los saldos a favor y los déficit (el déficit de uno no reduce lo de otro).' },
   caja_libre: { nombre: 'Disponibilidad propia', formula: 'Saldo bancario al corte − suma de los saldos A FAVOR de cada cliente. Solo se determina con cartolas completas al corte, saldos iniciales aprobados de todos los clientes con fondos, sin importes por clasificar y sin posibles duplicados. Si falta algo: «no determinable» (la resta se muestra aparte como referencia, no como disponibilidad).' },
   meses_caja: { nombre: 'Meses de caja', formula: 'Disponibilidad propia ÷ pagos propios promedio de los últimos 3 meses con pagos. Solo con disponibilidad propia determinada.' },
   por_cobrar: { nombre: 'Por cobrar (hoy)', formula: 'Lo que falta de cada factura vigente, con las aplicaciones confirmadas y sugeridas. Corte: hoy.' },
-  sin_aplicar: { nombre: 'Abonos sin aplicar', formula: 'Cobros propios con cliente que todavía no se aplicaron a una factura (no es plata en custodia).' }
+  sin_aplicar: { nombre: 'Abonos sin aplicar', formula: 'Cobros propios con cliente que todavía no se aplicaron a una factura (no es dinero en custodia).' }
 };
 
 // ---------------------------------------------------------------- comparación (FIN-35)
@@ -152,7 +152,7 @@ function calidad_(db, periodo, emp, mesDatos, hoy, conflictos) {
   if (mesDatos && mesDatos.sin_banco) add('SIN_BANCO', 'PROVISIONAL', mesDatos.sin_banco + ' operación(es) registradas todavía sin su movimiento del banco (' + Base.plata_(mesDatos.sin_banco_monto) + ').', { cantidad: mesDatos.sin_banco, monto: mesDatos.sin_banco_monto, evidencia: { vista: 'conciliacion', filtros: { periodo } } });
   try {
     const c = require('./finanzasFondos').custodiaAl_(Base.ultimoDia_(periodo), emp);
-    if (c.sin_apertura) add('APERTURA', 'PROVISIONAL', c.sin_apertura + ' cliente(s) con plata en custodia sin saldo inicial aprobado: su saldo es parcial.', { cantidad: c.sin_apertura, evidencia: { vista: 'fondos' } });
+    if (c.sin_apertura) add('APERTURA', 'PROVISIONAL', c.sin_apertura + ' cliente(s) con dinero en custodia sin saldo inicial aprobado: su saldo es parcial.', { cantidad: c.sin_apertura, evidencia: { vista: 'fondos' } });
   } catch (e) { /* sin fondos */ }
   if (periodo === hoy.slice(0, 7)) add('MES_EN_CURSO', 'PROVISIONAL', 'El mes está en curso (corte ' + hoy + '): no se compara como un mes completo.', {});
   let cerrado = false;
@@ -579,7 +579,7 @@ function insights_(c) {
   if (neg.length) add({ rule_id: 'CUSTODIA_NEGATIVA', severidad: neg.some((x) => !x.parcial) ? 'critico' : 'alerta', metric: 'custodia', actual: m.custodia_deficit, impacto: -m.custodia_deficit,
     texto: neg.length + ' cliente(s) con fondos en negativo según lo registrado (' + neg.slice(0, 3).map((x) => x.cliente + ' ' + Base.plata_(x.saldo)).join(', ') + ').',
     contribuciones: neg.slice(0, 5).map((x) => ({ nombre: x.cliente, monto: x.saldo, parcial: x.parcial })),
-    limites: neg.some((x) => x.parcial) ? 'Algunos no tienen saldo inicial aprobado: antes de concluir que la empresa puso plata, revisa si falta lo que mandaron antes del primer mes cargado.' : 'Con saldo inicial aprobado: la empresa pagó por ellos más de lo recibido; hay que cobrarlo o registrar lo que falta.',
+    limites: neg.some((x) => x.parcial) ? 'Algunos no tienen saldo inicial aprobado: antes de concluir que la empresa puso dinero, revisa si falta lo que mandaron antes del primer mes cargado.' : 'Con saldo inicial aprobado: la empresa pagó por ellos más de lo recibido; hay que cobrarlo o registrar lo que falta.',
     hechos: { observa: 'Fondos de clientes bajo cero', magnitud: m.custodia_deficit, componentes: neg.slice(0, 5), falta: neg.filter((x) => x.parcial).map((x) => 'saldo inicial de ' + x.cliente), revisar: 'Fondos' },
     evidencia: { vista: 'fondos' } });
   // 4. Flujo propio contra el mes anterior: se califica solo si es comparable.
@@ -658,10 +658,10 @@ function insights_(c) {
     hechos: { observa: 'Saldos entre empresas', magnitud: c.breakdowns.entre_empresas[0].monto, componentes: c.breakdowns.entre_empresas.slice(0, 3), falta: [], revisar: 'Préstamos' }, evidencia: { vista: 'prestamos' } });
   // 10. Fondos de clientes y abonos sin factura.
   if (m.custodia_positiva > 0) add({ rule_id: 'FONDOS_CLIENTES', severidad: 'info', metric: 'custodia', actual: m.custodia_positiva, impacto: m.custodia_positiva,
-    texto: 'Hay ' + Base.plata_(m.custodia_positiva) + ' de clientes en custodia (suma de saldos a favor): es plata de ellos, no se puede gastar.', limites: m.custodia_parcial ? 'Parcial: faltan saldos iniciales.' : '',
+    texto: 'Hay ' + Base.plata_(m.custodia_positiva) + ' de clientes en custodia (suma de saldos a favor): es dinero de ellos, no se puede gastar.', limites: m.custodia_parcial ? 'Parcial: faltan saldos iniciales.' : '',
     hechos: { observa: 'Fondos administrados', magnitud: m.custodia_positiva, componentes: [], falta: [], revisar: 'Fondos' }, evidencia: { vista: 'fondos' } });
   if (m.cobranza && m.cobranza.sin_aplicar > 0) add({ rule_id: 'ABONOS_SIN_FACTURA', severidad: 'info', metric: 'sin_aplicar', actual: m.cobranza.sin_aplicar, impacto: m.cobranza.sin_aplicar,
-    texto: Base.plata_(m.cobranza.sin_aplicar) + ' cobrados a clientes todavía no se aplican a una factura.', limites: 'No es plata en custodia: son cobros propios esperando su factura o su aplicación.',
+    texto: Base.plata_(m.cobranza.sin_aplicar) + ' cobrados a clientes todavía no se aplican a una factura.', limites: 'No es dinero en custodia: son cobros propios esperando su factura o su aplicación.',
     hechos: { observa: 'Cobros sin aplicar', magnitud: m.cobranza.sin_aplicar, componentes: [], falta: [], revisar: 'Cobranza' }, evidencia: { vista: 'cobranza', filtros: {} } });
   // Prioridad: lo que cambia la interpretación; después severidad; a igual severidad, materialidad.
   L.sort((a, b) => (b.interpreta - a.interpreta) || SEV[a.severidad] - SEV[b.severidad] || (b.impacto || 0) - (a.impacto || 0));

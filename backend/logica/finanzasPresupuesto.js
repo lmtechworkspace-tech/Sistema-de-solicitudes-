@@ -176,7 +176,7 @@ const ver = B.conBoveda('VER_PRESUPUESTO', function (db, data) {
   const historial = empresa ? db_().prepare('SELECT version, estado, base, en, por FROM FIN_PRESUPUESTO_VERSIONES WHERE anio = ? AND empresa = ? ORDER BY version DESC, en DESC').all(anio, empresa) : [];
   // I10.1 · Cobertura: los meses del año con cartolas. El acumulado compara solo esos meses (ppto y real).
   const mesesConDatos = I.db_().prepare('SELECT DISTINCT periodo FROM FIN_MOVIMIENTOS WHERE periodo LIKE ? ORDER BY periodo').all(anio + '-%').map((r) => Number(r.periodo.slice(5, 7)) - 1);
-  // Primer mes del año con movimientos: antes de eso, "real = 0" no significa que no hubo plata.
+  // Primer mes del año con movimientos: antes de eso, "real = 0" no significa que no hubo dinero.
   const primero = I.db_().prepare('SELECT MIN(periodo) AS p FROM FIN_MOVIMIENTOS WHERE periodo LIKE ?').get(anio + '-%');
   const primerMes = primero && primero.p ? Number(primero.p.slice(5, 7)) - 1 : null;
   const ultimo = I.db_().prepare('SELECT MAX(periodo) AS p FROM FIN_MOVIMIENTOS WHERE periodo LIKE ?').get(anio + '-%');

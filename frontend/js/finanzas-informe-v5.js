@@ -40,18 +40,18 @@
 
   // ---- qué es cada cifra y cómo se calcula (lenguaje claro) ------------------------------------------------
   var DEF = {
-    honorarios: { t: 'Honorarios', ico: 'dinero', que: 'La plata que la empresa ganó por sus servicios.', como: 'Suma de las filas con OBS ABONO o ABONO RENTA que entraron al banco, más lo que sobró de un grupo de fondos y se decidió cobrar como honorario.', f: { c: ['hon', 'hon_grupo'] }, bueno: 'sube' },
+    honorarios: { t: 'Honorarios', ico: 'dinero', que: 'El dinero que la empresa ganó por sus servicios.', como: 'Suma de las filas con OBS ABONO o ABONO RENTA que entraron al banco, más lo que sobró de un grupo de fondos y se decidió cobrar como honorario.', f: { c: ['hon', 'hon_grupo'] }, bueno: 'sube' },
     gastos: { t: 'Gastos', ico: 'recibo', que: 'Lo que la empresa pagó para funcionar: sueldos, arriendo, servicios, impuestos propios…', como: 'Suma de las filas con OBS ABONO que salieron del banco, agrupadas por su plan de cuenta.', f: { c: ['gas'] }, bueno: 'baja' },
     resultado: { t: 'Resultado', ico: 'tendencia', que: 'Lo que queda después de pagar los gastos con los honorarios. Si es negativo, el mes costó más de lo que dejó.', como: 'Honorarios − gastos. Es exactamente el ABONO + ABONO RENTA del resumen de la planilla, así que se puede comparar con el Excel.', f: { c: ['hon', 'hon_grupo', 'gas'] }, bueno: 'sube' },
     margen: { t: 'Margen', ico: 'dona', que: 'De cada $100 de honorarios, cuántos quedan después de pagar los gastos.', como: 'Resultado ÷ honorarios × 100.', f: { c: ['hon', 'hon_grupo', 'gas'] }, bueno: 'sube' },
-    caja_libre: { t: 'Caja libre', ico: 'caja', que: 'La plata del banco que de verdad es de la empresa (descontando la de los clientes).', como: 'Saldo final de la cartola − lo que los clientes tienen a su favor (fondos que mandaron y todavía no se usan). Solo se calcula con la cartola de todas las cuentas.', f: null, bueno: 'sube' },
-    custodia: { t: 'Fondos de clientes', ico: 'equipo', que: 'Plata de clientes que está en la cuenta para pagar sus obligaciones (imposiciones, IVA…). No es de la empresa.', como: 'Por cliente, acumulado: lo que mandó − lo que se pagó por él − lo que sobró y se cobró como honorario. Se suman los saldos a favor.', f: { c: ['fon_rec', 'fon_pag'] }, bueno: null },
+    caja_libre: { t: 'Caja libre', ico: 'caja', que: 'El dinero del banco que de verdad es de la empresa (descontando la de los clientes).', como: 'Saldo final de la cartola − lo que los clientes tienen a su favor (fondos que mandaron y todavía no se usan). Solo se calcula con la cartola de todas las cuentas.', f: null, bueno: 'sube' },
+    custodia: { t: 'Fondos de clientes', ico: 'equipo', que: 'Dinero de clientes que está en la cuenta para pagar sus obligaciones (imposiciones, IVA…). No es de la empresa.', como: 'Por cliente, acumulado: lo que mandó − lo que se pagó por él − lo que sobró y se cobró como honorario. Se suman los saldos a favor.', f: { c: ['fon_rec', 'fon_pag'] }, bueno: null },
     meses_caja: { t: 'Meses de caja', ico: 'calendario', que: 'Cuántos meses de gastos se podrían pagar solo con la caja libre.', como: 'Caja libre ÷ gasto promedio de los últimos 3 meses.', f: null, bueno: 'sube' },
     verificado: { t: 'Verificado con la cartola', ico: 'check', que: 'Qué parte de lo anotado ya confirmó el banco. Con menos de 100 %, las cifras son provisorias.', como: 'Filas que coinciden con un movimiento de la cartola (mismo monto, hasta 3 días de diferencia) ÷ filas del mes.', f: { b: ['falta', 'esperando'] }, bueno: 'sube' },
     por_cobrar: { t: 'Por cobrar', ico: 'reloj', que: 'Facturas emitidas que todavía no se pagan (corte: hoy).', como: 'Total de cada factura − lo pagado según la planilla (columna N° factura) o lo aplicado en Cobranza − notas de crédito.', f: null, bueno: 'baja' },
     recurrentes: { t: 'Honorarios mensuales', ico: 'tendencia', que: 'Los honorarios que se repiten todos los meses (igualas). Dan estabilidad.', como: 'Honorarios con plan «Servicio Mensual» (incluido lo cobrado de los grupos) ÷ honorarios del mes.', f: { c: ['hon', 'hon_grupo'] }, bueno: 'sube' },
     gastos_fijos: { t: 'Gastos fijos', ico: 'candado', que: 'Gastos que se pagan todos los meses aunque baje el trabajo: sueldos, arriendo, sistemas, servicios básicos.', como: 'Gastos cuyo plan de cuenta es Sueldos, Arriendo, Servidores y Sistemas, Cuentas Básicas, Internet o Patente. Es una estimación por el nombre del plan.', f: { c: ['gas'] }, bueno: null },
-    fondos: { t: 'Movimiento de fondos de clientes', ico: 'equipo', que: 'Plata de clientes que entró y que se pagó por ellos. Va aparte de honorarios y gastos.', como: 'Filas con OBS IVA, IMPOSICIONES, SALDO o PENDIENTE, y todas las filas que están en un grupo.', f: { c: ['fon_rec', 'fon_pag'] }, bueno: null }
+    fondos: { t: 'Movimiento de fondos de clientes', ico: 'equipo', que: 'Dinero de clientes que entró y que se pagó por ellos. Va aparte de honorarios y gastos.', como: 'Filas con OBS IVA, IMPOSICIONES, SALDO o PENDIENTE, y todas las filas que están en un grupo.', f: { c: ['fon_rec', 'fon_pag'] }, bueno: null }
   };
   var CAT_ = { hon: 'Honorario', hon_grupo: 'Honorario (sobrante de grupo)', gas: 'Gasto', fon_rec: 'Fondos recibidos', fon_pag: 'Pagado por clientes', favor: 'A favor del cliente', pend: 'Grupo abierto', tra: 'Traspaso / préstamo', sin: 'Sin completar' };
   var NIVEL_ = { critico: ['Crítico', 'alerta'], alerta: ['Atención', 'alerta'], ok: ['Bien', 'check'], info: ['Para saber', 'info'] };
@@ -220,7 +220,7 @@
     html += comentarios(d.comentarios, 7);
     html += '<div class="fin5-inf-grid">' + cascada(m, 8) + verificacion(m, 9) + '</div>';
     html += '<div class="fin5-inf-grid">' +
-      seccion('Gastos por plan de cuenta', 'En qué se fue la plata de la empresa. Toca una barra para ver sus filas.', barrasH(topObj(m.gas_plan, 12).map(function (x) { return conDelta(x, av && av.gas_plan, true); }), m.gastos, function (x) { return { c: ['gas'], pl: x.k }; }, 'critico', { vacio: 'Sin gastos anotados.' }), 10) +
+      seccion('Gastos por plan de cuenta', 'En qué se fue el dinero de la empresa. Toca una barra para ver sus filas.', barrasH(topObj(m.gas_plan, 12).map(function (x) { return conDelta(x, av && av.gas_plan, true); }), m.gastos, function (x) { return { c: ['gas'], pl: x.k }; }, 'critico', { vacio: 'Sin gastos anotados.' }), 10) +
       seccion('Honorarios por cliente', 'Quién generó los ingresos del mes. ' + concentracion(m), barrasH(topObj(m.hon_cliente, 10), m.honorarios, function (x) { return { c: ['hon', 'hon_grupo'], n: x.k }; }, 'ok', { vacio: 'Sin honorarios anotados.' }), 11) +
     '</div>';
     html += '<div class="fin5-inf-grid">' + fondos(d, m, 12) + cobranza(d, 13) + '</div>';
@@ -258,7 +258,7 @@
 
   // Cómo se movió el banco: saldo inicial → cada tipo de movimiento → saldo final (y si calza con la cartola).
   function cascada(m, i) {
-    if (!m.banco.saldo_final_conocido) return seccion('Cómo se movió la plata del banco', 'Falta la cartola de ' + txt(m.banco.cuentas_sin_cartola.join(', ') || 'este mes') + ': sin ella no se conoce el saldo.', '<p class="fin5-nota">Sube la cartola en «Subir archivos» y este gráfico muestra cómo se pasó del saldo inicial al final.</p>', i);
+    if (!m.banco.saldo_final_conocido) return seccion('Cómo se movió el dinero del banco', 'Falta la cartola de ' + txt(m.banco.cuentas_sin_cartola.join(', ') || 'este mes') + ': sin ella no se conoce el saldo.', '<p class="fin5-nota">Sube la cartola en «Subir archivos» y este gráfico muestra cómo se pasó del saldo inicial al final.</p>', i);
     var pasos = [
       ['Saldo inicial', m.banco.saldo_inicial, 'total'], ['Honorarios', m.honorarios, 'mov', { c: ['hon'] }], ['Gastos', -m.gastos, 'mov', { c: ['gas'] }],
       ['Fondos recibidos', m.fondos_recibidos, 'mov', { c: ['fon_rec'] }], ['Pagado por clientes', -m.fondos_pagados, 'mov', { c: ['fon_pag'] }]
@@ -276,7 +276,7 @@
     var min = Math.min.apply(null, vals.concat([0])), max = Math.max.apply(null, vals), r = max - min || 1;
     var y = function (v) { return (v - min) / r * 100; };
     var dif = m.banco.saldo_final - calculado;
-    return seccion('Cómo se movió la plata del banco', 'Del saldo inicial al final, por tipo de movimiento (lo cobrado de los grupos no se suma aquí: ya entró como fondos). Toca una barra para ver sus filas.',
+    return seccion('Cómo se movió el dinero del banco', 'Del saldo inicial al final, por tipo de movimiento (lo cobrado de los grupos no se suma aquí: ya entró como fondos). Toca una barra para ver sus filas.',
       '<div class="fin5-inf-cascada" role="img" aria-label="Saldo inicial ' + plata(m.banco.saldo_inicial) + ', saldo final ' + plata(calculado) + '">' + puntos.map(function (p, k) {
         var lo = Math.min(p.ini, p.fin), hi = Math.max(p.ini, p.fin);
         var tono = p.tipo === 'total' ? 'total' : p.v >= 0 ? 'sube' : 'baja';
@@ -315,7 +315,7 @@
   function fondos(d, m, i) {
     var deben = d.clientes.deben || [], favor = d.clientes.a_favor || [];
     var fila = function (c) { return '<li><span>' + txt(c.cliente) + '</span><small>recibido ' + corta(c.recibido) + ' · pagado ' + corta(c.pagado) + (c.cobrado ? ' · cobrado ' + corta(c.cobrado) : '') + '</small><b class="' + (c.saldo < 0 ? 'fin2-neg' : '') + '">' + plata(c.saldo) + '</b></li>'; };
-    return seccion('Fondos de clientes', 'Plata de clientes en la cuenta (no es de la empresa). Saldos acumulados desde ' + txt(mesLargo(d.clientes.desde)) + '.',
+    return seccion('Fondos de clientes', 'Dinero de clientes en la cuenta (no es de la empresa). Saldos acumulados desde ' + txt(mesLargo(d.clientes.desde)) + '.',
       '<div class="fin5-inf-fondos"><div class="fin5-inf-mini"><span>Recibido en el mes</span><b>' + plata(m.fondos_recibidos) + '</b></div><div class="fin5-inf-mini"><span>Pagado por ellos</span><b>' + plata(m.fondos_pagados) + '</b></div><div class="fin5-inf-mini"><span>A favor de clientes</span><b>' + plata(m.custodia) + '</b></div></div>' +
       (deben.length ? '<h3 class="fin5-inf-h3 fin5-inf-h3--mal">' + U.ico('alerta', 14) + 'Clientes que deben (se pagó más de lo que mandaron)</h3><ul class="fin5-inf-lista">' + deben.slice(0, 8).map(fila).join('') + '</ul>' : '<p class="fin5-inf-cuadre fin5-inf-cuadre--ok">' + U.ico('check', 14) + 'Ningún cliente debe fondos.</p>') +
       (favor.length ? '<h3 class="fin5-inf-h3">Mayores saldos a favor</h3><ul class="fin5-inf-lista">' + favor.slice(0, 5).map(fila).join('') + '</ul>' : '') +

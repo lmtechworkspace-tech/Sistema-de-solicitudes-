@@ -6,7 +6,7 @@
  * Lo que hoy se anota en el Excel BANCOS, ahora directo en SIGSO: cada fila con
  * su fecha, el monto (+ entra / − sale), el nombre corto, el plan de cuenta, la
  * OBS y lo que dice el banco. Con eso SIGSO clasifica igual que con la planilla
- * (ABONO = honorario, IMPOSICIONES/IVA/SALDO/PENDIENTE = plata del cliente…).
+ * (ABONO = honorario, IMPOSICIONES/IVA/SALDO/PENDIENTE = dinero del cliente…).
  *
  * El banco es la verdad, pero llega después (la cartola) y sin todo el detalle
  * («pago en internet» no dice de quién). Por eso:

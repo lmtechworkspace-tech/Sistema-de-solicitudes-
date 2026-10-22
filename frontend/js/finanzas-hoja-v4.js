@@ -19,15 +19,15 @@
 
   var COLS = [['fecha', 'Fecha'], ['nombre', 'Nombre'], ['obs', 'OBS'], ['plan', 'Plan de cuenta'], ['monto', 'Monto'], ['grupo', 'Grupo'], ['fact', 'N° factura'], ['glosa', 'Detalle banco']];
   var ATAJO_OBS = { A: 'ABONO', R: 'ABONO RENTA', I: 'IVA', M: 'IMPOSICIONES', S: 'SALDO', P: 'PENDIENTE' };
-  var AYUDA_OBS = { ABONO: 'honorario si entra · gasto si sale', 'ABONO RENTA': 'honorario de renta', IVA: 'plata del cliente para su IVA', IMPOSICIONES: 'plata del cliente para imposiciones', SALDO: 'plata del cliente a su favor', PENDIENTE: 'plata del cliente por resolver' };
+  var AYUDA_OBS = { ABONO: 'honorario si entra · gasto si sale', 'ABONO RENTA': 'honorario de renta', IVA: 'dinero del cliente para su IVA', IMPOSICIONES: 'dinero del cliente para imposiciones', SALDO: 'dinero del cliente a su favor', PENDIENTE: 'dinero del cliente por resolver' };
   // Ayuda de cada columna (el «?» de la cabecera): qué va, cómo se escribe y un ejemplo, en palabras simples.
   var AYUDA_COL = {
-    fecha: { t: 'Fecha', que: 'El día en que pasó la plata.', como: ['Escribe solo el día (12) o día y mes (12-09).', 'Si el banco lo registró un día después, igual se une: se aceptan 3 días hábiles de diferencia.'] },
-    nombre: { t: 'Nombre', que: 'Quién mandó la plata o a quién se le pagó.', como: ['El cliente, o el gasto: ARRIENDO, SUELDO, CAJA CHICA…', 'Escríbelo siempre igual para el mismo cliente: al escribir, SIGSO te ofrece los nombres ya usados.'] },
-    obs: { t: 'OBS · de quién es la plata', que: 'Dice si la plata es de la empresa o del cliente. Es lo más importante de la fila.', como: ['<b>ABONO</b>: de la empresa. Si entra es un honorario; si sale, un gasto.', '<b>ABONO RENTA</b>: honorario de renta.', '<b>IVA</b> / <b>IMPOSICIONES</b>: plata que el cliente manda para pagar su IVA o sus imposiciones.', '<b>SALDO</b>: plata del cliente que queda a su favor.', '<b>PENDIENTE</b>: plata del cliente que todavía no se sabe qué es.', 'Atajo: escribe una letra (A, R, I, M, S o P).'] },
-    plan: { t: 'Plan de cuenta', que: 'En qué se gastó la plata (o por qué entró).', como: ['Es <b>obligatorio en los gastos</b> (OBS ABONO y monto negativo): Sueldos, Arriendo Mensual, Comisión Banco, Caja Chica, Cuentas Básicas…', 'Con él se arma el FLUJO y los informes. Si falta, la fila queda «por completar».', 'SIGSO te sugiere uno cuando lo reconoce: Enter lo acepta.'] },
-    monto: { t: 'Monto', que: 'Cuánto entró o salió de la cuenta.', como: ['<b class="fin2-pos">+ verde</b>: entró plata.', '<b class="fin2-neg">− rojo</b>: salió plata.', 'Al escribir: 450.000 si entró, −450.000 si salió.'] },
-    grupo: { t: 'Grupo', que: 'Junta la plata que mandó un cliente con lo que se pagó por él (lo que hacía UNITARIO).', como: ['La letra es solo un nombre, como las columnas del Excel: A, B… Z y después AA, AB, AC… <b>No significa otra cosa.</b>', 'Todas las filas con la misma letra son del mismo cliente. Al tocar una, se marcan las demás de su grupo.', 'Lo que sobra (entró − salió) se decide en el panel «Grupos de fondos».'] },
+    fecha: { t: 'Fecha', que: 'El día en que pasó el dinero.', como: ['Escribe solo el día (12) o día y mes (12-09).', 'Si el banco lo registró un día después, igual se une: se aceptan 3 días hábiles de diferencia.'] },
+    nombre: { t: 'Nombre', que: 'Quién mandó el dinero o a quién se le pagó.', como: ['El cliente, o el gasto: ARRIENDO, SUELDO, CAJA CHICA…', 'Escríbelo siempre igual para el mismo cliente: al escribir, SIGSO te ofrece los nombres ya usados.'] },
+    obs: { t: 'OBS · de quién es el dinero', que: 'Dice si el dinero es de la empresa o del cliente. Es lo más importante de la fila.', como: ['<b>ABONO</b>: de la empresa. Si entra es un honorario; si sale, un gasto.', '<b>ABONO RENTA</b>: honorario de renta.', '<b>IVA</b> / <b>IMPOSICIONES</b>: dinero que el cliente manda para pagar su IVA o sus imposiciones.', '<b>SALDO</b>: dinero del cliente que queda a su favor.', '<b>PENDIENTE</b>: dinero del cliente que todavía no se sabe qué es.', 'Atajo: escribe una letra (A, R, I, M, S o P).'] },
+    plan: { t: 'Plan de cuenta', que: 'En qué se gastó el dinero (o por qué entró).', como: ['Es <b>obligatorio en los gastos</b> (OBS ABONO y monto negativo): Sueldos, Arriendo Mensual, Comisión Banco, Caja Chica, Cuentas Básicas…', 'Con él se arma el FLUJO y los informes. Si falta, la fila queda «por completar».', 'SIGSO te sugiere uno cuando lo reconoce: Enter lo acepta.'] },
+    monto: { t: 'Monto', que: 'Cuánto entró o salió de la cuenta.', como: ['<b class="fin2-pos">+ verde</b>: entró dinero.', '<b class="fin2-neg">− rojo</b>: salió dinero.', 'Al escribir: 450.000 si entró, −450.000 si salió.'] },
+    grupo: { t: 'Grupo', que: 'Junta el dinero que mandó un cliente con lo que se pagó por él (lo que hacía UNITARIO).', como: ['La letra es solo un nombre, como las columnas del Excel: A, B… Z y después AA, AB, AC… <b>No significa otra cosa.</b>', 'Todas las filas con la misma letra son del mismo cliente. Al tocar una, se marcan las demás de su grupo.', 'Lo que sobra (entró − salió) se decide en el panel «Grupos de fondos».'] },
     fact: { t: 'N° factura', que: 'El número de la factura que paga este abono.', como: ['Así la cobranza la marca como pagada.', 'Si paga varias: 1052-1053.'] },
     glosa: { t: 'Detalle banco', que: 'Lo que dice la cartola del banco.', como: ['Viene del banco, no se escribe. Ayuda a saber quién es.'] },
     saldo: { t: 'Saldo', que: 'Lo que había en la cuenta después de este movimiento.', como: ['Lo informa el banco, no se escribe.'] },
@@ -153,6 +153,7 @@
       tomar(r.data);
       pintar(true);
       seleccionar(lineas().length - 1, editable() ? 0 : 1, true);
+      if (r.data.filas && r.data.filas.length) setTimeout(function () { if (cuerpoPlanilla()) tour(false); }, 1100);
     });
   }
   function cuerpoPlanilla() { var r = x_ && x_.raiz(); return r ? r.querySelector('.fin5[data-vista="planilla"]') : null; }
@@ -247,7 +248,7 @@
       { clave: 'saldo', t: 'SALDO', v: t.SALDO, ico: 'persona', tono: 'info', sub: 'a favor de clientes' },
       { clave: 'pend', t: 'PENDIENTE', v: t.PENDIENTE, ico: 'reloj', tono: 'alerta', sub: 'grupos abiertos' }
     ];
-    if (t.FONDOS) l.push({ clave: 'fondos', t: 'IVA e imposiciones', v: t.FONDOS, ico: 'caja', tono: 'neutro', sub: 'plata de clientes sin grupo' });
+    if (t.FONDOS) l.push({ clave: 'fondos', t: 'IVA e imposiciones', v: t.FONDOS, ico: 'caja', tono: 'neutro', sub: 'dinero de clientes sin grupo' });
     if (t.OTRO_MES) l.push({ clave: 'otro', t: 'De otros meses', v: t.OTRO_MES, ico: 'calendario', tono: 'neutro', sub: 'grupos que cierran en otro mes' });
     if (t.TRASPASOS) l.push({ clave: 'tras', t: 'Traspasos', v: t.TRASPASOS, ico: 'derivar', tono: 'neutro', sub: 'entre empresas del grupo' });
     if (t.SIN_COMPLETAR) l.push({ clave: 'sinc', t: 'Sin completar', v: t.SIN_COMPLETAR, ico: 'alerta', tono: 'critico', sub: (e.por_completar + e.falta) + ' fila(s) por anotar' });
@@ -307,9 +308,9 @@
       { id: 'cartola', t: 'Sube la cartola', hecho: !!c, sub: c ? 'Cargada' : 'Del banco, en Excel', guia: 'Sube la cartola del banco en Excel (botón «Subir cartola» arriba). Con ella SIGSO comprueba cada fila.' },
       { id: 'falta', t: 'Anota lo del banco', hecho: !!c && !e.falta, n: e.falta, sub: e.falta ? e.falta + ' sin anotar' : c ? 'Todo anotado' : 'Espera la cartola', guia: 'El banco trae movimientos que nadie anotó (en naranjo). Escribe quién es y la OBS: SIGSO te sugiere el nombre.' },
       { id: 'completar', t: 'Completa los datos', hecho: !comp && d.filas.length > 0, n: comp, sub: comp ? comp + ' por completar' : d.filas.length ? 'Nada pendiente' : 'Sin filas', guia: 'A algunas filas les falta un dato. En la columna «Qué es» el texto naranjo dice cuál (el plan, la OBS o el nombre): tócalo y SIGSO te lleva a la celda.' },
-      { id: 'grupos', t: 'Decide los grupos', hecho: !ga, n: ga, sub: ga ? ga + ' con plata por decidir' : 'Todos resueltos', guia: 'Hay grupos donde sobró o faltó plata. En el panel «Grupos de fondos» elige qué pasa con lo que sobra (se cobra o queda a favor del cliente).' },
+      { id: 'grupos', t: 'Decide los grupos', hecho: !ga, n: ga, sub: ga ? ga + ' con dinero por decidir' : 'Todos resueltos', guia: 'Hay grupos donde sobró o faltó dinero. En el panel «Grupos de fondos» elige qué pasa con lo que sobra (se cobra o queda a favor del cliente).' },
       { id: 'esperando', t: 'Cuadra con el banco', hecho: cuadra, n: e.esperando, sub: cuadra ? 'Cuadra' : e.esperando ? e.esperando + ' esperan la cartola' : 'Faltan pasos', guia: e.esperando ? 'Hay filas anotadas que el banco no trae. Si ya subiste la cartola completa, revisa su fecha o su monto.' : 'Cuando todo lo anotado esté en el banco, el mes cuadra.' },
-      { id: 'cierre', t: 'Cierra el mes', hecho: !!d.cerrado, sub: d.cerrado ? 'Cerrado' : 'Al final', guia: 'Todo listo: cierra el mes en «Más → Cierre de meses» para que nadie lo cambie sin querer.' }
+      { id: 'cierre', t: 'Revisa y cierra', hecho: !!d.cerrado, sub: d.cerrado ? 'Cerrado' : estadoRev(d) === 'EN_REVISION' ? 'En revisión' : estadoRev(d) === 'OBSERVADO' ? 'Con observaciones' : 'Al final', guia: estadoRev(d) === 'EN_REVISION' ? 'El mes está en revisión: quien revisa lo cierra o lo devuelve con observaciones.' : 'Todo listo: toca «Revisa y cierra» para ver la revisión final, enviarlo a revisión o cerrarlo.' }
     ];
     var actual = -1; pasos.forEach(function (p, i) { if (actual === -1 && !p.hecho) actual = i; });
     var listos = pasos.filter(function (p) { return p.hecho; }).length;
@@ -319,10 +320,11 @@
         '<span class="fin5-camino__barra" aria-hidden="true"><i style="width:' + Math.round(listos / pasos.length * 100) + '%"></i></span></div>' +
       '<ol class="fin5-camino__pasos">' + pasos.map(function (p, i) {
         var estado = p.hecho ? 'hecho' : i === actual ? 'actual' : 'pendiente';
-        return '<li><button type="button" class="fin5-paso js-f5-paso" data-paso="' + p.id + '" data-estado="' + estado + '"' + (i === actual ? ' aria-current="step"' : '') + (!ed && (p.id === 'cartola' || p.id === 'cierre') ? ' disabled' : '') + '>' +
+        return '<li><button type="button" class="fin5-paso js-f5-paso" data-paso="' + p.id + '" data-estado="' + estado + '"' + (i === actual ? ' aria-current="step"' : '') + (!ed && p.id === 'cartola' ? ' disabled' : '') + '>' +
           '<span class="fin5-paso__n">' + (p.hecho ? U.ico('check', 14) : i + 1) + '</span><span class="fin5-paso__t"><b>' + txt(p.t) + '</b><small>' + txt(p.sub) + '</small></span></button></li>';
       }).join('') + '</ol>' +
-      '<p class="fin5-camino__guia">' + U.ico(actual === -1 ? 'check' : 'bombilla', 15) + '<span>' + (actual === -1 ? '' : '<b>Ahora: ' + txt(pasos[actual].t) + '.</b> ') + txt(guia) + '</span></p></nav>';
+      '<p class="fin5-camino__guia">' + U.ico(actual === -1 ? 'check' : 'bombilla', 15) + '<span>' + (actual === -1 ? '' : '<b>Ahora: ' + txt(pasos[actual].t) + '.</b> ') + txt(guia) + '</span>' +
+        '<button type="button" class="sx2-enlace js-f5-revisar">Revisar el mes</button><button type="button" class="sx2-enlace js-f5-tour">Ver recorrido</button></p>' + estadoRevHtml(d) + '</nav>';
   }
   // Explicación sobre la tabla cuando se filtra por algo pendiente: qué significa y cómo se resuelve.
   function guiaHtml(d) {
@@ -332,7 +334,7 @@
       d.filas.forEach(function (x) { var q = faltaDe(x); if (q && q.tipo) cuenta_[q.tipo]++; });
       var l = [];
       if (cuenta_.plan) l.push('<li><b>' + cuenta_.plan + ' gasto(s) sin plan de cuenta</b>: escribe en «Plan de cuenta» en qué se gastó (Sueldos, Comisión Banco, Caja Chica…). Si pones el mismo plan en varias parecidas, SIGSO te ofrece copiarlo a las demás.</li>');
-      if (cuenta_.obs) l.push('<li><b>' + cuenta_.obs + ' fila(s) sin OBS</b>: escribe de quién es la plata. Si es parte de un grupo, usa la misma OBS del resto del grupo.</li>');
+      if (cuenta_.obs) l.push('<li><b>' + cuenta_.obs + ' fila(s) sin OBS</b>: escribe de quién es el dinero. Si es parte de un grupo, usa la misma OBS del resto del grupo.</li>');
       if (cuenta_.nombre) l.push('<li><b>' + cuenta_.nombre + ' fila(s) sin nombre</b>: escribe quién mandó o a quién se pagó.</li>');
       h = '<h3>Qué falta completar</h3><ul>' + l.join('') + '</ul><p>Toca el texto naranjo de «Qué es» en cada fila para ir directo a la celda.</p>';
     } else if (f === 'falta') h = '<h3>Movimientos del banco sin anotar</h3><p>Están en la cartola y nadie los escribió en la planilla. La fecha y el monto ya vienen del banco: completa <b>quién es</b> y la <b>OBS</b>. Si el nombre aparece sugerido, Enter lo acepta.</p>';
@@ -342,7 +344,7 @@
   function irPaso(id) {
     var raiz = x_.raiz();
     if (id === 'cartola') { x_.ir('cargas'); return; }
-    if (id === 'cierre') { x_.ir('cierre'); return; }
+    if (id === 'cierre') { abrirRevision(); return; }
     if (id === 'grupos') {
       var ab = gruposAbiertos(est_.datos)[0], card = raiz.querySelector(ab ? '.fin5-grupo[data-letra="' + ab.letra + '"]' : '.fin5-grupos');
       if (card) { card.scrollIntoView({ block: 'center', behavior: reducido() ? 'auto' : 'smooth' }); card.classList.remove('fin5-resalta'); void card.offsetWidth; card.classList.add('fin5-resalta'); }
@@ -353,6 +355,170 @@
     var t = raiz.querySelector('.fin5-filtros'); if (t) t.scrollIntoView({ block: 'start', behavior: reducido() ? 'auto' : 'smooth' });
     var l = lineas(), i = l.findIndex(function (z) { return z.f && faltaDe(z.f); });
     if (i >= 0) { var q = faltaDe(l[i].f); seleccionar(i, colDe(q.col), true); }
+  }
+  // ---- Revisión del mes: pasos, avisos, nombres parecidos y enviar / devolver / cerrar --------------------
+  function estadoRev(d) { return (d && d.revision && d.revision.estado) || 'ABIERTO'; }
+  function fechaCorta(iso) { return iso ? String(iso).slice(8, 10) + '-' + String(iso).slice(5, 7) : ''; }
+  function estadoRevHtml(d) {
+    var r = d.revision; if (!r || r.estado === 'ABIERTO' || r.estado === 'CERRADO') return '';
+    var abiertas = (r.observaciones || []).filter(function (o) { return !o.resuelta; });
+    if (r.estado === 'EN_REVISION') return '<div class="fin5-revest fin5-revest--info">' + U.ico('reloj', 16) + '<span><b>En revisión.</b> ' + txt((r.revision && r.revision.enviado_por) || 'Alguien') + ' lo envió el ' + txt(fechaCorta(r.revision && r.revision.en)) + (r.revision && r.revision.nota ? ': «' + txt(r.revision.nota) + '»' : '.') + (puede('CIERRE') ? ' Te toca revisarlo y cerrarlo, o devolverlo con observaciones.' : ' Quien revisa lo cerrará o lo devolverá con observaciones.') + '</span><button type="button" class="sx2-boton sx2-boton--secundario sx2-boton--sm js-f5-revisar">Abrir la revisión</button></div>';
+    return '<div class="fin5-revest fin5-revest--alerta">' + U.ico('alerta', 16) + '<div><b>Devuelto con observaciones.</b> Corrige lo que se pide y márcalo como corregido:' +
+      '<ul>' + abiertas.map(function (o) { return '<li>«' + txt(o.texto) + '» <small>— ' + txt(o.por) + ', ' + txt(fechaCorta(o.en)) + '</small>' + (puede('CONFIRMAR') ? ' <button type="button" class="fin5-mini js-f5-resolver" data-i="' + o.indice + '">' + U.ico('check', 12) + 'Corregido</button>' : '') + '</li>'; }).join('') + '</ul></div></div>';
+  }
+  var rev_ = null;
+  function abrirRevision() {
+    var dr = U.drawer({ titulo: 'Revisar ' + mesLargo(est_.periodo), subtitulo: '<span class="fin2-ayuda">Lo que hay que mirar antes de cerrar el mes</span>', cuerpo: U.esqueleto('lista', 6), alCerrar: function () { rev_ = null; } });
+    dr.el.querySelector('.sx2-drawer__panel').classList.add('fin5-rev-panel');
+    rev_ = { dr: dr, eleccion: {} };
+    cargarRevision();
+    dr.el.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button'); if (!b) return;
+      if (b.classList.contains('js-rv-ir')) { var id = b.dataset.paso; dr.cerrar(); setTimeout(function () { irPaso(id); }, 240); }
+      else if (b.classList.contains('js-rv-unificar')) unificar(+b.dataset.k);
+      else if (b.classList.contains('js-rv-enviar')) accionRevision('enviar');
+      else if (b.classList.contains('js-rv-observar')) accionRevision('observar');
+      else if (b.classList.contains('js-rv-cerrar')) accionRevision('cerrar');
+      else if (b.classList.contains('js-f5-resolver')) resolverObs(+b.dataset.i);
+    });
+    dr.el.addEventListener('change', function (ev) { var t = ev.target; if (t.name && t.name.indexOf('rv-par-') === 0) rev_.eleccion[t.name.slice(7)] = t.value; });
+  }
+  function cargarRevision() {
+    if (!rev_) return;
+    x_.api('finanzasHojaRevision', { periodo: est_.periodo, cuenta_ref: est_.cuenta }).then(function (r) {
+      if (!rev_) return;
+      if (!r || !r.ok) { rev_.dr.cuerpo(U.vacio({ icono: 'alerta', titulo: 'No se pudo revisar el mes', texto: (r && r.message) || '' })); return; }
+      rev_.d = r.data; pintarRevision();
+    });
+  }
+  function pintarRevision() {
+    var v = rev_.d, c = v.cierre, pz = v.puede, ok = v.pasos.filter(function (p) { return p.ok; }).length;
+    var pasos = v.pasos.map(function (p) {
+      return '<li class="fin5-rv-paso" data-ok="' + p.ok + '"><span class="fin5-rv-paso__ico">' + U.ico(p.ok ? 'check' : 'alerta', 14) + '</span><div><b>' + txt(p.titulo) + '</b><small>' + txt(p.detalle) + '</small></div>' +
+        (!p.ok && p.id !== 'cartola' ? '<button type="button" class="fin5-mini js-rv-ir" data-paso="' + p.id + '">Ir a corregir</button>' : !p.ok ? '<button type="button" class="fin5-mini js-rv-ir" data-paso="cartola">Subir cartola</button>' : '') + '</li>';
+    }).join('');
+    var par = v.parecidos.map(function (g, k) {
+      var elegido = rev_.eleccion[k] || g.sugerido;
+      return '<div class="fin5-rv-par"><p class="fin5-rv-par__motivo">' + txt(g.motivo) + '</p>' + g.nombres.map(function (n) {
+        return '<label class="fin5-rv-op"><input type="radio" name="rv-par-' + k + '" value="' + txt(n.nombre) + '"' + (n.nombre === elegido ? ' checked' : '') + (pz.editar ? '' : ' disabled') + '><span>' + txt(n.nombre) + '</span><small>' + n.filas + ' fila(s)</small></label>';
+      }).join('') + (pz.editar && !est_.datos.cerrado ? '<button type="button" class="fin5-mini fin5-mini--acento js-rv-unificar" data-k="' + k + '">Dejar todo con el nombre elegido</button>' : '') + '</div>';
+    }).join('');
+    var avisos = v.avisos.filter(function (a) { return a.id !== 'nombres'; }).map(function (a) { return '<li><b>' + txt(a.titulo) + '</b><small>' + txt(a.detalle) + '</small></li>'; }).join('');
+    var otros = v.otros_pasos.length ? '<div class="fin5-aviso fin5-aviso--alerta">' + U.ico('alerta', 15) + '<span>Para cerrar el mes completo también falta: ' + txt(v.otros_pasos.join(', ').toLowerCase()) + '. Se ve en «Más → Cierre de meses».</span></div>' : '';
+    var obs = (c.observaciones || []).length ? '<section class="fin5-rv-sec"><h3>Observaciones</h3><ul class="fin5-rv-obs">' + c.observaciones.map(function (o) {
+      return '<li data-resuelta="' + !!o.resuelta + '">' + U.ico(o.resuelta ? 'check' : 'alerta', 13) + '<div>«' + txt(o.texto) + '» <small>' + txt(o.por) + ' · ' + txt(fechaCorta(o.en)) + (o.resuelta ? ' · corregida por ' + txt(o.resuelta_por || '') : '') + '</small></div>' +
+        (!o.resuelta && pz.enviar ? '<button type="button" class="fin5-mini js-f5-resolver" data-i="' + o.indice + '">Corregido</button>' : '') + '</li>';
+    }).join('') + '</ul></section>' : '';
+    // Qué puede hacer cada quien: quien anota lo envía a revisión; quien revisa lo devuelve o lo cierra.
+    var abiertas = (c.observaciones || []).filter(function (o) { return !o.resuelta; }).length;
+    var acciones = '', estadoTxt = '';
+    if (c.estado === 'CERRADO') estadoTxt = 'Cerrado por ' + (c.cerrado_por || '—') + ' el ' + fechaCorta(c.en) + '. Para cambiar algo hay que reabrirlo en «Más → Cierre de meses».';
+    else {
+      estadoTxt = c.estado === 'EN_REVISION' ? 'En revisión: lo envió ' + ((c.revision && c.revision.enviado_por) || '—') + ' el ' + fechaCorta(c.revision && c.revision.en) + '.' : c.estado === 'OBSERVADO' ? 'Devuelto con observaciones (' + abiertas + ' sin corregir).' : 'Abierto: se puede seguir anotando.';
+      if (pz.enviar && c.estado !== 'EN_REVISION') acciones += U.boton({ texto: 'Enviar a revisión', icono: 'derivar', variante: v.listo ? 'primario' : 'secundario', clase: 'js-rv-enviar' });
+      if (pz.revisar && c.estado === 'EN_REVISION') acciones += U.boton({ texto: 'Devolver con observaciones', icono: 'editar', variante: 'secundario', clase: 'js-rv-observar' });
+      if (pz.revisar && (c.estado === 'EN_REVISION' || !c.politica.exige_revision)) acciones += U.boton({ texto: 'Cerrar el mes', icono: 'candado', variante: c.estado === 'EN_REVISION' ? 'primario' : 'secundario', clase: 'js-rv-cerrar' });
+    }
+    var resumen = v.listo ? '<div class="fin5-rv-res fin5-rv-res--ok">' + U.ico('check', 22) + '<div><b>La planilla de ' + txt(v.nombre_mes) + ' está lista.</b><span>' + txt(v.cuenta) + ' · los ' + v.pasos.length + ' pasos completos.</span></div></div>'
+      : '<div class="fin5-rv-res">' + '<b class="fin5-rv-res__n">' + ok + '/' + v.pasos.length + '</b><div><b>' + (v.pasos.length - ok === 1 ? 'Falta 1 paso' : 'Faltan ' + (v.pasos.length - ok) + ' pasos') + ' para dejarla lista.</b><span>Toca «Ir a corregir» y SIGSO te lleva a las filas.</span></div></div>';
+    rev_.dr.cuerpo('<div class="fin5-rv">' + resumen +
+      '<section class="fin5-rv-sec"><h3>Pasos</h3><ul class="fin5-rv-pasos">' + pasos + '</ul></section>' +
+      (par ? '<section class="fin5-rv-sec"><h3>Un mismo cliente escrito de varias formas</h3><p class="fin2-ayuda">Elige cómo queda el nombre: se cambia en todas sus filas de este mes. Así los saldos por cliente y los informes no lo cuentan como dos clientes distintos.</p>' + par + '</section>' : '') +
+      (avisos ? '<section class="fin5-rv-sec"><h3>Para mirar (no impiden cerrar)</h3><ul class="fin5-rv-avisos">' + avisos + '</ul></section>' : '') +
+      obs + otros +
+      '<section class="fin5-rv-sec fin5-rv-estado"><h3>Estado del mes</h3><p>' + txt(estadoTxt) + '</p><p class="fin2-ayuda">' + txt(c.politica.texto) + '</p>' + (acciones ? '<div class="fin5-rv-acc">' + acciones + '</div>' : '') + '</section></div>');
+  }
+  function accionRevision(tipo) {
+    var p = est_.periodo, fin = function () { cargarRevision(); recargar(null); };
+    if (tipo === 'enviar') U.formulario({ titulo: 'Enviar ' + mesLargo(p) + ' a revisión', boton: 'Enviar', campos: U.campo('Nota para quien revisa (opcional)', '<input name="nota" class="sx2-input" maxlength="500" placeholder="Por ejemplo: quedó pendiente confirmar el grupo AD">', 'Quien revisa recibe un aviso en la campana de SIGSO.'),
+      enviar: function (d) { return x_.api('finanzasEnviarRevision', { periodo: p, nota: d.nota }); }, aviso: 'Enviado a revisión.', listo: function () { abrirRevision(); recargar(null); } });
+    else if (tipo === 'observar') U.formulario({ titulo: 'Devolver con observaciones', boton: 'Devolver', campos: U.campo('Qué hay que corregir', '<textarea name="observacion" class="sx2-input" rows="3" required></textarea>', 'Quien lo envió recibe un aviso. Mientras haya observaciones sin corregir, el mes no se puede cerrar.'),
+      enviar: function (d) { return x_.api('finanzasObservarCierre', { periodo: p, observacion: d.observacion }); }, aviso: 'Devuelto con observaciones.', listo: function () { abrirRevision(); recargar(null); } });
+    else U.confirmar({ titulo: '¿Cerrar ' + mesLargo(p) + '?', texto: 'El mes queda fijo: nadie podrá cambiar su planilla sin reabrirlo con un motivo. Se guarda una versión del informe tal como está.', boton: 'Cerrar el mes' }).then(function (si) {
+      if (!si) return;
+      x_.api('finanzasCerrarMes', { periodo: p }).then(function (r) { if (!r || !r.ok) { error(r, 'No se pudo cerrar.'); return; } x_.aviso(mesLargo(p) + ' quedó cerrado.', 'exito'); fin(); });
+    });
+  }
+  function resolverObs(i) {
+    x_.api('finanzasResolverObservacion', { periodo: est_.periodo, indice: i, respuesta: 'Corregido en la planilla' }).then(function (r) {
+      if (!r || !r.ok) { error(r, 'No se pudo marcar.'); return; }
+      mensaje('Observación marcada como corregida'); recargar(null); if (rev_) cargarRevision();
+    });
+  }
+  // Unificar nombres: el elegido queda en todas las filas del mes que usan las otras formas.
+  function unificar(k) {
+    var g = rev_ && rev_.d.parecidos[k]; if (!g) return;
+    var a = rev_.eleccion[k] || g.sugerido, otros = g.nombres.map(function (n) { return n.nombre; }).filter(function (n) { return n !== a; });
+    var filas = est_.datos.filas.filter(function (f) { return otros.indexOf(norm(f.nombre)) !== -1 && f.banco !== 'falta'; });
+    if (!filas.length) return;
+    U.confirmar({ titulo: '¿Dejar «' + a + '»?', texto: 'Se cambia el nombre de ' + filas.length + ' fila(s) que dicen ' + otros.map(function (o) { return '«' + o + '»'; }).join(', ') + '.', boton: 'Unificar' }).then(function (si) {
+      if (!si) return;
+      var hechos = 0;
+      filas.forEach(function (f) {
+        encolar(function () {
+          return x_.api('finanzasHojaGuardar', { id: f.id, expected_version: f.version, campos: { nombre: a } }).then(function (r) {
+            if (!r || !r.ok) { error(r, 'No se pudo cambiar el nombre.'); return; }
+            f.nombre = a; hechos++; if (r.data && r.data.version !== undefined) f.version = r.data.version; est_.guardados.push(f.id);
+          });
+        });
+      });
+      cola_.then(function () { mensaje(hechos + ' fila(s) quedaron como «' + a + '»'); delete rev_.eleccion[k]; cargarRevision(); });
+    });
+  }
+  // ---- Recorrido de la primera vez: marca cada parte de la planilla y explica para qué sirve ----------------
+  var TOUR_ = [
+    ['.fin5-camino', 'El camino del mes', 'Son los pasos para dejar listo un mes. El que toca va marcado en azul y debajo dice qué hacer. Toca un paso para ir directo a lo que falta.'],
+    ['.fin5-kpis', 'El resumen', 'Como arriba en el Excel: ABONO, ABONO RENTA, SALDO, PENDIENTE y el TOTAL. Se calcula solo con lo que anotas.'],
+    ['.fin4-hoja thead', 'Las columnas y sus «?»', 'Cada columna tiene un «?»: tócalo y explica qué va ahí, cómo se escribe y un ejemplo.'],
+    ['.fin4-fila--nueva', 'Aquí se anota', 'Haz clic en la fila nueva y escribe como en Excel: día, nombre, OBS (una letra basta) y monto. Enter guarda y baja.'],
+    ['.js-f5-completar', 'Lo que falta, en naranjo', 'En «Qué es» lo pendiente sale en naranjo. Tócalo y SIGSO te lleva a la celda que hay que llenar.'],
+    ['.fin5-banco', 'El banco', 'Muestra si lo anotado coincide con la cartola. Cuando todo está en el banco, dice «Cuadra».'],
+    ['.fin5-grupos', 'Los grupos', 'Juntan lo que mandó un cliente con lo que se pagó por él. Si sobra o falta dinero, aquí se decide qué pasa.'],
+    ['.js-f5-revisar', 'Revisar el mes', 'Al terminar, abre la revisión: muestra lo que falta, los nombres escritos distinto y permite enviar el mes a revisión o cerrarlo.']
+  ];
+  var tour_ = null;
+  function tourVisto() { try { return !!localStorage.getItem('sigso_fin_tour_planilla_1'); } catch (e) { return true; } }
+  function tourMarcar() { try { localStorage.setItem('sigso_fin_tour_planilla_1', '1'); } catch (e) { /* sin almacenamiento */ } }
+  function tour(forzar) {
+    if (tour_ || (!forzar && (tourVisto() || !editable()))) return;
+    var pasos = TOUR_.filter(function (t) { return x_.raiz().querySelector(t[0]); });
+    if (!pasos.length) return;
+    var el = document.createElement('div'); el.className = 'fin5-tour'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Recorrido por la planilla');
+    el.innerHTML = '<div class="fin5-tour__foco"></div><div class="fin5-tour__card" tabindex="-1"></div>';
+    document.body.appendChild(el);
+    tour_ = { el: el, i: 0, pasos: pasos };
+    function fin() { tourMarcar(); window.removeEventListener('resize', ubicar); document.removeEventListener('scroll', ubicar, true); document.removeEventListener('keydown', tecla, true); if (el.parentNode) el.parentNode.removeChild(el); tour_ = null; }
+    function ubicar() {
+      if (!tour_) return;
+      var t = x_.raiz().querySelector(pasos[tour_.i][0]); if (!t) return;
+      var r = t.getBoundingClientRect(), foco = el.querySelector('.fin5-tour__foco'), card = el.querySelector('.fin5-tour__card');
+      var alto = Math.min(r.height, window.innerHeight * 0.6);
+      foco.style.cssText = 'top:' + (r.top - 6) + 'px;left:' + (r.left - 6) + 'px;width:' + (r.width + 12) + 'px;height:' + (alto + 12) + 'px';
+      var cw = Math.min(360, window.innerWidth - 24), ch = card.offsetHeight || 180;
+      var top = r.top + alto + 16 + ch < window.innerHeight ? r.top + alto + 16 : Math.max(12, r.top - ch - 16);
+      card.style.cssText = 'top:' + top + 'px;left:' + Math.max(12, Math.min(r.left, window.innerWidth - cw - 12)) + 'px;width:' + cw + 'px';
+    }
+    function mostrar() {
+      var p = pasos[tour_.i], t = x_.raiz().querySelector(p[0]);
+      if (t) t.scrollIntoView({ block: 'center', behavior: 'auto' });
+      var card = el.querySelector('.fin5-tour__card');
+      card.innerHTML = '<small class="fin5-tour__n">Paso ' + (tour_.i + 1) + ' de ' + pasos.length + '</small><b>' + txt(p[1]) + '</b><p>' + txt(p[2]) + '</p>' +
+        '<div class="fin5-tour__acc"><button type="button" class="sx2-enlace js-tour-fin">Saltar</button><span></span>' +
+        (tour_.i ? '<button type="button" class="sx2-boton sx2-boton--secundario sx2-boton--sm js-tour-ant">Anterior</button>' : '') +
+        '<button type="button" class="sx2-boton sx2-boton--primario sx2-boton--sm js-tour-sig">' + (tour_.i === pasos.length - 1 ? 'Listo' : 'Siguiente') + '</button></div>';
+      requestAnimationFrame(ubicar);
+      var sig = card.querySelector('.js-tour-sig'); if (sig) sig.focus();
+    }
+    function tecla(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); fin(); } else if (ev.key === 'ArrowRight') { ev.stopPropagation(); ev.preventDefault(); avanzar(1); } else if (ev.key === 'ArrowLeft') { ev.stopPropagation(); ev.preventDefault(); avanzar(-1); } }
+    function avanzar(n) { var j = tour_.i + n; if (j >= pasos.length) { fin(); return; } if (j < 0) return; tour_.i = j; mostrar(); }
+    el.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button'); if (!b) return;
+      if (b.classList.contains('js-tour-fin')) fin(); else if (b.classList.contains('js-tour-sig')) avanzar(1); else if (b.classList.contains('js-tour-ant')) avanzar(-1);
+    });
+    window.addEventListener('resize', ubicar);
+    document.addEventListener('scroll', ubicar, true);
+    document.addEventListener('keydown', tecla, true);
+    mostrar();
   }
   // ---- «?» de las columnas ------------------------------------------------------------------
   var popA_ = null;
@@ -484,12 +650,12 @@
         var contenido = num && m ? '<span class="fin5-mt fin5-mt--' + (m < 0 ? 'sale' : 'entra') + '" title="' + (m < 0 ? 'Salió de la cuenta' : 'Entró a la cuenta') + '"><i aria-hidden="true">' + (m < 0 ? '−' : '+') + '</i>' + txt(plata(Math.abs(m))) + '</span>'
           : k[0] === 'grupo' && v.grupo ? '<span class="fin5-gr" title="Grupo ' + txt(v.grupo) + (grupo ? ' · ' + txt(grupo.cliente || 'sin nombre') + ' · ' + grupo.filas + ' fila(s) · sobra ' + txt(plata(grupo.suma)) : '') + '">' + txt(v.grupo) + '</span>'
             : txt(v[k[0]]);
-        return '<td class="fin4-cel fin4-c-' + k[0] + (num ? ' fin4-n' : '') + (b ? ' fin4-bloq' : '') + (k[0] === 'glosa' && !z.nueva && f.banco !== 'esperando' ? ' fin4-tenue' : '') + '" data-r="' + i + '" data-c="' + j + '"' + (ed && !b ? '' : ' aria-readonly="true"') + '>' +
+        return '<td class="fin4-cel fin4-c-' + k[0] + (num ? ' fin4-n' : '') + (b ? ' fin4-bloq' : '') + (k[0] === 'glosa' && !z.nueva && f.banco !== 'esperando' ? ' fin4-tenue' : '') + '" data-r="' + i + '" data-c="' + j + '" data-l="' + k[1] + '"' + (ed && !b ? '' : ' aria-readonly="true"') + '>' +
           '<span class="fin4-v' + (num ? '' : tono) + extra + (ph[k[0]] ? ' fin5-con-ph' : '') + '" data-ph="' + txt(ph[k[0]] || '') + '">' + contenido + '</span></td>';
       }).join('') +
-      '<td class="fin4-n fin4-saldo"><span class="fin4-v">' + (z.nueva || f.temp ? '' : plata(f.saldo)) + '</span></td>' +
-      '<td class="fin4-c-que"><span class="fin4-v">' + que + '</span></td>' +
-      '<td class="fin4-c-banco"><span class="fin4-v">' + banco + '</span></td></tr>';
+      '<td class="fin4-n fin4-saldo" data-l="Saldo"><span class="fin4-v">' + (z.nueva || f.temp ? '' : plata(f.saldo)) + '</span></td>' +
+      '<td class="fin4-c-que" data-l="Qué es"><span class="fin4-v">' + que + '</span></td>' +
+      '<td class="fin4-c-banco" data-l="Banco"><span class="fin4-v">' + banco + '</span></td></tr>';
   }
   function gruposHtml(d) {
     var g = (d.grupos || []).slice().sort(function (a, b) { var pa = a.decision === 'PENDIENTE' && a.suma ? 0 : 1, pb = b.decision === 'PENDIENTE' && b.suma ? 0 : 1; return pa - pb; });
@@ -545,7 +711,7 @@
       else {
         var f = z.f;
         if (f.banco === 'falta') { var sg = sugerirNombre(f); t = 'El banco trae este movimiento y nadie lo anotó: escribe quién es y la OBS.' + (sg ? ' Sugerido: ' + sg + ' (Enter en Nombre).' : ''); }
-        else if (faltaDe(f)) { var q = faltaDe(f), sp = q.tipo === 'plan' ? sugerirPlan(f) : ''; t = q.tipo === 'plan' ? 'Es un gasto de la empresa y le falta el plan de cuenta: escribe en qué se gastó (Sueldos, Comisión Banco, Caja Chica…).' + (sp ? ' Sugerido: ' + sp + ' (Enter en Plan de cuenta).' : '') : q.tipo === 'obs' ? 'Le falta la OBS (de quién es la plata): A = ABONO, R = ABONO RENTA, I = IVA, M = IMPOSICIONES, S = SALDO, P = PENDIENTE.' + (f.grupo ? ' Está en el grupo ' + f.grupo + ': usa la misma OBS de las otras filas del grupo.' : '') : 'Le falta el nombre: el cliente, o el gasto (ARRIENDO, SUELDO…).'; }
+        else if (faltaDe(f)) { var q = faltaDe(f), sp = q.tipo === 'plan' ? sugerirPlan(f) : ''; t = q.tipo === 'plan' ? 'Es un gasto de la empresa y le falta el plan de cuenta: escribe en qué se gastó (Sueldos, Comisión Banco, Caja Chica…).' + (sp ? ' Sugerido: ' + sp + ' (Enter en Plan de cuenta).' : '') : q.tipo === 'obs' ? 'Le falta la OBS (de quién es el dinero): A = ABONO, R = ABONO RENTA, I = IVA, M = IMPOSICIONES, S = SALDO, P = PENDIENTE.' + (f.grupo ? ' Está en el grupo ' + f.grupo + ': usa la misma OBS de las otras filas del grupo.' : '') : 'Le falta el nombre: el cliente, o el gasto (ARRIENDO, SUELDO…).'; }
         else if (f.banco === 'esperando') t = 'Anotada: falta que llegue en la cartola para comprobarla.';
         else t = f.que.t + (f.cliente ? ' · ' + f.cliente : '') + (f.plan ? ' · ' + f.plan : '') + (f.glosa ? ' · banco: ' + f.glosa : '');
         if (bloqueada(z, campo)) t += ' La fecha, el monto y el detalle vienen del banco.';
@@ -1071,7 +1237,7 @@
       paginaVista('saldos', x.cab('saldos') + '<div class="sx2-pagina__cuerpo fin4 fin5">' +
         '<div class="fin5-barra fin5-entra" style="--i:0">' + selectorMes('js-f4-periodo', rep_.periodo, ultimosMeses(18), 'Hasta') + '<span class="fin5-barra__mes">Saldo acumulado desde ' + txt(mesLargo(d.desde)) + '</span></div>' +
         '<section class="fin5-kpis" aria-label="Totales">' +
-          kpi({ clave: 'sc-s', t: 'Plata de clientes en la cuenta', v: tot.saldo, ico: 'caja', tono: 'acento', sub: 'recibido − pagado − cobrado' }, 1) +
+          kpi({ clave: 'sc-s', t: 'Dinero de clientes en la cuenta', v: tot.saldo, ico: 'caja', tono: 'acento', sub: 'recibido − pagado − cobrado' }, 1) +
           kpi({ clave: 'sc-h', t: 'Honorarios de ' + mesLargo(d.periodo), v: tot.hon, ico: 'dinero', tono: 'ok' }, 2) +
           kpi({ clave: 'sc-d', t: 'Facturas por cobrar', v: tot.deuda, ico: 'recibo', tono: 'alerta' }, 3) +
           kpi({ clave: 'sc-n', t: 'Clientes en negativo', v: tot.neg, fmt: 'n', ico: 'alerta', tono: tot.neg ? 'critico' : 'neutro', sub: 'se pagó más de lo que mandaron' }, 4) +
@@ -1079,7 +1245,7 @@
         (l.length ? '<section class="fin5-card fin5-entra" style="--i:5"><header class="fin5-card__cab"><h2>' + l.length + ' cliente(s)</h2><label class="fin5-buscar">' + U.ico('lupa', 15) + '<input type="search" class="js-f5-buscar-cli" placeholder="Buscar cliente…" value="' + txt(rep_.buscaCli) + '" aria-label="Buscar cliente"></label></header>' +
           '<div class="fin4-rep"><table class="fin4-tab fin5-tab-cli"><thead><tr><th>Cliente</th><th class="fin4-n">Honorarios del mes</th><th class="fin4-n">Fondos recibidos</th><th class="fin4-n">Pagado por él</th><th class="fin4-n">Sobró, cobrado</th><th class="fin5-col-saldo">Saldo de fondos</th><th class="fin4-n">Debe en facturas</th></tr></thead><tbody class="js-f5-cli">' + cuerpoSaldos() + '</tbody></table></div></section>'
           : vacioHtml('equipo', 'Sin clientes con movimiento', 'Aparecen cuando la planilla tiene filas con su nombre.')) +
-        '<p class="fin5-nota">Saldo de fondos = lo que el cliente mandó para sus obligaciones − lo que se pagó por él − lo que sobró y se cobró como honorario. Un saldo negativo es plata que hay que pedirle. «Sin ficha»: el nombre de la planilla no está enlazado a un cliente de SIGSO.</p></div>');
+        '<p class="fin5-nota">Saldo de fondos = lo que el cliente mandó para sus obligaciones − lo que se pagó por él − lo que sobró y se cobró como honorario. Un saldo negativo es dinero que hay que pedirle. «Sin ficha»: el nombre de la planilla no está enlazado a un cliente de SIGSO.</p></div>');
       activar(x.raiz());
     });
   }
@@ -1162,6 +1328,9 @@
       if (b && b.classList.contains('js-f5-mes-mas')) { abrirMeses(b); return; }
       if (b && b.classList.contains('js-f5-col-ayuda')) { ev.stopPropagation(); abrirAyudaCol(b); return; }
       if (b && b.classList.contains('js-f5-paso')) { irPaso(b.dataset.paso); return; }
+      if (b && b.classList.contains('js-f5-revisar')) { abrirRevision(); return; }
+      if (b && b.classList.contains('js-f5-resolver')) { resolverObs(+b.dataset.i); return; }
+      if (b && b.classList.contains('js-f5-tour')) { tour(true); return; }
       if (b && b.classList.contains('js-f5-oferta')) { aplicarOferta(); return; }
       if (b && b.classList.contains('js-f5-completar')) { if (est_.editando) confirmar(); seleccionar(+b.dataset.i, colDe(b.dataset.col)); editar(); return; }
       if (b && b.classList.contains('js-f5-mover')) { moverFilas([b.dataset.id], b.dataset.p); return; }

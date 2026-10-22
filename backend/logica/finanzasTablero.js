@@ -7,7 +7,7 @@
  * Arma, para un mes y una empresa (o el grupo), lo que gerencia necesita leer
  * en 30 segundos, solo con lo que ya está en la bóveda:
  *  - Resultado del mes = ingresos de la empresa − gastos de la empresa. La
- *    plata de los clientes (fondos recibidos y pagados por su cuenta) va
+ *    dinero de los clientes (fondos recibidos y pagados por su cuenta) va
  *    APARTE: no es ingreso ni gasto (decisión del dueño 2026-10-06).
  *  - Caja al cierre del mes (último saldo de cada cuenta en sus cartolas).
  *  - Fondos de clientes en custodia (recibido − pagado, acumulado).
@@ -192,12 +192,12 @@ function calcular_(db, periodo, empresa) {
   try { presupuesto = require('./finanzasPresupuesto').porMes_(serieP, emp); } catch (e) { presupuesto = null; }
   if (presupuesto) serie.forEach((s) => { const pm = presupuesto[s.periodo]; s.ppto_ingresos = pm ? pm.ingresos : null; s.ppto_egresos = pm ? pm.egresos : null; });
 
-  // Etapa 5 · Cuántos meses cubre la caja: caja libre (sin la plata de clientes)
+  // Etapa 5 · Cuántos meses cubre la caja: caja libre (sin el dinero de clientes)
   // / gasto promedio de la empresa en los últimos 3 meses con gastos.
   const conGasto = serie.filter((s) => s.egresos > 0).slice(-3);
   const gastoPromedio = conGasto.length ? Math.round(conGasto.reduce((a, s) => a + s.egresos, 0) / conGasto.length) : 0;
-  // v2 (FIN-15, T12): se reserva la plata de CADA cliente con saldo a favor; el
-  // déficit de un cliente no libera la plata de otro (antes se restaba el neto).
+  // v2 (FIN-15, T12): se reserva el dinero de CADA cliente con saldo a favor; el
+  // déficit de un cliente no libera el dinero de otro (antes se restaba el neto).
   const cajaLibre = caja - cust.positivos;
   const mesesCaja = gastoPromedio ? Math.round(cajaLibre / gastoPromedio * 10) / 10 : null;
 
@@ -254,7 +254,7 @@ function lectura_(t) {
   if (t.meses_caja !== null && t.meses_caja !== undefined) {
     // Con el mes sin revisar completo, los gastos están incompletos: la cifra es provisoria, nunca "verde".
     const prov = !t.calidad.completo;
-    L.push({ tono: t.meses_caja < 2 ? 'critico' : (t.meses_caja < 4 || prov) ? 'alerta' : 'ok', texto: 'La caja libre (sin la plata de clientes) cubre ' + String(t.meses_caja).replace('.', ',') + ' meses de gastos al ritmo de los últimos meses (' + plata_(t.gasto_promedio) + ' al mes)' + (prov ? '. Provisorio: faltan gastos por revisar, así que en realidad cubre menos.' : '.') });
+    L.push({ tono: t.meses_caja < 2 ? 'critico' : (t.meses_caja < 4 || prov) ? 'alerta' : 'ok', texto: 'La caja libre (sin el dinero de clientes) cubre ' + String(t.meses_caja).replace('.', ',') + ' meses de gastos al ritmo de los últimos meses (' + plata_(t.gasto_promedio) + ' al mes)' + (prov ? '. Provisorio: faltan gastos por revisar, así que en realidad cubre menos.' : '.') });
   }
   if (t.entre_empresas && t.entre_empresas.length) {
     L.push({ tono: 'info', texto: 'Entre empresas: ' + t.entre_empresas.slice(0, 3).map((d) => d.debe + ' le debe ' + plata_(d.monto) + ' a ' + d.a).join(' · ') + '.' });
@@ -262,12 +262,12 @@ function lectura_(t) {
   if (!t.total_obligaciones) {
     L.push({ tono: 'alerta', texto: 'No hay pagos de sueldos, imposiciones ni IVA de la empresa confirmados en ' + nombreMes_(t.periodo) + ': no se puede estimar si la caja alcanza para el mes que viene.' });
   } else {
-    // Corrección v2 (I03.2): la caja total no es plata propia; la suficiencia la evalúa el informe (finanzasReportes)
+    // Corrección v2 (I03.2): la caja total no es dinero propio; la suficiencia la evalúa el informe (finanzasReportes)
     // solo con disponibilidad propia determinada. Aquí se informa el monto sin concluir.
     L.push({ tono: 'info', texto: 'Sueldos, imposiciones e IVA del mes que viene: ≈ ' + plata_(t.total_obligaciones) + ' (estimado con lo pagado este mes). Si alcanza o no se ve en Informes, que verifica saldos iniciales y cartolas.' });
   }
-  if (t.custodia > 0) L.push({ tono: 'info', texto: 'Hay ' + plata_(t.custodia) + ' de clientes en custodia: es plata de ellos para sus imposiciones e IVA, no se puede gastar.' });
-  else if (t.custodia < 0) L.push({ tono: 'alerta', texto: 'En total, lo pagado por cuenta de clientes supera en ' + plata_(-t.custodia) + ' lo que mandaron. Suele faltar la plata que llegó antes del primer mes cargado.' });
+  if (t.custodia > 0) L.push({ tono: 'info', texto: 'Hay ' + plata_(t.custodia) + ' de clientes en custodia: es dinero de ellos para sus imposiciones e IVA, no se puede gastar.' });
+  else if (t.custodia < 0) L.push({ tono: 'alerta', texto: 'En total, lo pagado por cuenta de clientes supera en ' + plata_(-t.custodia) + ' lo que mandaron. Suele faltar el dinero que llegó antes del primer mes cargado.' });
   if (t.cobranza.saldo_a_favor > 0) L.push({ tono: 'info', texto: plata_(t.cobranza.saldo_a_favor) + ' pagados por clientes que todavía no tienen factura.' });
   return L;
 }

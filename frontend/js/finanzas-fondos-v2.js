@@ -2,7 +2,7 @@
  * finanzas-fondos-v2.js — Fondos de clientes (2026-10-20; FIN-13 a FIN-16;
  * backend/logica/finanzasFondos.js).
  *
- * La plata que los clientes mandan para sus obligaciones NO es de la
+ * El dinero que los clientes mandan para sus obligaciones NO es de la
  * empresa. Aquí se ve por cliente: saldo inicial aprobado + recibido +
  * reintegros − pagado − devuelto ± reasignado, separado por GESTIÓN
  * (obligación y período: «imposiciones de julio»). Un cliente con déficit
@@ -64,12 +64,12 @@
       (d.aperturas_propuestas ? U.boton({ texto: 'Por aprobar (' + d.aperturas_propuestas + ')', icono: 'check', sm: true, clase: 'js-fo-por-aprobar', datos: { cap: 'APERTURA' } }) : '') +
       U.boton({ texto: 'Nueva gestión', icono: 'nueva', sm: true, variante: 'primario', clase: 'js-fo-nueva', datos: { cap: 'FONDOS' } })) +
       '<div class="sx2-fila-kpis">' +
-        U.kpi({ etiqueta: 'En custodia (saldos a favor)', valor: plata(d.positivos), icono: 'escudo', tono: 'info', titulo: 'Suma de los clientes con saldo a favor: es plata de ellos.' }) +
+        U.kpi({ etiqueta: 'En custodia (saldos a favor)', valor: plata(d.positivos), icono: 'escudo', tono: 'info', titulo: 'Suma de los clientes con saldo a favor: es dinero de ellos.' }) +
         U.kpi({ etiqueta: 'Déficit (clientes en negativo)', valor: plata(d.negativos), icono: 'alerta', tono: d.negativos < 0 ? 'critico' : 'neutro', i: 1, titulo: 'No se compensa con el saldo de otros clientes.' }) +
         U.kpi({ etiqueta: 'Sin saldo inicial aprobado', valor: d.sin_apertura, icono: 'reloj', tono: d.sin_apertura ? 'alerta' : 'ok', i: 2, titulo: 'Sin apertura el saldo es parcial.' }) +
       '</div>' +
       (d.politica ? '<p class="fin2-ayuda">' + U.ico('escudo', 12) + ' <b>Política de saldos iniciales:</b> ' + txt(d.politica.texto) + ' Pueden aprobar: ' + txt(d.politica.aprobadores.join(', ') || 'nadie con ese permiso') + '. Se cambia en Configuración › Parámetros.</p>' : '') +
-      (d.parcial ? '<div class="fin2-cinta fin2-cinta--alerta">' + U.ico('alerta', 16) + '<span>Hay clientes <b>sin saldo inicial aprobado</b>: su saldo puede no incluir lo que mandaron antes de la primera cartola. Antes de concluir que la empresa puso plata, registra y aprueba el saldo inicial.</span></div>' : '') +
+      (d.parcial ? '<div class="fin2-cinta fin2-cinta--alerta">' + U.ico('alerta', 16) + '<span>Hay clientes <b>sin saldo inicial aprobado</b>: su saldo puede no incluir lo que mandaron antes de la primera cartola. Antes de concluir que la empresa puso dinero, registra y aprueba el saldo inicial.</span></div>' : '') +
       '<div class="fin2-ctx"><label class="fin2-busca">' + U.ico('lupa', 14) + '<input class="js-fo-busca" type="search" placeholder="Cliente o RUT" value="' + txt(est_.busca) + '" aria-label="Buscar cliente"></label>' +
         '<div class="fin2-filtros">' + [['todos', 'Todos'], ['favor', 'A favor'], ['deficit', 'En negativo'], ['parcial', 'Sin saldo inicial'], ['gestiones', 'Con gestiones abiertas']].map(function (f) {
           return U.chip({ texto: f[1], n: n(f[0]), activo: est_.filtro === f[0], clase: 'js-fo-filtro', datos: { id: f[0] } });
@@ -138,7 +138,7 @@
             U.boton({ texto: g.estado === 'ABIERTA' ? 'Cerrar' : 'Reabrir', sm: true, clase: 'js-fo-estado', datos: { id: g.id, v: g.version, estado: g.estado === 'ABIERTA' ? 'CERRADA' : 'ABIERTA' } }) +
             (!g.piezas.length ? U.boton({ texto: 'Anular', sm: true, variante: 'fantasma', clase: 'js-fo-estado', datos: { id: g.id, v: g.version, estado: 'ANULADA' } }) : '') + '</div></div></details>';
       }).join('') : '<p class="fin2-ayuda">Sin gestiones. Una gestión agrupa lo recibido y pagado para UNA obligación y período (p. ej. imposiciones de julio).</p>') + '</section>' +
-      (ff === 'todas' || ff === 'sin_asignacion' ? '<section class="fin2-p-sec"><h3>Sin gestión asignada</h3><p class="fin2-ayuda">Esta plata cuenta en el saldo del cliente aunque no tenga gestión; asignarla no la cuenta dos veces.</p>' + desglose(f.sin_gestion) + piezas(f.sin_gestion.piezas, true, true) + '</section>' : '') +
+      (ff === 'todas' || ff === 'sin_asignacion' ? '<section class="fin2-p-sec"><h3>Sin gestión asignada</h3><p class="fin2-ayuda">Este dinero cuenta en el saldo del cliente aunque no tenga gestión; asignarla no la cuenta dos veces.</p>' + desglose(f.sin_gestion) + piezas(f.sin_gestion.piezas, true, true) + '</section>' : '') +
       (f.reasignaciones.length ? '<section class="fin2-p-sec"><h3>Reasignaciones</h3><ul class="fin2-lista-saldos">' + f.reasignaciones.map(function (r) {
         var nom = function (id) { if (id === 'SIN_GESTION') return 'Sin gestión'; var g = gest.filter(function (y) { return y.id === id; })[0]; return g ? g.obligacion + ' ' + (g.periodo_obligacion || '') : '?'; };
         return '<li><span>' + txt(r.fecha) + ' · ' + txt(nom(r.desde_gestion)) + ' → ' + txt(nom(r.hacia_gestion)) + '<small>' + txt(r.motivo) + ' · ' + txt(r.creado_por) + '</small></span><b class="fin2-num">' + plata(r.monto) + '</b>' + U.boton({ texto: 'Deshacer', sm: true, variante: 'fantasma', clase: 'js-fo-desreas', datos: { id: r.id, cap: 'FONDOS' } }) + '</li>';
@@ -169,7 +169,7 @@
         var refs = Object.keys(est_.sel).filter(function (k) { return est_.sel[k]; });
         if (!refs.length) { x_.aviso('Marca primero los movimientos.', 'alerta'); return; }
         U.formulario({ titulo: 'Asignar ' + refs.length + ' movimiento(s)', boton: 'Asignar',
-          campos: U.campo('Gestión', '<select name="gestion_id" class="sx2-input">' + opciones(f.gestiones.filter(function (g) { return g.estado !== 'ANULADA'; }).map(function (g) { return [g.id, g.obligacion + ' ' + (g.periodo_obligacion || '') + ' · ' + plata(g.saldo)]; }), '', 'Quitar de su gestión') + '</select>', 'No cambia montos ni la naturaleza: solo dice a qué obligación corresponde esa plata.') +
+          campos: U.campo('Gestión', '<select name="gestion_id" class="sx2-input">' + opciones(f.gestiones.filter(function (g) { return g.estado !== 'ANULADA'; }).map(function (g) { return [g.id, g.obligacion + ' ' + (g.periodo_obligacion || '') + ' · ' + plata(g.saldo)]; }), '', 'Quitar de su gestión') + '</select>', 'No cambia montos ni la naturaleza: solo dice a qué obligación corresponde ese dinero.') +
             U.campo('Destino (opcional)', '<input name="destino" class="sx2-input" placeholder="Obra, trabajador…">'),
           enviar: function (v) { var dd = { refs: refs, gestion_id: v.gestion_id }; if (v.destino) dd.destino = v.destino; return x_.api('finanzasAsignarGestion', dd).then(function (r) { if (r && r.ok && r.data.errores.length) x_.aviso(r.data.errores.length + ' no se asignaron: ' + r.data.errores[0].mensaje, 'alerta'); return r; }); },
           aviso: function (r) { return r.data.hechos + ' asignado(s).'; }, listo: reabrir });

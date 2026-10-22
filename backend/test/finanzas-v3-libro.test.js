@@ -102,7 +102,7 @@ test('v3 · un mes sin cartola se carga desde la planilla, marcado sin verificar
   assert.equal(lb.resumen.GASTO, -60000);
 });
 
-test('v3 · formar un grupo de fondos desde el libro: clasifica las filas como plata del cliente y crea la gestión', (t) => {
+test('v3 · formar un grupo de fondos desde el libro: clasifica las filas como dinero del cliente y crea la gestión', (t) => {
   const { db, ctx, D } = base(t);
   const movs = F.movimientos(db, D({ periodo: '2026-08' }), ctx).movimientos;
   const recibe = movs.find((m) => m.glosa === 'TRANSFER DE CONSTRUCTORA NORTE');

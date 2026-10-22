@@ -110,7 +110,7 @@ test('registro · corregir reclasifica, el grupo protege sus filas y borrar resp
   assert.ok(R.eliminar(db, D({ id: p2.id, expected_version: p2.version }), ctx)._validationError);
   assert.equal(Lb.sacarDeGrupo(db, D({ ids: [p2.id] }), ctx).sacadas, 1);
   const p3 = linea(Lb.libro(db, D({ periodo: '2026-09' }), ctx), 'PANADERIA SOL');
-  assert.ok(!p3.grupo && p3.categoria === 'FONDOS', 'fuera del grupo sigue siendo plata del cliente');
+  assert.ok(!p3.grupo && p3.categoria === 'FONDOS', 'fuera del grupo sigue siendo dinero del cliente');
   assert.equal(R.eliminar(db, D({ id: p3.id, expected_version: p3.version }), ctx).borrada, true);
 
   // Una fila ya en el banco: borrar solo quita la anotación.

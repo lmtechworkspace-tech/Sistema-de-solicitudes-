@@ -87,7 +87,7 @@ const FUENTES = {
       const ficha = F.fichaCliente_(c.cliente_id, hoy);
       const sg = ficha && ficha.sin_gestion;
       if (sg && sg.saldo > 0) out.push(item_('FONDOS', { id: 'fon:' + c.cliente_id, fecha: ((sg.piezas || []).map((p) => p.fecha).filter(Boolean).sort()[0]) || '', periodo: '', empresa: '', cliente: c.cliente || '', importe: sg.saldo,
-        motivo: 'Plata del cliente que todavía no se asigna a una gestión (IVA, imposiciones…)', contexto: { cliente_id: c.cliente_id } }, hoy));
+        motivo: 'Dinero del cliente que todavía no se asigna a una gestión (IVA, imposiciones…)', contexto: { cliente_id: c.cliente_id } }, hoy));
     });
     F.aperturas_({}).filter((a) => a.estado === 'PROPUESTA').forEach((a) => out.push(item_('APERTURA', { id: 'ap:' + a.id, fecha: a.fecha_corte, periodo: String(a.fecha_corte || '').slice(0, 7), empresa: a.empresa || '',
       cliente: a.cliente || '', importe: a.monto || 0, motivo: 'Propuesto por ' + (a.creado_por || '—') + ': falta que otra persona lo apruebe o anule', contexto: { cliente_id: a.cliente_id } }, hoy)));

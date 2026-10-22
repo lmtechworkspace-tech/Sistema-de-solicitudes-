@@ -17,11 +17,11 @@
  *  - Los saldos encadenan fila a fila: sirve para detectar una cartola
  *    incompleta o alterada antes de importarla.
  *
- * Seis tipos de movimiento (decisión del dueño 2026-10-06: la plata de los
+ * Seis tipos de movimiento (decisión del dueño 2026-10-06: el dinero de los
  * clientes NO es ingreso de la empresa, va a su propia cuenta corriente):
  *   INGRESO        ingreso de la empresa (honorarios, etc.)
  *   EGRESO         gasto de la empresa
- *   FONDO_RECIBIDO el cliente manda plata para pagar SUS obligaciones
+ *   FONDO_RECIBIDO el cliente manda dinero para pagar SUS obligaciones
  *   FONDO_PAGADO   la empresa paga por cuenta del cliente (Previred, IVA...)
  *   TRASPASO       entre cuentas de la misma empresa
  *   PRESTAMO       entre empresas del grupo
@@ -580,7 +580,7 @@ function validarClasif_(c, mov) {
   const sentido = mov.abono > 0 ? 'abono' : 'cargo';
   const t = TIPOS[c.tipo];
   if (!t) return 'Elige qué tipo de movimiento es.';
-  if (t.sentido && t.sentido !== sentido) return t.nombre + (sentido === 'abono' ? ' no puede ser plata que entra.' : ' no puede ser plata que sale.');
+  if (t.sentido && t.sentido !== sentido) return t.nombre + (sentido === 'abono' ? ' no puede ser dinero que entra.' : ' no puede ser dinero que sale.');
   if (t.cliente && !c.cliente_id) return 'Elige de qué cliente es.';
   if (t.empresa && empresasValidas_().indexOf(c.empresa) === -1) return 'Elige con qué empresa del grupo.';
   if (cuentasDe_(c.tipo).length && cuentasDe_(c.tipo).indexOf(c.cuenta) === -1) return 'Elige la cuenta o el concepto.';
@@ -660,7 +660,7 @@ function normalizarClasif_(it, mov, ctxN) {
   // Dimensiones (FIN-13/27): no cambian el monto; solo dicen a qué gestión, proyecto u obligación pertenece.
   const gestion = texto_(it.gestion_id);
   if (gestion) {
-    if (!t || !t.cliente) return { error: 'Solo la plata de un cliente se asigna a una gestión de fondos.' };
+    if (!t || !t.cliente) return { error: 'Solo el dinero de un cliente se asigna a una gestión de fondos.' };
     const g = ctxN.gestion ? ctxN.gestion(gestion) : null;
     if (!g) return { error: 'Esa gestión de fondos no existe.' };
     if (g.cliente_id !== c.cliente_id) return { error: 'La gestión de fondos es de otro cliente.' };
