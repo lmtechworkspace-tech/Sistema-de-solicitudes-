@@ -46,6 +46,16 @@ function mesCerrado_(periodo) {
     return !!(r && r.estado === 'CERRADO');
   } catch (e) { return false; }
 }
+/** Estado de revisión y cierre de un mes (lo muestra la planilla): quién lo envió, sus observaciones y la política. */
+function estadoMes_(periodo) {
+  let fila = null;
+  try { fila = filaCierre_(periodo); } catch (e) { fila = null; }
+  const datos = fila ? I.des_(fila.datos) : {};
+  const estado = fila ? fila.estado : 'ABIERTO';
+  const rev = datos.revision ? { enviado_por: datos.revision.enviado_por, en: datos.revision.en, nota: datos.revision.nota || '' } : null;
+  return { estado, nombre: ESTADOS_[estado] || estado, revision: rev, observaciones: (datos.observaciones || []).map((o, i) => Object.assign({ indice: i }, o)),
+    cerrado_por: estado === 'CERRADO' ? fila.actualizado_por : '', en: fila ? fila.actualizado_en : '', politica: politicaCierre_() };
+}
 function ultimoDia_(p) { return Base.ultimoDia_(p); }
 const nombreMes_ = (p) => Base.nombreMes_(p);
 const plata_ = (n) => Base.plata_(n);
@@ -104,7 +114,9 @@ function verificar_(periodo) {
   const delMes = imps.filter((x) => x.hasta >= inicio && x.desde <= fin);
   const descuadradas = delMes.filter((x) => x.cuadra === false).length;
   // 3) Nada sin revisar.
-  const pend = d.prepare("SELECT COUNT(*) AS n FROM FIN_MOVIMIENTOS WHERE periodo = ? AND estado = 'PENDIENTE'").get(periodo).n;
+  //    v5.3: un movimiento anotado en la planilla (con su OBS) ya está revisado: la planilla es la clasificación.
+  const pend = d.prepare("SELECT datos FROM FIN_MOVIMIENTOS WHERE periodo = ? AND estado = 'PENDIENTE'").all(periodo)
+    .filter((r) => { const m = I.des_(r.datos); return !(m.planilla && m.planilla.obs); }).length;
   const total = d.prepare('SELECT COUNT(*) AS n FROM FIN_MOVIMIENTOS WHERE periodo = ?').get(periodo).n;
   // 4) Saldos iniciales de fondos de clientes (o la excepción aceptada con su motivo).
   let sinApertura = 0;
@@ -125,7 +137,7 @@ function verificar_(periodo) {
     { id: 'cuadra', nombre: 'Saldos cuadran con el banco', ok: delMes.length > 0 && !descuadradas, obligatorio: true,
       detalle: delMes.length ? (descuadradas ? descuadradas + ' cartola(s) no cuadraron' : delMes.length + ' cartola(s), todas cuadran') : 'Sin cartolas del mes.' },
     { id: 'revisado', nombre: 'Todo revisado', ok: total > 0 && pend === 0, obligatorio: true,
-      detalle: total ? (pend ? 'Faltan ' + pend + ' de ' + total + ' movimientos' : 'Los ' + total + ' movimientos confirmados') : 'Sin movimientos.' },
+      detalle: total ? (pend ? 'Faltan ' + pend + ' de ' + total + ' movimientos' : 'Los ' + total + ' movimientos anotados en la planilla o confirmados') : 'Sin movimientos.' },
     { id: 'aperturas', nombre: 'Saldos iniciales de fondos de clientes', ok: !sinApertura || !!exc.aperturas, obligatorio: true,
       detalle: !sinApertura ? 'Todos los clientes con fondos tienen saldo inicial aprobado.' : exc.aperturas ? sinApertura + ' sin saldo inicial; excepción aceptada por ' + exc.aperturas.por + ': ' + exc.aperturas.motivo : sinApertura + ' cliente(s) sin saldo inicial aprobado: cárgalos en Fondos o acepta la excepción con su motivo.' },
     { id: 'identidad', nombre: 'Sin posibles duplicados por resolver', ok: !conflictos.length, obligatorio: true,
@@ -138,6 +150,23 @@ function verificar_(periodo) {
   return { periodo, pasos, cobertura, listo: pasos.filter((p) => p.obligatorio).every((p) => p.ok) };
 }
 function siguienteDia_(iso) { return Base.sumarDias_(iso, 1); }
+
+/**
+ * Aviso en la campana de SIGSO (sin montos ni datos de la bóveda: solo que hay algo que mirar) para las personas con
+ * acceso a Finanzas que cumplen `quien(cuenta_id)`. Nunca rompe la acción si no se puede avisar.
+ */
+function avisar_(db, quien, titulo, mensaje) {
+  try {
+    const { leerFilas_ } = require('../db/sqliteRepo');
+    const { COLUMNAS } = require('../db/schema');
+    const correos = leerFilas_(db, 'CUENTAS_PORTAL', COLUMNAS.CUENTAS_PORTAL)
+      .filter((c) => c && c.cuenta_id && B.tieneAcceso(db, { cuenta_id: c.cuenta_id }) && quien(String(c.cuenta_id)))
+      .map((c) => { let l = []; try { l = JSON.parse(c.emails || '[]'); } catch (e) { l = String(c.emails || '').split(/[,;\s]+/); } return (Array.isArray(l) ? l : [l]).filter(Boolean)[0]; })
+      .filter(Boolean);
+    if (!correos.length) return 0;
+    return require('./notificacionesApp').encolarLote(db, correos.map((e) => ({ destinatario: e, tipo: 'FIN_CIERRE', titulo, mensaje, modulo_id: 'finanzas', texto_accion: 'Abrir Finanzas', vidaHoras: 24 * 7 }))).encolado;
+  } catch (e) { return 0; }
+}
 
 // ---------------------------------------------------------------- acciones de cierre
 
@@ -198,9 +227,11 @@ const enviarRevision = Base.conCapacidad('CONFIRMAR', '', function (db, data, co
   if (!v.listo) return errorValidacion('periodo', 'Antes de enviarlo a revisión falta: ' + v.pasos.filter((p) => p.obligatorio && !p.ok).map((p) => p.nombre.toLowerCase()).join(', ') + '.');
   const r = filaCierre_(periodo);
   const datos = r ? I.des_(r.datos) : {};
-  datos.revision = { enviado_por: x.nombre, en: Base.ahora_(), nota: Base.txt_(data.nota).slice(0, 500), revision_datos: Base.revision_() };
+  datos.revision = { enviado_por: x.nombre, enviado_id: String((contexto && contexto.cuenta_id) || ''), en: Base.ahora_(), nota: Base.txt_(data.nota).slice(0, 500), revision_datos: Base.revision_() };
   guardarCierre_(periodo, 'EN_REVISION', datos, x);
   x.registrar('CIERRE_A_REVISION', nombreMes_(periodo));
+  avisar_(db, (c) => c !== datos.revision.enviado_id && Base.puede_({ cuenta_id: c }, 'CIERRE'), nombreMes_(periodo) + ' está listo para revisión',
+    x.nombre + ' terminó la planilla de ' + nombreMes_(periodo) + ' y la envió a revisión.' + (datos.revision.nota ? ' Nota: ' + datos.revision.nota : ''));
   return { periodo, estado: 'EN_REVISION' };
 });
 
@@ -216,6 +247,8 @@ const observar = Base.conCapacidad('CIERRE', '', function (db, data, contexto, x
   datos.observaciones = (datos.observaciones || []).concat([{ por: x.nombre, en: Base.ahora_(), texto: obs.slice(0, 1000), resuelta: false }]).slice(-50);
   guardarCierre_(periodo, 'OBSERVADO', datos, x);
   x.registrar('CIERRE_OBSERVADO', nombreMes_(periodo) + ': ' + obs.slice(0, 80));
+  const quien = datos.revision && datos.revision.enviado_id;
+  if (quien) avisar_(db, (c) => c === quien, nombreMes_(periodo) + ' volvió con observaciones', x.nombre + ' pide corregir: ' + obs.slice(0, 200));
   return { periodo, estado: 'OBSERVADO' };
 });
 
@@ -450,4 +483,4 @@ const marcarPasoRetiro = B.conBoveda('', function (db, data, contexto, x) {
   return { ok: true };
 });
 
-module.exports = { estado, cerrar, reabrir, paralelo, marcarPasoRetiro, enviarRevision, observar, resolverObservacion, excepcion, versionCierre, mesCerrado_, verificar_, foto_, politicaCierre_, excepcionesLista_ };
+module.exports = { estadoMes_, estado, cerrar, reabrir, paralelo, marcarPasoRetiro, enviarRevision, observar, resolverObservacion, excepcion, versionCierre, mesCerrado_, verificar_, foto_, politicaCierre_, excepcionesLista_ };

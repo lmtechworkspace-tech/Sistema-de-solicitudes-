@@ -383,7 +383,7 @@
         '<label class="fin2-campo"><span>Medio</span><select class="fin2-input fin2-input--sm js-finr-o" data-campo="medio"' + (editable ? '' : ' disabled') + '>' + opciones(medios, o.medio) + '</select></label></div>' +
       '<div class="fin2-parte2__fila">' +
         '<label class="fin2-campo"><span>Fecha efectiva</span><input type="date" class="fin2-input fin2-input--sm js-finr-o" data-campo="fecha" value="' + txt(o.fecha) + '"' + (editable ? '' : ' disabled') + '></label>' +
-        '<label class="fin2-campo"><span>Entra o sale</span><select class="fin2-input fin2-input--sm js-finr-o" data-campo="sentido"' + (editable ? '' : ' disabled') + '>' + opciones([['ENTRADA', 'Entra plata'], ['SALIDA', 'Sale plata']], o.sentido) + '</select></label>' +
+        '<label class="fin2-campo"><span>Entra o sale</span><select class="fin2-input fin2-input--sm js-finr-o" data-campo="sentido"' + (editable ? '' : ' disabled') + '>' + opciones([['ENTRADA', 'Entra dinero'], ['SALIDA', 'Sale dinero']], o.sentido) + '</select></label>' +
         '<label class="fin2-campo"><span>Monto total</span><input class="fin2-input fin2-input--sm fin2-der js-finr-o" data-campo="monto" inputmode="numeric" value="' + miles(o.monto) + '"' + (editable ? '' : ' disabled') + '></label></div>' +
       '<div class="fin2-parte2__fila">' +
         '<label class="fin2-campo"><span>Quién paga / recibe</span><input class="fin2-input fin2-input--sm js-finr-o" data-campo="tercero" value="' + txt(o.tercero) + '"' + (editable ? '' : ' disabled') + '><small class="fin2-ayuda">El pagador puede ser distinto del cliente.</small></label>' +
@@ -627,7 +627,7 @@
   // ---- formulario guiado por acción (FIN-10) ----------------------------------------------
   function guiado() {
     var acciones = est_.datos.acciones || {};
-    var d = U.drawer({ titulo: 'Formulario guiado', subtitulo: '<span class="fin2-ayuda">¿Qué pasó con la plata?</span>',
+    var d = U.drawer({ titulo: 'Formulario guiado', subtitulo: '<span class="fin2-ayuda">¿Qué pasó con el dinero?</span>',
       cuerpo: '<button type="button" class="fin2-accion fin2-accion--fuente js-finr-fuentes"><b>' + U.ico('enlace', 14) + ' Pagar una obligación que ya está en Control interno</b><small>IVA (F29) o imposiciones: el cliente, el concepto, el período y el monto esperado vienen de la matriz. Solo confirmas fecha y monto real.</small></button>' +
         '<div class="fin2-acciones-grid">' + Object.keys(acciones).map(function (k) {
         return '<button type="button" class="fin2-accion js-finr-accion" data-id="' + k + '"><b>' + txt(acciones[k].nombre) + '</b><small>' + txt(acciones[k].ayuda) + '</small></button>';

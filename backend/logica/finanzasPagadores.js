@@ -4,7 +4,7 @@
  * finanzasPagadores.js — Finanzas, Etapa A del rediseño (2026-10-07).
  *
  * Lo que mostraron las planillas reales de julio y agosto: el nombre que da
- * el banco NO dice de qué cliente es la plata. Construcciones Kraken pagó por
+ * el banco NO dice de qué cliente es el dinero. Construcciones Kraken pagó por
  * Elohim y por WWL; Daniela Muñoz por Osses; Construcciones Miranda por
  * Ynfantes. Bárbara y Lisseth lo saben; el banco no. Por eso:
  *
@@ -23,7 +23,7 @@
  *    como sugerencia en su movimiento, y cada pagador aprende su cliente.
  *  - DIVIDIR: una transferencia puede ser de varios clientes (clasif.partes);
  *    piezas_() la abre en partes para todos los cálculos (tablero, cobranza,
- *    presupuesto, plata de clientes).
+ *    presupuesto, dinero de clientes).
  */
 
 const crypto = require('node:crypto');
@@ -290,7 +290,7 @@ function clasifDesdeExcel_(fila, destino, medio) {
   })();
   if (destino.clase === 'gasto') return fila.cargo ? { tipo: 'EGRESO', cuenta: destino.cuenta } : { tipo: 'INGRESO', cuenta: 'Otros Ingresos' };
   if (destino.clase === 'empresa') return { tipo: destino.empresa === fila._empresaCuenta ? 'TRASPASO' : 'PRESTAMO', empresa: destino.empresa === fila._empresaCuenta ? '' : destino.empresa };
-  // Cliente: ABONO = honorarios; lo demás es plata del cliente (para sus imposiciones, IVA…).
+  // Cliente: ABONO = honorarios; lo demás es dinero del cliente (para sus imposiciones, IVA…).
   if (fila.abono) {
     if (obs === 'ABONO') return { tipo: 'INGRESO', cuenta: 'Servicio Mensual', cliente_id: destino.cliente_id, cliente: destino.cliente };
     if (obs === 'ABONO RENTA') return { tipo: 'INGRESO', cuenta: 'Servicio Renta', cliente_id: destino.cliente_id, cliente: destino.cliente };

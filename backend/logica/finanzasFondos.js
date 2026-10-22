@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * finanzasFondos.js — la plata de los clientes, por cliente y por gestión
+ * finanzasFondos.js — el dinero de los clientes, por cliente y por gestión
  * (2026-10-20; FIN-13, FIN-14, FIN-15).
  *
  * Un cliente manda dinero para pagar SUS obligaciones (imposiciones, IVA,
@@ -25,7 +25,7 @@
  * Saldo de una gestión = aperturas aprobadas + recibido + reintegros
  *   − pagado − devuelto ± reasignaciones.
  * La custodia de cada cliente se suma por separado: el déficit de un cliente
- * nunca libera la plata de otro.
+ * nunca libera el dinero de otro.
  */
 
 const B = require('./finanzasBoveda');
@@ -180,13 +180,13 @@ function fichaCliente_(clienteId, hasta) {
     apertura: conApertura ? 'CONOCIDA' : aps.some((a) => a.estado === 'PROPUESTA') ? 'PROPUESTA' : 'DESCONOCIDA',
     filtros: { pendiente_ejecutar: lista.filter((g) => g.banderas.pendiente_ejecutar).length, deficit: lista.filter((g) => g.banderas.deficit).length,
       sin_asignacion: sinG.piezas.length, remanente_sin_decidir: lista.filter((g) => g.banderas.remanente_sin_decidir).length },
-    nota_parcial: aps.some((a) => a.estado === 'APROBADA') ? '' : 'Falta el saldo inicial aprobado de este cliente: el saldo es parcial y puede faltar plata que mandó antes de cargar las cartolas.'
+    nota_parcial: aps.some((a) => a.estado === 'APROBADA') ? '' : 'Falta el saldo inicial aprobado de este cliente: el saldo es parcial y puede faltar dinero que mandó antes de cargar las cartolas.'
   };
 }
 
 // ---------------------------------------------------------------- acciones de lectura
 
-/** Lista de clientes con plata en custodia (o con gestiones), con su saldo y si es parcial. */
+/** Lista de clientes con dinero en custodia (o con gestiones), con su saldo y si es parcial. */
 const fondos = B.conBoveda('VER_FONDOS', function (db, data) {
   const hasta = Base.fechaCivil_(data && data.hasta) || '';
   const empresa = Cat.empresas_({ todos: true }).indexOf(Base.txt_(data && data.empresa)) !== -1 ? data.empresa : '';
@@ -280,7 +280,7 @@ const estadoGestion = Base.conCapacidad('FONDOS', '', function (db, data, contex
 /**
  * Asigna piezas (de un movimiento del banco o de una operación) a una gestión,
  * o se las quita (gestion_id vacío). No cambia montos ni la clasificación:
- * solo dice a qué obligación corresponde esa plata. refs: ['mov:<id>:<parte>' | 'op:<id>:<parte>'].
+ * solo dice a qué obligación corresponde ese dinero. refs: ['mov:<id>:<parte>' | 'op:<id>:<parte>'].
  */
 const asignarGestion = Base.conCapacidad('FONDOS', '', function (db, data, contexto, x) {
   const refs = (Array.isArray(data && data.refs) ? data.refs : []).map(Base.txt_).filter(Boolean).slice(0, 200);
@@ -295,7 +295,7 @@ const asignarGestion = Base.conCapacidad('FONDOS', '', function (db, data, conte
   Base.transaccion_(() => {
     refs.forEach((ref) => {
       const r = actualizarPieza_(ref, (c) => {
-        if (!c || (c.tipo !== 'FONDO_RECIBIDO' && c.tipo !== 'FONDO_PAGADO')) return 'Solo la plata de un cliente se asigna a una gestión.';
+        if (!c || (c.tipo !== 'FONDO_RECIBIDO' && c.tipo !== 'FONDO_PAGADO')) return 'Solo el dinero de un cliente se asigna a una gestión.';
         if (g && c.cliente_id !== g.cliente_id) return 'La gestión es de otro cliente.';
         if (gid) c.gestion_id = gid; else delete c.gestion_id;
         if (data.destino !== undefined) { if (destino) c.destino = destino; else delete c.destino; }
@@ -393,7 +393,7 @@ const reasignar = Base.conCapacidad('FONDOS', '', function (db, data, contexto, 
     const gd = desde === 'SIN_GESTION' ? null : mapa.get(desde), gh = hacia === 'SIN_GESTION' ? null : mapa.get(hacia);
     if ((desde !== 'SIN_GESTION' && !gd) || (hacia !== 'SIN_GESTION' && !gh)) return errorValidacion('desde', 'Una de las gestiones no existe.');
     const cliente = (gd || gh).cliente_id;
-    if ((gd && gd.cliente_id !== cliente) || (gh && gh.cliente_id !== cliente)) return errorValidacion('hacia', 'Solo se reasigna entre gestiones del MISMO cliente. Pasar plata de un cliente a otro no está habilitado: requiere un procedimiento y respaldo que aún no se definen (y nunca para tapar el déficit de otro).');
+    if ((gd && gd.cliente_id !== cliente) || (gh && gh.cliente_id !== cliente)) return errorValidacion('hacia', 'Solo se reasigna entre gestiones del MISMO cliente. Pasar dinero de un cliente a otro no está habilitado: requiere un procedimiento y respaldo que aún no se definen (y nunca para tapar el déficit de otro).');
     const m = Base.montoClp_(data.monto);
     if (!m.ok || !(m.valor > 0)) return errorValidacion('monto', m.error || 'El monto debe ser mayor que cero.');
     const motivo = Base.txt_(data.motivo);
@@ -490,7 +490,7 @@ const gestionDesdePieza = Base.conCapacidad('FONDOS', '', function (db, data, co
   const ref = Base.txt_(data && data.ref);
   const cli = Base.txt_(data && data.cliente_id);
   const pieza = hechosFondos_({ cliente_id: cli }).find((h) => h.ref === ref);
-  if (!pieza) return errorValidacion('ref', 'Ese movimiento no es plata de este cliente o ya no existe.');
+  if (!pieza) return errorValidacion('ref', 'Ese movimiento no es dinero de este cliente o ya no existe.');
   if (pieza.clasif.gestion_id) return errorValidacion('ref', 'Ese movimiento ya tiene gestión.');
   const obligacion = Cat.conceptos_('FONDO').indexOf(pieza.clasif.cuenta) !== -1 ? pieza.clasif.cuenta : 'Otro';
   return Base.idempotente_(contexto, 'gestionDesdePieza', data.idempotency_key, { ref }, () => Base.transaccion_(() => {

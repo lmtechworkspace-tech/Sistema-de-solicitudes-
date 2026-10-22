@@ -12,7 +12,7 @@
  *   1. El pagador nunca ha pagado por ese cliente (o es la primera vez que aparece).
  *   2. En el Excel BANCOS lo anotaron como otra cosa.
  *   3. El banco dice Previred / SII / Tesorería y se marca como otra cosa.
- *   4. Un pago por cuenta de un cliente que deja su plata en custodia en negativo.
+ *   4. Un pago por cuenta de un cliente que deja su dinero en custodia en negativo.
  *   5. El mismo cliente ya tiene un pago igual ese mes (¿pago doble?).
  *   6. Ingreso que no calza con sus facturas pendientes, o sin cliente.
  */
@@ -104,13 +104,13 @@ function revisarUno_(r, mov, it, ctx) {
       const okPropio = c.tipo === 'EGRESO' && CUENTAS_MEDIO[det.medio].indexOf(c.cuenta) !== -1;
       if (c.tipo !== 'FONDO_PAGADO' && !okPropio) add('alerta', quien + 'El banco dice que fue un pago a ' + NOMBRE_MEDIO[det.medio] + ' y lo estás marcando como «' + tipoNombre(c.tipo) + (c.cuenta ? ' · ' + c.cuenta : '') + '».');
     }
-    // 4. Pago por cuenta de un cliente sin plata suficiente en custodia.
+    // 4. Pago por cuenta de un cliente sin dinero suficiente en custodia.
     if (c.tipo === 'FONDO_PAGADO' && c.cliente_id) {
       const antes = ctx.fondos.get(c.cliente_id) || 0;
       const despues = antes - pz.cargo;
       // Sin ningún registro previo del cliente (p. ej. lo mandó antes de que partiera el sistema): solo informa.
-      if (despues < 0 && !ctx.fondos.has(c.cliente_id)) add('info', quien + 'No hay registro de plata de ' + c.cliente + ' en custodia: si la mandó antes de partir con el sistema, cárgala como saldo inicial; si no, la empresa está poniendo ' + plata_(-despues) + ' por el cliente.');
-      else if (despues < 0) add('alerta', quien + c.cliente + ' tiene ' + plata_(antes) + ' en custodia; con este pago queda en ' + plata_(despues) + '. La empresa estaría poniendo la plata: hay que cobrársela (o falta registrar lo que mandó).');
+      if (despues < 0 && !ctx.fondos.has(c.cliente_id)) add('info', quien + 'No hay registro de dinero de ' + c.cliente + ' en custodia: si la mandó antes de partir con el sistema, cárgala como saldo inicial; si no, la empresa está poniendo ' + plata_(-despues) + ' por el cliente.');
+      else if (despues < 0) add('alerta', quien + c.cliente + ' tiene ' + plata_(antes) + ' en custodia; con este pago queda en ' + plata_(despues) + '. La empresa estaría poniendo el dinero: hay que cobrársela (o falta registrar lo que mandó).');
       ctx.fondos.set(c.cliente_id, despues);   // en un lote, lo siguiente ve este pago
     }
     if (c.tipo === 'FONDO_RECIBIDO' && c.cliente_id) ctx.fondos.set(c.cliente_id, (ctx.fondos.get(c.cliente_id) || 0) + pz.abono);

@@ -4,8 +4,8 @@
  * finanzasConciliacion.js — vincular el banco con el registro operativo
  * (2026-10-20; FIN-19, FIN-28/T28).
  *
- * Un movimiento de la cartola es la EVIDENCIA de que la plata entró o salió.
- * Una operación registrada es lo que la operación SABE de esa plata (de qué
+ * Un movimiento de la cartola es la EVIDENCIA de que el dinero entró o salió.
+ * Una operación registrada es lo que la operación SABE de ese dinero (de qué
  * cliente, obligación, período, destino). Conciliar los une:
  *
  *  - Uno a uno, uno a varios (una transferencia que paga dos operaciones) y

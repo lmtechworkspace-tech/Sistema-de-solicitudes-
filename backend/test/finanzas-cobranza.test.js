@@ -4,7 +4,7 @@
  * Finanzas, Etapa 3 (2026-10-06): facturas y cobranza. Datos FICTICIOS.
  * Lo central: los pagos del banco cubren las facturas del cliente de la más
  * antigua a la más nueva, lo que sobra es saldo a favor (los "abonos" de la
- * planilla SIGECO), y la plata que el cliente manda para sus imposiciones NO
+ * planilla SIGECO), y el dinero que el cliente manda para sus imposiciones NO
  * paga facturas.
  */
 
@@ -101,7 +101,7 @@ test('cartera: los pagos cubren de la factura más antigua a la más nueva, lo q
   F.clasificar(db, D({ items: [
     { id: movs[0].id, tipo: 'INGRESO', cuenta: 'Servicio Mensual', cliente_id: 'CL-1' },
     { id: movs[1].id, tipo: 'INGRESO', cuenta: 'Servicio Mensual', cliente_id: 'CL-2' },
-    // Plata para sus imposiciones: es del cliente, no paga facturas.
+    // Dinero para sus imposiciones: es del cliente, no paga facturas.
     { id: movs[2].id, tipo: 'FONDO_RECIBIDO', cuenta: 'Imposiciones', cliente_id: 'CL-2' }
   ] }), ctx);
   const cb = C.cobranza(db, D({}), ctx);

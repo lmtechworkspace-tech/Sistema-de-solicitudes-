@@ -21,7 +21,7 @@
  *   ABONO / ABONO RENTA, entra  → Ingreso de la empresa (Servicio Mensual / Servicio Renta)
  *   ABONO / ABONO RENTA, sale   → Gasto de la empresa (cuenta según el plan: sueldo, arriendo…)
  *   IMPOSICIONES, IVA, SALDO, PENDIENTE (y plan CONVENIO, PAGO DIFERIDO…)
- *                               → plata del cliente: Fondo recibido / Pago por cuenta del cliente
+ *                               → dinero del cliente: Fondo recibido / Pago por cuenta del cliente
  *   nombre corto de una empresa del grupo → Traspaso o Préstamo
  *   sin OBS                     → queda por revisar (con lo que dice la planilla a la vista)
  */
@@ -253,7 +253,7 @@ const llevarMes = Base.conCapacidad('MIGRAR', '', function (db, data, contexto, 
 function clasificarYAgrupar_(db, data, contexto, P0) {
   const { filas, par, gr, cuenta, periodo, lote, archivo } = P0;
   const d = I.db_();
-  // Grupos de fondos (columna UNITARIO): una fila que pertenece a un grupo es plata del cliente aunque su OBS esté vacía.
+  // Grupos de fondos (columna UNITARIO): una fila que pertenece a un grupo es dinero del cliente aunque su OBS esté vacía.
   const grupoDe = new Map();
   gr.forEach((g) => g.miembros.forEach((n) => grupoDe.set(n, g)));
   const conceptoGrupo = (g) => { const ms = g.miembros.map((n) => filas.find((r) => r.fila === n)).filter(Boolean); return conceptoFondo_(ms.find((r) => r.plan) || ms.find((r) => r.obs && r.obs !== 'SALDO') || ms[ms.length - 1]); };
@@ -285,7 +285,7 @@ function clasificarYAgrupar_(db, data, contexto, P0) {
       // En un grupo, todas sus filas son del cliente del grupo (aunque alguna use otro nombre corto o ninguno).
       const qg = g ? clienteGrupo(g) : null;
       if (g && qg && c && (c.tipo === 'FONDO_RECIBIDO' || c.tipo === 'FONDO_PAGADO')) { delete c.falta; c.cliente_id = qg.cliente_id; }
-      // Toda fila de un grupo es plata del cliente, también la que cierra el grupo con OBS «ABONO»: esa marca dice
+      // Toda fila de un grupo es dinero del cliente, también la que cierra el grupo con OBS «ABONO»: esa marca dice
       // que lo que sobra del grupo se cobra como honorario (se decide en el paso 4), no que el pago sea un gasto.
       if (g && (!c || (c.tipo !== 'FONDO_RECIBIDO' && c.tipo !== 'FONDO_PAGADO'))) {
         const q = qg || quien.get(r.alias);
@@ -482,7 +482,7 @@ const libro = B.conBoveda('', function (db, data, contexto) {
 
 /**
  * Forma un grupo de fondos desde el libro (lo que en el Excel BANCOS es la fórmula de UNITARIO): marca varias filas,
- * dice de qué cliente y obligación son, y SIGSO las clasifica como plata del cliente, crea la gestión y las asigna.
+ * dice de qué cliente y obligación son, y SIGSO las clasifica como dinero del cliente, crea la gestión y las asigna.
  * data: { ids: [movimiento], versiones: {id: version}, cliente_id, obligacion, periodo_obligacion }
  */
 const agrupar = Base.conCapacidad('FONDOS', '', function (db, data, contexto) {
@@ -499,7 +499,7 @@ const agrupar = Base.conCapacidad('FONDOS', '', function (db, data, contexto) {
   if (movs.length !== ids.length) return errorValidacion('ids', 'Alguna fila ya no existe: recarga el libro.');
   const cuentas = I.cuentasMapa_();
   const empresa = (cuentas.get(movs[0].cuenta_ref) || {}).empresa;
-  // 1) Las filas que no estén ya como plata de ESTE cliente se clasifican así (entra = recibido, sale = pago).
+  // 1) Las filas que no estén ya como dinero de ESTE cliente se clasifican así (entra = recibido, sale = pago).
   const items = [];
   movs.forEach((r) => {
     const m = I.des_(r.datos);
@@ -515,7 +515,7 @@ const agrupar = Base.conCapacidad('FONDOS', '', function (db, data, contexto) {
     if (r._validationError || r._forbidden) return r;
     if (r.errores && r.errores.length) return errorValidacion('ids', r.errores[0].mensaje || 'No se pudo clasificar una fila.');
   }
-  // 2) La gestión del grupo (nueva, o una que ya existe: el cliente mandó más plata después) y sus filas.
+  // 2) La gestión del grupo (nueva, o una que ya existe: el cliente mandó más dinero después) y sus filas.
   const Fo = require('./finanzasFondos');
   let gest;
   if (txt_(data.gestion_id)) {
@@ -548,7 +548,7 @@ const agrupar = Base.conCapacidad('FONDOS', '', function (db, data, contexto) {
   return { gestion_id: gest.id, asignadas: a.hechos || 0, errores: a.errores || [], saldo: ge ? ge.saldo : null, honorario, cliente: cli.nombre };
 });
 
-/** Saca filas de su grupo de fondos (siguen siendo plata del cliente, sin grupo). data: { ids } */
+/** Saca filas de su grupo de fondos (siguen siendo dinero del cliente, sin grupo). data: { ids } */
 const sacarDeGrupo = Base.conCapacidad('FONDOS', '', function (db, data, contexto) {
   const ids = (Array.isArray(data && data.ids) ? data.ids : []).map(txt_).filter(Boolean).slice(0, 60);
   if (!ids.length) return errorValidacion('ids', 'Marca las filas que salen del grupo.');

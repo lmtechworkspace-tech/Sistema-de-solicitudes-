@@ -358,7 +358,7 @@ const guardarCompromiso = Base.conCapacidad('PLANIFICAR', '', function (db, data
  *  2. El horizonte empieza en el MES DEL CORTE: el resto de ese mes (lo que
  *     vence o se debe pagar después del corte) también cuenta.
  *  3. Cobranza esperada, compromisos confirmados y estimaciones van aparte.
- *     La plata de clientes para sus obligaciones va en su propio circuito.
+ *     El dinero de clientes para sus obligaciones va en su propio circuito.
  *  4. Un compromiso registrado del mismo concepto REEMPLAZA a la estimación de
  *     ese mes (se muestra la sustitución; no se suman los dos).
  *  5. La cobranza es un escenario editable (% elegido) con las facturas que lo

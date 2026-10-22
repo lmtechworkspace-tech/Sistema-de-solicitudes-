@@ -129,7 +129,7 @@ test('presupuesto: se guarda por empresa, el grupo suma, y se compara con lo rea
   assert.match(tb.lectura.map((l) => l.texto).join(' '), /superaron el presupuesto: 133 %/);
 });
 
-test('meses de caja: caja libre (sin la plata de clientes) / gasto promedio de la empresa', (t) => {
+test('meses de caja: caja libre (sin el dinero de clientes) / gasto promedio de la empresa', (t) => {
   const { db, ctx, D } = preparar(t);
   const tb = T.tablero(db, D({ periodo: '2026-08', empresa: 'HomePymes' }), ctx);
   // Caja HomePymes al cierre: 2.000.000 + 900.000 - 500.000 - 100.000 = 2.300.000; gasto del mes 600.000.

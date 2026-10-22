@@ -75,7 +75,7 @@
         tira('Cobros sin aplicar', plata(T.sin_aplicar), 'neutro', 'Cobros propios todavía sin factura; los fondos de clientes no pagan facturas.') +
         tira('Propuesto por SIGSO (aparte)', plata(T.propuesto), 'alerta', 'No reduce la deuda hasta que una persona lo confirma.') +
       '</div>' +
-      '<details class="fin2-explica"><summary>Cobro recibido, aplicación propuesta y factura pagada: ¿qué es cada uno?</summary><p class="fin2-ayuda"><b>Cobro recibido</b>: la plata que llegó (banco o registro). <b>Aplicación propuesta</b>: SIGSO sugiere a qué factura va (de la más antigua a la más nueva) y una persona la revisa. <b>Factura pagada</b>: solo cuando lo aplicado y confirmado cubre su saldo.</p></details>' +
+      '<details class="fin2-explica"><summary>Cobro recibido, aplicación propuesta y factura pagada: ¿qué es cada uno?</summary><p class="fin2-ayuda"><b>Cobro recibido</b>: el dinero que llegó (banco o registro). <b>Aplicación propuesta</b>: SIGSO sugiere a qué factura va (de la más antigua a la más nueva) y una persona la revisa. <b>Factura pagada</b>: solo cuando lo aplicado y confirmado cubre su saldo.</p></details>' +
       (cliente ? '<div class="fin2-cinta fin2-cinta--info">' + U.ico('equipo', 16) + '<span>Viendo a <b>' + txt(cliente.nombre) + '</b>. ' + U.boton({ texto: 'Revisar propuestas del cliente', sm: true, clase: 'js-fcb-sug', datos: { clave: cliente.id, cap: 'APLICAR' } }) + ' ' + U.boton({ texto: 'Ver todos', sm: true, variante: 'fantasma', clase: 'js-fcb-todos' }) + '</span></div>' : '') +
       U.card({ sinRelleno: true, cuerpo:
         '<div class="fin2-tabla-barra">' + U.segmento(ESTADOS.map(function (e) { return { id: e[0], texto: e[1] }; }), est_.estado, 'js-fcb-estado') + '</div>' +
