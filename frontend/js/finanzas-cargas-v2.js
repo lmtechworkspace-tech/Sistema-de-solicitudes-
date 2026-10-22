@@ -118,7 +118,8 @@
   function mostrarCartola(v, filas, nombre, prog) {
     var emp = v.cuenta_conocida ? v.cuenta_conocida.empresa : '';
     prog.innerHTML = cinta(v.cuadra ? 'info' : 'critico', '<b>Cartola ' + txt(v.banco) + ' ···' + txt(v.ultimos4) + '</b> · ' + txt(v.desde) + ' al ' + txt(v.hasta) + ' · ' + v.movimientos + ' movimiento(s), ' + v.nuevas + ' nuevo(s)' +
-      (v.cuadra ? ' · los saldos cuadran.' : ' · <b>los saldos NO cuadran</b>: revisa el archivo antes de importar.')) +
+      (v.cuadra ? ' · los saldos cuadran.' : ' · <b>los saldos NO cuadran</b>: ' + txt((v.errores || [])[0] || 'revisa el archivo antes de importar.'))) +
+      ((v.avisos || []).length ? cinta('alerta', '<b>Ojo:</b> ' + v.avisos.map(txt).join(' ')) : '') +
       '<div class="fin2-acciones" style="justify-content:flex-start">' + (v.cuenta_conocida ? '<span class="fin2-ayuda">Cuenta de ' + txt(emp) + '</span>' : '<label class="fin2-campo fin2-campo--fila"><span>Empresa de la cuenta</span><select class="fin2-input fin2-input--sm js-fca-cemp">' + opciones((cat_.empresas || []).map(function (e) { return [e, e]; }), '', 'Elige…') + '</select></label>') +
       U.boton({ texto: v.nuevas ? 'Importar ' + v.nuevas + ' movimiento(s)' : 'Nada nuevo', icono: 'check', variante: 'primario', sm: true, clase: 'js-fca-icart', deshabilitado: !v.nuevas || !v.cuadra }) + '</div>';
     prog.querySelector('.js-fca-icart').addEventListener('click', function (ev) {

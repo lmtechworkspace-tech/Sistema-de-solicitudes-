@@ -86,3 +86,13 @@ test('informe · comparar meses: tendencia, meses con pérdida, el gasto que má
   assert.ok(Inf.informe(db, D({ desde: '2026-09', hasta: '2026-06' }), ctx)._validationError);
   assert.ok(Inf.informe(db, D({ desde: '2024-01', hasta: '2026-09' }), ctx)._validationError, 'máximo 24 meses');
 });
+
+test('informe · un grupo es de un solo cliente aunque una fila lo escriba distinto: no aparece una deuda falsa', (t) => {
+  const { db, ctx, D, g } = base(t);
+  g({ fecha: '2026-09-15', monto: 1077, nombre: 'ARMANDO LAEL', obs: 'IVA', grupo: 'Z' });
+  g({ fecha: '2026-09-16', monto: -1077, nombre: 'CONST ARMANDO Y LAEL', obs: 'IVA', grupo: 'Z' });
+  const r = Inf.informe(db, D({ desde: '2026-09', hasta: '2026-09' }), ctx);
+  assert.ok(!r._validationError, r.message);
+  assert.equal(r.clientes.deben.length, 0);
+  assert.ok(!com(r, 'deudores'));
+});

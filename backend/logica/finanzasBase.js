@@ -121,6 +121,18 @@ function ultimoDia_(periodo) { const [a, m] = String(periodo).split('-').map(Num
 function mesSiguiente_(p) { const [a, m] = p.split('-').map(Number); return m === 12 ? (a + 1) + '-01' : a + '-' + String(m + 1).padStart(2, '0'); }
 function mesAnterior_(p) { const [a, m] = p.split('-').map(Number); return m === 1 ? (a - 1) + '-12' : a + '-' + String(m - 1).padStart(2, '0'); }
 function sumarDias_(iso, n) { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+// Distancia en días hábiles entre dos fechas ISO: el sábado y el domingo no cuentan. Una transferencia anotada el
+// jueves que el banco contabiliza el lunes queda a 2 días, no a 4 (pasó con OSSES en septiembre: 17-09 → 21-09).
+function diasHabiles_(a, b) {
+  let x = String(a || '').slice(0, 10), y = String(b || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(x) || !/^\d{4}-\d{2}-\d{2}$/.test(y)) return Infinity;
+  if (x > y) [x, y] = [y, x];
+  const t = Date.parse(y + 'T12:00:00Z'), total = Math.round((t - Date.parse(x + 'T12:00:00Z')) / 864e5);
+  if (total > 60) return total;
+  let n = 0;
+  for (let d = new Date(x + 'T12:00:00Z'); d.getTime() < t;) { d.setUTCDate(d.getUTCDate() + 1); const w = d.getUTCDay(); if (w !== 0 && w !== 6) n += 1; }
+  return n;
+}
 // I12.2: crear un formateador de fechas cuesta; se crea una vez.
 const FECHA_CL_ = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' });
 function hoy_() { return FECHA_CL_.format(new Date()); }
@@ -382,7 +394,7 @@ function repartir_(monto, pesos) {
 
 module.exports = {
   // dinero y fechas
-  montoClp_, montoExcel_, fechaCivil_, periodo_, ultimoDia_, mesSiguiente_, mesAnterior_, sumarDias_, hoy_, rangoMeses_, diasDelMes_,
+  montoClp_, montoExcel_, fechaCivil_, periodo_, ultimoDia_, mesSiguiente_, mesAnterior_, sumarDias_, diasHabiles_, hoy_, rangoMeses_, diasDelMes_,
   // errores
   errConflicto, errIdempotencia, errPeriodoCerrado, errNoComparable, errFuente, errPermiso,
   // capacidades

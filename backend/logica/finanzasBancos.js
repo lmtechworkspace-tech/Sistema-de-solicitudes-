@@ -146,6 +146,7 @@ function monto_(v) {
 // v2 (FIN-07): fecha civil validada contra el calendario real (un 31-02 ya no pasa).
 function fechaIso_(v) { return Base.fechaCivil_(v); }
 const texto_ = (v) => String(v == null ? '' : v).trim();
+function plata_(n) { const v = Math.round(Number(n) || 0); return (v < 0 ? '−' : '') + '$' + Math.abs(v).toLocaleString('es-CL'); }
 function mesCerrado_(periodo) { try { return require('./finanzasCierre').mesCerrado_(periodo); } catch (e) { return false; } }
 /** ¿Le falta a esta cuenta la capacidad? (v2: capacidades en vez de solo «solo lectura»). */
 function soloEscritura_(contexto, cap) { return !Base.puede_(contexto, cap || 'REGISTRAR'); }
@@ -166,7 +167,7 @@ function leerCartola(filas) {
     for (let k = i + 1; k < c.length; k++) if (c[k]) return c[k];
     return '';
   };
-  let titular = '', numero = '', periodo = '';
+  let titular = '', numero = '', periodo = '', disponible = null;
   let iCab = -1, col = null, resumen = null;
   for (let i = 0; i < filas.length; i++) {
     const c = celdas(filas[i]);
@@ -175,13 +176,18 @@ function leerCartola(filas) {
     if (n[0] === 'N DE CUENTA' || n[0] === 'NO DE CUENTA' || n[0] === 'N DE CTA') { numero = valorJunto(filas[i], c[0]); periodo = periodo || valorJunto(filas[i], 'Periodo'); }
     if (n.indexOf('SALDO ANTERIOR') !== -1 && !resumen) {
       const sig = celdas(filas[i + 1]);
-      const at = (et) => sig[n.findIndex((x) => x.indexOf(et) === 0)];
+      // Una celda vacía del resumen es «no informado» (algunas exportaciones del BCI lo dejan en blanco), no cero.
+      const at = (et) => { const v = sig[n.findIndex((x) => x.indexOf(et) === 0)]; return v ? Math.abs(monto_(v)) : null; };
+      const anterior = sig[n.findIndex((x) => x.indexOf('SALDO ANTERIOR') === 0)], final = sig[n.findIndex((x) => x.indexOf('SALDO CONTABLE') === 0)];
       resumen = {
-        saldo_anterior: monto_(at('SALDO ANTERIOR')), total_cargos: monto_(at('TOTAL CARGOS')),
-        total_abonos: monto_(at('TOTAL ABONOS')), saldo_final: monto_(at('SALDO CONTABLE'))
+        saldo_anterior: anterior ? monto_(anterior) : null, total_cargos: at('TOTAL CARGOS'),
+        total_abonos: at('TOTAL ABONOS'), saldo_final: final ? monto_(final) : null
       };
       if (!periodo) periodo = sig[0] || '';
     }
+    // «Saldo Disponible» (fila de abajo, misma columna): el saldo al cierre del período, si el resumen no lo trae.
+    const iDisp = n.indexOf('SALDO DISPONIBLE');
+    if (iDisp !== -1 && disponible === null) { const v = celdas(filas[i + 1])[iDisp]; disponible = v ? monto_(v) : null; }
     if (n[0] === 'FECHA' && n.indexOf('DESCRIPCION') !== -1 && n.some((x) => x.indexOf('SALDO') === 0)) {
       iCab = i;
       col = {
@@ -202,30 +208,53 @@ function leerCartola(filas) {
     const c = celdas(filas[i]);
     const fecha = fechaIso_(c[col.fecha]);
     if (!fecha) continue;
-    const cargo = monto_(c[col.cargo]), abono = monto_(c[col.abono]), saldo = monto_(c[col.saldo]);
+    // El BCI exporta los cargos a veces como «1.234» y a veces como -1234: el cargo siempre es un monto positivo que
+    // sale (si se guardara negativo, el pago se contaría como un ingreso).
+    const cargo = Math.abs(monto_(c[col.cargo])), abono = Math.abs(monto_(c[col.abono])), saldo = monto_(c[col.saldo]);
     if ([cargo, abono, saldo].some((x) => isNaN(x))) return { error: 'La fila ' + (i + 1) + ' tiene un monto que no se entiende.' };
     movimientos.push({ fila: i + 1, fecha, glosa: c[col.glosa].replace(/\s+/g, ' '), doc: col.doc >= 0 ? c[col.doc] : '', cargo, abono, saldo });
+  }
+  // «Saldo diario» relativo: la «Cartola histórica» del BCI lo acumula desde cero en el período (no es el saldo real).
+  // Si la cadena calza desde cero y no desde el saldo anterior, se le suma el saldo anterior del resumen (o, si el
+  // resumen viene en blanco, el que resulta del saldo disponible al cierre menos los movimientos).
+  const sigue = (inicio) => { let p = inicio; return movimientos.every((m) => { const ok = p - m.cargo + m.abono === m.saldo; p = m.saldo; return ok; }); };
+  const neto = movimientos.reduce((a, m) => a + m.abono - m.cargo, 0);
+  let saldoRelativo = false, ajuste = 0;
+  if (movimientos.length && !(resumen && resumen.saldo_anterior !== null && sigue(resumen.saldo_anterior)) && sigue(0)) {
+    saldoRelativo = true;
+    if (resumen && resumen.saldo_anterior !== null) ajuste = resumen.saldo_anterior;
+    else if (disponible !== null) ajuste = disponible - neto;
+    else ajuste = null;
+    if (ajuste !== null) movimientos.forEach((m) => { m.saldo += ajuste; });
   }
   const pm = /(\d{2}-\d{2}-\d{4}).*?(\d{2}-\d{2}-\d{4})/.exec(periodo) || [];
   const desde = fechaIso_(pm[1] || '') || (movimientos[0] && movimientos[0].fecha) || '';
   const hasta = fechaIso_(pm[2] || '') || (movimientos.length && movimientos[movimientos.length - 1].fecha) || '';
 
-  // Chequeos: cada saldo diario = el anterior - cargo + abono; y el resumen del banco.
-  const errores = [];
-  let previo = resumen ? resumen.saldo_anterior : null;
+  // Chequeos: cada saldo diario = el anterior - cargo + abono; y el resumen del banco (lo que informa).
+  const errores = [], avisos = [];
+  const inicial = saldoRelativo ? ajuste : (resumen && resumen.saldo_anterior !== null ? resumen.saldo_anterior : null);
+  let previo = inicial;
   movimientos.forEach((m) => {
     if (previo !== null && previo - m.cargo + m.abono !== m.saldo) errores.push('Fila ' + m.fila + ': el saldo no sigue del anterior.');
     previo = m.saldo;
   });
   const sumC = movimientos.reduce((s, m) => s + m.cargo, 0), sumA = movimientos.reduce((s, m) => s + m.abono, 0);
-  if (resumen) {
-    if (resumen.saldo_anterior - resumen.total_cargos + resumen.total_abonos !== resumen.saldo_final) errores.push('El resumen del banco no cuadra.');
-    if (sumC !== resumen.total_cargos || sumA !== resumen.total_abonos) errores.push('Los movimientos no suman lo que dice el resumen del banco (faltan o sobran filas).');
+  if (resumen && resumen.saldo_anterior !== null && resumen.total_cargos !== null && resumen.total_abonos !== null && resumen.saldo_final !== null) {
+    // Con la cadena de saldos entera (ningún movimiento repetido ni faltante entre fila y fila), un resumen que no
+    // calza con la lista es un aviso: la lista es lo que se importa y se puede revisar; el resumen solo da los saldos.
+    const lista = errores.length ? errores : avisos;
+    if (resumen.saldo_anterior - resumen.total_cargos + resumen.total_abonos !== resumen.saldo_final) lista.push('El resumen del banco no cuadra.');
+    if (sumC !== resumen.total_cargos || sumA !== resumen.total_abonos) lista.push('Los movimientos no suman lo que dice el resumen del banco: cargos ' + plata_(sumC) + ' frente a ' + plata_(resumen.total_cargos) + ', abonos ' + plata_(sumA) + ' frente a ' + plata_(resumen.total_abonos) + '. Los saldos del período se toman de la lista de movimientos.');
   }
+  if (saldoRelativo && ajuste === null) avisos.push('La cartola no trae el saldo anterior: los saldos se muestran desde cero.');
+  else if (saldoRelativo && !(resumen && resumen.saldo_anterior !== null)) avisos.push('El resumen viene en blanco: el saldo anterior (' + plata_(ajuste) + ') se calculó con el saldo disponible al cierre menos los movimientos.');
+  const ultimo = movimientos.length ? movimientos[movimientos.length - 1].saldo : null;
   return {
     banco: 'BCI', titular, numero: numero.replace(/\D/g, ''), desde, hasta,
-    saldo_anterior: resumen ? resumen.saldo_anterior : null, saldo_final: resumen ? resumen.saldo_final : (movimientos.length ? movimientos[movimientos.length - 1].saldo : null),
-    total_cargos: sumC, total_abonos: sumA, movimientos, cuadra: errores.length === 0, errores: errores.slice(0, 10)
+    saldo_anterior: inicial, saldo_final: saldoRelativo || !resumen || resumen.saldo_final === null ? ultimo : resumen.saldo_final,
+    saldo_relativo: saldoRelativo, saldo_inferido: saldoRelativo && !(resumen && resumen.saldo_anterior !== null),
+    total_cargos: sumC, total_abonos: sumA, movimientos, cuadra: errores.length === 0, errores: errores.slice(0, 10), avisos
   };
 }
 
@@ -411,22 +440,43 @@ function proyectosSigso_(db) {
   } catch (e) { return []; }
 }
 
+/**
+ * Qué movimientos de una cartola son nuevos. Además de la huella exacta, se compara por fecha, N° de documento,
+ * cargo y abono (sin el saldo): así una cartola que se sube dos veces, dos cartolas que se traslapan o una que se
+ * vuelve a leer con otro saldo no duplican movimientos. Se respeta cuántas veces se repite cada uno.
+ */
+function nuevos_(c, cuentaId) {
+  const d = db_();
+  const huella = (m) => hmac_(['mov', c.numero, m.fecha, m.doc, m.cargo, m.abono, m.saldo].join('|'));
+  const clave = (fecha, doc, cargo, abono) => [fecha, texto_(doc), Math.abs(cargo || 0), Math.abs(abono || 0)].join('|');
+  const hay = new Map();
+  if (cuentaId && c.movimientos.length) {
+    d.prepare('SELECT fecha, datos FROM FIN_MOVIMIENTOS WHERE cuenta_ref = ? AND fecha BETWEEN ? AND ?').all(cuentaId, c.desde, c.hasta).forEach((r) => {
+      const m = des_(r.datos); if (m.sin_cartola) return;
+      const k = clave(r.fecha, m.doc, m.cargo, m.abono); hay.set(k, (hay.get(k) || 0) + 1);
+    });
+  }
+  return c.movimientos.filter((m) => {
+    if (d.prepare('SELECT 1 FROM FIN_MOVIMIENTOS WHERE huella = ?').get(huella(m))) return false;
+    const k = clave(m.fecha, m.doc, m.cargo, m.abono), n = hay.get(k) || 0;
+    if (n > 0) { hay.set(k, n - 1); return false; }
+    return true;
+  });
+}
+
 /** Revisa una cartola SIN guardar nada: qué cuenta es, si cuadra, cuántas filas son nuevas. */
 const revisarCartola = B.conBoveda('', function (db, data) {
   const c = leerCartola(data && data.filas);
   if (c.error) return errorValidacion('archivo', c.error);
   const cuenta = cuentaPorNumero_(c.numero);
-  const d = db_();
-  let nuevas = 0;
-  const huella = (m) => hmac_(['mov', c.numero, m.fecha, m.doc, m.cargo, m.abono, m.saldo].join('|'));
-  c.movimientos.forEach((m) => { if (!d.prepare('SELECT 1 FROM FIN_MOVIMIENTOS WHERE huella = ?').get(huella(m))) nuevas++; });
+  const nuevas = nuevos_(c, cuenta ? cuenta.id : null).length;
   const ctx = contextoSugerencias_(db, cuenta ? cuenta.empresa : 'HomePymes');
   const certezas = { alta: 0, media: 0, baja: 0 };
   c.movimientos.forEach((m) => { const s = sugerir_(m, ctx); certezas[completa_(s, m.abono > 0 ? 'abono' : 'cargo') && s.certeza === 'alta' ? 'alta' : s.certeza === 'baja' ? 'baja' : 'media']++; });
   return {
     banco: c.banco, titular: c.titular, ultimos4: c.numero.slice(-4), desde: c.desde, hasta: c.hasta,
     saldo_anterior: c.saldo_anterior, saldo_final: c.saldo_final, total_cargos: c.total_cargos, total_abonos: c.total_abonos,
-    cuadra: c.cuadra, errores: c.errores, movimientos: c.movimientos.length, nuevas, repetidas: c.movimientos.length - nuevas,
+    cuadra: c.cuadra, errores: c.errores, avisos: c.avisos, saldo_relativo: c.saldo_relativo, movimientos: c.movimientos.length, nuevas, repetidas: c.movimientos.length - nuevas,
     cuenta_conocida: cuenta ? { empresa: cuenta.empresa, banco: cuenta.banco } : null, certezas
   };
 });
@@ -448,9 +498,9 @@ const importarCartola = B.conBoveda('', function (db, data, contexto, x) {
     cuenta = cuentaPorNumero_(c.numero);
     x.registrar('CUENTA_NUEVA', c.banco + ' ···' + c.numero.slice(-4) + ' → ' + empresa);
   }
+  const aGuardar = new Set(nuevos_(c, cuenta.id));
   // Etapa 6: no entran movimientos NUEVOS a un mes cerrado (los repetidos se ignoran igual).
-  const cerrados = [...new Set(c.movimientos.filter((m) => mesCerrado_(m.fecha.slice(0, 7)) &&
-    !d.prepare('SELECT 1 FROM FIN_MOVIMIENTOS WHERE huella = ?').get(hmac_(['mov', c.numero, m.fecha, m.doc, m.cargo, m.abono, m.saldo].join('|')))).map((m) => m.fecha.slice(0, 7)))];
+  const cerrados = [...new Set([...aGuardar].filter((m) => mesCerrado_(m.fecha.slice(0, 7))).map((m) => m.fecha.slice(0, 7)))];
   if (cerrados.length) return errorValidacion('archivo', 'La cartola trae movimientos nuevos de un mes cerrado (' + cerrados.join(', ') + '). Reábrelo en «Cierre» si de verdad faltaban.');
   const ctx = contextoSugerencias_(db, cuenta.empresa);
   ctx.cuenta_ref = cuenta.id;
@@ -462,6 +512,7 @@ const importarCartola = B.conBoveda('', function (db, data, contexto, x) {
   d.exec('BEGIN');
   try {
     c.movimientos.forEach((m, i) => {
+      if (!aGuardar.has(m)) return;
       const s = sugerir_(m, ctx);
       const r = ins.run(crypto.randomUUID(), cuenta.id, m.fecha, m.fecha.slice(0, 7), base + i + 1,
         hmac_(['mov', c.numero, m.fecha, m.doc, m.cargo, m.abono, m.saldo].join('|')), 'PENDIENTE',

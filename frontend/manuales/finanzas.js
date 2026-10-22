@@ -54,6 +54,18 @@
             marcas: [{ n: 1, t: 'Aquí se pegan.' }, { n: 2, t: '[[Revisar y anotar]].' }],
             ojo: ['No pegues un mes que ya está anotado: quedarían filas repetidas.'] }
         ] },
+      { id: 'modelo', titulo: 'El mes modelo: cómo se llena bien un mes', ruta: '#/finanzas',
+        intro: ['Septiembre 2026 es el mes de referencia: con la planilla bien llenada y las dos cartolas del mes, **las 196 filas coincidieron con el banco** y el resumen de SIGSO dio exactamente el del Excel (TOTAL, ABONO, ABONO RENTA, SALDO y PENDIENTE). Así se logra lo mismo cada mes.'],
+        pasos: [
+          { titulo: 'Las cartolas: el mes completo, sin huecos',
+            texto: [['Sube la cartola **en Excel** de todo el mes (del 1 al último día). Si el banco la entrega en partes (por ejemplo, del 31-08 al 16-09 y del 16-09 al 30-09), sube todas: el día que se repite en dos cartolas **no se duplica**.', 'Al revisar la cartola, SIGSO comprueba que la cadena de saldos no se corte. Los avisos («el resumen viene en blanco», «los movimientos no suman lo que dice el resumen del banco») no impiden importar: los saldos se toman de la lista de movimientos, que es lo que se verifica fila a fila.', 'La «Cartola histórica» del BCI trae los cargos con signo menos y el saldo diario contado desde cero: SIGSO lo corrige solo (el saldo real parte del saldo disponible al cierre).']],
+            consejo: ['Lo ideal es la **cartola mensual oficial** (01 al 30/31): trae el saldo anterior y el resumen del banco, y no hay que inferir nada.'] },
+          { titulo: 'La planilla: una fila por movimiento del banco',
+            texto: [['**Fecha**: el día en que pasó (la de «Mis Movimientos»). Si el banco la contabiliza el día hábil siguiente, igual se une: se aceptan 3 días hábiles de diferencia.', '**Monto**: el mismo del banco, con signo (lo que sale, negativo). Un monto mal digitado aparece en Informes como «posible monto mal digitado».', '**Nombre**: siempre escrito igual para el mismo cliente (no «ARMANDO LAEL» un día y «CONST ARMANDO Y LAEL» otro). El autocompletar ofrece los nombres ya usados.', '**OBS** en **todas** las filas: ABONO / ABONO RENTA (de la empresa), IVA / IMPOSICIONES (plata del cliente), SALDO o PENDIENTE. Una fila sin OBS queda «por completar».', '**Plan de cuenta** en todos los egresos ABONO (sueldos, arriendo, comisiones, caja chica, traspasos…): sin él, el gasto aparece como «Sin plan de cuenta» en el FLUJO y en Informes.', '**Grupo**: la plata que manda un cliente y lo que se paga por él lleva la misma letra; lo que sobra se decide (ABONO o SALDO).', '**N° factura** en el abono que paga una factura: así la cobranza sabe que está pagada.']] },
+          { titulo: 'Cómo saber que el mes quedó bien',
+            texto: [['En la planilla: **En el banco** igual a **Todas**, **Por completar** en 0 y arriba «Cuadra con la cartola».', 'En **Informes** del mes: **Verificado 100 %** y el resultado igual al ABONO + ABONO RENTA del resumen del Excel.', 'Recién entonces conviene **cerrar el mes** (Más → Cierre).']],
+            ojo: ['Si en el mes anterior no se cargaron los fondos de los clientes, el informe sale **provisorio**: los saldos por cliente parten en el primer mes cargado.'] }
+        ] },
       { id: 'informes', titulo: 'Informes: lo que dicen los datos', ruta: '#/finanzas',
         intro: ['**Informes** convierte la planilla en información. Se arma solo con lo anotado (con las mismas reglas de la planilla): el **resultado** es el ABONO + ABONO RENTA del resumen, así que se puede comparar con el Excel.'],
         pasos: [
@@ -66,7 +78,7 @@
             texto: [['Toca **Imprimir o guardar PDF**: sale solo el informe, con los «¿cómo se llegó?» abiertos. En el diálogo de impresión elige «Guardar como PDF».']] }
         ] },
       { id: 'cartola', titulo: 'Cuando llega la cartola', ruta: '#/finanzas',
-        intro: ['La cartola es la verdad. Se sube en **Más → Subir archivos** (o con [[Subir cartola]] arriba de la planilla). Cada fila anotada se une sola con su movimiento del banco (mismo monto, hasta 3 días de diferencia) y pasa a **✓ banco**.'],
+        intro: ['La cartola es la verdad. Se sube en **Más → Subir archivos** (o con [[Subir cartola]] arriba de la planilla). Cada fila anotada se une sola con su movimiento del banco (mismo monto, hasta 3 días hábiles de diferencia: el fin de semana no cuenta) y pasa a **✓ banco**.'],
         pasos: [
           { titulo: 'Lo que el banco trae y nadie anotó', img: 'planilla-falta',
             texto: [['Las filas **naranjas** ((1)) están en la cartola y nadie las anotó (por ejemplo, un «pago cuentas vía internet» que el banco no explica). La fecha y el monto ya vienen del banco.', 'Escribe **quién es** ((2)) y la **OBS** ((3)), como cualquier fila.', 'Cuando no queda nada en naranjo ni «esperando», arriba dice **Cuadra con la cartola**.']],
