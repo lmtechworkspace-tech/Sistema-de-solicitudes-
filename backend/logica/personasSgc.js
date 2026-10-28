@@ -35,6 +35,7 @@ const Jefatura = require('./jefatura');
 const Notificaciones = require('./notificaciones');
 const NotificacionesApp = require('./notificacionesApp');
 const Almacenamiento = require('./almacenamiento');
+const Portal = require('./portal');
 
 const ITEMS_INDUCCION_SGC = ['Organigrama', 'Política de Calidad', 'Objetivos de Calidad', 'Descriptor de cargo', 'Inducción ISO 9001'];
 const TIPOS_DOC_PERSONA_SGC = ['CV', 'TITULO', 'ISO9001', 'CONTRATO', 'CERTIFICADO', 'OTRO'];
@@ -99,6 +100,88 @@ function parsearItemsDescriptor_(valor) {
 }
 function descriptorVigenteDe_(db, personaId) {
   return leerSeguro_(db, 'SGC_DESCRIPTORES').find((d) => d.persona_id === personaId && esVerdadero_(d.vigente)) || null;
+}
+
+// --- un cargo, varias personas (2026-10-28) --------------------------------
+// Caso real: entra una segunda Asistente de RR.HH. El descriptor vive por
+// ficha, así que la nueva quedaba sin descriptor aunque el cargo ya lo
+// tuviera. Se compara el cargo sin tildes, mayúsculas ni espacios de más.
+function normalizarCargo_(cargo) {
+  return String(cargo || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+}
+/** Las otras fichas vigentes (activas, no desvinculadas) con el mismo cargo. */
+function mismoCargo_(db, persona) {
+  const cargo = normalizarCargo_(persona && persona.cargo);
+  if (!cargo) return [];
+  return leerSeguro_(db, 'SGC_PERSONAS').filter((p) => esActivo_(p) && p.estado !== 'DESVINCULADO' &&
+    p.persona_id !== persona.persona_id && normalizarCargo_(p.cargo) === cargo);
+}
+/** La ficha de donde tomar el descriptor: la indicada, o la del mismo cargo con el descriptor más reciente. */
+function origenDescriptor_(db, cargo, preferidoId) {
+  const vigentes = leerSeguro_(db, 'SGC_DESCRIPTORES').filter((d) => esVerdadero_(d.vigente));
+  const vigenteDe = (id) => vigentes.find((d) => d.persona_id === id) || null;
+  if (preferidoId) {
+    const p = buscarPersonaSgc_(db, preferidoId);
+    if (p && vigenteDe(p.persona_id)) return { persona: p, descriptor: vigenteDe(p.persona_id) };
+  }
+  const c = normalizarCargo_(cargo);
+  if (!c) return null;
+  const candidatos = leerSeguro_(db, 'SGC_PERSONAS').filter((p) => esActivo_(p) && normalizarCargo_(p.cargo) === c && vigenteDe(p.persona_id))
+    .map((p) => ({ persona: p, descriptor: vigenteDe(p.persona_id) }))
+    .sort((a, b) => String(b.descriptor.fecha || '').localeCompare(String(a.descriptor.fecha || '')));
+  return candidatos[0] || null;
+}
+/** Copia el descriptor (mismo contenido, versión y archivo) como vigente de otra ficha. */
+function copiarDescriptor_(db, descriptor, personaId, contexto) {
+  leerSeguro_(db, 'SGC_DESCRIPTORES').forEach((d) => {
+    if (d.persona_id === personaId && esVerdadero_(d.vigente)) actualizarFilaPorId_(db, 'SGC_DESCRIPTORES', 'descriptor_id', d.descriptor_id, { vigente: false });
+  });
+  const copia = Object.assign({}, descriptor, {
+    descriptor_id: uuid_(), persona_id: personaId, vigente: true,
+    creado_por: (contexto && contexto.email) || '', fecha: new Date().toISOString()
+  });
+  agregarFila_(db, 'SGC_DESCRIPTORES', copia);
+  return copia;
+}
+/**
+ * Cuentas activas de SIGSO con rol en el SGC (Calidad → Accesos) que todavía
+ * no tienen ficha: activar a alguien y darle rol NO crea su ficha, y su
+ * "Mi ficha" quedaba vacía sin aviso.
+ */
+function cuentasSinFicha_(db) {
+  const conFicha = {};
+  leerSeguro_(db, 'SGC_PERSONAS').filter(esActivo_).forEach((p) => { conFicha[normalizarEmail_(p.usuario_email)] = true; });
+  const roles = {};
+  leerSeguro_(db, 'SGC_ROLES').filter((r) => esVerdadero_(r.activo)).forEach((r) => { roles[normalizarEmail_(r.usuario_email)] = r; });
+  const lista = [];
+  leerSeguro_(db, 'CUENTAS_PORTAL').filter((c) => esVerdadero_(c.activo)).forEach((c) => {
+    const correos = Portal.parsearListaPortal(c.emails).map(normalizarEmail_).filter(Boolean);
+    if (!correos.length || correos.some((e) => conFicha[e])) return;
+    const conRol = correos.find((e) => roles[e]);
+    if (!conRol) return;
+    lista.push({ email: conRol, nombre: c.nombre || conRol, cargo: c.cargo || '', area_id: roles[conRol].area_id || '', rol_sgc: roles[conRol].rol_sgc || '' });
+  });
+  return lista.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
+}
+/** Los cargos que ya existen, con la ficha que sirve de modelo (para "Mismo cargo que…"). */
+function cargosExistentes_(db) {
+  const vigentes = {};
+  leerSeguro_(db, 'SGC_DESCRIPTORES').filter((d) => esVerdadero_(d.vigente)).forEach((d) => { vigentes[d.persona_id] = d; });
+  const porCargo = {};
+  leerSeguro_(db, 'SGC_PERSONAS').filter((p) => esActivo_(p) && p.estado !== 'DESVINCULADO' && String(p.cargo || '').trim()).forEach((p) => {
+    const k = normalizarCargo_(p.cargo);
+    const g = porCargo[k] = porCargo[k] || { cargo: String(p.cargo).trim(), personas: [], modelo: null };
+    g.personas.push(p.nombre);
+    // Modelo: quien tiene descriptor; entre varios, el más reciente.
+    const d = vigentes[p.persona_id];
+    if (!g.modelo || (d && (!g.modelo.d || String(d.fecha || '') > String(g.modelo.d.fecha || '')))) g.modelo = { p, d };
+  });
+  return Object.keys(porCargo).map((k) => {
+    const g = porCargo[k], m = g.modelo.p;
+    return { cargo: g.cargo, personas: g.personas, persona_id: m.persona_id, tipo: m.tipo || 'INT', area_id: m.area_id || '',
+      jefatura_email: m.jefatura_email || '', subrogante_email: m.subrogante_email || '',
+      descriptor_version: g.modelo.d ? g.modelo.d.version : '' };
+  }).sort((a, b) => a.cargo.localeCompare(b.cargo));
 }
 function puntuarItemsEvaluacion_(items, respuestas) {
   const resultado = [];
@@ -166,6 +249,8 @@ function listar(db, data, contexto) {
 
   return {
     puede_gestionar: gobierna, rol_sgc: rol || 'OPERATIVO',
+    cuentas_sin_ficha: gobierna ? cuentasSinFicha_(db) : [],
+    cargos: gobierna ? cargosExistentes_(db) : [],
     personas: visibles.map((p) => {
       const suyos = descriptores.filter((d) => d.persona_id === p.persona_id);
       const vigente = suyos.find((d) => esVerdadero_(d.vigente));
@@ -222,6 +307,8 @@ function getFicha(db, data, contexto) {
     descriptores, descriptor_vigente: descriptorVigente,
     items_responsabilidades: descriptorVigente ? parsearItemsDescriptor_(descriptorVigente.items_responsabilidades) : [],
     items_habilidades: descriptorVigente ? parsearItemsDescriptor_(descriptorVigente.items_habilidades) : [],
+    // Las otras personas con el mismo cargo: el descriptor se puede aplicar a todas.
+    mismo_cargo: gobierna ? mismoCargo_(db, persona).map((p) => ({ persona_id: p.persona_id, nombre: p.nombre })) : [],
     documentos, induccion
   };
 }
@@ -251,7 +338,16 @@ function guardarPersona(db, data, contexto) {
     const cambios = {};
     ['nombre', 'rut', 'cargo', 'tipo', 'area_id', 'jefatura_email', 'subrogante_email', 'fecha_ingreso'].forEach((campo) => { if (data[campo] !== undefined) cambios[campo] = data[campo]; });
     if (data.usuario_email !== undefined) cambios.usuario_email = email;
-    return actualizarFilaPorId_(db, 'SGC_PERSONAS', 'persona_id', existente.persona_id, cambios);
+    const editada = actualizarFilaPorId_(db, 'SGC_PERSONAS', 'persona_id', existente.persona_id, cambios);
+    // Ficha sin descriptor que ahora tiene un cargo que ya existe: hereda el suyo.
+    if (!descriptorVigenteDe_(db, existente.persona_id)) {
+      const origen = origenDescriptor_(db, cargoEfectivo, data.copiar_descriptor_de);
+      if (origen && origen.persona.persona_id !== existente.persona_id) {
+        copiarDescriptor_(db, origen.descriptor, existente.persona_id, contexto);
+        return Object.assign({}, editada, { descriptor_copiado_de: origen.persona.nombre, descriptor_version: origen.descriptor.version });
+      }
+    }
+    return editada;
   }
 
   const cargoNuevo = String(data.cargo || '').trim().toLowerCase();
@@ -272,9 +368,19 @@ function guardarPersona(db, data, contexto) {
     agregarFila_(db, 'SGC_INDUCCIONES', { induccion_id: uuid_(), persona_id: persona.persona_id, item, fecha: '', relator_email: '', estado: 'PENDIENTE', observaciones: '' });
   });
   registrarLogSgc_(db, 'SGC_PERSONA_CREADA', persona.nombre + ' (' + email + ')', contexto);
+  // Un cargo puede tener varias personas: la ficha nueva hereda el descriptor
+  // vigente del cargo (el que se eligió en "Mismo cargo que…", o el de quien
+  // ya tenga ese cargo). La evaluación, inducción y carpeta son de cada una.
+  const origen = origenDescriptor_(db, persona.cargo, data.copiar_descriptor_de);
+  let copiado = null;
+  if (origen) {
+    copiarDescriptor_(db, origen.descriptor, persona.persona_id, contexto);
+    copiado = { descriptor_copiado_de: origen.persona.nombre, descriptor_version: origen.descriptor.version };
+    registrarLogSgc_(db, 'SGC_DESCRIPTOR', persona.nombre + ' ' + origen.descriptor.version + ' (copiado de ' + origen.persona.nombre + ')', contexto);
+  }
   // Al directorio de inmediato (selector de personas), no en el próximo arranque.
   try { asegurarDirectorioPersonas_(db); } catch (err) { console.error('[directorio] siembra tras crear ficha SGC:', err && err.message); }
-  return persona;
+  return Object.assign({}, persona, copiado);
 }
 
 function desvincular(db, data, contexto) {
@@ -335,7 +441,16 @@ async function guardarDescriptor(db, data, contexto) {
   };
   agregarFila_(db, 'SGC_DESCRIPTORES', descriptor);
   registrarLogSgc_(db, 'SGC_DESCRIPTOR', persona.nombre + ' ' + version, contexto);
-  return descriptor;
+  // Misma versión para quienes comparten el cargo (si se pidió).
+  const aplicadoA = [];
+  if (esVerdadero_(data.aplicar_mismo_cargo) || data.aplicar_mismo_cargo === 'on') {
+    mismoCargo_(db, persona).forEach((p) => {
+      copiarDescriptor_(db, descriptor, p.persona_id, contexto);
+      aplicadoA.push(p.nombre);
+      registrarLogSgc_(db, 'SGC_DESCRIPTOR', p.nombre + ' ' + version + ' (mismo cargo que ' + persona.nombre + ')', contexto);
+    });
+  }
+  return Object.assign({}, descriptor, { aplicado_a: aplicadoA });
 }
 
 async function actualizarDescriptor(db, data, contexto) {
@@ -359,7 +474,20 @@ async function actualizarDescriptor(db, data, contexto) {
   }
   actualizarFilaPorId_(db, 'SGC_DESCRIPTORES', 'descriptor_id', desc.descriptor_id, cambios);
   registrarLogSgc_(db, 'SGC_DESCRIPTOR_EDITADO', persona.nombre + ' ' + desc.version, contexto);
-  return { descriptor_id: desc.descriptor_id };
+  // La corrección llega a quienes comparten el cargo; a quien no tenga
+  // descriptor o tenga otra versión se le deja la versión corregida como vigente.
+  const aplicadoA = [];
+  if (esVerdadero_(data.aplicar_mismo_cargo) || data.aplicar_mismo_cargo === 'on') {
+    const corregido = Object.assign({}, desc, cambios);
+    mismoCargo_(db, persona).forEach((p) => {
+      const suyo = descriptorVigenteDe_(db, p.persona_id);
+      if (suyo && suyo.version === desc.version) actualizarFilaPorId_(db, 'SGC_DESCRIPTORES', 'descriptor_id', suyo.descriptor_id, cambios);
+      else copiarDescriptor_(db, corregido, p.persona_id, contexto);
+      aplicadoA.push(p.nombre);
+      registrarLogSgc_(db, 'SGC_DESCRIPTOR_EDITADO', p.nombre + ' ' + desc.version + ' (mismo cargo que ' + persona.nombre + ')', contexto);
+    });
+  }
+  return { descriptor_id: desc.descriptor_id, aplicado_a: aplicadoA };
 }
 
 async function descargarDescriptor(db, data, contexto) {

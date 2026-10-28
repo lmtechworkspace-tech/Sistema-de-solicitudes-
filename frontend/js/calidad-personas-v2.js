@@ -124,12 +124,26 @@
         r.evaluaciones_difieren + (r.evaluaciones_difieren === 1 ? ' evaluación importada dice' : ' evaluaciones importadas dicen') +
         ' "requiere capacitación" aunque el promedio es 3 o más. Aquí se muestra según la regla (promedio menor a 3); si alguien sí la necesita, regístralo al volver a evaluar.</p>' : '';
     var lista = filtrados();
-    return kpis + aviso +
+    // Activar a alguien y darle rol en Accesos no crea su ficha: se avisa aquí.
+    var sinFicha = datos_.cuentas_sin_ficha || [];
+    var avisoSinFicha = datos_.puede_gestionar && sinFicha.length
+      ? U.card({ titulo: sinFicha.length === 1 ? '1 persona con acceso a Calidad sin ficha' : sinFicha.length + ' personas con acceso a Calidad sin ficha', icono: 'alerta', i: 2, cuerpo:
+          '<p class="sx2-tenue" style="margin:0 0 var(--sx-e-3);font-size:.8125rem">Tienen rol en Accesos, pero su "Mi ficha" está vacía hasta que se cree. Si toman un cargo que ya existe, elige "Mismo cargo que…" y heredan su descriptor.</p>' +
+          '<ul class="dc2-lista">' + sinFicha.map(function (c) {
+            return '<li class="dc2-fila" style="cursor:default">' + U.avatar(PY.persona(c.email, c.nombre)) +
+              '<span class="sx2-apilado" style="gap:4px;min-width:0;flex:1"><strong class="sx2-cortar">' + U.esc(PY.persona(c.email, c.nombre).nombre) + '</strong>' +
+                '<span class="dc2-fila__meta"><span>' + U.esc(c.email) + '</span>' + (c.area_id ? '<span>' + U.esc(c.area_id) + '</span>' : '') + '</span></span>' +
+              U.boton({ texto: 'Crear ficha', icono: 'mas', sm: true, variante: 'primario', clase: 'js-pc2-crear', datos: { email: c.email } }) + '</li>';
+          }).join('') + '</ul>' })
+      : '';
+    var vacio = !datos_.personas.length && !datos_.puede_gestionar
+      ? U.vacio({ icono: 'persona', titulo: 'Aún no tienes ficha en Calidad', texto: 'Tu cuenta tiene acceso, pero el Encargado del SGC todavía no crea tu ficha (cargo, descriptor e inducción). Avísale para que la cree.' })
+      : U.vacio({ icono: 'lupa', titulo: 'Nadie coincide', texto: 'Prueba con otra palabra o limpia el filtro.' });
+    return avisoSinFicha + kpis + aviso +
       '<div class="dc2-barra sx2-entra"><label class="dc2-buscar">' + U.ico('lupa', 16) +
         '<input type="search" class="js-pc2-q" placeholder="Buscar por nombre, cargo o área…" value="' + U.esc(q_) + '" aria-label="Buscar una persona"></label>' +
         (filtro_ || q_ ? U.boton({ texto: 'Limpiar', sm: true, variante: 'fantasma', clase: 'js-pc2-limpiar' }) : '') + '</div>' +
-      U.card({ sinRelleno: true, i: 6, cuerpo: lista.length ? '<ul class="dc2-lista">' + lista.map(filaPersona).join('') + '</ul>'
-        : U.vacio({ icono: 'lupa', titulo: 'Nadie coincide', texto: 'Prueba con otra palabra o limpia el filtro.' }) });
+      U.card({ sinRelleno: true, i: 6, cuerpo: lista.length ? '<ul class="dc2-lista">' + lista.map(filaPersona).join('') + '</ul>' : vacio });
   }
 
   function filtrados() {
@@ -325,7 +339,12 @@
     if (!enVista(t)) return;
     if ((b = t.closest('.js-pc2-tab'))) { tab_ = b.getAttribute('data-id'); pintar(true); return; }
     if (t.closest('.js-pc2-recargar')) { cargar(); return; }
-    if (t.closest('.js-pc2-nueva')) { SigsoCalidad.formularioPersona(); return; }
+    if (t.closest('.js-pc2-nueva')) { SigsoCalidad.formularioPersona(null, datos_.cargos); return; }
+    if ((b = t.closest('.js-pc2-crear'))) {
+      var c = (datos_.cuentas_sin_ficha || []).filter(function (x) { return x.email === b.getAttribute('data-email'); })[0];
+      if (c) SigsoCalidad.formularioPersona({ nombre: PY.persona(c.email, c.nombre).nombre, usuario_email: c.email, cargo: c.cargo, area_id: c.area_id }, datos_.cargos);
+      return;
+    }
     if ((b = t.closest('.sx2-kpi--clic'))) { var f = b.getAttribute('data-filtro'); filtro_ = filtro_ === f ? '' : f; pintar(true); return; }
     if (t.closest('.js-pc2-limpiar')) { filtro_ = ''; q_ = ''; pintar(true); return; }
     if ((b = t.closest('.js-pc2-modo'))) { modoFecha_ = b.getAttribute('data-id'); pintar(true); return; }

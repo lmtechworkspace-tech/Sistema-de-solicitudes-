@@ -149,7 +149,7 @@
       fichaSinListado_ = !!sinListado;
       if (window.SigsoCalidadFichaV2) SigsoCalidadFichaV2.abrir(personaId, !!sinListado);
     },
-    formularioPersona: function () { if (window.SigsoCalidadFichaV2) SigsoCalidadFichaV2.nueva(); }
+    formularioPersona: function (prellenado, cargos) { if (window.SigsoCalidadFichaV2) SigsoCalidadFichaV2.nueva(prellenado, cargos); }
   };
   // Registro temprano del árbol: el sidebar dibuja la rama antes de entrar.
   registrarArbol();

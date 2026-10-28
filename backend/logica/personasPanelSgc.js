@@ -95,6 +95,8 @@ function getPanel(db, data, contexto) {
   const cuenta = (a) => personas.filter((p) => p.alertas.indexOf(a) !== -1).length;
   return {
     puede_gestionar: base.puede_gestionar, rol_sgc: base.rol_sgc,
+    // Un cargo, varias personas: cuentas con rol SGC sin ficha y los cargos que ya existen.
+    cuentas_sin_ficha: base.cuentas_sin_ficha, cargos: base.cargos,
     // Para que el árbol lateral se pode igual al entrar directo a Personas.
     secciones_visibles: Calidad.seccionesVisiblesSgc_(db, contexto),
     items_induccion: ITEMS, hoy,

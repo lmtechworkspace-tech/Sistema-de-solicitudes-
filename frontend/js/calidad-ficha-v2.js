@@ -212,11 +212,35 @@
   }
 
   // --- Formularios de la ficha ------------------------------------------------------------
-  function formPersona(p) {
+  // prellenado: datos de la cuenta (Crear ficha desde "con acceso sin ficha").
+  // cargos: los que ya existen; "Mismo cargo que…" copia cargo, área, tipo y
+  // jefatura, y el backend le copia el descriptor vigente de ese cargo.
+  function formPersona(p, prellenado, cargos) {
     var nueva = !p;
-    p = p || {};
+    p = p || prellenado || {};
+    cargos = cargos || [];
+    var mismoCargo = nueva && cargos.length ? U.campo('Mismo cargo que…', '<select class="sx2-select" name="copiar_descriptor_de"><option value="">Cargo nuevo (sin copiar)</option>' +
+        cargos.map(function (c) {
+          return '<option value="' + U.esc(c.persona_id) + '">' + U.esc(c.cargo + ' — ' + c.personas.join(', ') + (c.descriptor_version ? ' · descriptor ' + c.descriptor_version : ' · sin descriptor')) + '</option>';
+        }).join('') + '</select>', 'Si toma un cargo que ya tiene alguien, elígelo: se copian cargo, área, tipo y jefatura, y hereda el descriptor de cargo vigente. Su inducción y evaluación son propias.') : '';
     paso({ titulo: nueva ? 'Nueva persona' : 'Editar datos', boton: nueva ? 'Crear ficha' : 'Guardar', ancho: true,
-      campos: U.campo('Nombre completo', '<input class="sx2-input" name="nombre" required value="' + U.esc(p.nombre || '') + '">') +
+      alMontar: function (form) {
+        var sel = form.querySelector('[name=copiar_descriptor_de]');
+        if (!sel) return;
+        sel.addEventListener('change', function () {
+          var c = cargos.filter(function (x) { return x.persona_id === sel.value; })[0];
+          if (!c) return;
+          form.querySelector('[name=cargo]').value = c.cargo;
+          form.querySelector('[name=area_id]').value = c.area_id || '';
+          form.querySelector('[name=tipo]').value = c.tipo === 'EXT' ? 'EXT' : 'INT';
+          if (c.jefatura_email) form.querySelector('[name=jefatura_email]').value = c.jefatura_email;
+        });
+        // Si la cuenta ya trae un cargo que existe, se preselecciona.
+        var cargoCuenta = norm(p.cargo).trim();
+        var igual = cargoCuenta && cargos.filter(function (x) { return norm(x.cargo).trim() === cargoCuenta; })[0];
+        if (igual) { sel.value = igual.persona_id; sel.dispatchEvent(new Event('change')); }
+      },
+      campos: mismoCargo + U.campo('Nombre completo', '<input class="sx2-input" name="nombre" required value="' + U.esc(p.nombre || '') + '">') +
         '<div class="sx2-form__fila">' + U.campo('Correo', '<input class="sx2-input" type="email" name="usuario_email" required value="' + U.esc(p.usuario_email || '') + '"' + (!nueva && p.usuario_email ? ' readonly' : '') + '>') +
           U.campo('RUT', '<input class="sx2-input" name="rut" value="' + U.esc(p.rut || '') + '" placeholder="12.345.678-9">') + '</div>' +
         '<div class="sx2-form__fila">' + U.campo('Cargo según organigrama', '<input class="sx2-input" name="cargo" value="' + U.esc(p.cargo || '') + '">') +
@@ -234,7 +258,10 @@
         return x;
       },
       enviar: function (x) { return api('guardarPersonaSgc', x); },
-      aviso: nueva ? 'Ficha creada.' : 'Datos guardados.',
+      aviso: function (r) {
+        var x = (r && r.data) || {};
+        return (nueva ? 'Ficha creada.' : 'Datos guardados.') + (x.descriptor_copiado_de ? ' Heredó el descriptor ' + x.descriptor_version + ' de ' + x.descriptor_copiado_de + '.' : '');
+      },
       listo: function (r) {
         if (window.SigsoCalidad && SigsoCalidad.invalidar) SigsoCalidad.invalidar();
         if (nueva) { var id = r && r.data && r.data.persona_id; if (id) abrir(id); else if (window.SigsoCalidad) SigsoCalidad.irAItem('personas'); }
@@ -243,6 +270,7 @@
   }
   function formDescriptor(p, v, editar) {
     var corregir = !!(editar && v), base = corregir ? v : {};
+    var mismos = (ficha_.datos && ficha_.datos.mismo_cargo) || [];
     paso({ titulo: (corregir ? 'Corregir descriptor ' : 'Descriptor de cargo') + (corregir ? v.version : ''), boton: corregir ? 'Guardar cambios' : 'Guardar descriptor', ocupado: 'Guardando…', ancho: true,
       sub: corregir ? 'Corrige la versión vigente sin crear una nueva. Para un cambio real de contenido, usa "Nueva versión".' : (v ? 'La versión ' + U.esc(v.version) + ' quedará archivada (no se elimina) y esta pasa a ser la vigente.' : ''),
       campos: U.campo('Versión', '<input class="sx2-input" name="version" required value="' + U.esc(corregir ? v.version : (v ? '' : 'v01')) + '" placeholder="Ej.: v02"' + (corregir ? ' readonly' : '') + '>') +
@@ -255,7 +283,9 @@
         '<div class="sx2-form__fila">' + U.campo('Nivel educacional', '<input class="sx2-input" name="nivel_educacional" value="' + U.esc(base.nivel_educacional || '') + '">') +
           U.campo('Formación técnica', '<input class="sx2-input" name="formacion_tecnica" value="' + U.esc(base.formacion_tecnica || '') + '">') + '</div>' +
         U.campo('Experiencia laboral requerida', '<textarea class="sx2-input" name="experiencia" rows="2">' + U.esc(base.experiencia || '') + '</textarea>') +
-        archivoCampo('archivo', corregir && v.archivo_id ? 'Reemplazar el archivo (opcional)' : 'Archivo del descriptor (opcional)', corregir && v.archivo_id ? 'Actual: ' + (v.archivo_nombre || 'sin nombre') + '. Déjalo vacío para no cambiarlo.' : ''),
+        archivoCampo('archivo', corregir && v.archivo_id ? 'Reemplazar el archivo (opcional)' : 'Archivo del descriptor (opcional)', corregir && v.archivo_id ? 'Actual: ' + (v.archivo_nombre || 'sin nombre') + '. Déjalo vacío para no cambiarlo.' : '') +
+        (mismos.length ? '<label class="sx2-flex" style="gap:8px;align-items:flex-start;font-size:.875rem"><input type="checkbox" name="aplicar_mismo_cargo" checked>' +
+          '<span>Aplicar también a ' + U.esc(mismos.map(function (m) { return m.nombre; }).join(', ')) + ' (mismo cargo)</span></label>' : ''),
       preparar: function (x) {
         if (!x.version) return 'Indica la versión.';
         if (!corregir && (ficha_.datos.descriptores || []).some(function (dd) { return String(dd.version).toLowerCase() === x.version.toLowerCase(); })) return 'Ya existe la versión ' + x.version + '.';
@@ -266,11 +296,15 @@
           var datos = { persona_id: p.persona_id, version: x.version, objetivo: x.objetivo, funciones: x.funciones, responsabilidades: x.responsabilidades, habilidades: x.habilidades,
             items_responsabilidades: lineas(x.items_resp), items_habilidades: lineas(x.items_hab), nivel_educacional: x.nivel_educacional, formacion_tecnica: x.formacion_tecnica, experiencia: x.experiencia };
           if (a) { datos.contenido_base64 = a.b64; datos.nombre_archivo = a.nombre; }
+          if (x.aplicar_mismo_cargo) datos.aplicar_mismo_cargo = true;
           if (corregir) { datos.descriptor_id = v.descriptor_id; return api('actualizarDescriptorSgc', datos); }
           return api('guardarDescriptorSgc', datos);
         });
       },
-      aviso: 'Descriptor guardado.' });
+      aviso: function (r) {
+        var a = (r && r.data && r.data.aplicado_a) || [];
+        return 'Descriptor guardado' + (a.length ? ' también para ' + a.join(', ') : '') + '.';
+      } });
   }
   function formDocumento(p) {
     paso({ titulo: 'Cargar documento', boton: 'Cargar', ocupado: 'Subiendo…', sub: U.esc(p.nombre),
@@ -504,7 +538,7 @@
 
   window.SigsoCalidadFichaV2 = {
     abrir: abrir,
-    nueva: function () { formPersona(null); },
+    nueva: function (prellenado, cargos) { formPersona(null, prellenado, cargos); },
     mostrarCapacitaciones: mostrarCapacitaciones
   };
 })();
