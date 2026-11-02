@@ -727,11 +727,23 @@
     return '<div class="fin5-paso-env"><section class="fin5-card fin5-cpaso fin5-cpaso--' + (ok ? 'ok' : 'alerta') + ' fin5-entra" style="--i:3" aria-label="Cuenta de paso">' +
       '<header class="fin5-card__cab"><h2>Cuenta de paso <button type="button" class="fin5-th-ayuda js-f5-col-ayuda" data-col="paso" aria-label="¿Qué es la cuenta de paso?">?</button></h2><span class="fin5-pildora fin5-pildora--' + (ok ? 'ok">' + U.ico('check', 13) + 'En $0' : 'alerta">Debe quedar en $0') + '</span></header>' +
       '<div class="fin5-cpaso__saldo"><small>Saldo al cierre de ' + txt(mesLargo(d.periodo)) + '</small><b class="' + (ok ? 'fin2-pos' : '') + '">' + (c.saldo_final === null ? '—' : plata(c.saldo_final)) + '</b>' + (c.destino ? '<span>Honorarios → ' + txt(c.destino.nombre) + '</span>' : '') + '</div>' +
+      semanasHtml(c) +
       (partes.length && !ok ? '<div class="fin5-pila" role="img" aria-label="De qué se compone el saldo">' + partes.map(function (x) { return '<span class="fin5-cpaso__seg fin5-cpaso__seg--' + x[2] + '" style="width:' + (Math.abs(x[1]) / base * 100).toFixed(1) + '%" title="' + txt(x[0]) + ': ' + plata(x[1]) + '"></span>'; }).join('') + '</div>' : '') +
       (ok ? '<p class="fin5-cpaso__ok">' + U.ico('check', 14) + 'Todo lo que entró ya se pagó por los clientes o se traspasó a la cuenta de la empresa.</p>'
         : '<ul class="fin5-cpaso__lista">' + c.pendientes.map(function (x) { return '<li><div><b>' + txt(x.titulo) + '</b><small>' + txt(x.como) + '</small></div><span class="' + (x.monto < 0 ? 'fin2-neg' : '') + '">' + plata(x.monto) + '</span></li>'; }).join('') + '</ul>') +
       (c.diferencia ? '<p class="fin5-nota">' + U.ico('alerta', 13) + ' ' + plata(c.diferencia) + ' que no se explican con la planilla: revisa la cartola.</p>' : '') +
       '<p class="fin5-nota">Control desde ' + txt(mesLargo(c.desde)) + '. ' + (puede('CONFIGURAR') ? '<button type="button" class="sx2-enlace js-f5-paso-config">Cambiar</button>' : '') + '</p></section></div>';
+  }
+  // Monto corto para espacios chicos: $12,5 M · $865 mil · $4.200.
+  function compacto(v) { var a = Math.abs(v), s = v < 0 ? '−$' : '$'; return a >= 1e6 ? s + (a / 1e6).toLocaleString('es-CL', { maximumFractionDigits: 1 }) + ' M' : a >= 1e4 ? s + Math.round(a / 1e3) + ' mil' : plata(v); }
+  // Corte semanal: «cada semana debe estar en cero». Una ficha por semana con el saldo de ese día.
+  function semanasHtml(c) {
+    if (!c.semanas || !c.semanas.length) return '';
+    return '<div class="fin5-sem"><small class="fin5-sem__t">Cada semana</small><ol>' + c.semanas.map(function (w) {
+      var sin = w.saldo === null, tono = sin ? 'neutro' : w.en_cero ? 'ok' : 'alerta';
+      var tip = corta(w.desde) + ' al ' + corta(w.hasta) + ': saldo ' + (sin ? 'sin cartola' : plata(w.saldo)) + (sin || w.en_cero ? '' : ' · honorarios por traspasar ' + plata(w.por_traspasar) + ' · de clientes ' + plata(w.clientes || 0));
+      return '<li class="fin5-sem__d fin5-sem__d--' + tono + '" title="' + txt(tip) + '"><span>' + txt(Number(w.desde.slice(8)) + '–' + Number(w.hasta.slice(8))) + '</span><b>' + (sin ? '—' : w.en_cero ? U.ico('check', 12) + '$0' : txt(compacto(w.saldo))) + '</b></li>';
+    }).join('') + '</ol></div>';
   }
   function configurarPaso() {
     var d = est_.datos, c = d.cuenta_paso, otras = d.cuentas.filter(function (x) { return x.id !== d.cuenta_ref; });
@@ -1341,7 +1353,7 @@
   // =====================================================================================
   //  Reportes: FLUJO, saldo por cliente y cobranza
   // =====================================================================================
-  var rep_ = { flujoVista: 'real', flujoCuenta: '', cobVista: 'facturas', deudas: null, filtroDeuda: 'debe', buscaDeuda: '', hasta: '', meses: 6, empresa: '', periodo: '', facturas: 'abiertas', vacias: false, buscaCli: '', buscaFact: '', saldos: null, cobros: null };
+  var rep_ = { pano: null, filtroPano: 'todos', empresaPano: '', buscaPano: '', fin: null, flujoVista: 'real', flujoCuenta: '', cobVista: 'facturas', deudas: null, filtroDeuda: 'debe', buscaDeuda: '', hasta: '', meses: 6, empresa: '', periodo: '', facturas: 'abiertas', vacias: false, buscaCli: '', buscaFact: '', saldos: null, cobros: null };
   function selectorMes(clase, actual, meses, etiqueta) { return '<label class="fin5-select">' + U.ico('calendario', 15) + '<select class="' + clase + '" aria-label="' + txt(etiqueta || 'Mes') + '">' + meses.map(function (m) { return '<option value="' + m + '"' + (m === actual ? ' selected' : '') + '>' + txt(mesLargo(m)) + '</option>'; }).join('') + '</select></label>'; }
   function ultimosMeses(n) { var out = [], a = hoy().slice(0, 7).split('-').map(Number); for (var i = 0; i < n; i++) { var d = new Date(Date.UTC(a[0], a[1] - 1 - i, 1)); out.push(d.toISOString().slice(0, 7)); } return out; }
   // Mismo reporte con otro filtro: se atenúa lo que hay (sin pantalla en blanco) y se cambia solo el cuerpo al llegar.
@@ -1392,15 +1404,15 @@
       fila('Margen del mes', mg, 'fin4-res', '', true) +
       sec('Fondos de clientes (no son de la empresa)', 'caja') + fila('Recibido de clientes', d.fondos.recibido, '', 'info') + fila('Pagado por cuenta de clientes', d.fondos.pagado, '', 'info') + fila('Lo que sobró, cobrado como honorario', d.fondos.honorario, '', 'ok') + fila('Lo que sobró, a favor del cliente', d.fondos.a_favor, '', 'info') +
       sec('Otros (no son ingreso ni gasto)', 'capas') + fila('Traspasos entre cuentas', d.otros.traspasos, '', 'neutro') + fila('Préstamos recibidos', d.otros.prestamos_entran, '', 'neutro') + fila('Devoluciones de préstamos', d.otros.prestamos_salen, '', 'neutro') + fila('Sin completar', d.otros.sin_completar, '', 'alerta');
-    var comparar = rep_.flujoVista === 'comparar';
+    var comparar = rep_.flujoVista === 'comparar', proy = rep_.flujoVista === 'proyectos';
     paginaVista('flujo', x.cab('flujo') + '<div class="sx2-pagina__cuerpo fin4 fin5">' +
       '<div class="fin5-barra fin5-entra" style="--i:0">' + selectorMes('js-f4-hasta', rep_.hasta, ultimosMeses(18), 'Hasta') +
         '<div class="fin5-seg" role="group" aria-label="Meses">' + [3, 6, 12].map(function (n) { return '<button type="button" class="js-f5-nmeses" data-n="' + n + '" aria-pressed="' + (n === rep_.meses) + '">' + n + ' meses</button>'; }).join('') + '</div>' +
         '<label class="fin5-select">' + U.ico('caja', 15) + '<select class="js-f4-flujo-cuenta" aria-label="Cuenta"><option value="">Todas las cuentas</option>' + (d.cuentas || []).map(function (c) { return '<option value="' + txt(c.id) + '"' + (c.id === d.cuenta_ref ? ' selected' : '') + '>' + txt(c.nombre) + '</option>'; }).join('') + '</select></label>' +
         (d.cuenta_ref ? '' : '<label class="fin5-select">' + U.ico('empresa', 15) + '<select class="js-f4-empresa" aria-label="Empresa"><option value="">Todo el grupo</option>' + d.empresas.map(function (e) { return '<option' + (e === rep_.empresa ? ' selected' : '') + '>' + txt(e) + '</option>'; }).join('') + '</select></label>') +
-        U.segmento([{ id: 'real', texto: 'Real', icono: 'tabla' }, { id: 'comparar', texto: 'Proyectado vs real', icono: 'diana' }], rep_.flujoVista, 'js-f5-flujo-vista') +
-      '</div>' + (comparar ? flujoComparar(d, ti, te) + '</div>' : '') +
-      (comparar ? '' : '<section class="fin5-kpis" aria-label="Totales del período">' +
+        U.segmento([{ id: 'real', texto: 'Real', icono: 'tabla' }, { id: 'comparar', texto: 'Proyectado vs real', icono: 'diana' }, { id: 'proyectos', texto: 'Proyectos', icono: 'bandera' }], rep_.flujoVista, 'js-f5-flujo-vista') +
+      '</div>' + (comparar ? flujoComparar(d, ti, te) + '</div>' : proy ? proyectosHtml() + '</div>' : '') +
+      (comparar || proy ? '' : '<section class="fin5-kpis" aria-label="Totales del período">' +
         kpi({ clave: 'fl-i', t: 'Ingresos', v: tI, ico: 'tendencia', tono: 'ok', sub: M.length + ' meses' }, 1) + kpi({ clave: 'fl-e', t: 'Egresos', v: -tE, ico: 'dinero', tono: 'critico', sub: 'gastos con plan de cuenta' }, 2) +
         kpi({ clave: 'fl-m', t: 'Margen', v: tM, ico: 'destello', tono: 'acento', sub: tI ? Math.round(tM / tI * 100) + '% de los ingresos' : '' }, 3) + kpi({ clave: 'fl-f', t: 'Fondos de clientes', v: tot(d.fondos.recibido), ico: 'caja', tono: 'info', sub: 'recibidos (aparte)' }, 4) +
       '</section>' +
@@ -1461,6 +1473,70 @@
         '<tr class="fin4-sec"><th colspan="5"><span>' + U.ico('dinero', 14) + 'Egresos</span></th></tr>' + tabla(P.egresos, re, true) + '</tbody></table></div></section>' +
       '<p class="fin5-nota">Lo proyectado sale del presupuesto (Más → Presupuesto); lo real, de la planilla. En verde, lo que va mejor que lo proyectado (más ingresos o menos gastos). <button type="button" class="sx2-enlace js-f5-ir-presupuesto">Editar el presupuesto</button></p>';
   }
+  // Proyectos financiados por clientes: meta mensual, aporte de cada cliente (su % de lo que paga) y cumplimiento.
+  function pedirFinanciamiento() {
+    x_.api('finanzasFinanciamiento', { hasta: rep_.hasta, meses: rep_.meses }).then(function (r) {
+      if (!r || !r.ok) { error(r, 'No se pudieron calcular los proyectos.'); return; }
+      rep_.fin = r.data; rep_.finClave = rep_.hasta + '|' + rep_.meses; if (rep_.flujoVista === 'proyectos') pintarFlujo();
+    });
+  }
+  function proyectosHtml() {
+    if (!rep_.fin || rep_.finClave !== rep_.hasta + '|' + rep_.meses) { pedirFinanciamiento(); return U.esqueleto('tabla', 6); }
+    var d = rep_.fin, M = d.meses_con_datos.length ? d.meses_con_datos : d.meses, ult = d.ultimo;
+    var pl = puede('PLANIFICAR'), pc = puede('CLIENTES');
+    var agregar = pl ? U.boton({ texto: 'Agregar proyecto a financiar', icono: 'nueva', sm: true, variante: 'primario', clase: 'js-f5-proy-nuevo' }) : '';
+    if (!d.proyectos.length) return '<div class="fin5-vacio fin5-entra"><span class="fin5-vacio__ico">' + U.ico('bandera', 26) + '</span><h3>Todavía no hay proyectos financiados por clientes</h3><p>Por ejemplo, el podcast: se le pone una meta mensual y se eligen los clientes que lo financian con un porcentaje de lo que pagan. SIGSO suma lo que aporta cada uno según la planilla y muestra si se cumple la meta.</p>' + agregar + '</div>';
+    var MT = d.proyectos.reduce(function (a, p) { return a + p.meta_mensual; }, 0), AT = d.proyectos.reduce(function (a, p) { return a + p.aporte_mes; }, 0);
+    return '<section class="fin5-kpis" aria-label="Proyectos">' +
+        kpi({ clave: 'pr-n', t: 'Proyectos', v: d.proyectos.length, fmt: 'n', ico: 'bandera', tono: 'neutro', sub: d.proyectos.reduce(function (a, p) { return a + p.clientes.length; }, 0) + ' cliente(s) los financian' }, 1) +
+        kpi({ clave: 'pr-m', t: 'Meta mensual', v: MT, ico: 'diana', tono: 'acento', sub: 'la suma de las metas' }, 2) +
+        kpi({ clave: 'pr-a', t: 'Aportado en ' + mesNombreLargo(ult), v: AT, ico: 'dinero', tono: AT >= MT && MT ? 'ok' : 'alerta', sub: MT ? Math.round(AT / MT * 100) + ' % de la meta' : 'sin meta' }, 3) +
+      '</section>' +
+      '<div class="fin5-proy-acc">' + agregar + '</div>' +
+      '<div class="fin5-proy-lista">' + d.proyectos.map(function (p, k) {
+        var pct = p.cumplimiento_mes, max = Math.max.apply(null, M.map(function (m) { return p.por_mes[m] || 0; }).concat([p.meta_mensual, 1]));
+        return '<article class="fin5-card fin5-proy fin5-entra" style="--i:' + (k + 4) + '"><header class="fin5-card__cab"><div><h2>' + txt(p.nombre) + '</h2><small class="fin5-tenue">' + txt([p.codigo, p.fuente].filter(Boolean).join(' · ')) + '</small></div>' +
+            (pl ? '<button type="button" class="fin5-mini js-f5-proy-meta" data-id="' + txt(p.id) + '">' + U.ico('diana', 13) + 'Meta</button>' : '') + (pc ? '<button type="button" class="fin5-mini js-f5-proy-cli" data-id="' + txt(p.id) + '">' + U.ico('nueva', 13) + 'Cliente</button>' : '') + '</header>' +
+          '<div class="fin5-proy__meta"><div><small>Aportado en ' + txt(mesNombreLargo(ult)) + '</small><b>' + plata(p.aporte_mes) + '</b><span>' + (p.meta_mensual ? 'de ' + plata(p.meta_mensual) + ' al mes' : 'sin meta mensual') + '</span></div>' +
+            (pct !== null ? '<div class="fin5-proy__pct fin5-proy__pct--' + (pct >= 100 ? 'ok' : pct >= 60 ? 'medio' : 'bajo') + '"><b>' + pct + ' %</b><small>de la meta</small></div>' : '') + '</div>' +
+          (p.meta_mensual ? '<div class="fin5-progreso fin5-progreso--' + (pct >= 100 ? 'ok' : 'info') + '"><span style="width:' + Math.min(100, pct || 0) + '%"></span></div>' : '') +
+          (p.meta_total ? '<p class="fin5-nota">Acumulado ' + plata(p.aporte_total) + ' de ' + plata(p.meta_total) + ' (' + (p.avance_total || 0) + ' %).</p>' : '') +
+          '<div class="fin5-proy__meses" role="img" aria-label="Aporte por mes">' + M.map(function (m) { var v = p.por_mes[m] || 0; return '<div><span class="fin5-proy__bar' + (p.meta_mensual && v < p.meta_mensual ? ' fin5-proy__bar--bajo' : '') + '" style="height:' + Math.max(3, v / max * 100).toFixed(0) + '%" title="' + txt(mesCorto(m) + ': ' + plata(v)) + '"></span><small>' + txt(mesCorto(m)) + '</small></div>'; }).join('') +
+            (p.meta_mensual ? '<i class="fin5-proy__linea" style="bottom:' + (16 + p.meta_mensual / max * 80).toFixed(0) + 'px" title="Meta mensual"></i>' : '') + '</div>' +
+          (p.clientes.length ? '<table class="fin4-tab fin5-proy__cli"><thead><tr><th>Cliente</th><th class="fin4-n">%</th><th class="fin4-n">Esperado</th><th class="fin4-n">Aportó en ' + txt(mesCorto(ult)) + '</th><th class="fin4-n">Acumulado</th></tr></thead><tbody>' + p.clientes.map(function (c) {
+            return '<tr><th>' + txt(c.cliente) + (c.vigente && !c.aporte_mes ? ' ' + U.badge('sin aporte', 'alerta') : '') + '</th><td class="fin4-n">' + c.porcentaje + ' %</td><td class="fin4-n">' + plata(c.esperado_mes, '—') + '</td><td class="fin4-n">' + plata(c.aporte_mes, '—') + '</td><td class="fin4-n">' + plata(c.aporte_total, '—') + '</td></tr>';
+          }).join('') + '</tbody></table>' : '<p class="fin5-nota">Todavía no tiene clientes que lo financien.</p>') +
+          (p.sin_aportar.length ? '<div class="fin5-aviso fin5-aviso--alerta">' + U.ico('alerta', 15) + '<span>En ' + txt(mesNombreLargo(ult)) + ' no aportaron: ' + txt(p.sin_aportar.join(', ')) + ' (no pagaron honorarios ese mes).</span></div>' : '') +
+        '</article>';
+      }).join('') + '</div>' +
+      '<p class="fin5-nota">' + txt(d.formulas.aporte) + '. Esperado: ' + txt(d.formulas.esperado).toLowerCase() + '. Los porcentajes se cambian con fecha («Cliente»), así la historia no cambia.</p>';
+  }
+  function mesNombreLargo(p) { return mesLargo(p).split(' ')[0]; }
+  function formMetaProyecto(id) {
+    var d = rep_.fin, p = id ? d.proyectos.filter(function (x) { return x.id === id; })[0] : null;
+    var campos = (p ? '' : U.campo('Proyecto', '<select name="proyecto_id" class="sx2-input"><option value="">Uno nuevo…</option>' + d.disponibles.map(function (q) { return '<option value="' + txt(q.id) + '">' + txt(q.nombre + (q.codigo ? ' (' + q.codigo + ')' : '')) + '</option>'; }).join('') + '</select>', 'Los proyectos de SIGSO, o uno nuevo solo para Finanzas.') +
+        U.campo('Nombre del proyecto nuevo', '<input name="nombre" class="sx2-input" maxlength="160" placeholder="Podcast">') + U.campo('Código', '<input name="codigo" class="sx2-input" maxlength="20" placeholder="POD">')) +
+      U.campo('Meta mensual', '<input name="meta_mensual" class="sx2-input" inputmode="decimal" value="' + (p && p.meta_mensual ? plata(p.meta_mensual) : '') + '" placeholder="$500.000">', 'Cuánto debe financiarse cada mes.') +
+      U.campo('Meta total (opcional)', '<input name="meta_total" class="sx2-input" inputmode="decimal" value="' + (p && p.meta_total ? plata(p.meta_total) : '') + '" placeholder="$6.000.000">') +
+      U.campo('Nota', '<input name="nota" class="sx2-input" maxlength="300" value="' + txt(p ? p.nota : '') + '">');
+    U.formulario({ titulo: p ? 'Meta de ' + p.nombre : 'Proyecto a financiar', boton: 'Guardar', campos: campos,
+      enviar: function (v) {
+        var pid = p ? p.id : v.proyecto_id;
+        var meta = function (idp) { return x_.api('finanzasGuardarMetaProyecto', { proyecto_id: idp, meta_mensual: v.meta_mensual, meta_total: v.meta_total, nota: v.nota }); };
+        if (pid) return meta(pid);
+        if (!v.nombre || !v.codigo) return Promise.resolve({ ok: false, message: 'Elige un proyecto o escribe el nombre y el código del nuevo.' });
+        return x_.api('finanzasGuardarProyecto', { codigo: v.codigo, nombre: v.nombre }).then(function (r) { return r && r.ok ? meta('leg:' + v.codigo.trim().slice(0, 20)) : r; });
+      }, aviso: 'Guardado.', listo: function () { rep_.fin = null; pintarFlujo(); } });
+  }
+  function formClienteProyecto(id) {
+    var d = rep_.fin, p = d.proyectos.filter(function (x) { return x.id === id; })[0]; if (!p) return;
+    U.formulario({ titulo: 'Cliente que financia ' + p.nombre, boton: 'Guardar',
+      campos: U.campo('Cliente', '<select name="cliente_id" class="sx2-input" required><option value="">Elige…</option>' + d.clientes.map(function (c) { return '<option value="' + txt(c.id) + '">' + txt(c.nombre) + '</option>'; }).join('') + '</select>') +
+        U.campo('Porcentaje de lo que paga', '<input name="porcentaje" class="sx2-input" inputmode="decimal" required placeholder="20">', 'Qué parte de sus honorarios va a este proyecto.') +
+        U.campo('Desde', '<input name="desde" type="date" class="sx2-input" value="' + hoy() + '">', 'Si ya financiaba el proyecto, el porcentaje anterior se cierra el día antes.'),
+      enviar: function (v) { return x_.api('finanzasGuardarAsignacion', { cliente_id: v.cliente_id, proyecto_id: p.id, porcentaje: v.porcentaje, desde: v.desde }); },
+      aviso: 'Guardado.', listo: function () { rep_.fin = null; pintarFlujo(); } });
+  }
   // ---- Saldo por cliente ----------------------------------------------------------------
   function verSaldos(x) {
     x_ = x; enlazar();
@@ -1503,10 +1579,11 @@
   }
 
   // ---- Cobranza ---------------------------------------------------------------------------
-  function segCobros() { return '<div class="fin5-cob-seg fin5-entra">' + U.segmento([{ id: 'facturas', texto: 'Facturas', icono: 'recibo' }, { id: 'deudas', texto: 'Deudas anteriores', icono: 'reloj' }], rep_.cobVista, 'js-f5-cobvista') + '</div>'; }
+  function segCobros() { return '<div class="fin5-cob-seg fin5-entra">' + U.segmento([{ id: 'facturas', texto: 'Facturas', icono: 'recibo' }, { id: 'deudas', texto: 'Deudas anteriores', icono: 'reloj' }, { id: 'clientes', texto: 'Todos los clientes', icono: 'equipo' }], rep_.cobVista, 'js-f5-cobvista') + '</div>'; }
   function verCobros(x) {
     x_ = x; enlazar();
     if (rep_.cobVista === 'deudas') { verDeudas(x); return; }
+    if (rep_.cobVista === 'clientes') { verPanorama(x); return; }
     var t = x.turno();
     if (!atenuar('cobros')) x.pagina(x.cab('cobros') + U.esqueleto('tabla', 12));
     x.api('finanzasHojaCobranza', { estado: rep_.facturas }).then(function (r) {
@@ -1535,6 +1612,53 @@
       x.aplicarCapacidades(x.raiz());
       activar(x.raiz());
     });
+  }
+  // ---- Todos los clientes: activos, sin movimiento, los que se fueron, y cuánto debe cada uno --------------------
+  var ESTADO_TONO_ = { ACTIVO: 'ok', SIN_MOVIMIENTO: 'neutro', SE_FUE: 'alerta', SUSPENDIDO: 'alerta', PROSPECTO: 'info' };
+  function verPanorama(x) {
+    var t = x.turno();
+    if (!atenuar('cobros')) x.pagina(x.cab('cobros') + U.esqueleto('tabla', 10));
+    x.api('finanzasPanoramaClientes', {}).then(function (r) {
+      if (!x.vigente(t)) return;
+      if (!r || !r.ok) { falla(x, 'cobros', 'No se pudo armar la lista de clientes', r); return; }
+      rep_.pano = r.data; pintarPanorama(x);
+    });
+  }
+  function pintarPanorama(x) {
+    var d = rep_.pano, T = d.totales;
+    var filtros = [['todos', 'Todos'], ['deben', 'Deben'], ['ACTIVO', 'Activos'], ['SIN_MOVIMIENTO', 'Sin movimiento'], ['SE_FUE', 'Se fueron']];
+    paginaVista('cobros', x.cab('cobros') + '<div class="sx2-pagina__cuerpo fin4 fin5">' + segCobros() +
+      '<section class="fin5-kpis" aria-label="Clientes">' +
+        kpi({ clave: 'pa-d', t: 'Lo que deben', v: T.total_debe, ico: 'reloj', tono: T.total_debe ? 'critico' : 'ok', sub: T.deben + ' cliente(s) · vencido ' + plata(T.vencido) }, 1) +
+        kpi({ clave: 'pa-f', t: 'De clientes que se fueron', v: T.debe_se_fueron, ico: 'salir', tono: 'alerta', sub: T.se_fueron + ' se fueron' + (T.anterior ? ' · deudas anteriores ' + plata(T.anterior) : '') }, 2) +
+        kpi({ clave: 'pa-a', t: 'Clientes activos', v: T.activos, fmt: 'n', ico: 'equipo', tono: 'ok', sub: 'pagaron en ' + d.meses_actividad.map(mesCorto).join(', ') + ' o tienen servicio vigente' }, 3) +
+        kpi({ clave: 'pa-s', t: 'Sin movimiento', v: T.sin_movimiento, fmt: 'n', ico: 'pausado', tono: 'neutro', sub: 'sin pagos en esos meses' }, 4) +
+      '</section>' +
+      '<section class="fin5-card fin5-entra" style="--i:5"><header class="fin5-card__cab"><div class="fin5-chips" role="group" aria-label="Filtrar clientes">' + filtros.map(function (f) { return '<button type="button" class="fin5-chip js-f5-pano-filtro" data-f="' + f[0] + '" aria-pressed="' + (rep_.filtroPano === f[0]) + '">' + f[1] + '</button>'; }).join('') + '</div>' +
+        (d.empresas.length > 1 ? '<label class="fin5-select">' + U.ico('empresa', 15) + '<select class="js-f5-pano-empresa" aria-label="Empresa"><option value="">Todas las empresas</option>' + d.empresas.map(function (e) { return '<option' + (e === rep_.empresaPano ? ' selected' : '') + '>' + txt(e) + '</option>'; }).join('') + '</select></label>' : '') +
+        '<label class="fin5-buscar">' + U.ico('lupa', 15) + '<input type="search" class="js-f5-buscar-pano" placeholder="Buscar cliente o RUT…" value="' + txt(rep_.buscaPano) + '" aria-label="Buscar cliente"></label></header>' +
+        '<div class="fin4-rep"><table class="fin4-tab fin5-tab-fact"><thead><tr><th>Cliente</th><th>Estado</th><th>Empresa</th><th class="fin4-n">Mensual</th><th>Último pago</th><th class="fin4-n">Pagó (3 meses)</th><th class="fin4-n">Facturas por cobrar</th><th class="fin4-n">Deuda anterior</th><th class="fin4-n">Debe en total</th></tr></thead><tbody class="js-f5-pano">' + cuerpoPanorama() + '</tbody></table></div>' +
+      '</section>' +
+      '<p class="fin5-nota"><b>Activo</b>: pagó en los últimos meses con planilla o tiene un servicio vigente. <b>Se fue</b>: su ficha dice «Terminado», su deuda anterior dice «se fue» o está inactivo en el maestro. <b>Debe en total</b> = facturas por cobrar + deudas anteriores. El estado y la empresa se corrigen en Más → Fichas de clientes.</p></div>');
+    x.aplicarCapacidades(x.raiz()); activar(x.raiz());
+  }
+  function cuerpoPanorama() {
+    var d = rep_.pano, q = norm(rep_.buscaPano).trim(), f = rep_.filtroPano;
+    var l = d.clientes.filter(function (c) {
+      if (f === 'deben' && !c.debe) return false; if (f !== 'todos' && f !== 'deben' && c.estado !== f) return false;
+      if (rep_.empresaPano && c.empresa !== rep_.empresaPano) return false;
+      return !q || norm(c.cliente + ' ' + c.rut).indexOf(q) !== -1;
+    });
+    if (!l.length) return '<tr class="fin5-sin"><td colspan="9">' + U.ico('lupa', 16) + ' Ningún cliente con ese filtro.</td></tr>';
+    return l.slice(0, 400).map(function (c, i) {
+      return '<tr style="--i:' + Math.min(i, 24) + '"><td><span class="fin5-cli"><span class="fin5-avatar" data-tono="' + (String(c.cliente || '?').charCodeAt(0) % 5) + '">' + txt(iniciales(c.cliente)) + '</span><span class="fin5-cli__n">' + txt(c.cliente) + '<small>' + txt(c.rut || '') + (c.sin_ficha ? ' · no está en el maestro' : '') + '</small></span></span></td>' +
+        '<td>' + U.badge(d.estados[c.estado] || c.estado, ESTADO_TONO_[c.estado] || 'neutro') + '</td><td>' + (c.empresa ? '<span class="fin5-etq">' + txt(c.empresa) + '</span>' : '') + '</td>' +
+        '<td class="fin4-n">' + plata(c.mensual, '—') + '</td><td class="fin2-num">' + txt(c.ultimo_pago ? corta(c.ultimo_pago) + '-' + c.ultimo_pago.slice(2, 4) : '—') + '</td>' +
+        '<td class="fin4-n">' + plata(c.pagado_3m, '—') + '</td>' +
+        '<td class="fin4-n">' + plata(c.por_cobrar, '—') + (c.vencido ? '<small class="fin5-atraso">vencido ' + plata(c.vencido) + '</small>' : '') + '</td>' +
+        '<td class="fin4-n">' + plata(c.deuda_anterior, '—') + (c.deuda_codigos.length ? '<small class="fin5-tenue">' + txt(c.deuda_codigos.join(', ')) + '</small>' : '') + '</td>' +
+        '<td class="fin4-n"><b class="' + (c.debe ? 'fin2-neg' : '') + '">' + plata(c.debe, '—') + '</b></td></tr>';
+    }).join('');
   }
   // ---- Deudas anteriores: clientes de antes o que se fueron que quedaron debiendo (código DA001… en la planilla) ----
   function verDeudas(x) {
@@ -1739,6 +1863,10 @@
       if (b && b.classList.contains('js-f5-limpiar')) { est_.filtro = 'todas'; est_.busca = ''; var bi = x_.raiz().querySelector('.js-f5-buscar'); if (bi) bi.value = ''; filtrar(); return; }
       if (b && b.classList.contains('js-f5-flujo-vista')) { if (rep_.flujoVista !== b.dataset.id) { rep_.flujoVista = b.dataset.id; pintarFlujo(); } return; }
       if (b && b.classList.contains('js-f5-ir-presupuesto')) { x_.ir('presupuesto'); return; }
+      if (b && b.classList.contains('js-f5-proy-nuevo')) { formMetaProyecto(''); return; }
+      if (b && b.classList.contains('js-f5-proy-meta')) { formMetaProyecto(b.dataset.id); return; }
+      if (b && b.classList.contains('js-f5-proy-cli')) { formClienteProyecto(b.dataset.id); return; }
+      if (b && b.classList.contains('js-f5-pano-filtro')) { rep_.filtroPano = b.dataset.f; Array.prototype.forEach.call(x_.raiz().querySelectorAll('.js-f5-pano-filtro'), function (c) { c.setAttribute('aria-pressed', String(c.dataset.f === rep_.filtroPano)); }); var tp = x_.raiz().querySelector('.js-f5-pano'); if (tp) tp.innerHTML = cuerpoPanorama(); return; }
       if (b && b.classList.contains('js-f5-vacias')) { rep_.vacias = !rep_.vacias; pintarFlujo(); return; }
       if (b && b.classList.contains('js-f5-nmeses')) { rep_.meses = Number(b.dataset.n); verFlujo(x_); return; }
       var cel = t.closest('.fin4-hoja td.fin4-cel');
@@ -1762,6 +1890,7 @@
       var t = ev.target;
       if (t.classList.contains('js-f5-buscar')) { est_.busca = t.value; filtrar(true); }
       else if (t.classList.contains('js-f5-buscar-cli')) { rep_.buscaCli = t.value; var tb = x_.raiz().querySelector('.js-f5-cli'); if (tb) tb.innerHTML = cuerpoSaldos(); }
+      else if (t.classList.contains('js-f5-buscar-pano')) { rep_.buscaPano = t.value; var tp2 = x_.raiz().querySelector('.js-f5-pano'); if (tp2) tp2.innerHTML = cuerpoPanorama(); }
       else if (t.classList.contains('js-f5-buscar-deuda')) { rep_.buscaDeuda = t.value; var td2 = x_.raiz().querySelector('.js-f5-deudas'); if (td2) td2.innerHTML = cuerpoDeudas(); }
       else if (t.classList.contains('js-f5-buscar-fact')) { rep_.buscaFact = t.value; var tf = x_.raiz().querySelector('.js-f5-fact'); if (tf) tf.innerHTML = cuerpoCobros(); }
     });
@@ -1774,6 +1903,7 @@
       else if (t.classList.contains('js-f4-hasta')) { rep_.hasta = t.value; verFlujo(x_); }
       else if (t.classList.contains('js-f4-empresa')) { rep_.empresa = t.value; verFlujo(x_); }
       else if (t.classList.contains('js-f4-flujo-cuenta')) { rep_.flujoCuenta = t.value; verFlujo(x_); }
+      else if (t.classList.contains('js-f5-pano-empresa')) { rep_.empresaPano = t.value; var tp3 = x_.raiz().querySelector('.js-f5-pano'); if (tp3) tp3.innerHTML = cuerpoPanorama(); }
       else if (t.classList.contains('js-f4-periodo')) { rep_.periodo = t.value; verSaldos(x_); }
     });
     // Teclado de planilla: solo cuando la hoja está en pantalla y no hay un diálogo abierto.

@@ -2115,3 +2115,42 @@ tr.fin5-deuda:focus-visible { outline: 2px solid var(--fin); outline-offset: -2p
 .fin5-cumple__b--bien { background: var(--sx-ok); } .fin5-cumple__b--mal { background: var(--sx-critico); }
 .fin5-comp-mes tr.fin5-tenue th, .fin5-comp-mes tr.fin5-tenue td { color: var(--sx-texto-3); font-weight: 500; }
 .fin5-comp-mes tr[data-tono="ok"] td { color: var(--sx-ok); font-weight: 650; } .fin5-comp-mes tr[data-tono="critico"] td { color: var(--sx-critico); font-weight: 650; }
+
+/* ==== Finanzas v5.8 · corte semanal, todos los clientes, proyectos financiados ==== */
+.fin5-sem { display: flex; flex-direction: column; gap: 5px; }
+.fin5-sem__t { font: 700 .66rem/1 var(--fuente); letter-spacing: .06em; text-transform: uppercase; color: var(--sx-texto-3); }
+.fin5-sem ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(58px, 1fr)); gap: 5px; }
+.fin5-sem__d { display: flex; flex-direction: column; gap: 2px; padding: 6px 7px; border-radius: 9px; border: 1px solid var(--sx-borde); background: var(--sx-superficie); cursor: help; --t: var(--sx-texto-3); }
+.fin5-sem__d span { font-size: .64rem; color: var(--sx-texto-3); }
+.fin5-sem__d b { display: inline-flex; align-items: center; gap: 3px; font: 700 .72rem/1.1 var(--fuente); color: var(--t); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fin5-sem__d--ok { --t: var(--sx-ok); border-color: color-mix(in srgb, var(--sx-ok) 35%, var(--sx-borde)); background: color-mix(in srgb, var(--sx-ok) 6%, var(--sx-superficie)); }
+.fin5-sem__d--alerta { --t: color-mix(in srgb, var(--sx-alerta) 85%, var(--sx-texto)); border-color: color-mix(in srgb, var(--sx-alerta) 40%, var(--sx-borde)); }
+.fin5-proy-acc { display: flex; justify-content: flex-end; }
+.fin5-proy-acc:empty { display: none; }
+.fin5-proy-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; }
+@media (max-width: 560px) { .fin5-proy-lista { grid-template-columns: 1fr; } }
+.fin5-proy .fin5-card__cab { gap: 6px; }
+.fin5-proy .fin5-card__cab > div { flex: 1; min-width: 0; }
+.fin5-proy__meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fin5-proy__meta > div:first-child { display: flex; flex-direction: column; gap: 2px; }
+.fin5-proy__meta small { font-size: .72rem; color: var(--sx-texto-3); }
+.fin5-proy__meta b { font: 800 1.35rem/1.1 var(--fuente); color: var(--sx-texto); font-variant-numeric: tabular-nums; }
+.fin5-proy__meta span { font-size: .76rem; color: var(--sx-texto-2); }
+.fin5-proy__pct { display: flex; flex-direction: column; align-items: center; padding: 8px 12px; border-radius: 12px; }
+.fin5-proy__pct b { font: 800 1.2rem/1 var(--fuente); }
+.fin5-proy__pct small { font-size: .66rem; }
+.fin5-proy__pct--ok { background: color-mix(in srgb, var(--sx-ok) 12%, transparent); color: var(--sx-ok); }
+.fin5-proy__pct--medio { background: color-mix(in srgb, var(--sx-alerta) 12%, transparent); color: color-mix(in srgb, var(--sx-alerta) 85%, var(--sx-texto)); }
+.fin5-proy__pct--bajo { background: color-mix(in srgb, var(--sx-critico) 10%, transparent); color: var(--sx-critico); }
+.fin5-proy__meses { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 96px; padding-bottom: 16px; }
+.fin5-proy__meses > div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
+.fin5-proy__meses > div > small { position: absolute; bottom: -16px; font-size: .62rem; color: var(--sx-texto-3); white-space: nowrap; }
+.fin5-proy__meses > div { position: relative; }
+.fin5-proy__bar { width: 70%; max-width: 34px; border-radius: 6px 6px 2px 2px; background: var(--sx-ok); }
+.fin5-proy__bar--bajo { background: color-mix(in srgb, var(--sx-alerta) 80%, var(--sx-superficie)); }
+.fin5-proy__linea { position: absolute; left: 0; right: 0; border-top: 2px dashed color-mix(in srgb, var(--fin) 70%, transparent); pointer-events: none; }
+.fin5-proy__cli { font-size: .78rem; width: 100%; min-width: 0 !important; }
+.fin5-proy__cli th, .fin5-proy__cli td { white-space: normal; padding-inline: 6px; }
+.fin5-proy { overflow: hidden; }
+.fin5-proy__cli th { font-weight: 600; }
+.fin5-proy__cli td.fin4-n { white-space: nowrap; }
