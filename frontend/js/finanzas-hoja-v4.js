@@ -185,12 +185,13 @@
     return l;
   }
   // Filtros de la planilla (solo cambian lo que se ve; los totales siguen siendo del mes completo).
-  var FILTROS = [['todas', 'Todas'], ['falta', 'Falta anotar'], ['completar', 'Por completar'], ['esperando', 'Esperan cartola'], ['ok', 'En el banco']];
+  var FILTROS = [['todas', 'Todas'], ['falta', 'Falta anotar'], ['completar', 'Por completar'], ['factura', 'Factura sugerida'], ['esperando', 'Esperan cartola'], ['ok', 'En el banco']];
   function pasaFiltro(f, k) {
     k = k || est_.filtro;
     if (k === 'falta') return f.banco === 'falta';
     if (k === 'completar') return !!(f.que && (f.que.k === 'rev' || / · sin /.test(f.que.t)));
     if (k === 'esperando') return f.banco === 'esperando';
+    if (k === 'factura') return !!(f.sug_fact && !f.fact);
     if (k === 'ok') return f.banco === 'ok';
     return true;
   }
@@ -349,6 +350,11 @@
       if (cuenta_.nombre) l.push('<li><b>' + cuenta_.nombre + ' fila(s) sin nombre</b>: escribe quién mandó o a quién se pagó.</li>');
       h = '<h3>Qué falta completar</h3><ul>' + l.join('') + '</ul><p>Toca el texto naranjo de «Qué es» en cada fila para ir directo a la celda.</p>';
     } else if (f === 'falta') h = '<h3>Movimientos del banco sin anotar</h3><p>Están en la cartola y nadie los escribió en la planilla. La fecha y el monto ya vienen del banco: completa <b>quién es</b> y la <b>OBS</b>. Si el nombre aparece sugerido, Enter lo acepta.</p>';
+    else if (f === 'factura') {
+      var segs = d.filas.filter(function (x) { return x.sug_fact && !x.fact && x.sug_fact.certeza === 'alta'; }).length, med = d.filas.filter(function (x) { return x.sug_fact && !x.fact && x.sug_fact.certeza !== 'alta'; }).length;
+      h = '<h3>Abonos con su factura sugerida</h3><p>SIGSO encontró la factura que paga cada abono: mismo cliente y mismo monto' + (med ? ', o solo el mismo monto cuando paga otra persona (esas confírmalas una a una)' : '') + '. Con el N° puesto, la factura queda pagada en Cobranza. Toca la celda «N° factura» y Enter acepta la sugerencia.</p>' +
+        (segs && editable() ? '<p><button type="button" class="sx2-boton sx2-boton--primario sx2-boton--sm js-f5-fact-todas">' + U.ico('check', 14) + 'Poner las ' + segs + ' sugerencias seguras</button></p>' : '');
+    }
     else if (f === 'esperando') h = '<h3>Anotadas que el banco todavía no trae</h3><p>Si ya subiste la cartola completa del mes, revisa la fecha y el monto: puede haber un número mal escrito, o el banco lo registró en otro mes.</p>';
     return '<div class="fin5-guia"' + (h ? '' : ' hidden') + '>' + (h ? U.ico('bombilla', 18) + '<div>' + h + '</div>' : '') + '</div>';
   }
@@ -655,6 +661,25 @@
     est_.oferta = sim.length ? { plan: plan, ids: sim.map(function (g) { return g.id; }), hasta: Date.now() + 30000 } : null;
     ayuda();
   }
+  // Pone de una vez los N° de factura sugeridos con certeza alta (mismo cliente y mismo monto). Las de solo monto, una a una.
+  function ponerFacturasSugeridas() {
+    var filas = est_.datos.filas.filter(function (f) { return f.sug_fact && !f.fact && f.sug_fact.certeza === 'alta'; });
+    if (!filas.length) return;
+    U.confirmar({ titulo: '¿Poner ' + filas.length + ' N° de factura?', texto: filas.slice(0, 8).map(function (f) { return corta(f.fecha) + ' ' + (f.nombre || '') + ' → ' + f.sug_fact.fact; }).join('; ') + (filas.length > 8 ? '; …' : '') + '.', boton: 'Ponerlos' }).then(function (si) {
+      if (!si) return;
+      filas.forEach(function (f) {
+        var n = f.sug_fact.fact; f.fact = n;
+        encolar(function () {
+          return x_.api('finanzasHojaGuardar', { id: f.id, expected_version: f.version, campos: { fact: n } }).then(function (r) {
+            if (!r || !r.ok) { f.fact = ''; error(r, 'No se pudo guardar.'); return; }
+            if (r.data && r.data.version !== undefined) f.version = r.data.version;
+            est_.guardados.push(f.id);
+          });
+        });
+      });
+      repintarHoja(); mensaje(filas.length + ' factura(s) quedaron pagadas');
+    });
+  }
   function aplicarOferta() {
     var o = est_.oferta; if (!o) return;
     var filas = est_.datos.filas.filter(function (g) { return o.ids.indexOf(g.id) !== -1 && !g.plan; });
@@ -742,6 +767,7 @@
     var ph = z.nueva ? { fecha: 'día · ' + corta(fechaDefecto()), nombre: 'escribe aquí para anotar', obs: 'OBS', monto: '+ entra / − sale' } : f.banco === 'falta' ? { nombre: sug ? '¿' + sug + '? ↵' : '¿quién es?', obs: 'OBS' } : {};
     var falta = z.nueva ? null : faltaDe(f), sugPlan = falta && falta.tipo === 'plan' ? sugerirPlan(f) : '';
     if (falta && falta.tipo === 'plan') ph.plan = sugPlan ? '¿' + sugPlan + '? ↵' : 'falta: ¿en qué se gastó?';
+    if (!z.nueva && f.sug_fact && !f.fact) ph.fact = '¿' + f.sug_fact.fact + '? ↵';
     if (falta && falta.tipo === 'obs') ph.obs = 'falta la OBS';
     if (falta && falta.tipo === 'nombre') ph.nombre = 'falta el nombre';
     var grupo = !z.nueva && f.grupo ? (est_.datos.grupos || []).filter(function (g) { return g.letra === f.grupo; })[0] : null;
@@ -753,7 +779,7 @@
     var que = z.nueva || f.temp ? '' : (falta && ed ? '<button type="button" class="fin5-que-btn js-f5-completar" data-i="' + i + '" data-col="' + falta.col + '" title="Completar ahora">' + U.ico('editar', 12) + txt(falta.t) + '</button>'
       : '<span class="fin4-que fin4-que--' + (falta ? 'alerta' : QUE_TONO[f.que.k] || 'neutro') + '">' + txt(falta ? falta.t : f.que.t) + '</span>') + (f.cliente && f.cliente !== f.nombre ? '<small class="fin4-que-cli">' + txt(f.cliente) + '</small>' : '');
     var obs = z.nueva ? est_.borrador.obs : f.obs;
-    var firma = z.nueva ? JSON.stringify(est_.borrador) + listo() : [f.version, f.saldo, f.banco, f.que && f.que.t, f.cliente, f.fecha, f.fecha_banco, f.movida, v.nombre, v.obs, v.plan, v.monto, v.grupo, v.fact, v.glosa, sug, sugPlan, grupo && grupo.cliente].join('|');
+    var firma = z.nueva ? JSON.stringify(est_.borrador) + listo() : [f.version, f.saldo, f.banco, f.que && f.que.t, f.cliente, f.fecha, f.fecha_banco, f.movida, v.nombre, v.obs, v.plan, v.monto, v.grupo, v.fact, v.glosa, sug, sugPlan, grupo && grupo.cliente, f.sug_fact && f.sug_fact.fact].join('|');
     return '<tr class="fin4-fila ' + clase + '" data-i="' + i + '"' + (f.id ? ' data-id="' + txt(f.id) + '"' : '') + (f.grupo ? ' data-grupo="' + txt(f.grupo) + '"' : '') + (z.nueva || f.temp ? '' : ' data-k="' + (falta ? 'pend' : f.que.k) + '"' + (falta || f.banco === 'esperando' ? ' data-pend="1"' : '')) + ' data-firma="' + txt(firma) + '" style="--i:' + Math.min(i, 24) + '"><td class="fin4-idx">' + (z.nueva ? '+' : f.temp ? '…' : f._n) + '</td>' +
       COLS.map(function (k, j) {
         var b = bloqueada(z, k[0]);
@@ -827,6 +853,7 @@
         var f = z.f;
         if (f.banco === 'falta') { var sg = sugerirNombre(f); t = 'El banco trae este movimiento y nadie lo anotó: escribe quién es y la OBS.' + (sg ? ' Sugerido: ' + sg + ' (Enter en Nombre).' : ''); }
         else if (faltaDe(f)) { var q = faltaDe(f), sp = q.tipo === 'plan' ? sugerirPlan(f) : ''; t = q.tipo === 'plan' ? 'Es un gasto de la empresa y le falta el plan de cuenta: escribe en qué se gastó (Sueldos, Comisión Banco, Caja Chica…).' + (sp ? ' Sugerido: ' + sp + ' (Enter en Plan de cuenta).' : '') : q.tipo === 'obs' ? 'Le falta la OBS (de quién es el dinero): A = ABONO, R = ABONO RENTA, I = IVA, M = IMPOSICIONES, S = SALDO, P = PENDIENTE.' + (f.grupo ? ' Está en el grupo ' + f.grupo + ': usa la misma OBS de las otras filas del grupo.' : '') : 'Le falta el nombre: el cliente, o el gasto (ARRIENDO, SUELDO…).'; }
+        else if (f.sug_fact && !f.fact && (campo === 'fact' || campo === 'monto' || campo === 'nombre')) t = (f.sug_fact.certeza === 'alta' ? 'Factura sugerida: ' : 'Posible factura: ') + f.sug_fact.motivo + '. En «N° factura», Enter la acepta.';
         else if (f.banco === 'esperando') t = 'Anotada: falta que llegue en la cartola para comprobarla.';
         else t = f.que.t + (f.cliente ? ' · ' + f.cliente : '') + (f.plan ? ' · ' + f.plan : '') + (f.glosa ? ' · banco: ' + f.glosa : '');
         if (bloqueada(z, campo)) t += ' La fecha, el monto y el detalle vienen del banco.';
@@ -860,6 +887,7 @@
     // Nombre de una fila del banco sin anotar: se propone quién es (del detalle del banco), listo para aceptar con Enter.
     if (inicial === undefined && campo === 'nombre' && !valor && z.f && z.f.banco === 'falta') valor = sugerirNombre(z.f);
     if (inicial === undefined && campo === 'plan' && !valor && z.f) valor = sugerirPlan(z.f);
+    if (inicial === undefined && campo === 'fact' && !valor && z.f && z.f.sug_fact) valor = z.f.sug_fact.fact;
     inp.value = valor;
     est_.editando = { r: est_.sel.r, c: est_.sel.c, inp: inp };
     inp.focus(); if (inicial === undefined) inp.select();
@@ -1265,7 +1293,7 @@
   // =====================================================================================
   //  Reportes: FLUJO, saldo por cliente y cobranza
   // =====================================================================================
-  var rep_ = { hasta: '', meses: 6, empresa: '', periodo: '', facturas: 'abiertas', vacias: false, buscaCli: '', buscaFact: '', saldos: null, cobros: null };
+  var rep_ = { cobVista: 'facturas', deudas: null, filtroDeuda: 'debe', buscaDeuda: '', hasta: '', meses: 6, empresa: '', periodo: '', facturas: 'abiertas', vacias: false, buscaCli: '', buscaFact: '', saldos: null, cobros: null };
   function selectorMes(clase, actual, meses, etiqueta) { return '<label class="fin5-select">' + U.ico('calendario', 15) + '<select class="' + clase + '" aria-label="' + txt(etiqueta || 'Mes') + '">' + meses.map(function (m) { return '<option value="' + m + '"' + (m === actual ? ' selected' : '') + '>' + txt(mesLargo(m)) + '</option>'; }).join('') + '</select></label>'; }
   function ultimosMeses(n) { var out = [], a = hoy().slice(0, 7).split('-').map(Number); for (var i = 0; i < n; i++) { var d = new Date(Date.UTC(a[0], a[1] - 1 - i, 1)); out.push(d.toISOString().slice(0, 7)); } return out; }
   // Mismo reporte con otro filtro: se atenúa lo que hay (sin pantalla en blanco) y se cambia solo el cuerpo al llegar.
@@ -1383,8 +1411,10 @@
   }
 
   // ---- Cobranza ---------------------------------------------------------------------------
+  function segCobros() { return '<div class="fin5-cob-seg fin5-entra">' + U.segmento([{ id: 'facturas', texto: 'Facturas', icono: 'recibo' }, { id: 'deudas', texto: 'Deudas anteriores', icono: 'reloj' }], rep_.cobVista, 'js-f5-cobvista') + '</div>'; }
   function verCobros(x) {
     x_ = x; enlazar();
+    if (rep_.cobVista === 'deudas') { verDeudas(x); return; }
     var t = x.turno();
     if (!atenuar('cobros')) x.pagina(x.cab('cobros') + U.esqueleto('tabla', 12));
     x.api('finanzasHojaCobranza', { estado: rep_.facturas }).then(function (r) {
@@ -1394,7 +1424,7 @@
       var d = r.data, T = d.totales;
       var porVencer = Math.max(0, T.por_cobrar - T.vencido), base = T.pagado + T.por_cobrar || 1;
       var seg = function (cl, v, clave) { return v ? '<span class="fin5-pila__' + cl + '"' + crece(clave, v / base * 100, 'width') + ' title="' + plata(v) + '"></span>' : ''; };
-      paginaVista('cobros', x.cab('cobros', U.boton({ texto: 'Subir facturas o ventas del SII', icono: 'subir', sm: true, variante: 'primario', clase: 'js-f4-cargar', datos: { cap: 'REGISTRAR' } })) + '<div class="sx2-pagina__cuerpo fin4 fin5">' +
+      paginaVista('cobros', x.cab('cobros', U.boton({ texto: 'Subir facturas o ventas del SII', icono: 'subir', sm: true, variante: 'primario', clase: 'js-f4-cargar', datos: { cap: 'REGISTRAR' } })) + '<div class="sx2-pagina__cuerpo fin4 fin5">' + segCobros() +
         '<section class="fin5-kpis" aria-label="Totales de cobranza">' +
           kpi({ clave: 'co-f', t: 'Facturado', v: T.facturado, ico: 'recibo', tono: 'neutro', sub: d.total_facturas + ' factura(s)' }, 1) +
           kpi({ clave: 'co-p', t: 'Pagado', v: T.pagado, ico: 'check', tono: 'ok', sub: T.facturado ? Math.round(T.pagado / T.facturado * 100) + '% de lo facturado' : '' }, 2) +
@@ -1412,6 +1442,135 @@
         '<p class="fin5-nota">Una factura queda pagada cuando, en la planilla, la fila del abono lleva su número en la columna «N° factura» (varias: «1052-1053»). No hay otra hoja de pagos que llenar.</p></div>');
       x.aplicarCapacidades(x.raiz());
       activar(x.raiz());
+    });
+  }
+  // ---- Deudas anteriores: clientes de antes o que se fueron que quedaron debiendo (código DA001… en la planilla) ----
+  function verDeudas(x) {
+    var t = x.turno();
+    if (!atenuar('cobros')) x.pagina(x.cab('cobros') + U.esqueleto('tabla', 10));
+    x.api('finanzasDeudas', {}).then(function (r) {
+      if (!x.vigente(t)) return;
+      if (!r || !r.ok) { falla(x, 'cobros', 'No se pudieron cargar las deudas anteriores', r); return; }
+      rep_.deudas = r.data; pintarDeudas(x);
+    });
+  }
+  function pintarDeudas(x) {
+    var d = rep_.deudas, T = d.totales, ed = puede('APLICAR');
+    var acciones = ed ? U.boton({ texto: 'Agregar deuda', icono: 'nueva', sm: true, variante: 'secundario', clase: 'js-f5-deuda-nueva' }) + U.boton({ texto: 'Cargar desde Excel', icono: 'subir', sm: true, variante: 'primario', clase: 'js-f5-deuda-excel' }) : '';
+    var filtros = [['debe', 'Deben'], ['SE_FUE', 'Se fueron'], ['ACTIVO', 'Siguen'], ['pagadas', 'Pagadas'], ['todas', 'Todas']];
+    paginaVista('cobros', x.cab('cobros') + '<div class="sx2-pagina__cuerpo fin4 fin5">' + segCobros() +
+      '<section class="fin5-kpis" aria-label="Totales de deudas anteriores">' +
+        kpi({ clave: 'da-s', t: 'Por cobrar', v: T.saldo, ico: 'reloj', tono: T.saldo ? 'critico' : 'ok', sub: T.clientes + ' cliente(s) deben' }, 1) +
+        kpi({ clave: 'da-f', t: 'De clientes que se fueron', v: T.se_fueron, ico: 'salir', tono: 'alerta', sub: T.saldo ? Math.round(T.se_fueron / T.saldo * 100) + '% de lo por cobrar' : '' }, 2) +
+        kpi({ clave: 'da-a', t: 'De clientes que siguen', v: T.activos, ico: 'persona', tono: 'info' }, 3) +
+        kpi({ clave: 'da-c', t: 'Ya cobrado', v: T.abonado, ico: 'check', tono: 'ok', sub: T.adeudado ? Math.round(T.abonado / T.adeudado * 100) + '% de lo adeudado' : '' }, 4) +
+      '</section>' +
+      (d.sueltos.length ? '<div class="fin5-aviso fin5-aviso--alerta">' + U.ico('alerta', 16) + '<span><b>' + d.sueltos.length + ' abono(s) anotados como «' + txt(d.plan) + '» sin el código de la deuda</b> (' + d.sueltos.slice(0, 3).map(function (s) { return txt(s.nombre || 'sin nombre') + ' ' + plata(s.monto); }).join(', ') + '). Escribe en su «N° factura» el código (DA…) para que descuente la deuda.</span></div>' : '') +
+      '<section class="fin5-card fin5-entra" style="--i:5"><header class="fin5-card__cab"><div class="fin5-chips" role="group" aria-label="Filtrar deudas">' + filtros.map(function (f) { return '<button type="button" class="fin5-chip js-f5-deuda-filtro" data-f="' + f[0] + '" aria-pressed="' + (rep_.filtroDeuda === f[0]) + '">' + f[1] + '</button>'; }).join('') + '</div>' +
+        '<label class="fin5-buscar">' + U.ico('lupa', 15) + '<input type="search" class="js-f5-buscar-deuda" placeholder="Buscar cliente, RUT o código…" value="' + txt(rep_.buscaDeuda) + '" aria-label="Buscar deuda"></label>' + (acciones ? '<span class="fin5-deuda-acc">' + acciones + '</span>' : '') + '</header>' +
+        (d.deudas.length ? '<div class="fin4-rep"><table class="fin4-tab fin5-tab-fact"><thead><tr><th>Código</th><th>Cliente</th><th>Origen</th><th>Año</th><th>Estado</th><th class="fin4-n">Adeudado</th><th class="fin5-col-pago">Cobrado</th><th class="fin4-n">Por cobrar</th><th>Último abono</th></tr></thead><tbody class="js-f5-deudas">' + cuerpoDeudas() + '</tbody></table></div>'
+          : vacioHtml('reloj', 'Todavía no hay deudas anteriores', 'Carga el Excel con los clientes de antes (o los que se fueron) y lo que quedó debiendo cada uno: CLIENTE, RUT, EMPRESA, AÑO, MONTO y ESTADO.', ed ? U.boton({ texto: 'Cargar desde Excel', icono: 'subir', variante: 'primario', clase: 'js-f5-deuda-excel' }) : '')) +
+      '</section>' +
+      '<section class="fin5-card fin5-cob-como fin5-entra" style="--i:6"><h3>' + U.ico('bombilla', 16) + ' Cuando un cliente abona una deuda anterior</h3><ol><li>En la planilla, anota el abono como siempre (fecha, nombre, OBS <b>ABONO</b>, monto).</li><li>En <b>Plan de cuenta</b> elige <b>' + txt(d.plan) + '</b>.</li><li>En <b>N° factura</b> escribe el código de su deuda (<b>DA001</b>…). SIGSO te lo sugiere: Enter lo acepta.</li></ol><p>Así el abono descuenta la deuda aquí, y en los informes se ve aparte de las ventas del mes.</p></section></div>');
+    x.aplicarCapacidades(x.raiz());
+    activar(x.raiz());
+  }
+  function deudasVisibles() {
+    var q = norm(rep_.buscaDeuda).trim(), f = rep_.filtroDeuda;
+    return rep_.deudas.deudas.filter(function (x) {
+      if (f === 'debe' && !x.saldo) return false; if (f === 'pagadas' && x.saldo) return false; if ((f === 'SE_FUE' || f === 'ACTIVO') && (x.estado_cliente !== f || !x.saldo)) return false;
+      return !q || norm([x.codigo, x.cliente, x.rut, x.rut_visible, x.origen, x.nota].join(' ')).indexOf(q) !== -1;
+    });
+  }
+  function cuerpoDeudas() {
+    var l = deudasVisibles();
+    if (!l.length) return '<tr class="fin5-sin"><td colspan="9">' + U.ico('lupa', 16) + ' Ninguna deuda con ese filtro.</td></tr>';
+    return l.map(function (x, i) {
+      var pct = x.monto ? Math.min(100, x.abonado / x.monto * 100) : 0;
+      return '<tr class="fin5-deuda js-f5-deuda" data-id="' + txt(x.id) + '" tabindex="0" style="--i:' + Math.min(i, 24) + '"><th class="fin5-folio">' + txt(x.codigo) + '</th>' +
+        '<td><span class="fin5-cli"><span class="fin5-avatar" data-tono="' + (String(x.cliente || '?').charCodeAt(0) % 5) + '">' + txt(iniciales(x.cliente)) + '</span><span class="fin5-cli__n">' + txt(x.cliente) + (x.rut_visible ? '<small>' + txt(x.rut_visible) + (x.rut_invalido ? ' · RUT por revisar' : '') + '</small>' : '') + '</span></span></td>' +
+        '<td>' + (x.origen ? '<span class="fin5-etq">' + txt(x.origen) + '</span>' : '') + '</td><td class="fin2-num">' + txt(x.anio || '') + '</td>' +
+        '<td>' + U.badge(x.estado_cliente === 'SE_FUE' ? 'Se fue' : 'Sigue', x.estado_cliente === 'SE_FUE' ? 'alerta' : 'info') + '</td>' +
+        '<td class="fin4-n">' + plata(x.monto) + '</td>' +
+        '<td class="fin5-col-pago"><div class="fin5-progreso fin5-progreso--' + (pct >= 100 ? 'ok' : 'info') + '"><span style="width:' + pct.toFixed(1) + '%"></span></div><small>' + plata(x.abonado, '—') + '</small></td>' +
+        '<td class="fin4-n"><b class="' + (x.saldo ? 'fin2-neg' : 'fin2-pos') + '">' + plata(x.saldo, 'Pagada') + '</b></td>' +
+        '<td class="fin2-num">' + txt(x.ultimo_abono ? corta(x.ultimo_abono) + '-' + x.ultimo_abono.slice(2, 4) : '—') + '</td></tr>';
+    }).join('');
+  }
+  function formDeuda(x0) {
+    x0 = x0 || {};
+    var v = function (k) { return txt(x0[k] == null ? '' : x0[k]); };
+    U.formulario({ titulo: x0.id ? 'Deuda ' + x0.codigo : 'Agregar deuda anterior', subtitulo: '<span class="fin2-ayuda">' + (x0.id ? 'Corregir los datos (lo cobrado sale de la planilla)' : 'Un cliente de antes que quedó debiendo') + '</span>', boton: x0.id ? 'Guardar' : 'Agregar',
+      campos: U.campo('Cliente', '<input name="cliente" class="sx2-input" required maxlength="160" value="' + v('cliente') + '">') +
+        U.campo('RUT', '<input name="rut" class="sx2-input" maxlength="14" value="' + v('rut_visible') + '" placeholder="76.543.210-3">', 'Con el RUT se reconoce al cliente aunque el banco acorte su nombre.') +
+        U.campo('Empresa de origen', '<input name="origen" class="sx2-input" maxlength="80" value="' + v('origen') + '" placeholder="HomePymes 2025">') +
+        U.campo('Año de la deuda', '<input name="anio" class="sx2-input" inputmode="numeric" maxlength="4" value="' + v('anio') + '" placeholder="2025">') +
+        U.campo('Monto adeudado', '<input name="monto" class="sx2-input" inputmode="decimal" required value="' + (x0.monto ? plata(x0.monto) : '') + '" placeholder="$500.000">') +
+        U.campo('¿Sigue como cliente?', '<select name="estado_cliente" class="sx2-input"><option value="ACTIVO"' + (x0.estado_cliente !== 'SE_FUE' ? ' selected' : '') + '>Sí, sigue</option><option value="SE_FUE"' + (x0.estado_cliente === 'SE_FUE' ? ' selected' : '') + '>No, se fue</option></select>') +
+        U.campo('Nombre corto en la planilla (opcional)', '<input name="alias" class="sx2-input" maxlength="60" value="' + v('alias') + '" placeholder="RIO CLARO">', 'Si en la planilla lo anotan con otro nombre, así SIGSO sugiere su código.') +
+        U.campo('Nota', '<textarea name="nota" class="sx2-input" rows="2" maxlength="500">' + v('nota') + '</textarea>'),
+      enviar: function (dd) { return x_.api('finanzasGuardarDeuda', Object.assign(dd, x0.id ? { id: x0.id, expected_version: x0.version } : {})); },
+      aviso: x0.id ? 'Deuda actualizada.' : 'Deuda agregada.', listo: function () { verDeudas(x_); } });
+  }
+  function verDeuda(id) {
+    var x0 = rep_.deudas.deudas.filter(function (y) { return y.id === id; })[0]; if (!x0) return;
+    var ed = puede('APLICAR');
+    var dr = U.drawer({ titulo: x0.codigo + ' · ' + x0.cliente, subtitulo: '<span class="fin2-ayuda">' + txt([x0.origen, x0.anio, x0.estado_cliente === 'SE_FUE' ? 'se fue' : 'sigue como cliente'].filter(Boolean).join(' · ')) + '</span>',
+      cuerpo: '<div class="fin5-inf-fondos"><div class="fin5-inf-mini"><span>Adeudado</span><b>' + plata(x0.monto) + '</b></div><div class="fin5-inf-mini"><span>Cobrado</span><b class="fin2-pos">' + plata(x0.abonado) + '</b></div><div class="fin5-inf-mini"><span>Por cobrar</span><b class="fin2-neg">' + plata(x0.saldo) + '</b></div></div>' +
+        (x0.rut_invalido ? '<div class="fin5-aviso fin5-aviso--alerta">' + U.ico('alerta', 15) + '<span>El RUT ' + txt(x0.rut_visible) + ' no es válido (dígito verificador). Revísalo.</span></div>' : '') +
+        '<h3 class="fin5-inf-h3">Abonos (desde la planilla)</h3>' + (x0.abonos.length ? '<ul class="fin5-inf-lista">' + x0.abonos.map(function (a) { return '<li><span>' + txt(corta(a.fecha) + '-' + a.fecha.slice(2, 4)) + ' · ' + txt(a.nombre || 'sin nombre') + '</span><b>' + plata(a.monto) + '</b></li>'; }).join('') + '</ul>'
+          : '<p class="fin2-ayuda">Todavía sin abonos. Cuando abone, anótalo en la planilla con el plan «' + txt(rep_.deudas.plan) + '» y el código <b>' + txt(x0.codigo) + '</b> en N° factura.</p>') +
+        (x0.nota ? '<p class="fin2-ayuda">' + txt(x0.nota) + '</p>' : ''),
+      pie: ed ? '<span style="flex:1"></span>' + (x0.abonos.length ? '' : U.boton({ texto: 'Quitar', icono: 'basura', variante: 'fantasma', clase: 'js-f5-deuda-quitar' })) + U.boton({ texto: 'Editar', icono: 'editar', variante: 'primario', clase: 'js-f5-deuda-editar' }) : '' });
+    dr.el.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button'); if (!b) return;
+      if (b.classList.contains('js-f5-deuda-editar')) { dr.cerrar(); setTimeout(function () { formDeuda(x0); }, 230); }
+      else if (b.classList.contains('js-f5-deuda-quitar')) U.confirmar({ titulo: '¿Quitar la deuda ' + x0.codigo + '?', texto: x0.cliente + ' · ' + plata(x0.monto) + '. Sale de la lista (queda en la bitácora).', boton: 'Quitar', peligro: true }).then(function (si) {
+        if (!si) return;
+        x_.api('finanzasBorrarDeuda', { id: x0.id }).then(function (r) { if (!r || !r.ok) { error(r, 'No se pudo quitar.'); return; } dr.cerrar(); x_.aviso('Deuda quitada.', 'exito'); verDeudas(x_); });
+      });
+    });
+  }
+  // Cargar desde Excel: se lee en el navegador, se muestra lo que entraría y recién ahí se guarda.
+  function cargarDeudasExcel() {
+    var dr = U.drawer({ titulo: 'Cargar deudas anteriores', subtitulo: '<span class="fin2-ayuda">Excel con una fila por cliente</span>',
+      cuerpo: '<p class="fin2-ayuda">La primera fila debe decir al menos <b>CLIENTE</b> (o <b>RUT</b>) y <b>MONTO</b>. También se leen <b>RUT</b>, <b>EMPRESA</b> u <b>ORIGEN</b>, <b>AÑO</b>, <b>ESTADO</b> (sigue / se fue) y <b>NOTA</b>. Las que ya estén cargadas no se duplican.</p>' +
+        '<label class="fin5-deuda-archivo">' + U.ico('subir', 18) + '<span>Elegir el Excel (.xlsx)</span><input type="file" accept=".xlsx,.xlsm" class="js-f5-deuda-archivo"></label>' +
+        '<p class="fin2-ayuda">O pega las filas copiadas del Excel (con su fila de títulos):</p><textarea class="sx2-input js-f5-deuda-pegado" rows="6" placeholder="CLIENTE&#9;RUT&#9;EMPRESA&#9;AÑO&#9;MONTO&#9;ESTADO"></textarea>' +
+        '<div class="js-f5-deuda-prev"></div>',
+      pie: '<span style="flex:1"></span>' + U.boton({ texto: 'Revisar', icono: 'lupa', variante: 'secundario', clase: 'js-f5-deuda-revisar' }) + U.boton({ texto: 'Cargar', icono: 'check', variante: 'primario', clase: 'js-f5-deuda-cargar' }) });
+    var filas = null, archivo = '';
+    var prev = dr.el.querySelector('.js-f5-deuda-prev'), cargar = dr.el.querySelector('.js-f5-deuda-cargar');
+    cargar.disabled = true;
+    function revisar() {
+      var t = dr.el.querySelector('.js-f5-deuda-pegado').value;
+      if (!filas && t.trim()) { filas = t.replace(/\r/g, '').split('\n').filter(function (l) { return l.trim(); }).map(function (l) { return l.split('\t'); }); archivo = 'pegado'; }
+      if (!filas) { prev.innerHTML = '<p class="fin5-ayuda-err">' + U.ico('alerta', 13) + 'Elige el Excel o pega las filas.</p>'; return; }
+      x_.api('finanzasImportarDeudas', { filas: filas, revisar: true }).then(function (r) {
+        if (!r || !r.ok) { prev.innerHTML = '<div class="fin5-aviso fin5-aviso--critico">' + U.ico('alerta', 15) + '<span>' + txt((r && r.message) || 'No se pudo leer.') + '</span></div>'; cargar.disabled = true; return; }
+        var v = r.data;
+        prev.innerHTML = '<div class="fin5-aviso fin5-aviso--' + (v.nuevas.length ? 'ok' : 'alerta') + '">' + U.ico(v.nuevas.length ? 'check' : 'info', 15) + '<span><b>' + v.nuevas.length + ' deuda(s) nueva(s) por ' + plata(v.total) + '</b>' + (v.en_maestro ? ' · ' + v.en_maestro + ' reconocida(s) en el maestro de clientes' : '') + (v.repetidas.length ? ' · ' + v.repetidas.length + ' ya cargada(s)' : '') + (v.rut_invalido ? ' · ' + v.rut_invalido + ' con RUT por revisar' : '') + '.</span></div>' +
+          (v.errores.length ? '<div class="fin5-aviso fin5-aviso--alerta">' + U.ico('alerta', 15) + '<span>' + v.errores.slice(0, 6).map(function (e) { return 'Fila ' + e.fila + ': ' + txt(e.error); }).join('<br>') + (v.errores.length > 6 ? '<br>y ' + (v.errores.length - 6) + ' más' : '') + '</span></div>' : '') +
+          (v.nuevas.length ? '<ul class="fin5-inf-lista">' + v.nuevas.slice(0, 12).map(function (y) { return '<li><span>' + txt(y.cliente) + ' <small>' + txt([y.origen, y.anio, y.estado_cliente === 'SE_FUE' ? 'se fue' : 'sigue'].filter(Boolean).join(' · ')) + '</small></span><b>' + plata(y.monto) + '</b></li>'; }).join('') + (v.nuevas.length > 12 ? '<li><span>y ' + (v.nuevas.length - 12) + ' más</span></li>' : '') + '</ul>' : '');
+        cargar.disabled = !v.nuevas.length;
+      });
+    }
+    dr.el.addEventListener('change', function (ev) {
+      var inp = ev.target; if (!inp.classList.contains('js-f5-deuda-archivo') || !inp.files[0]) return;
+      var f = inp.files[0]; archivo = f.name; prev.innerHTML = '<p class="fin2-ayuda">Leyendo ' + txt(f.name) + '…</p>';
+      SigsoLectorXlsx.leer(f, {}).then(function (hojas) { var h = hojas.filter(function (x) { return !x.oculta; })[0] || hojas[0]; filas = h ? h.filas : null; revisar(); }, function () { prev.innerHTML = '<p class="fin5-ayuda-err">No se pudo leer el archivo.</p>'; });
+    });
+    dr.el.addEventListener('input', function (ev) { if (ev.target.classList.contains('js-f5-deuda-pegado')) { filas = null; cargar.disabled = true; } });
+    dr.el.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button'); if (!b) return;
+      if (b.classList.contains('js-f5-deuda-revisar')) revisar();
+      else if (b.classList.contains('js-f5-deuda-cargar') && filas) {
+        b.disabled = true;
+        x_.api('finanzasImportarDeudas', { filas: filas, archivo: archivo }).then(function (r) {
+          if (!r || !r.ok) { b.disabled = false; error(r, 'No se pudo cargar.'); return; }
+          dr.cerrar(); x_.aviso(r.data.creadas + ' deuda(s) cargada(s) por ' + plata(r.data.total) + '.', 'exito'); rep_.filtroDeuda = 'debe'; verDeudas(x_);
+        });
+      }
     });
   }
   function diasDesde(iso) { var a = Date.parse(iso + 'T00:00:00Z'), b = Date.parse(hoy() + 'T00:00:00Z'); return isNaN(a) ? 0 : Math.round((b - a) / 864e5); }
@@ -1451,6 +1610,7 @@
       if (b && b.classList.contains('js-f5-resolver')) { resolverObs(+b.dataset.i); return; }
       if (b && b.classList.contains('js-f5-tour')) { tour(true); return; }
       if (b && b.classList.contains('js-f5-portada')) { portada(); return; }
+      if (b && b.classList.contains('js-f5-fact-todas')) { ponerFacturasSugeridas(); return; }
       if (b && b.classList.contains('js-f5-arriba')) { var bar = x_.raiz().querySelector('.fin5-barra'); if (bar) bar.scrollIntoView({ block: 'start', behavior: reducido() ? 'auto' : 'smooth' }); return; }
       if (b && b.classList.contains('js-f5-pref')) {
         var k = b.dataset.p; PREF_[k] = !PREF_[k]; guardarPref();
@@ -1470,6 +1630,11 @@
       if (b && b.classList.contains('js-f4-cargar')) { x_.ir('cargas'); return; }
       if (b && b.classList.contains('js-f4-pegar')) { pegarDialogo(); return; }
       if (b && b.classList.contains('js-f4-excel')) { descargarExcel(b); return; }
+      if (b && b.classList.contains('js-f5-cobvista')) { if (rep_.cobVista !== b.dataset.id) { rep_.cobVista = b.dataset.id; verCobros(x_); } return; }
+      if (b && b.classList.contains('js-f5-deuda-filtro')) { rep_.filtroDeuda = b.dataset.f; Array.prototype.forEach.call(x_.raiz().querySelectorAll('.js-f5-deuda-filtro'), function (c) { c.setAttribute('aria-pressed', String(c.dataset.f === rep_.filtroDeuda)); }); var tbd = x_.raiz().querySelector('.js-f5-deudas'); if (tbd) tbd.innerHTML = cuerpoDeudas(); return; }
+      if (b && b.classList.contains('js-f5-deuda-nueva')) { formDeuda(null); return; }
+      if (b && b.classList.contains('js-f5-deuda-excel')) { cargarDeudasExcel(); return; }
+      var trd = t.closest('.js-f5-deuda'); if (trd) { verDeuda(trd.dataset.id); return; }
       if (b && b.classList.contains('js-f4-fact')) { rep_.facturas = b.dataset.id || rep_.facturas; verCobros(x_); return; }
       if (b && b.classList.contains('js-f5-filtro')) { est_.filtro = b.dataset.f; filtrar(); return; }
       if (b && b.classList.contains('js-f5-limpiar')) { est_.filtro = 'todas'; est_.busca = ''; var bi = x_.raiz().querySelector('.js-f5-buscar'); if (bi) bi.value = ''; filtrar(); return; }
@@ -1490,10 +1655,13 @@
     });
     window.addEventListener('resize', function () { if (ac_) abrirAc(false); cerrarMeses(); cerrarAyudaCol(); });
     document.addEventListener('scroll', function (ev) { if (ac_) abrirAc(false); if (popA_ && !popA_.el.contains(ev.target)) cerrarAyudaCol(); }, true);
+    // Una deuda de la lista se abre con Enter (como con el clic).
+    raiz.addEventListener('keydown', function (ev) { var tr = ev.target.closest && ev.target.closest('.js-f5-deuda'); if (tr && ev.key === 'Enter') { ev.preventDefault(); verDeuda(tr.dataset.id); } });
     raiz.addEventListener('input', function (ev) {
       var t = ev.target;
       if (t.classList.contains('js-f5-buscar')) { est_.busca = t.value; filtrar(true); }
       else if (t.classList.contains('js-f5-buscar-cli')) { rep_.buscaCli = t.value; var tb = x_.raiz().querySelector('.js-f5-cli'); if (tb) tb.innerHTML = cuerpoSaldos(); }
+      else if (t.classList.contains('js-f5-buscar-deuda')) { rep_.buscaDeuda = t.value; var td2 = x_.raiz().querySelector('.js-f5-deudas'); if (td2) td2.innerHTML = cuerpoDeudas(); }
       else if (t.classList.contains('js-f5-buscar-fact')) { rep_.buscaFact = t.value; var tf = x_.raiz().querySelector('.js-f5-fact'); if (tf) tf.innerHTML = cuerpoCobros(); }
     });
     raiz.addEventListener('change', function (ev) {
@@ -1540,5 +1708,5 @@
       if (/\t/.test(t)) { ev.preventDefault(); pegar(t); }
     });
   }
-  window.SigsoFinanzasHoja = { ver: ver, verFlujo: verFlujo, verSaldos: verSaldos, verCobros: verCobros };
+  window.SigsoFinanzasHoja = { ver: ver, verFlujo: verFlujo, verSaldos: verSaldos, verCobros: verCobros, elegirCobros: function (v) { rep_.cobVista = v === 'deudas' ? 'deudas' : 'facturas'; } };
 })();

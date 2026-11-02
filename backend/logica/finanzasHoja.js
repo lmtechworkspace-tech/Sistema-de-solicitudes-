@@ -263,6 +263,7 @@ const hoja = B.conBoveda('', function (db, data) {
   const cuentas = [...ctx.cuentas.values()].map((c) => ({ id: c.id, nombre: c.banco + ' ···' + c.ultimos4, empresa: c.empresa }));
   if (!cuenta) return { periodo, meses, cuentas, cuenta_ref: '', filas: [], grupos: [], totales: null, cartola: null, estado: { ok: 0, esperando: 0, falta: 0, por_completar: 0 }, listas, cerrado: false };
   const h = construir_(db, cuenta, periodo, ctx);
+  try { sugerirFacturas_(db, h, cuenta); } catch (e) { /* sin facturas: sin sugerencias */ }
   let revision = null;
   try { revision = require('./finanzasCierre').estadoMes_(periodo); } catch (e) { revision = null; }
   return Object.assign({ periodo, meses, cuentas, cuenta_ref: cuenta.id, empresa: cuenta.empresa, listas, cerrado: cerrado_(periodo), revision }, h);
@@ -448,6 +449,47 @@ function folios_(fact) {
 }
 
 /**
+ * N° de factura (o código de deuda anterior) sugerido para los abonos sin N°. SIGSO propone, la persona acepta:
+ *   - abono con el plan «Cobro deuda anterior» → el código de la deuda de ese cliente (DA001…), si hay una sola;
+ *   - la factura abierta del MISMO cliente con saldo igual al abono (certeza alta);
+ *   - si no, la única factura abierta de la empresa con ese saldo (certeza media: puede pagar otro por el cliente).
+ * Una factura no se sugiere dos veces ni si ya está anotada en otra fila.
+ */
+const VACIAS_NOMBRE_ = /^(SPA|LTDA|LIMITADA|EIRL|SA|CONST|CONSTRUCTORA|CONSTRUCCIONES|Y|DE|DEL|LA|EL)$/;
+function nombreEn_(corto, largo) {
+  const p = (t) => N(t).replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !VACIAS_NOMBRE_.test(w));
+  const a = p(corto), b = p(largo);
+  return a.length > 0 && b.length > 0 && a.every((w) => b.indexOf(w) !== -1);
+}
+function sugerirFacturas_(db, h, cuenta) {
+  const cand = h.filas.filter((f) => f.monto > 0 && !f.fact && !f.grupo && /^ABONO/.test(f.obs || '') && f.banco !== 'falta');
+  if (!cand.length) return;
+  const Dd = require('./finanzasDeudas');
+  const conDeuda = cand.some((f) => N(f.plan) === N(Dd.PLAN));
+  const deudas = conDeuda ? Dd.lista_().deudas.filter((x) => x.saldo > 0) : [];
+  const abiertas = facturas_(db, null).filter((f) => f.saldo > 0 && f.estado !== 'Incobrable');
+  const anotados = new Set(); h.filas.forEach((f) => folios_(f.fact).forEach((fo) => anotados.add(fo)));
+  const libre = (f) => !anotados.has(N(f.folio));
+  cand.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).forEach((f) => {
+    if (N(f.plan) === N(Dd.PLAN)) {
+      const dd = Dd.sugerirCodigo_(f, deudas);
+      if (dd) { f.sug_fact = { fact: dd.codigo, certeza: 'alta', motivo: 'Deuda anterior de ' + dd.cliente + ' (por cobrar ' + Base.plata_(dd.saldo) + ')' }; }
+      return;
+    }
+    const porFecha = (a, b) => String(a.fecha).localeCompare(String(b.fecha));
+    let l = f.cliente_id ? abiertas.filter((x) => libre(x) && x.cliente_id === f.cliente_id && x.saldo === f.monto).sort(porFecha) : [];
+    let certeza = 'alta';
+    // Sin ficha del cliente: si el nombre de la fila está en el nombre de la factura («SISTEMA CONSTRUCTIVO» ↔ «… SPA»), también es segura.
+    if (!l.length) l = abiertas.filter((x) => libre(x) && x.saldo === f.monto && nombreEn_(f.nombre, x.cliente)).sort(porFecha);
+    if (!l.length) { l = abiertas.filter((x) => libre(x) && x.saldo === f.monto && x.empresa === cuenta.empresa); certeza = 'media'; if (l.length !== 1) return; }
+    const x = l[0];
+    anotados.add(N(x.folio));
+    f.sug_fact = { fact: String(x.folio), certeza, motivo: certeza === 'alta' ? 'Factura ' + x.folio + ' de ' + x.cliente + ' por el mismo monto' + (l.length > 1 ? ' (la más antigua de ' + l.length + ')' : '')
+      : 'Mismo monto que la factura ' + x.folio + ' de ' + x.cliente + ': confirma que este pago es de ese cliente' };
+  });
+}
+
+/**
  * Facturas con lo pagado según la hoja (columna N° factura) y lo aplicado en Cobranza.
  * Un folio es de la empresa de la cuenta donde entró el abono (el mismo folio en dos empresas son dos facturas); si la
  * empresa no calza pero el folio es de una sola factura, se usa esa (cobro por otra empresa del grupo). Un abono con
@@ -532,4 +574,4 @@ const cobranza = B.conBoveda('', function (db, data, contexto, x) {
   return { totales: T, facturas: ver, total_facturas: l.length };
 });
 
-module.exports = { hoja, guardar, borrar, decidirGrupo, moverMes, flujo, clientes, cobranza, construir_, contexto_, que_, folios_, fechaHoja_, planFlujo_, valorGrupo_, facturas_, DECISIONES };
+module.exports = { sugerirFacturas_, hoja, guardar, borrar, decidirGrupo, moverMes, flujo, clientes, cobranza, construir_, contexto_, que_, folios_, fechaHoja_, planFlujo_, valorGrupo_, facturas_, DECISIONES };

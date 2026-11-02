@@ -224,7 +224,32 @@
       seccion('Honorarios por cliente', 'Quién generó los ingresos del mes. ' + concentracion(m), barrasH(topObj(m.hon_cliente, 10), m.honorarios, function (x) { return { c: ['hon', 'hon_grupo'], n: x.k }; }, 'ok', { vacio: 'Sin honorarios anotados.' }), 11) +
     '</div>';
     html += '<div class="fin5-inf-grid">' + fondos(d, m, 12) + cobranza(d, 13) + '</div>';
+    html += '<div class="fin5-inf-grid">' + ventas(d, P, 14) + deudasAnt(d, m, 15) + '</div>';
     return html;
+  }
+  // Ventas del mes: lo facturado (Registro de Ventas del SII) con fecha de emisión en el mes y cuánto ya se pagó.
+  function ventas(d, P, i) {
+    var v = (d.ventas || {})[P], a = (d.ventas || {})[mesMas(P, -1)];
+    if (!v || !v.n) return seccion('Ventas del mes', 'Lo facturado en ' + txt(mesNombre(P)) + ' según el Registro de Ventas del SII.',
+      '<p class="fin5-inf-cuadre">' + U.ico('info', 14) + 'No hay facturas emitidas en ' + txt(mesNombre(P)) + '. Si se facturó, sube el Registro de Ventas del SII en «Subir archivos».</p>', i);
+    var dv = a && a.n ? variacion(v.facturado, a.facturado) : null, pp = v.facturado ? Math.round(v.pagado / v.facturado * 100) : 0;
+    return seccion('Ventas del mes', 'Lo facturado en ' + txt(mesNombre(P)) + ' según el Registro de Ventas del SII' + (dv ? ': ' + (dv.dif >= 0 ? '<b class="fin5-inf-ok">' + corta(dv.dif) + ' más</b>' : '<b class="fin2-neg">' + corta(-dv.dif) + ' menos</b>') + ' que ' + txt(mesNombre(mesMas(P, -1))) + '.' : '.'),
+      '<div class="fin5-inf-fondos"><div class="fin5-inf-mini"><span>Facturado · ' + v.n + ' factura' + (v.n === 1 ? '' : 's') + '</span><b>' + plata(v.facturado) + '</b></div>' +
+        '<div class="fin5-inf-mini"><span>Ya pagado</span><b class="fin5-inf-ok">' + plata(v.pagado) + '</b></div><div class="fin5-inf-mini"><span>Por cobrar</span><b class="' + (v.vencido ? 'fin2-neg' : '') + '">' + plata(v.por_cobrar) + '</b></div></div>' +
+      '<div class="fin5-pila fin5-inf-pila" role="img" aria-label="' + pp + '% pagado"><span class="fin5-pila__ok" data-ancho="' + pp + '"></span><span class="fin5-pila__info" data-ancho="' + (100 - pp) + '"></span></div>' +
+      '<p class="fin5-inf-sub">' + pp + ' % de lo facturado en el mes ya está pagado (abonos con su N° de factura en la planilla).</p>' +
+      (v.clientes.length ? '<h3 class="fin5-inf-h3">A quién se le facturó</h3><ul class="fin5-inf-lista">' + v.clientes.map(function (x) { return '<li><span>' + txt(x.cliente) + '</span><b>' + plata(x.total) + '</b></li>'; }).join('') + '</ul>' : '') +
+      '<button type="button" class="sx2-enlace js-inf-ir" data-v="cobros">Ver las facturas en Cobranza →</button>', i);
+  }
+  // Deudas anteriores: clientes de antes (o que se fueron) que quedaron debiendo, y lo cobrado de eso en el mes.
+  function deudasAnt(d, m, i) {
+    var x = d.deudas_anteriores;
+    if (!x || (!x.saldo && !m.deuda_anterior)) return seccion('Deudas anteriores', 'Clientes de antes o que se fueron y quedaron debiendo.',
+      '<p class="fin5-inf-cuadre">' + U.ico('info', 14) + 'Todavía no hay deudas anteriores cargadas. Se cargan en Cobranza → Deudas anteriores.</p><button type="button" class="sx2-enlace js-inf-ir" data-v="cobros" data-sub="deudas">Abrir Deudas anteriores →</button>', i);
+    return seccion('Deudas anteriores', 'Lo que quedó debiendo la cartera de antes. No son facturas del libro actual: cada abono se anota en la planilla con el plan «Cobro deuda anterior» y su código (DA001…).',
+      '<div class="fin5-inf-fondos"><div class="fin5-inf-mini"><span>Por cobrar · ' + x.clientes + ' cliente' + (x.clientes === 1 ? '' : 's') + '</span><b class="fin2-neg">' + plata(x.saldo) + '</b></div>' +
+        '<div class="fin5-inf-mini"><span>De clientes que se fueron</span><b>' + plata(x.se_fueron) + '</b></div><div class="fin5-inf-mini"><span>Cobrado en ' + txt(mesNombre(m.periodo)) + '</span><b class="fin5-inf-ok">' + plata(m.deuda_anterior || 0) + '</b></div></div>' +
+      '<button type="button" class="sx2-enlace js-inf-ir" data-v="cobros" data-sub="deudas">Abrir Deudas anteriores →</button>', i);
   }
   function mesDe(d, p) { for (var i = 0; i < d.meses.length; i++) if (d.meses[i].periodo === p) return d.meses[i]; return null; }
   function conDelta(x, base, gasto) {
@@ -539,7 +564,7 @@
       }
       if (b.classList.contains('js-inf-explicar')) { explicar(b.dataset.k); return; }
       if (b.classList.contains('js-inf-filas')) { try { verFilas(JSON.parse(b.dataset.f), b.dataset.t || 'Filas'); } catch (e) { /* filtro inválido */ } return; }
-      if (b.classList.contains('js-inf-ir')) { x_.ir(b.dataset.v); return; }
+      if (b.classList.contains('js-inf-ir')) { if (b.dataset.v === 'cobros' && window.SigsoFinanzasHoja && SigsoFinanzasHoja.elegirCobros) SigsoFinanzasHoja.elegirCobros(b.dataset.sub || 'facturas'); x_.ir(b.dataset.v); return; }
       if (b.classList.contains('js-inf-planilla')) { x_.ir('planilla', { periodo_hoja: est_.modo === 'rango' ? est_.hasta : est_.mes }); return; }
       if (b.classList.contains('js-inf-imprimir')) { imprimir(); return; }
     });

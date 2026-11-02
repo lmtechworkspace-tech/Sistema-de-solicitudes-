@@ -57,7 +57,7 @@ function mes_(db, ctx, cuentas, periodo) {
   const filas = [];
   const m = {
     periodo, honorarios: 0, gastos: 0, resultado: 0, fondos_recibidos: 0, fondos_pagados: 0, traspasos: 0, sin_completar: 0, n_sin_completar: 0,
-    a_favor: 0, pendiente: 0, neto: 0, hon_plan: {}, hon_cliente: {}, gas_plan: {}, recurrentes: 0, gastos_fijos: 0, n_filas: 0,
+    a_favor: 0, pendiente: 0, neto: 0, deuda_anterior: 0, hon_plan: {}, hon_cliente: {}, gas_plan: {}, recurrentes: 0, gastos_fijos: 0, n_filas: 0,
     banco: { saldo_inicial: 0, saldo_final: 0, movimientos: 0, cuadra: true, cortes: 0, repetidos: 0, cuentas_sin_cartola: [], cuentas: 0 },
     verif: { ok: 0, esperando: 0, falta: 0, por_completar: 0, m_ok: 0, m_esperando: 0, m_falta: 0, diferencias: [] }
   };
@@ -99,6 +99,7 @@ function mes_(db, ctx, cuentas, periodo) {
   filas.forEach((x) => {
     if (x.c === 'hon' || x.c === 'hon_grupo') {
       m.honorarios += x.m; sumar_(m.hon_plan, x.pl, x.m); sumar_(m.hon_cliente, x.n || 'Sin nombre', x.m);
+      if (N(x.pl) === N(DEUDA_PLAN_)) m.deuda_anterior += x.m; // ingreso sin factura del mes: cobro de una deuda de antes
       if (RECURRENTES_.test(N(x.pl))) m.recurrentes += x.m;
     } else if (x.c === 'gas') { m.gastos -= x.m; sumar_(m.gas_plan, x.pl, -x.m); if (FIJOS_.test(N(x.pl))) m.gastos_fijos -= x.m; }
     else if (x.c === 'fon_rec') m.fondos_recibidos += x.m;
@@ -154,8 +155,12 @@ function mayorCambio_(a, b) {
 }
 function top_(o, n) { return Object.keys(o).map((k) => ({ k, v: o[k] })).filter((x) => x.v).sort((a, b) => b.v - a.v).slice(0, n); }
 
+const DEUDA_PLAN_ = 'Cobro deuda anterior';
 function comentariosMes_(m, ant, prom3, extra) {
   const out = [], P = nombreMes_(m.periodo);
+  if (m.deuda_anterior > 0) out.push(c_('info', 'deuda_anterior', 'Se cobraron ' + plata_(m.deuda_anterior) + ' de deudas anteriores',
+    'Son abonos de clientes que debían desde antes (sin factura en el libro actual). Están dentro de los honorarios del mes, pero no son ventas de ' + P + '.',
+    'Suma de las filas con el plan «' + DEUDA_PLAN_ + '». Cada una lleva en «N° factura» el código de la deuda (DA001…), que la descuenta en «Deudas anteriores».', { c: ['hon'] }));
   // Resultado del mes
   if (m.honorarios || m.gastos) {
     if (m.resultado < 0) out.push(c_('critico', 'resultado', 'El mes cerró con pérdida de ' + plata_(-m.resultado), 'Los gastos (' + plata_(m.gastos) + ') superaron a los honorarios (' + plata_(m.honorarios) + '). Para cubrirlos faltaron ' + plata_(-m.resultado) + '.',
@@ -347,6 +352,18 @@ const informe = B.conBoveda('VER_INFORME', function (db, data, contexto) {
   const ult3 = meses.slice(-3).map((p) => porMes[p].honorarios).reduce((a, v) => a + v, 0);
   cob.dso = ult3 > 0 ? Math.round(cob.por_cobrar / (ult3 / 90)) : null;
   cob.aging = aging; cob.top_deudores = topDeudores;
+  // Ventas por mes (Registro de Ventas del SII): lo facturado con fecha de emisión en el mes, y cuánto ya se pagó.
+  const ventas = {};
+  [mesMas_(sel[0], -1)].concat(sel).forEach((p) => {
+    const l = facturas.filter((f) => String(f.fecha || '').slice(0, 7) === p && f.estado !== 'Incobrable');
+    const porCli = {}; l.forEach((f) => sumar_(porCli, f.cliente || 'Sin cliente', f.total));
+    ventas[p] = { periodo: p, facturado: l.reduce((a, f) => a + f.total, 0), n: l.length, pagado: l.reduce((a, f) => a + f.pagado, 0), por_cobrar: l.reduce((a, f) => a + f.saldo, 0),
+      vencido: l.filter((f) => f.estado === 'Vencida').reduce((a, f) => a + f.saldo, 0), clientes: top_(porCli, 6).map((x) => ({ cliente: x.k, total: x.v })),
+      facturas: l.slice().sort((a, b) => b.total - a.total).slice(0, 40).map((f) => ({ folio: f.folio, cliente: f.cliente, fecha: f.fecha, total: f.total, pagado: f.pagado, saldo: f.saldo, estado: f.estado })) };
+  });
+  // Deudas anteriores (clientes de antes o que se fueron): lo que falta cobrar hoy.
+  let deudasAnt = null;
+  try { const l = require('./finanzasDeudas').lista_().deudas; deudasAnt = { saldo: l.reduce((a, x) => a + x.saldo, 0), clientes: l.filter((x) => x.saldo > 0).length, se_fueron: l.filter((x) => x.saldo > 0 && x.estado_cliente === 'SE_FUE').reduce((a, x) => a + x.saldo, 0) }; } catch (e) { deudasAnt = null; }
   // Comentarios
   const ms = sel.map((p) => porMes[p]);
   const fin = porMes[hasta];
@@ -383,7 +400,7 @@ const informe = B.conBoveda('VER_INFORME', function (db, data, contexto) {
     desde, hasta, empresa, empresas, disponibles, hoy, rango: sel,
     meses: serie, filas: filasSel.slice(0, 8000), filas_truncadas: filasSel.length > 8000,
     clientes: { deben: clientes.filter((c) => c.saldo < 0).slice(0, 15), a_favor: clientes.filter((c) => c.saldo > 0).sort((a, b) => b.saldo - a.saldo).slice(0, 15), desde: primerDato },
-    cobranza: cob, comentarios,
+    cobranza: cob, ventas, deudas_anteriores: deudasAnt, comentarios,
     calidad: { estado: razones.length ? 'PROVISORIO' : 'COMPLETO', razones: razones.slice(0, 30) }
   };
 });

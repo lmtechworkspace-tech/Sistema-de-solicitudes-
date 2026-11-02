@@ -2058,3 +2058,22 @@ tr.fin5-mismo-grupo .fin5-gr[style*="--gh"] { color: #fff; background: hsl(var(-
   .fin5-vista { margin-left: 0; }
 }
 .fin5-rv-nota { flex-basis: 100%; display: flex; align-items: center; gap: 6px; margin: 2px 0 0 !important; }
+
+/* ==== Finanzas v5.5 · Cobranza: facturas y deudas anteriores; factura sugerida ==== */
+.fin5-cob-seg { display: flex; }
+.fin5-deuda-acc { display: inline-flex; gap: 8px; margin-left: auto; }
+.fin5-card__cab .fin5-deuda-acc + * { margin-left: 0; }
+tr.fin5-deuda { cursor: pointer; transition: background .15s; }
+tr.fin5-deuda:hover td, tr.fin5-deuda:hover th, tr.fin5-deuda:focus-visible td { background: color-mix(in srgb, var(--fin) 5%, var(--sx-superficie)); }
+tr.fin5-deuda:focus-visible { outline: 2px solid var(--fin); outline-offset: -2px; }
+.fin5-cli__n small { display: block; font-size: .7rem; color: var(--sx-texto-3); font-weight: 500; }
+.fin5-cob-como { gap: 6px; font-size: .82rem; color: var(--sx-texto-2); }
+.fin5-cob-como h3 { display: flex; align-items: center; gap: 8px; margin: 0; font: 700 .9rem/1.2 var(--fuente); color: var(--sx-texto); }
+.fin5-cob-como h3 svg { color: var(--fin); }
+.fin5-cob-como ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
+.fin5-cob-como p { margin: 0; }
+.fin5-deuda-archivo { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 18px; border: 2px dashed var(--sx-borde-fuerte); border-radius: 14px; cursor: pointer; color: var(--fin); font: 650 .86rem/1 var(--fuente); transition: background .15s, border-color .15s; }
+.fin5-deuda-archivo:hover { background: color-mix(in srgb, var(--fin) 6%, transparent); border-color: var(--fin); }
+.fin5-deuda-archivo input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.fin4-c-fact .fin5-con-ph:empty::before { color: color-mix(in srgb, var(--fin) 75%, var(--sx-texto-3)); }
+@media (max-width: 760px) { .fin5-deuda-acc { margin-left: 0; width: 100%; } }
