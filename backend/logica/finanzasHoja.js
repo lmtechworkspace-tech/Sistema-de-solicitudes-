@@ -110,7 +110,7 @@ function construir_(db, cuenta, periodo, ctx) {
       banco: m.sin_cartola ? 'esperando' : (p || r.estado === 'CONFIRMADO') ? 'ok' : 'falta', anotada: !!p, deducida: !!ded,
       tipo_mov: p0 ? p0.tipo : '', en_gestion: piezas_(c).some((x) => x.gestion_id), partes: piezas_(c).length,
       cliente_id: p0 && p0.cliente_id ? p0.cliente_id : '', cliente: p0 && p0.cliente ? p0.cliente : '',
-      saldo_banco: m.saldo, verificado: !m.sin_cartola, _grupo_viejo: p && p.grupo ? p.grupo : null, _fila: p && !p.registro ? p.fila : null,
+      doc_banco: m.doc_banco || null, saldo_banco: m.saldo, verificado: !m.sin_cartola, _grupo_viejo: p && p.grupo ? p.grupo : null, _fila: p && !p.registro ? p.fila : null,
       // Fila que vino del Excel BANCOS: su UNITARIO (lo que la planilla sumaba en el resumen de arriba).
       con_fecha_tx: !!((m.detalle && m.detalle.fecha_tx) || (p && p.fecha) || m.unida),
       de_excel: !!(p && !p.registro && p.fila && p.fila < 100000), unitario: p && typeof p.unitario === 'number' && isFinite(p.unitario) ? p.unitario : null
@@ -264,6 +264,7 @@ const hoja = B.conBoveda('', function (db, data) {
   if (!cuenta) return { periodo, meses, cuentas, cuenta_ref: '', filas: [], grupos: [], totales: null, cartola: null, estado: { ok: 0, esperando: 0, falta: 0, por_completar: 0 }, listas, cerrado: false };
   const h = construir_(db, cuenta, periodo, ctx);
   try { sugerirFacturas_(db, h, cuenta); } catch (e) { /* sin facturas: sin sugerencias */ }
+  try { require('./finanzasDocBanco').sugerir_(db, h.filas, listas, cuenta.empresa); } catch (e) { /* sin documentos del banco */ }
   let revision = null;
   try { revision = require('./finanzasCierre').estadoMes_(periodo); } catch (e) { revision = null; }
   return Object.assign({ periodo, meses, cuentas, cuenta_ref: cuenta.id, empresa: cuenta.empresa, listas, cerrado: cerrado_(periodo), revision }, h);

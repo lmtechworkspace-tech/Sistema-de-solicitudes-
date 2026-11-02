@@ -55,6 +55,8 @@
           '<b>Arrastra aquí el archivo</b><span>SIGSO reconoce qué es y te muestra qué hará antes de guardar nada. Se lee en tu navegador (con fórmulas y hojas ocultas); al servidor viaja cifrado.</span></label>' +
         '<table class="fin2-tabla fin2-tabla--chica fin2-cargas__tipos"><thead><tr><th>Qué subes</th><th>Cómo lo reconoce</th><th>Dónde queda</th></tr></thead><tbody>' +
           '<tr><td>Cartola del BCI (.xlsx)</td><td>Formato de cartola con saldos</td><td>Libro del banco: se une con lo anotado; lo demás queda «falta anotar»</td></tr>' +
+          '<tr><td>Historial de pagos de cuentas del BCI (.xlsx)</td><td>Fecha, servicio o empresa, identificador y monto</td><td>Planilla: cada «pago cuentas vía internet» con su cliente y su OBS (sugerencia)</td></tr>' +
+          '<tr><td>Transferencias recibidas del BCI (.xlsx)</td><td>Fecha, nombre y RUT de quien transfiere, y monto</td><td>Planilla: cada abono con su cliente por RUT (sugerencia)</td></tr>' +
           '<tr><td>Registro de Ventas del SII (.csv, .gz)</td><td>Columnas «Tipo Doc» y «Folio»</td><td>Facturas (Cobranza)</td></tr>' +
           '<tr><td>Saldos iniciales de fondos (.xlsx)</td><td>Cliente/RUT, fecha de corte, monto y fuente</td><td>Saldos propuestos (Fondos)</td></tr>' +
           '<tr><td>Planilla SIGECO o Excel BANCOS (.xlsx)</td><td>Sus hojas conocidas</td><td>Revisión por hoja antes de publicar</td></tr>' +
@@ -96,9 +98,14 @@
         if (rc && rc.ok && hojas.length === 1) { mostrarCartola(rc.data, hojas[0].filas, archivo.name, prog); return null; }
         // v3: el Excel BANCOS se lleva mes a mes al libro del banco (cada fila con su movimiento, su OBS y sus grupos).
         if (hojas.some(esHojaBancos)) { mostrarBancos(hojas, archivo.name, prog); return null; }
-        // 3) Libro SIGECO o BANCOS: staging (nada se publica todavía).
-        prog.innerHTML = '<p class="fin2-ayuda">' + hojas.length + ' hoja(s) leídas · cargando sin publicar…</p>';
-        return x_.api('finanzasCargarLibro', { hash: rs[0], nombre: archivo.name, hojas: hojas });
+        // v5.6: historial de pagos de cuentas o transferencias recibidas del BCI (completan la cartola).
+        return x_.api('finanzasImportarDocBanco', { filas: (hojas[0] && hojas[0].filas) || [], nombre_archivo: archivo.name, revisar: true }).then(function (rd) {
+          if (rd && rd.ok) { mostrarDocBanco(rd.data, hojas[0].filas, archivo.name, prog, ''); return null; }
+          if (rd && rd.fields && rd.fields[0] && rd.fields[0].campo === 'cuenta') { elegirCuentaDoc(hojas[0].filas, archivo.name, prog); return null; }
+          // 3) Libro SIGECO o BANCOS: staging (nada se publica todavía).
+          prog.innerHTML = '<p class="fin2-ayuda">' + hojas.length + ' hoja(s) leídas · cargando sin publicar…</p>';
+          return x_.api('finanzasCargarLibro', { hash: rs[0], nombre: archivo.name, hojas: hojas });
+        });
       });
     }).then(function (r) {
       if (r === null) return;
@@ -132,6 +139,40 @@
         prog.innerHTML = cinta('ok', '<b>Importada:</b> ' + r.data.nuevas + ' movimiento(s) del banco' + (u ? ' · <b>' + u + '</b> se unieron con lo anotado ✓' : '') +
           (falta ? ' · <b>' + falta + '</b> quedan «falta anotar»' : '') + '. <button type="button" class="sx2-enlace js-fca-ir" data-vista="planilla">Ir a la planilla</button>');
         if (r.data.periodo) x_.contexto({ periodo_hoja: r.data.periodo });
+      });
+    });
+  }
+  // ---- v5.6: documentos del banco que completan la cartola ---------------------------------------
+  function elegirCuentaDoc(filas, nombre, prog) {
+    x_.api('finanzasResumenBancos', {}).then(function (rb) {
+      var cuentas = rb && rb.ok ? (rb.data.cuentas || []) : [];
+      prog.innerHTML = cinta('info', '<b>' + txt(nombre) + '</b>: ¿de qué cuenta es?') + '<div class="fin2-acciones" style="justify-content:flex-start"><label class="fin2-campo fin2-campo--fila"><span>Cuenta</span><select class="fin2-input fin2-input--sm js-fca-dcta">' + opciones(cuentas.map(function (c) { return [c.id, c.banco + ' ···' + c.ultimos4 + ' · ' + c.empresa]; }), '', 'Elige la cuenta…') + '</select></label></div>';
+      prog.querySelector('.js-fca-dcta').addEventListener('change', function (ev) {
+        var cta = ev.target.value; if (!cta) return;
+        x_.api('finanzasImportarDocBanco', { filas: filas, nombre_archivo: nombre, cuenta: cta, revisar: true }).then(function (rd) {
+          if (!rd || !rd.ok) { prog.innerHTML = cinta('critico', txt((rd && rd.message) || 'No se pudo leer.')); return; }
+          mostrarDocBanco(rd.data, filas, nombre, prog, cta);
+        });
+      });
+    });
+  }
+  function mostrarDocBanco(v, filas, nombre, prog, cta) {
+    var falta = v.filas - v.emparejados;
+    var que = v.tipo === 'PAGOS_CUENTAS' ? 'Cada «pago cuentas vía internet» de la cartola queda con el servicio que se pagó (Previred = imposiciones, SII = IVA) y el RUT de la empresa por la que se pagó.'
+      : 'Cada transferencia de la cartola queda con el nombre completo y el RUT de quien pagó: con el RUT, SIGSO sabe de qué cliente es aunque el banco acorte el nombre.';
+    prog.innerHTML = cinta('info', '<b>' + txt(v.nombre) + ' · ' + txt(v.cuenta) + '</b>: ' + v.filas + ' fila(s), <b>' + v.emparejados + ' encontradas en la cartola</b>' + (v.con_cliente ? ' · ' + v.con_cliente + ' con su cliente por RUT' : '') + (falta ? ' · ' + falta + ' no están en la cartola (¿falta subirla?)' : '') + '. ' + que + ' En la planilla aparecen como <b>sugerencias con su respaldo</b>: tú las aceptas.') +
+      (v.sin_cartola.length ? '<details class="fin2-p"><summary>Las que no están en la cartola</summary><ul class="fin2-lista-saldos">' + v.sin_cartola.map(function (s) { return '<li><span>' + txt(s.fecha) + ' · ' + txt(s.quien) + '</span><b>$' + Number(s.monto).toLocaleString('es-CL') + '</b></li>'; }).join('') + '</ul></details>' : '') +
+      '<div class="fin2-acciones" style="justify-content:flex-start">' + U.boton({ texto: v.emparejados ? 'Agregar a la planilla' : 'Nada que agregar', icono: 'check', variante: 'primario', sm: true, clase: 'js-fca-doc', deshabilitado: !v.emparejados, datos: { cap: 'REGISTRAR' } }) + '</div>';
+    x_.aplicarCapacidades(prog);
+    var b = prog.querySelector('.js-fca-doc'); if (!b) return;
+    b.addEventListener('click', function () {
+      b.disabled = true;
+      x_.api('finanzasImportarDocBanco', { filas: filas, nombre_archivo: nombre, cuenta: cta || undefined }).then(function (r) {
+        if (!r || !r.ok) { b.disabled = false; prog.innerHTML += cinta('critico', txt((r && r.message) || 'No se pudo agregar.')); return; }
+        var mes = r.data.periodos[r.data.periodos.length - 1] || '';
+        prog.innerHTML = cinta('ok', '<b>Listo:</b> ' + r.data.emparejados + ' movimiento(s) de la cartola ahora dicen ' + (r.data.tipo === 'PAGOS_CUENTAS' ? 'qué se pagó y por quién' : 'quién pagó') + '. En la planilla, filtra «Falta anotar» y acepta las sugerencias. ' +
+          (mes ? '<button type="button" class="sx2-enlace js-fca-ir" data-vista="planilla" data-mes="' + mes + '">Ir a la planilla</button>' : ''));
+        if (mes) x_.contexto({ periodo_hoja: mes });
       });
     });
   }

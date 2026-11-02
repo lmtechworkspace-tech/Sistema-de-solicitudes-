@@ -2077,3 +2077,12 @@ tr.fin5-deuda:focus-visible { outline: 2px solid var(--fin); outline-offset: -2p
 .fin5-deuda-archivo input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .fin4-c-fact .fin5-con-ph:empty::before { color: color-mix(in srgb, var(--fin) 75%, var(--sx-texto-3)); }
 @media (max-width: 760px) { .fin5-deuda-acc { margin-left: 0; width: 100%; } }
+
+/* ==== Finanzas v5.6 · sugerencia con respaldo del banco (pagos de cuentas, transferencias) ==== */
+.fin5-doc-btn {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 180px; padding: 4px 8px; border-radius: 8px; cursor: pointer; font: 650 .72rem/1.15 var(--fuente);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--t); color: var(--t); background: color-mix(in srgb, var(--t) 10%, transparent); transition: background .15s;
+  --t: var(--sx-ok);
+}
+.fin5-doc-btn--media, .fin5-doc-btn--baja { --t: color-mix(in srgb, var(--sx-alerta) 85%, var(--sx-texto)); border-style: dashed; }
+.fin5-doc-btn:hover { background: color-mix(in srgb, var(--t) 20%, transparent); }
