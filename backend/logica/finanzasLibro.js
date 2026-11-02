@@ -131,6 +131,8 @@ function resolverAlias_(alias, banco, ctx) {
 /** La clasificación que dice la planilla para una fila (o null si no alcanza para decidir). */
 function clasifDeFila_(r, quien, empresaCuenta) {
   const entra = r.monto > 0;
+  // v5.7: el traspaso de los honorarios a la cuenta de la empresa no es gasto (sale de la cuenta de paso).
+  if (/(^|\s)TRASPASO/.test(N(r.plan)) && !(quien && quien.clase === 'empresa' && quien.empresa !== empresaCuenta)) return { tipo: 'TRASPASO' };
   if (quien && quien.clase === 'empresa') {
     // La planilla cuenta lo marcado ABONO con otra empresa del grupo (arriendo, imposiciones o sueldos pagados por
     // ella o a ella) dentro del flujo propio; se respeta y queda anotada la empresa para revisarlo.

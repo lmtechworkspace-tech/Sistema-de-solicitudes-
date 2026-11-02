@@ -67,10 +67,10 @@ const TIPOS = {
 };
 // Plan de cuentas de la planilla SIGECO (hoja CATÁLOGOS), sin cambios.
 const CUENTAS = {
-  INGRESO: ['Servicio Mensual', 'Servicio Renta', 'Devolución Renta', 'Otros Ingresos', 'Cobro deuda anterior'],
+  INGRESO: ['Servicio Mensual', 'Servicio Renta', 'Devolución Renta', 'Otros Ingresos', 'Cobro deuda anterior', 'Préstamo recibido'],
   EGRESO: ['Arriendo Mensual', 'Arriendo Reajuste', 'Cuentas Básicas', 'Sueldos', 'Anticipos', 'Finiquitos', 'Imposiciones',
     'Convenios', 'IVA', 'IVA Postergado', 'Renta', 'Multas Clientes', 'Caja Chica', 'Patente Comercial', 'Comisión Banco',
-    'Servidores y Sistemas', 'Otros Egresos'],
+    'Servidores y Sistemas', 'Otros Egresos', 'Traspaso a cuenta empresa', 'Devolución de préstamo'],
   FONDO: ['Imposiciones', 'IVA', 'Sueldos', 'Convenios', 'Renta', 'Otro']
 };
 // Conceptos vigentes desde el catálogo (FIN-03); si el catálogo no responde, la semilla.

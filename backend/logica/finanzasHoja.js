@@ -54,7 +54,8 @@ function deducir_(c) {
 function que_(f) {
   if (f.banco === 'falta') return { k: 'falta', t: 'Falta anotar' };
   // La OBS anotada manda (como en el Excel): una fila con empresa del grupo y OBS ABONO suma en ABONO.
-  if (/^(TRASPASO|PRESTAMO)$/.test(N(f.plan)) || (!f.obs && (f.tipo_mov === 'TRASPASO' || f.tipo_mov === 'PRESTAMO'))) return { k: 'tra', t: /PRESTAMO/.test(N(f.plan)) || f.tipo_mov === 'PRESTAMO' ? 'Préstamo' : 'Traspaso' };
+  // v5.7: «Traspaso a cuenta empresa», «Préstamo recibido» o «Devolución de préstamo» tampoco son ingreso ni gasto.
+  if (/(^|\s)(TRASPASO|PRESTAMO)/.test(N(f.plan)) || (!f.obs && (f.tipo_mov === 'TRASPASO' || f.tipo_mov === 'PRESTAMO'))) return { k: 'tra', t: /PRESTAMO/.test(N(f.plan)) || f.tipo_mov === 'PRESTAMO' ? 'Préstamo' : 'Traspaso' };
   if (!f.obs) return { k: 'rev', t: 'Falta OBS' };
   // Como en el Excel, la OBS manda: una fila con OBS cuenta aunque le falte el nombre o el plan (se avisa).
   if (f.obs === 'ABONO' || f.obs === 'ABONO RENTA') {
@@ -265,6 +266,9 @@ const hoja = B.conBoveda('', function (db, data) {
   const h = construir_(db, cuenta, periodo, ctx);
   try { sugerirFacturas_(db, h, cuenta); } catch (e) { /* sin facturas: sin sugerencias */ }
   try { require('./finanzasDocBanco').sugerir_(db, h.filas, listas, cuenta.empresa); } catch (e) { /* sin documentos del banco */ }
+  let cuentaPaso = null;
+  try { cuentaPaso = require('./finanzasCuentaPaso').control_(db, cuenta, periodo, ctx); } catch (e) { cuentaPaso = null; }
+  h.cuenta_paso = cuentaPaso;
   let revision = null;
   try { revision = require('./finanzasCierre').estadoMes_(periodo); } catch (e) { revision = null; }
   return Object.assign({ periodo, meses, cuentas, cuenta_ref: cuenta.id, empresa: cuenta.empresa, listas, cerrado: cerrado_(periodo), revision }, h);
@@ -411,9 +415,10 @@ const flujo = B.conBoveda('', function (db, data) {
   const n = Math.min(12, Math.max(1, Number(data && data.meses) || 6));
   const meses = [];
   for (let i = n - 1; i >= 0; i--) { const [a, m] = hasta.split('-').map(Number); meses.push(new Date(Date.UTC(a, m - 1 - i, 1)).toISOString().slice(0, 7)); }
-  const empresa = txt_(data && data.empresa);
-  const cuentas = [...ctx.cuentas.values()].filter((c) => !empresa || c.empresa === empresa);
-  const ing = {}, egr = {}, fon = { recibido: {}, pagado: {}, honorario: {}, a_favor: {} }, otros = { traspasos: {}, sin_completar: {} };
+  const cuentaRef = txt_(data && data.cuenta_ref), unaCuenta = cuentaRef ? ctx.cuentas.get(cuentaRef) : null;
+  const empresa = unaCuenta ? unaCuenta.empresa : txt_(data && data.empresa);
+  const cuentas = unaCuenta ? [unaCuenta] : [...ctx.cuentas.values()].filter((c) => !empresa || c.empresa === empresa);
+  const ing = {}, egr = {}, fon = { recibido: {}, pagado: {}, honorario: {}, a_favor: {} }, otros = { traspasos: {}, prestamos_entran: {}, prestamos_salen: {}, sin_completar: {} };
   F.cuentasDe_('INGRESO').forEach((p) => { ing[p] = {}; });
   F.cuentasDe_('EGRESO').forEach((p) => { egr[p] = {}; });
   const sumar = (o, k, mes, v) => { (o[k] = o[k] || {}); o[k][mes] = (o[k][mes] || 0) + v; };
@@ -429,7 +434,7 @@ const flujo = B.conBoveda('', function (db, data) {
         if (k === 'ing') sumar(ing, planFlujo_(f), mes, f.monto);
         else if (k === 'gas') sumar(egr, planFlujo_(f), mes, -f.monto);
         else if (k === 'fon') sumar(fon, f.monto > 0 ? 'recibido' : 'pagado', mes, Math.abs(f.monto));
-        else if (k === 'tra') sumar(otros, 'traspasos', mes, f.monto);
+        else if (k === 'tra') { if (/PRESTAMO/.test(N(f.plan))) sumar(otros, f.monto > 0 ? 'prestamos_entran' : 'prestamos_salen', mes, Math.abs(f.monto)); else sumar(otros, 'traspasos', mes, f.monto); }
         else sumar(otros, 'sin_completar', mes, f.monto);
       });
       h.grupos.forEach((g) => {
@@ -440,7 +445,25 @@ const flujo = B.conBoveda('', function (db, data) {
     });
   });
   const filas = (o) => Object.keys(o).map((k) => ({ plan: k, valores: o[k] }));
-  return { meses, empresa, empresas: [...new Set([...ctx.cuentas.values()].map((c) => c.empresa))], ingresos: filas(ing), egresos: filas(egr), fondos: fon, otros, resumen };
+  // Proyectado: el presupuesto APROBADO de la empresa (o su borrador, dicho así) por plan de cuenta y mes.
+  const proyectado = { ingresos: {}, egresos: {}, estado: 'SIN_PRESUPUESTO', versiones: [] };
+  try {
+    const Pr = require('./finanzasPresupuesto');
+    [...new Set(meses.map((m) => Number(m.slice(0, 4))))].forEach((anio) => {
+      let l = Pr.lineas_(anio, empresa); let estado = 'APROBADO';
+      if (!Object.keys(l).length) { l = Pr.lineas_(anio, empresa, { borrador: true }); estado = 'BORRADOR'; }
+      if (!Object.keys(l).length) return;
+      if (proyectado.estado !== 'APROBADO') proyectado.estado = estado;
+      proyectado.versiones = proyectado.versiones.concat(l._versiones || []);
+      Object.keys(l).forEach((k) => {
+        const [tipo, plan] = [k.slice(0, k.indexOf('|')), k.slice(k.indexOf('|') + 1)];
+        const dest = tipo === 'INGRESO' ? proyectado.ingresos : tipo === 'EGRESO' ? proyectado.egresos : null; if (!dest) return;
+        meses.filter((m) => Number(m.slice(0, 4)) === anio).forEach((m) => { const v = l[k][Number(m.slice(5, 7)) - 1] || 0; if (v) { dest[plan] = dest[plan] || {}; dest[plan][m] = (dest[plan][m] || 0) + v; } });
+      });
+    });
+  } catch (e) { /* sin presupuesto */ }
+  const listaCuentas = [...ctx.cuentas.values()].map((c) => ({ id: c.id, nombre: c.banco + ' ···' + c.ultimos4 + ' · ' + c.empresa }));
+  return { meses, empresa, cuenta_ref: unaCuenta ? unaCuenta.id : '', cuentas: listaCuentas, empresas: [...new Set([...ctx.cuentas.values()].map((c) => c.empresa))], ingresos: filas(ing), egresos: filas(egr), fondos: fon, otros, resumen, proyectado };
 });
 
 /** Folios anotados en la columna N° factura: «1052», «1052-1053», «1052/1053», «1052 y 1053»… */

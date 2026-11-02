@@ -93,6 +93,12 @@
           { titulo: 'Fecha del banco y fecha de la planilla', img: 'planilla-falta',
             texto: [['El BCI pone en la cartola la **fecha contable** (el día hábil siguiente): lo pagado el 30 de junio puede salir el 1 de julio. La planilla va por la **fecha en que pasó**, y SIGSO también: cada fila va en el mes de su fecha de la planilla o de «Mis Movimientos», y al lado se ve «banco 01-07».', 'Si quedan filas del banco sin anotar en los primeros días del mes y sin fecha de transacción, el cuadro **Banco · cartola** ofrece [[Pasarlos a junio]] (el mes anterior). También se puede mover una sola fila con los botones **← mes** / **mes →** del pie de la planilla, y devolverla con **Volver a su mes**.', 'El mismo cuadro revisa la cartola: que esté completa (saldo inicial + movimientos = saldo final) y que la cadena de saldos no se corte (un corte avisa de un movimiento repetido o que falta).']] }
         ] },
+      { id: 'cuenta-paso', titulo: 'La cuenta de paso (BCI en $0)', ruta: '#/finanzas',
+        intro: ['Todo el dinero de los clientes entra al BCI. Desde ahí se pagan sus IVA e imposiciones y los honorarios se traspasan a la cuenta de la empresa. Por eso el BCI es una **cuenta de paso**: al cierre debe quedar en **$0**.'],
+        pasos: [
+          { titulo: 'Activarla y leerla',
+            texto: [['En la planilla del BCI, en el panel de la derecha, toca **Marcarla como cuenta de paso**: elige desde qué mes y cuál es la cuenta de la empresa.', 'La tarjeta **Cuenta de paso** muestra el saldo al cierre y de qué se compone: **honorarios por traspasar** (ABONO + ABONO RENTA que aún no se pasan a la empresa), **dinero de clientes por pagar** (IVA, imposiciones, saldos a favor), préstamos y lo que falta anotar. Cada parte dice qué hacer.', 'Al traspasar los honorarios a la cuenta de la empresa, anota ese movimiento con el plan **Traspaso a cuenta empresa**: no es un gasto.', 'Cuando todo se pagó o se traspasó, dice **En $0**. Si no, la revisión del mes lo avisa.']] }
+        ] },
       { id: 'grupos', titulo: 'Los grupos de fondos (lo que hacía UNITARIO)', ruta: '#/finanzas',
         intro: ['Cuando un cliente manda dinero para sus imposiciones o su IVA y después se paga por él, esas filas son un **grupo**. En vez de una fórmula, se pone **la misma letra** en la columna Grupo.'],
         pasos: [
@@ -103,6 +109,8 @@
         ] },
       { id: 'flujo', titulo: 'El FLUJO', ruta: '#/finanzas',
         pasos: [
+          { titulo: 'Proyectado vs real y una cuenta a la vez',
+            texto: [['Arriba se elige **una cuenta** (por ejemplo, la cuenta nueva de la empresa, donde corre su flujo) o todas.', '**Proyectado vs real** compara lo real de la planilla con el **presupuesto** (Más → Presupuesto): cuánto se esperaba de cada ingreso y gasto y cuánto fue, mes a mes y por plan de cuenta. En verde, lo que va mejor que lo proyectado. Solo se comparan los meses que ya tienen planilla.', 'Los **traspasos entre cuentas** y los **préstamos** (planes «Préstamo recibido» y «Devolución de préstamo») van aparte: no son ingreso ni gasto.']] },
           { titulo: 'Ingresos y egresos por plan de cuenta', img: 'flujo',
             marcas: [{ n: 1, t: 'Hasta qué mes, cuántos meses y de qué empresa (o todo el grupo).' },
               { n: 2, t: 'Ingresos y egresos por plan de cuenta, como en SIGECO.' }, { n: 3, t: '**Margen del mes**: ingresos menos egresos de la empresa.' }, { n: 4, t: 'El dinero de los clientes va aparte, para no inflar ingresos ni gastos.' }],
