@@ -62,8 +62,10 @@ function control_(db, cuenta, periodo, ctx) {
   const meses = []; for (let p = cfg.desde; p <= periodo && meses.length < 36; p = mesMas_(p, 1)) meses.push(p);
   const T = { honorarios: 0, traspasado: 0, clientes: 0, prestamos: 0, sin_completar: 0 };
   let inicial = null, final = null, cuadraCartola = true;
+  const todas = []; // las filas de todo el control, para el corte semanal
   const porMes = meses.map((p) => {
     const h = H.construir_(db, cuenta, p, ctx);
+    if (p === periodo) h.filas.forEach((f) => todas.push(f));
     const t = h.totales || {};
     let tras = 0, pres = 0;
     h.filas.forEach((f) => { if (f.que && f.que.k === 'tra') { if (esPrestamo_(f.plan)) pres += f.monto; else tras += f.monto; } });
@@ -76,6 +78,9 @@ function control_(db, cuenta, periodo, ctx) {
   });
   const porTraspasar = T.honorarios - T.traspasado;
   const calculado = (inicial || 0) + porTraspasar + T.clientes + T.prestamos + T.sin_completar;
+  // Lo de los meses anteriores del control entra con sus cifras de cierre; las semanas del mes suman sus filas encima.
+  const ant = porMes.slice(0, -1).reduce((a, m) => ({ por_traspasar: a.por_traspasar + m.honorarios - m.traspasado, prestamos: a.prestamos + m.prestamos, sin_completar: a.sin_completar + m.sin_completar }), { por_traspasar: 0, prestamos: 0, sin_completar: 0 });
+  const semanas = semanas_(cuenta, periodo, todas, inicial || 0, ant, { por_traspasar: porTraspasar, saldo: final, prestamos: T.prestamos, sin_completar: T.sin_completar });
   const enCero = final !== null && Math.abs(final) <= TOLERANCIA;
   const pendientes = [];
   if (porTraspasar > TOLERANCIA) pendientes.push({ id: 'traspasar', monto: porTraspasar, titulo: 'Honorarios por traspasar a la cuenta de la empresa', como: 'Traspasa ' + Base.plata_(porTraspasar) + ' a la cuenta de la empresa y anota ese movimiento con el plan «' + PLAN_TRASPASO + '».' });
@@ -88,7 +93,43 @@ function control_(db, cuenta, periodo, ctx) {
   let destino = null;
   if (cfg.destino_ref) { const c = I.cuentasMapa_().get(cfg.destino_ref); if (c) destino = { id: c.id, nombre: c.banco + ' ···' + c.ultimos4 + ' · ' + c.empresa }; }
   return { desde: cfg.desde, destino, periodo, saldo_final: final, saldo_inicial: inicial, por_traspasar: porTraspasar, honorarios: T.honorarios, traspasado: T.traspasado, clientes: T.clientes, prestamos: T.prestamos,
-    sin_completar: T.sin_completar, diferencia: final === null ? null : final - calculado, en_cero: enCero, cuadra_cartola: cuadraCartola, pendientes, meses: porMes, tolerancia: TOLERANCIA, plan_traspaso: PLAN_TRASPASO };
+    sin_completar: T.sin_completar, diferencia: final === null ? null : final - calculado, en_cero: enCero, semanas, cuadra_cartola: cuadraCartola, pendientes, meses: porMes, tolerancia: TOLERANCIA, plan_traspaso: PLAN_TRASPASO };
+}
+
+/**
+ * Corte semanal del mes (gerencia: «cada semana debe estar en cero»). Para cada semana (lunes a domingo, y el último
+ * día del mes): el saldo del banco ese día y cuánto de eso son honorarios por traspasar, contando las filas por su
+ * fecha del banco. Lo demás es dinero de clientes por pagar (o lo que falta anotar). La última semana usa las cifras
+ * del cierre del mes (con los grupos ya decididos), así el último corte es el mismo control del mes.
+ */
+function saldoAl_(cuentaId, fecha) {
+  const r = I.db_().prepare('SELECT datos FROM FIN_MOVIMIENTOS WHERE cuenta_ref = ? AND fecha <= ? ORDER BY fecha DESC, orden DESC LIMIT 40').all(cuentaId, fecha)
+    .map((x) => I.des_(x.datos)).find((m) => !m.sin_cartola && typeof m.saldo === 'number');
+  return r ? r.saldo : null;
+}
+function semanas_(cuenta, periodo, filas, inicial, ant, cierre) {
+  const fin = Base.ultimoDia_(periodo), cortes = [];
+  for (let d = periodo + '-01'; d <= fin; d = Base.sumarDias_(d, 1)) {
+    if (new Date(d + 'T12:00:00Z').getUTCDay() === 0 || d === fin) cortes.push(d);
+  }
+  let desde = periodo + '-01';
+  return cortes.map((hasta) => {
+    const ultima = hasta === fin;
+    const saldo = ultima && cierre.saldo !== null ? cierre.saldo : saldoAl_(cuenta.id, hasta);
+    let porTraspasar = ant.por_traspasar, sinCompletar = ant.sin_completar, prestamos = ant.prestamos;
+    if (ultima) { porTraspasar = cierre.por_traspasar; prestamos = cierre.prestamos; sinCompletar = cierre.sin_completar; }
+    else filas.forEach((f) => {
+      const fb = f.fecha_banco || f.fecha; if (!fb || fb > hasta) return;
+      const k = f.que && f.que.k;
+      if (!f.grupo && (k === 'ing' || k === 'gas')) porTraspasar += f.monto;
+      else if (k === 'tra') { if (esPrestamo_(f.plan)) prestamos += f.monto; else porTraspasar += f.monto; }
+      else if (k === 'rev' || k === 'falta') sinCompletar += f.monto;
+    });
+    const clientes = saldo === null ? null : saldo - inicial - porTraspasar - prestamos - sinCompletar;
+    const s = { desde, hasta, saldo, por_traspasar: porTraspasar, clientes, sin_completar: sinCompletar, en_cero: saldo !== null && Math.abs(saldo) <= TOLERANCIA };
+    desde = Base.sumarDias_(hasta, 1);
+    return s;
+  });
 }
 
 const guardar = Base.conCapacidad('CONFIGURAR', '', function (db, data, contexto, x) {
