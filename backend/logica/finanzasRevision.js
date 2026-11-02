@@ -95,6 +95,9 @@ const revision = B.conBoveda('', function (db, data, contexto) {
   if (dif.length) avisos.push({ id: 'montos', titulo: dif.length + ' monto(s) que parecen mal digitados', detalle: dif.slice(0, 3).map((x) => x.anotada.nombre + ': anotado ' + Base.plata_(x.anotada.monto) + ', banco ' + Base.plata_(x.banco.monto)).join(' · ') + '.', filas: dif });
   const otroMes = h.grupos.filter((g) => g.otro_mes);
   if (otroMes.length) avisos.push({ id: 'otro_mes', titulo: otroMes.length + ' grupo(s) con filas de otro mes', detalle: 'Revisa que lo que sobra se decida en un solo mes: ' + otroMes.slice(0, 4).map((g) => g.letra).join(', ') + '.' });
+  let paso = null;
+  try { paso = require('./finanzasCuentaPaso').control_(db, cuenta, periodo, ctx); } catch (e) { paso = null; }
+  if (paso && !paso.en_cero) avisos.push({ id: 'cuenta_paso', titulo: 'La cuenta de paso no quedó en $0 (' + Base.plata_(paso.saldo_final || 0) + ')', detalle: paso.pendientes.slice(0, 3).map((x) => x.titulo + ': ' + Base.plata_(x.monto)).join(' · ') + '.' });
   const movidas = h.filas.filter((f) => f.movida);
   if (movidas.length) avisos.push({ id: 'movidas', titulo: movidas.length + ' fila(s) pasadas de mes a mano', detalle: 'Confirma que de verdad son de ' + Base.nombreMes_(periodo) + '.' });
   const obligatorios = pasos.every((p) => p.ok);

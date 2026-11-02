@@ -38,6 +38,7 @@
     glosa: { t: 'Detalle banco', que: 'Lo que dice la cartola del banco.', como: ['Viene del banco, no se escribe. Ayuda a saber quién es.'] },
     saldo: { t: 'Saldo', que: 'Lo que había en la cuenta después de este movimiento.', como: ['Lo informa el banco, no se escribe.'] },
     que: { t: 'Qué es', que: 'Lo que SIGSO entiende de la fila con su OBS y su monto. No se escribe.', como: ['<span class="fin2-pos">Honorario</span>: entró y es de la empresa.', '<span class="fin2-neg">Gasto</span>: salió y es de la empresa.', '<span class="fin4-que--info">Fondos cliente</span>: IVA, imposiciones, saldo…', 'En <b class="fin4-que--alerta">naranjo</b>, lo que falta (por ejemplo «falta el plan»). Tócalo y SIGSO te lleva a la celda para completarlo.'] },
+    paso: { t: 'Cuenta de paso', que: 'El BCI recibe todo el dinero de los clientes. Desde ahí se pagan sus IVA e imposiciones y los honorarios se traspasan a la cuenta de la empresa: al cierre debe quedar en $0.', como: ['<b>Honorarios por traspasar</b>: ABONO + ABONO RENTA que todavía no se pasan a la cuenta de la empresa.', '<b>Dinero de clientes por pagar</b>: lo que mandaron para su IVA o imposiciones y aún no se paga, o lo que quedó a su favor.', 'El traspaso se anota con el plan <b>Traspaso a cuenta empresa</b>: no es gasto.'] },
     banco: { t: 'Banco', que: 'Si la fila ya coincide con la cartola.', como: ['<b>en banco</b>: coincide con la cartola.', '<b>esperando</b>: anotada; falta que llegue la cartola.', '<b>falta anotar</b>: el banco la trae y nadie la anotó.'] }
   };
   // Plan de cuenta que se reconoce por el nombre o el detalle del banco (solo sugerencia: se acepta con Enter).
@@ -210,7 +211,7 @@
     if (est_.filtro !== 'todas' && !d.filas.some(function (f) { return pasaFiltro(f); })) est_.filtro = 'todas';
     var interior = d.cuentas.length ? miniHtml(d) + barraHtml(d, mesesVisibles(d)) + caminoHtml(d) + kpisHtml(d) +
         '<div class="fin5-planilla-env' + prefClases() + '"><div class="fin5-planilla"><div class="fin5-principal">' + filtrosHtml(d) + guiaHtml(d) + hojaHtml(d, animar) + '</div>' +
-        '<aside class="fin5-lado" aria-label="Banco y grupos">' + bancoHtml(d) + gruposHtml(d) + atajosHtml() + '</aside></div></div>'
+        '<aside class="fin5-lado" aria-label="Banco y grupos">' + bancoHtml(d) + pasoHtml(d) + gruposHtml(d) + atajosHtml() + '</aside></div></div>'
       : vacioHtml('subir', 'Todavía no hay una cuenta del banco', 'Sube la primera cartola del banco: con ella se crea la cuenta y empieza la planilla.', U.boton({ texto: 'Subir cartola', icono: 'subir', variante: 'primario', clase: 'js-f4-cargar' }));
     var c = cuerpoPlanilla();
     if (c) {
@@ -715,6 +716,34 @@
       repintarHoja(); mensaje('Plan «' + o.plan + '» puesto en ' + filas.length + ' fila(s)');
     });
   }
+  // ---- Cuenta de paso: el BCI recibe todo, paga lo de los clientes y traspasa los honorarios; debe quedar en $0 ----
+  function pasoHtml(d) {
+    var c = d.cuenta_paso;
+    if (!c) return '<div class="fin5-paso-env">' + (puede('CONFIGURAR') && editable() ? '<p class="fin5-nota fin5-paso-ofrecer">' + U.ico('info', 13) + ' ¿Esta cuenta solo recibe y reparte (pagos de clientes y traspaso de honorarios)? <button type="button" class="sx2-enlace js-f5-paso-config">Marcarla como cuenta de paso</button></p>' : '') + '</div>';
+    var ok = c.en_cero, partes = [
+      ['Honorarios por traspasar', c.por_traspasar, 'acento'], ['Dinero de clientes por pagar', c.clientes, 'violeta'], ['Préstamos', c.prestamos, 'neutro'], ['Sin anotar o completar', c.sin_completar, 'alerta'], ['Saldo con que empezó el control', c.saldo_inicial || 0, 'neutro']
+    ].filter(function (x) { return Math.abs(x[1]) > 0; });
+    var base = partes.reduce(function (a, x) { return a + Math.abs(x[1]); }, 0) || 1;
+    return '<div class="fin5-paso-env"><section class="fin5-card fin5-cpaso fin5-cpaso--' + (ok ? 'ok' : 'alerta') + ' fin5-entra" style="--i:3" aria-label="Cuenta de paso">' +
+      '<header class="fin5-card__cab"><h2>Cuenta de paso <button type="button" class="fin5-th-ayuda js-f5-col-ayuda" data-col="paso" aria-label="¿Qué es la cuenta de paso?">?</button></h2><span class="fin5-pildora fin5-pildora--' + (ok ? 'ok">' + U.ico('check', 13) + 'En $0' : 'alerta">Debe quedar en $0') + '</span></header>' +
+      '<div class="fin5-cpaso__saldo"><small>Saldo al cierre de ' + txt(mesLargo(d.periodo)) + '</small><b class="' + (ok ? 'fin2-pos' : '') + '">' + (c.saldo_final === null ? '—' : plata(c.saldo_final)) + '</b>' + (c.destino ? '<span>Honorarios → ' + txt(c.destino.nombre) + '</span>' : '') + '</div>' +
+      (partes.length && !ok ? '<div class="fin5-pila" role="img" aria-label="De qué se compone el saldo">' + partes.map(function (x) { return '<span class="fin5-cpaso__seg fin5-cpaso__seg--' + x[2] + '" style="width:' + (Math.abs(x[1]) / base * 100).toFixed(1) + '%" title="' + txt(x[0]) + ': ' + plata(x[1]) + '"></span>'; }).join('') + '</div>' : '') +
+      (ok ? '<p class="fin5-cpaso__ok">' + U.ico('check', 14) + 'Todo lo que entró ya se pagó por los clientes o se traspasó a la cuenta de la empresa.</p>'
+        : '<ul class="fin5-cpaso__lista">' + c.pendientes.map(function (x) { return '<li><div><b>' + txt(x.titulo) + '</b><small>' + txt(x.como) + '</small></div><span class="' + (x.monto < 0 ? 'fin2-neg' : '') + '">' + plata(x.monto) + '</span></li>'; }).join('') + '</ul>') +
+      (c.diferencia ? '<p class="fin5-nota">' + U.ico('alerta', 13) + ' ' + plata(c.diferencia) + ' que no se explican con la planilla: revisa la cartola.</p>' : '') +
+      '<p class="fin5-nota">Control desde ' + txt(mesLargo(c.desde)) + '. ' + (puede('CONFIGURAR') ? '<button type="button" class="sx2-enlace js-f5-paso-config">Cambiar</button>' : '') + '</p></section></div>';
+  }
+  function configurarPaso() {
+    var d = est_.datos, c = d.cuenta_paso, otras = d.cuentas.filter(function (x) { return x.id !== d.cuenta_ref; });
+    var meses = ultimosMeses(18);
+    U.formulario({ titulo: 'Cuenta de paso', subtitulo: '<span class="fin2-ayuda">' + txt((d.cuentas.filter(function (x) { return x.id === d.cuenta_ref; })[0] || {}).nombre || '') + '</span>', boton: 'Guardar',
+      campos: '<p class="fin2-ayuda">Una cuenta de paso recibe el dinero de los clientes, paga sus IVA e imposiciones y traspasa los honorarios a la cuenta de la empresa. Al cierre debe quedar en $0: SIGSO muestra qué falta para llegar a cero.</p>' +
+        U.campo('¿Es cuenta de paso?', '<select name="activa" class="sx2-input"><option value="si"' + (c || !d.cuenta_paso ? ' selected' : '') + '>Sí</option><option value="no">No (quitar el control)</option></select>') +
+        U.campo('Desde qué mes', '<select name="desde" class="sx2-input">' + meses.map(function (m) { return '<option value="' + m + '"' + ((c ? c.desde : d.periodo) === m ? ' selected' : '') + '>' + txt(mesLargo(m)) + '</option>'; }).join('') + '</select>', 'Desde ese mes se suma lo que entra, se paga y se traspasa.') +
+        U.campo('Cuenta de la empresa (adonde van los honorarios)', '<select name="destino_ref" class="sx2-input"><option value="">Todavía no existe o no está en SIGSO</option>' + otras.map(function (x) { return '<option value="' + txt(x.id) + '"' + (c && c.destino && c.destino.id === x.id ? ' selected' : '') + '>' + txt(x.nombre) + '</option>'; }).join('') + '</select>', 'Al traspasar, anota el movimiento con el plan «Traspaso a cuenta empresa».'),
+      enviar: function (v) { return x_.api('finanzasGuardarCuentaPaso', { cuenta_ref: d.cuenta_ref, activa: v.activa !== 'no', desde: v.desde, destino_ref: v.destino_ref }); },
+      aviso: 'Listo.', listo: function () { recargar(null); } });
+  }
   function mesVecino(p, n) { var a = String(p).split('-').map(Number); return new Date(Date.UTC(a[0], a[1] - 1 + n, 1)).toISOString().slice(0, 7); }
   function filtrosHtml(d) {
     var pref = function (k, t, ico, tit) { return '<button type="button" class="fin5-vista__b js-f5-pref" data-p="' + k + '" aria-pressed="' + !!(k === 'sinLado' ? !PREF_.sinLado : PREF_[k]) + '" title="' + tit + '">' + ico + '<span>' + t + '</span></button>'; };
@@ -1070,7 +1099,7 @@
     // Si lo filtrado ya no tiene filas (se completó lo último), se vuelve a ver todo en vez de una tabla vacía.
     if (est_.filtro !== 'todas' && !d.filas.some(function (f) { return pasaFiltro(f); })) { est_.filtro = 'todas'; est_.sel.r = 0; }
     c.setAttribute('data-quieto', '1');
-    [['.fin5-mini-env', miniHtml(d)], ['.fin5-camino', caminoHtml(d)], ['.fin5-guia', guiaHtml(d)], ['.fin5-kpis', kpisHtml(d)], ['.fin5-chips', chipsHtml(d)], ['.fin5-banco', bancoHtml(d)], ['.fin5-grupos', gruposHtml(d)]].forEach(function (x) { reemplazarEn(c, x[0], x[1]); });
+    [['.fin5-mini-env', miniHtml(d)], ['.fin5-camino', caminoHtml(d)], ['.fin5-guia', guiaHtml(d)], ['.fin5-kpis', kpisHtml(d)], ['.fin5-chips', chipsHtml(d)], ['.fin5-banco', bancoHtml(d)], ['.fin5-paso-env', pasoHtml(d)], ['.fin5-grupos', gruposHtml(d)]].forEach(function (x) { reemplazarEn(c, x[0], x[1]); });
     var bm = c.querySelector('.js-f5-barra-mes'); if (bm) bm.textContent = mesLargo(d.periodo) + ' · ' + d.filas.length + ' fila(s)';
     var tb = c.querySelector('.fin4-hoja tbody');
     if (tb) {
@@ -1312,7 +1341,7 @@
   // =====================================================================================
   //  Reportes: FLUJO, saldo por cliente y cobranza
   // =====================================================================================
-  var rep_ = { cobVista: 'facturas', deudas: null, filtroDeuda: 'debe', buscaDeuda: '', hasta: '', meses: 6, empresa: '', periodo: '', facturas: 'abiertas', vacias: false, buscaCli: '', buscaFact: '', saldos: null, cobros: null };
+  var rep_ = { flujoVista: 'real', flujoCuenta: '', cobVista: 'facturas', deudas: null, filtroDeuda: 'debe', buscaDeuda: '', hasta: '', meses: 6, empresa: '', periodo: '', facturas: 'abiertas', vacias: false, buscaCli: '', buscaFact: '', saldos: null, cobros: null };
   function selectorMes(clase, actual, meses, etiqueta) { return '<label class="fin5-select">' + U.ico('calendario', 15) + '<select class="' + clase + '" aria-label="' + txt(etiqueta || 'Mes') + '">' + meses.map(function (m) { return '<option value="' + m + '"' + (m === actual ? ' selected' : '') + '>' + txt(mesLargo(m)) + '</option>'; }).join('') + '</select></label>'; }
   function ultimosMeses(n) { var out = [], a = hoy().slice(0, 7).split('-').map(Number); for (var i = 0; i < n; i++) { var d = new Date(Date.UTC(a[0], a[1] - 1 - i, 1)); out.push(d.toISOString().slice(0, 7)); } return out; }
   // Mismo reporte con otro filtro: se atenúa lo que hay (sin pantalla en blanco) y se cambia solo el cuerpo al llegar.
@@ -1333,7 +1362,7 @@
     rep_.hasta = rep_.hasta || hoy().slice(0, 7);
     var t = x.turno();
     if (!atenuar('flujo')) x.pagina(x.cab('flujo') + U.esqueleto('tabla', 14));
-    x.api('finanzasHojaFlujo', { hasta: rep_.hasta, meses: rep_.meses, empresa: rep_.empresa }).then(function (r) {
+    x.api('finanzasHojaFlujo', { hasta: rep_.hasta, meses: rep_.meses, empresa: rep_.empresa, cuenta_ref: rep_.flujoCuenta }).then(function (r) {
       if (!x.vigente(t)) return;
       if (!r || !r.ok) { falla(x, 'flujo', 'No se pudo armar el FLUJO', r); return; }
       rep_.flujo = r.data;
@@ -1362,13 +1391,16 @@
       sec('Egresos', 'dinero') + d.egresos.map(function (l) { return fila(l.plan, l.valores, '', 'critico'); }).join('') + fila('Total egresos', te, 'fin4-subt', '', true) +
       fila('Margen del mes', mg, 'fin4-res', '', true) +
       sec('Fondos de clientes (no son de la empresa)', 'caja') + fila('Recibido de clientes', d.fondos.recibido, '', 'info') + fila('Pagado por cuenta de clientes', d.fondos.pagado, '', 'info') + fila('Lo que sobró, cobrado como honorario', d.fondos.honorario, '', 'ok') + fila('Lo que sobró, a favor del cliente', d.fondos.a_favor, '', 'info') +
-      sec('Otros', 'capas') + fila('Traspasos y préstamos', d.otros.traspasos, '', 'neutro') + fila('Sin completar', d.otros.sin_completar, '', 'alerta');
+      sec('Otros (no son ingreso ni gasto)', 'capas') + fila('Traspasos entre cuentas', d.otros.traspasos, '', 'neutro') + fila('Préstamos recibidos', d.otros.prestamos_entran, '', 'neutro') + fila('Devoluciones de préstamos', d.otros.prestamos_salen, '', 'neutro') + fila('Sin completar', d.otros.sin_completar, '', 'alerta');
+    var comparar = rep_.flujoVista === 'comparar';
     paginaVista('flujo', x.cab('flujo') + '<div class="sx2-pagina__cuerpo fin4 fin5">' +
       '<div class="fin5-barra fin5-entra" style="--i:0">' + selectorMes('js-f4-hasta', rep_.hasta, ultimosMeses(18), 'Hasta') +
         '<div class="fin5-seg" role="group" aria-label="Meses">' + [3, 6, 12].map(function (n) { return '<button type="button" class="js-f5-nmeses" data-n="' + n + '" aria-pressed="' + (n === rep_.meses) + '">' + n + ' meses</button>'; }).join('') + '</div>' +
-        '<label class="fin5-select">' + U.ico('empresa', 15) + '<select class="js-f4-empresa" aria-label="Empresa"><option value="">Todo el grupo</option>' + d.empresas.map(function (e) { return '<option' + (e === rep_.empresa ? ' selected' : '') + '>' + txt(e) + '</option>'; }).join('') + '</select></label>' +
-      '</div>' +
-      '<section class="fin5-kpis" aria-label="Totales del período">' +
+        '<label class="fin5-select">' + U.ico('caja', 15) + '<select class="js-f4-flujo-cuenta" aria-label="Cuenta"><option value="">Todas las cuentas</option>' + (d.cuentas || []).map(function (c) { return '<option value="' + txt(c.id) + '"' + (c.id === d.cuenta_ref ? ' selected' : '') + '>' + txt(c.nombre) + '</option>'; }).join('') + '</select></label>' +
+        (d.cuenta_ref ? '' : '<label class="fin5-select">' + U.ico('empresa', 15) + '<select class="js-f4-empresa" aria-label="Empresa"><option value="">Todo el grupo</option>' + d.empresas.map(function (e) { return '<option' + (e === rep_.empresa ? ' selected' : '') + '>' + txt(e) + '</option>'; }).join('') + '</select></label>') +
+        U.segmento([{ id: 'real', texto: 'Real', icono: 'tabla' }, { id: 'comparar', texto: 'Proyectado vs real', icono: 'diana' }], rep_.flujoVista, 'js-f5-flujo-vista') +
+      '</div>' + (comparar ? flujoComparar(d, ti, te) + '</div>' : '') +
+      (comparar ? '' : '<section class="fin5-kpis" aria-label="Totales del período">' +
         kpi({ clave: 'fl-i', t: 'Ingresos', v: tI, ico: 'tendencia', tono: 'ok', sub: M.length + ' meses' }, 1) + kpi({ clave: 'fl-e', t: 'Egresos', v: -tE, ico: 'dinero', tono: 'critico', sub: 'gastos con plan de cuenta' }, 2) +
         kpi({ clave: 'fl-m', t: 'Margen', v: tM, ico: 'destello', tono: 'acento', sub: tI ? Math.round(tM / tI * 100) + '% de los ingresos' : '' }, 3) + kpi({ clave: 'fl-f', t: 'Fondos de clientes', v: tot(d.fondos.recibido), ico: 'caja', tono: 'info', sub: 'recibidos (aparte)' }, 4) +
       '</section>' +
@@ -1383,11 +1415,52 @@
         }).join('') + '</div></section>' +
       '<section class="fin5-card fin5-entra" style="--i:6"><header class="fin5-card__cab"><h2>Por plan de cuenta</h2><button type="button" class="fin5-chip js-f5-vacias" aria-pressed="' + rep_.vacias + '">' + U.ico(rep_.vacias ? 'ojo' : 'filtro', 13) + '<b class="js-f5-vacias-t"></b></button></header>' +
         '<div class="fin4-rep fin5-flujo"><table class="fin4-tab"><thead><tr><th>Plan de cuenta</th>' + M.map(function (m) { return '<th class="fin4-n">' + txt(mesCorto(m)) + '</th>'; }).join('') + '<th class="fin4-n">Total</th></tr></thead><tbody>' + cuerpo + '</tbody></table></div></section>' +
-      '<p class="fin5-nota">Sale solo de la planilla: cada fila cae en su plan de cuenta. El dinero de los clientes (IVA, imposiciones) va aparte, para no inflar los ingresos ni los gastos.</p></div>');
+      '<p class="fin5-nota">Sale solo de la planilla: cada fila cae en su plan de cuenta. El dinero de los clientes (IVA, imposiciones), los traspasos entre cuentas y los préstamos van aparte, para no inflar los ingresos ni los gastos.</p></div>'));
     var bt = x.raiz().querySelector('.js-f5-vacias-t'); if (bt) bt.textContent = rep_.vacias ? 'Ocultar planes sin movimiento' : 'Mostrar ' + ocultas + ' plan(es) sin movimiento';
     activar(x.raiz());
   }
 
+  // Proyectado (presupuesto) frente a lo real, por plan de cuenta y por mes.
+  function flujoComparar(d, ti, te) {
+    var P = d.proyectado || { ingresos: {}, egresos: {}, estado: 'SIN_PRESUPUESTO' };
+    // Solo los meses que ya tienen planilla: un mes sin datos no es «0 % cumplido», es un mes sin anotar.
+    var M = d.meses.filter(function (m) { return (ti[m] || 0) || (te[m] || 0); }), sinDatos = d.meses.length - M.length;
+    if (!M.length && P.estado !== 'SIN_PRESUPUESTO') return '<div class="fin5-vacio fin5-entra"><span class="fin5-vacio__ico">' + U.ico('diana', 26) + '</span><h3>Todavía no hay meses con planilla para comparar</h3><p>Elige otro período o completa la planilla.</p></div>';
+    if (P.estado === 'SIN_PRESUPUESTO') return '<div class="fin5-vacio fin5-entra"><span class="fin5-vacio__ico">' + U.ico('diana', 26) + '</span><h3>Todavía no hay flujo proyectado</h3><p>El proyectado sale del presupuesto de la empresa: cuánto se espera de cada ingreso y gasto, mes a mes (sueldos, arriendo, imposiciones, IVA…). Cárgalo una vez y aquí se compara solo con lo real de la planilla.</p>' + U.boton({ texto: 'Ir a Presupuesto', icono: 'derecha', variante: 'primario', clase: 'js-f5-ir-presupuesto' }) + '</div>';
+    var tot = function (o) { return M.reduce(function (s, m) { return s + ((o || {})[m] || 0); }, 0); };
+    var suma = function (obj) { var o = {}; Object.keys(obj).forEach(function (k) { M.forEach(function (m) { o[m] = (o[m] || 0) + ((obj[k] || {})[m] || 0); }); }); return o; };
+    var pi = suma(P.ingresos), pe = suma(P.egresos);
+    var real = function (lista) { var o = {}; lista.forEach(function (l) { o[l.plan] = l.valores; }); return o; };
+    var ri = real(d.ingresos), re = real(d.egresos);
+    function tabla(proy, rea, gasto) {
+      var planes = Object.keys(proy).concat(Object.keys(rea).filter(function (k) { return tot(rea[k]) && !proy[k]; }));
+      return planes.filter(function (k) { return tot(proy[k]) || tot(rea[k]); }).map(function (k) {
+        var p = tot(proy[k]), r = tot(rea[k]), dif = r - p, pc = p ? Math.round(r / p * 100) : null, malo = gasto ? dif > 0 : dif < 0;
+        return '<tr><th>' + txt(k) + (proy[k] ? '' : ' <small class="fin5-tenue">sin proyectar</small>') + '</th><td class="fin4-n">' + plata(p, '—') + '</td><td class="fin4-n">' + plata(r, '—') + '</td>' +
+          '<td class="fin4-n ' + (dif ? (malo ? 'fin2-neg' : 'fin2-pos') : '') + '">' + (dif > 0 ? '+' : '') + plata(dif, '—') + '</td>' +
+          '<td><div class="fin5-cumple"><span class="fin5-cumple__b fin5-cumple__b--' + (malo ? 'mal' : 'bien') + '" style="width:' + Math.min(100, pc === null ? 100 : pc) + '%"></span></div><small>' + (pc === null ? 'no proyectado' : pc + ' %') + '</small></td></tr>';
+      }).join('');
+    }
+    var PI = tot(pi), PE = tot(pe), RI = tot(ti), RE = tot(te);
+    var pct = function (r, p) { return p ? Math.round(r / p * 100) + ' % de lo proyectado' : 'sin proyectar'; };
+    var meses = '<table class="fin4-tab fin5-comp-mes"><thead><tr><th></th>' + M.map(function (m) { return '<th class="fin4-n">' + txt(mesCorto(m)) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      [['Ingresos proyectados', pi, ''], ['Ingresos reales', ti, 'ok'], ['Egresos proyectados', pe, ''], ['Egresos reales', te, 'critico']].map(function (r) { return '<tr' + (r[2] ? ' data-tono="' + r[2] + '"' : ' class="fin5-tenue"') + '><th>' + r[0] + '</th>' + M.map(function (m) { return '<td class="fin4-n">' + plata((r[1] || {})[m] || 0, '—') + '</td>'; }).join('') + '</tr>'; }).join('') +
+      '<tr class="fin4-res"><th>Margen real − proyectado</th>' + M.map(function (m) { var v = ((ti[m] || 0) - (te[m] || 0)) - ((pi[m] || 0) - (pe[m] || 0)); return '<td class="fin4-n ' + (v < 0 ? 'fin2-neg' : v > 0 ? 'fin2-pos' : '') + '">' + (v > 0 ? '+' : '') + plata(v, '—') + '</td>'; }).join('') + '</tr></tbody></table>';
+    var cab = '<thead><tr><th>Plan de cuenta</th><th class="fin4-n">Proyectado</th><th class="fin4-n">Real</th><th class="fin4-n">Diferencia</th><th>Cumplimiento</th></tr></thead>';
+    return (P.estado === 'BORRADOR' ? '<div class="fin5-aviso fin5-aviso--alerta fin5-entra">' + U.ico('info', 16) + '<span>El proyectado es un <b>borrador</b> del presupuesto (todavía no se aprueba). Se aprueba en Más → Presupuesto.</span></div>' : '') +
+      (sinDatos ? '<p class="fin5-nota">' + U.ico('info', 13) + ' Se comparan solo los ' + M.length + ' mes(es) con planilla (' + M.map(mesCorto).join(', ') + '); ' + sinDatos + ' mes(es) del período todavía no tienen movimientos anotados.</p>' : '') +
+      '<section class="fin5-kpis" aria-label="Proyectado vs real">' +
+        kpi({ clave: 'fc-i', t: 'Ingresos reales', v: RI, ico: 'tendencia', tono: 'ok', sub: pct(RI, PI) + ' (' + plata(PI) + ')' }, 1) +
+        kpi({ clave: 'fc-e', t: 'Egresos reales', v: -RE, ico: 'dinero', tono: 'critico', sub: pct(RE, PE) + ' (' + plata(PE) + ')' }, 2) +
+        kpi({ clave: 'fc-m', t: 'Margen real', v: RI - RE, ico: 'destello', tono: 'acento', sub: 'proyectado ' + plata(PI - PE) }, 3) +
+        kpi({ clave: 'fc-d', t: 'Diferencia de margen', v: (RI - RE) - (PI - PE), ico: 'diana', tono: (RI - RE) >= (PI - PE) ? 'ok' : 'critico', sub: (RI - RE) >= (PI - PE) ? 'mejor que lo proyectado' : 'peor que lo proyectado' }, 4) +
+      '</section>' +
+      '<section class="fin5-card fin5-entra" style="--i:5"><header class="fin5-card__cab"><h2>Mes a mes</h2></header><div class="fin4-rep">' + meses + '</div></section>' +
+      '<section class="fin5-card fin5-entra" style="--i:6"><header class="fin5-card__cab"><h2>Por plan de cuenta (total del período)</h2></header><div class="fin4-rep fin5-flujo"><table class="fin4-tab fin5-comp">' + cab + '<tbody>' +
+        '<tr class="fin4-sec"><th colspan="5"><span>' + U.ico('tendencia', 14) + 'Ingresos</span></th></tr>' + tabla(P.ingresos, ri, false) +
+        '<tr class="fin4-sec"><th colspan="5"><span>' + U.ico('dinero', 14) + 'Egresos</span></th></tr>' + tabla(P.egresos, re, true) + '</tbody></table></div></section>' +
+      '<p class="fin5-nota">Lo proyectado sale del presupuesto (Más → Presupuesto); lo real, de la planilla. En verde, lo que va mejor que lo proyectado (más ingresos o menos gastos). <button type="button" class="sx2-enlace js-f5-ir-presupuesto">Editar el presupuesto</button></p>';
+  }
   // ---- Saldo por cliente ----------------------------------------------------------------
   function verSaldos(x) {
     x_ = x; enlazar();
@@ -1630,6 +1703,7 @@
       if (b && b.classList.contains('js-f5-tour')) { tour(true); return; }
       if (b && b.classList.contains('js-f5-portada')) { portada(); return; }
       if (b && b.classList.contains('js-f5-fact-todas')) { ponerFacturasSugeridas(); return; }
+      if (b && b.classList.contains('js-f5-paso-config')) { configurarPaso(); return; }
       if (b && b.classList.contains('js-f5-doc-ok')) { aceptarDoc([b.dataset.id]); return; }
       if (b && b.classList.contains('js-f5-doc-todas')) {
         var ids = est_.datos.filas.filter(function (f) { return f.banco === 'falta' && f.sug_doc && f.sug_doc.nombre && f.sug_doc.certeza === 'alta'; }).map(function (f) { return f.id; });
@@ -1663,6 +1737,8 @@
       if (b && b.classList.contains('js-f4-fact')) { rep_.facturas = b.dataset.id || rep_.facturas; verCobros(x_); return; }
       if (b && b.classList.contains('js-f5-filtro')) { est_.filtro = b.dataset.f; filtrar(); return; }
       if (b && b.classList.contains('js-f5-limpiar')) { est_.filtro = 'todas'; est_.busca = ''; var bi = x_.raiz().querySelector('.js-f5-buscar'); if (bi) bi.value = ''; filtrar(); return; }
+      if (b && b.classList.contains('js-f5-flujo-vista')) { if (rep_.flujoVista !== b.dataset.id) { rep_.flujoVista = b.dataset.id; pintarFlujo(); } return; }
+      if (b && b.classList.contains('js-f5-ir-presupuesto')) { x_.ir('presupuesto'); return; }
       if (b && b.classList.contains('js-f5-vacias')) { rep_.vacias = !rep_.vacias; pintarFlujo(); return; }
       if (b && b.classList.contains('js-f5-nmeses')) { rep_.meses = Number(b.dataset.n); verFlujo(x_); return; }
       var cel = t.closest('.fin4-hoja td.fin4-cel');
@@ -1697,6 +1773,7 @@
       }
       else if (t.classList.contains('js-f4-hasta')) { rep_.hasta = t.value; verFlujo(x_); }
       else if (t.classList.contains('js-f4-empresa')) { rep_.empresa = t.value; verFlujo(x_); }
+      else if (t.classList.contains('js-f4-flujo-cuenta')) { rep_.flujoCuenta = t.value; verFlujo(x_); }
       else if (t.classList.contains('js-f4-periodo')) { rep_.periodo = t.value; verSaldos(x_); }
     });
     // Teclado de planilla: solo cuando la hoja está en pantalla y no hay un diálogo abierto.
