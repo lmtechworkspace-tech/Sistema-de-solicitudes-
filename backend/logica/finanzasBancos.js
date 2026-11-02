@@ -67,7 +67,7 @@ const TIPOS = {
 };
 // Plan de cuentas de la planilla SIGECO (hoja CATÁLOGOS), sin cambios.
 const CUENTAS = {
-  INGRESO: ['Servicio Mensual', 'Servicio Renta', 'Devolución Renta', 'Otros Ingresos'],
+  INGRESO: ['Servicio Mensual', 'Servicio Renta', 'Devolución Renta', 'Otros Ingresos', 'Cobro deuda anterior'],
   EGRESO: ['Arriendo Mensual', 'Arriendo Reajuste', 'Cuentas Básicas', 'Sueldos', 'Anticipos', 'Finiquitos', 'Imposiciones',
     'Convenios', 'IVA', 'IVA Postergado', 'Renta', 'Multas Clientes', 'Caja Chica', 'Patente Comercial', 'Comisión Banco',
     'Servidores y Sistemas', 'Otros Egresos'],
