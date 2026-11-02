@@ -349,7 +349,12 @@
       if (cuenta_.obs) l.push('<li><b>' + cuenta_.obs + ' fila(s) sin OBS</b>: escribe de quién es el dinero. Si es parte de un grupo, usa la misma OBS del resto del grupo.</li>');
       if (cuenta_.nombre) l.push('<li><b>' + cuenta_.nombre + ' fila(s) sin nombre</b>: escribe quién mandó o a quién se pagó.</li>');
       h = '<h3>Qué falta completar</h3><ul>' + l.join('') + '</ul><p>Toca el texto naranjo de «Qué es» en cada fila para ir directo a la celda.</p>';
-    } else if (f === 'falta') h = '<h3>Movimientos del banco sin anotar</h3><p>Están en la cartola y nadie los escribió en la planilla. La fecha y el monto ya vienen del banco: completa <b>quién es</b> y la <b>OBS</b>. Si el nombre aparece sugerido, Enter lo acepta.</p>';
+    } else if (f === 'falta') {
+      var cd = d.filas.filter(function (x) { return x.banco === 'falta' && x.sug_doc && x.sug_doc.nombre; }), seg = cd.filter(function (x) { return x.sug_doc.certeza === 'alta'; }).length;
+      h = '<h3>Movimientos del banco sin anotar</h3><p>Están en la cartola y nadie los escribió en la planilla. La fecha y el monto ya vienen del banco: completa <b>quién es</b> y la <b>OBS</b>. Si el nombre aparece sugerido, Enter lo acepta.</p>' +
+        (cd.length ? '<p><b>' + cd.length + ' tienen respaldo del banco</b> (historial de pagos de cuentas o transferencias recibidas): en «Qué es» se ve de quién son. Tócalo para aceptarlo' + (seg ? ', o acepta de una vez las ' + seg + ' seguras (cliente reconocido por su RUT).' : '.') + '</p>' +
+          (seg && editable() ? '<p><button type="button" class="sx2-boton sx2-boton--primario sx2-boton--sm js-f5-doc-todas">' + U.ico('check', 14) + 'Aceptar las ' + seg + ' sugerencias seguras</button></p>' : '') : '');
+    }
     else if (f === 'factura') {
       var segs = d.filas.filter(function (x) { return x.sug_fact && !x.fact && x.sug_fact.certeza === 'alta'; }).length, med = d.filas.filter(function (x) { return x.sug_fact && !x.fact && x.sug_fact.certeza !== 'alta'; }).length;
       h = '<h3>Abonos con su factura sugerida</h3><p>SIGSO encontró la factura que paga cada abono: mismo cliente y mismo monto' + (med ? ', o solo el mismo monto cuando paga otra persona (esas confírmalas una a una)' : '') + '. Con el N° puesto, la factura queda pagada en Cobranza. Toca la celda «N° factura» y Enter acepta la sugerencia.</p>' +
@@ -661,6 +666,17 @@
     est_.oferta = sim.length ? { plan: plan, ids: sim.map(function (g) { return g.id; }), hasta: Date.now() + 30000 } : null;
     ayuda();
   }
+  // Acepta sugerencias con respaldo del banco: el servidor anota cada fila y recuerda por quién pagó cada RUT.
+  function aceptarDoc(ids) {
+    if (!ids.length || !editable()) return;
+    encolar(function () {
+      return x_.api('finanzasAceptarSugerenciasDoc', { ids: ids, cuenta_ref: est_.cuenta, periodo: est_.periodo }).then(function (r) {
+        if (!r || !r.ok) { error(r, 'No se pudo anotar.'); return; }
+        est_.guardados = est_.guardados.concat(ids);
+        mensaje(r.data.anotadas + ' fila(s) anotada(s) con el respaldo del banco' + (r.data.errores.length ? ' · ' + r.data.errores.length + ' no se pudieron' : ''));
+      });
+    });
+  }
   // Pone de una vez los N° de factura sugeridos con certeza alta (mismo cliente y mismo monto). Las de solo monto, una a una.
   function ponerFacturasSugeridas() {
     var filas = est_.datos.filas.filter(function (f) { return f.sug_fact && !f.fact && f.sug_fact.certeza === 'alta'; });
@@ -776,10 +792,11 @@
         : (f.banco === 'ok' ? '<span class="fin4-chip fin4-chip--ok"><i></i>en banco</span>' : f.banco === 'esperando' ? '<span class="fin4-chip fin4-chip--esp"><i></i>esperando</span>' : '<span class="fin4-chip fin4-chip--falta"><i></i>falta anotar</span>') +
           (f.fecha_banco ? '<small class="fin5-fbanco" title="El banco lo contabilizó el ' + txt(f.fecha_banco.split('-').reverse().join('-')) + '">banco ' + txt(corta(f.fecha_banco)) + '</small>' : '') +
           (f.movida ? '<small class="fin5-fbanco fin5-fbanco--movida" title="Pasada a este mes a mano">movida</small>' : '');
-    var que = z.nueva || f.temp ? '' : (falta && ed ? '<button type="button" class="fin5-que-btn js-f5-completar" data-i="' + i + '" data-col="' + falta.col + '" title="Completar ahora">' + U.ico('editar', 12) + txt(falta.t) + '</button>'
+    var doc = !z.nueva && !f.temp && f.sug_doc && f.sug_doc.nombre && (f.banco === 'falta' || !f.nombre) ? f.sug_doc : null;
+    var que = z.nueva || f.temp ? '' : doc && ed ? '<button type="button" class="fin5-doc-btn fin5-doc-btn--' + doc.certeza + ' js-f5-doc-ok" data-id="' + txt(f.id) + '" title="' + txt(doc.fuente + ': ' + doc.motivo) + '">' + U.ico('check', 12) + txt(doc.nombre + (doc.obs ? ' · ' + doc.obs : '')) + '</button><small class="fin4-que-cli">' + txt(doc.certeza === 'alta' ? 'según ' + doc.fuente.toLowerCase() : 'por confirmar') + '</small>' : (falta && ed ? '<button type="button" class="fin5-que-btn js-f5-completar" data-i="' + i + '" data-col="' + falta.col + '" title="Completar ahora">' + U.ico('editar', 12) + txt(falta.t) + '</button>'
       : '<span class="fin4-que fin4-que--' + (falta ? 'alerta' : QUE_TONO[f.que.k] || 'neutro') + '">' + txt(falta ? falta.t : f.que.t) + '</span>') + (f.cliente && f.cliente !== f.nombre ? '<small class="fin4-que-cli">' + txt(f.cliente) + '</small>' : '');
     var obs = z.nueva ? est_.borrador.obs : f.obs;
-    var firma = z.nueva ? JSON.stringify(est_.borrador) + listo() : [f.version, f.saldo, f.banco, f.que && f.que.t, f.cliente, f.fecha, f.fecha_banco, f.movida, v.nombre, v.obs, v.plan, v.monto, v.grupo, v.fact, v.glosa, sug, sugPlan, grupo && grupo.cliente, f.sug_fact && f.sug_fact.fact].join('|');
+    var firma = z.nueva ? JSON.stringify(est_.borrador) + listo() : [f.version, f.saldo, f.banco, f.que && f.que.t, f.cliente, f.fecha, f.fecha_banco, f.movida, v.nombre, v.obs, v.plan, v.monto, v.grupo, v.fact, v.glosa, sug, sugPlan, grupo && grupo.cliente, f.sug_fact && f.sug_fact.fact, f.sug_doc && f.sug_doc.nombre].join('|');
     return '<tr class="fin4-fila ' + clase + '" data-i="' + i + '"' + (f.id ? ' data-id="' + txt(f.id) + '"' : '') + (f.grupo ? ' data-grupo="' + txt(f.grupo) + '"' : '') + (z.nueva || f.temp ? '' : ' data-k="' + (falta ? 'pend' : f.que.k) + '"' + (falta || f.banco === 'esperando' ? ' data-pend="1"' : '')) + ' data-firma="' + txt(firma) + '" style="--i:' + Math.min(i, 24) + '"><td class="fin4-idx">' + (z.nueva ? '+' : f.temp ? '…' : f._n) + '</td>' +
       COLS.map(function (k, j) {
         var b = bloqueada(z, k[0]);
@@ -851,7 +868,8 @@
       else if (z.f.temp) t = 'Guardando esta fila…';
       else {
         var f = z.f;
-        if (f.banco === 'falta') { var sg = sugerirNombre(f); t = 'El banco trae este movimiento y nadie lo anotó: escribe quién es y la OBS.' + (sg ? ' Sugerido: ' + sg + ' (Enter en Nombre).' : ''); }
+        if (f.banco === 'falta' && f.sug_doc) t = f.sug_doc.fuente + ': ' + f.sug_doc.motivo + '.' + (f.sug_doc.nombre ? ' Tócalo en «Qué es» para aceptarlo (o Enter en Nombre).' : '');
+        else if (f.banco === 'falta') { var sg = sugerirNombre(f); t = 'El banco trae este movimiento y nadie lo anotó: escribe quién es y la OBS.' + (sg ? ' Sugerido: ' + sg + ' (Enter en Nombre).' : ''); }
         else if (faltaDe(f)) { var q = faltaDe(f), sp = q.tipo === 'plan' ? sugerirPlan(f) : ''; t = q.tipo === 'plan' ? 'Es un gasto de la empresa y le falta el plan de cuenta: escribe en qué se gastó (Sueldos, Comisión Banco, Caja Chica…).' + (sp ? ' Sugerido: ' + sp + ' (Enter en Plan de cuenta).' : '') : q.tipo === 'obs' ? 'Le falta la OBS (de quién es el dinero): A = ABONO, R = ABONO RENTA, I = IVA, M = IMPOSICIONES, S = SALDO, P = PENDIENTE.' + (f.grupo ? ' Está en el grupo ' + f.grupo + ': usa la misma OBS de las otras filas del grupo.' : '') : 'Le falta el nombre: el cliente, o el gasto (ARRIENDO, SUELDO…).'; }
         else if (f.sug_fact && !f.fact && (campo === 'fact' || campo === 'monto' || campo === 'nombre')) t = (f.sug_fact.certeza === 'alta' ? 'Factura sugerida: ' : 'Posible factura: ') + f.sug_fact.motivo + '. En «N° factura», Enter la acepta.';
         else if (f.banco === 'esperando') t = 'Anotada: falta que llegue en la cartola para comprobarla.';
@@ -1105,6 +1123,7 @@
   // Quién es un movimiento del banco sin anotar: el pagador del detalle del banco o el nombre de la glosa, llevado al
   // nombre corto que ya se usa en la planilla si lo hay.
   function sugerirNombre(f) {
+    if (f.sug_doc && f.sug_doc.nombre) return f.sug_doc.nombre; // con respaldo: historial de pagos o transferencias del BCI
     var base = f.quien_banco || (/(?:TRANSFER(?:ENCIA)?\s+(?:RECIBIDA\s+)?DE|ENVIADA\s+A|ABONO\s+TERCEROS\s+[\dK.\-]+)\s+(.+)$/i.exec(f.glosa || '') || [])[1] || '';
     base = norm(base).replace(/[^A-Z0-9 ]/g, ' ').replace(/\b(SPA|LTDA|LIMITADA|EIRL|S A)\b/g, ' ').replace(/\s+/g, ' ').trim();
     if (base.length < 3) return '';
@@ -1611,6 +1630,12 @@
       if (b && b.classList.contains('js-f5-tour')) { tour(true); return; }
       if (b && b.classList.contains('js-f5-portada')) { portada(); return; }
       if (b && b.classList.contains('js-f5-fact-todas')) { ponerFacturasSugeridas(); return; }
+      if (b && b.classList.contains('js-f5-doc-ok')) { aceptarDoc([b.dataset.id]); return; }
+      if (b && b.classList.contains('js-f5-doc-todas')) {
+        var ids = est_.datos.filas.filter(function (f) { return f.banco === 'falta' && f.sug_doc && f.sug_doc.nombre && f.sug_doc.certeza === 'alta'; }).map(function (f) { return f.id; });
+        U.confirmar({ titulo: '¿Aceptar ' + ids.length + ' sugerencia(s)?', texto: 'Cada fila queda anotada con el cliente y la OBS que dice el banco (por su RUT). Se puede corregir después como cualquier fila.', boton: 'Aceptar' }).then(function (si) { if (si) aceptarDoc(ids); });
+        return;
+      }
       if (b && b.classList.contains('js-f5-arriba')) { var bar = x_.raiz().querySelector('.fin5-barra'); if (bar) bar.scrollIntoView({ block: 'start', behavior: reducido() ? 'auto' : 'smooth' }); return; }
       if (b && b.classList.contains('js-f5-pref')) {
         var k = b.dataset.p; PREF_[k] = !PREF_[k]; guardarPref();
