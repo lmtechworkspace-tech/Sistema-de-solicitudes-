@@ -34,6 +34,16 @@ jobs:
             echo "::error file=frontend/js/config.js::config.js apunta a una dirección local; no se publica."
             exit 1
           fi
+      # Cada publicación cambia la versión de los archivos (?v=<commit>): sin esto el navegador puede seguir usando
+      # el JS y el CSS que guardó y no se ven los cambios hasta forzar la recarga.
+      - name: Versionar los JS y CSS de cada página
+        run: |
+          V="${GITHUB_SHA::8}"
+          for f in frontend/*.html; do
+            sed -i -E "s#((src|href)=\"(js|css|manuales)/[^\"?]+\.(js|css))\"#\1?v=${V}\"#g" "$f"
+          done
+          sed -i -E "s#^(  var VERSION = )'1';#\1'${V}';#" frontend/js/manual-v2.js
+          grep -c "?v=${V}" frontend/plataforma.html
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
       - name: Empaquetar solo frontend/ como sitio estatico
