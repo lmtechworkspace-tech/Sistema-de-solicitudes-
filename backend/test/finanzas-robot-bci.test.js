@@ -150,7 +150,8 @@ function sitio() {
     if (u.pathname === '/convenios') {
       return html(res, '<h1>Bci</h1><h3>Convenios Relacionados al Usuario</h3><table><tr><th>Convenio</th><th>Rol</th><th>Rut</th><th>Razón Social</th></tr>' +
         [['001', '78.194.394-0', 'HOMEPYMES SPA'], ['002', '76.111.222-3', 'OTRA EMPRESA LTDA']].map((c) =>
-          '<tr><td><a href="/elegir?r=' + c[1] + '">' + c[0] + '</a></td><td>Apoderado</td><td>' + c[1] + '</td><td>' + c[2] + '</td></tr>').join('') + '</table>');
+          // Como pasó con el BCI real: el enlace de la fila no lleva a ninguna parte; entra la fila completa (JSF).
+          '<tr style="cursor:pointer" onclick="location.href=\'/elegir?r=' + c[1] + '\'"><td><a href="#" onclick="event.stopPropagation();return false">' + c[0] + '</a></td><td>Apoderado</td><td>' + c[1] + '</td><td>' + c[2] + '</td></tr>').join('') + '</table>');
     }
     if (u.pathname === '/elegir') { visto.empresa = u.searchParams.get('r'); res.writeHead(302, { Location: '/portal' }); return res.end(); }
     if (u.pathname === '/registrar') { visto.registrar++; return html(res, '<h1>Registro de dispositivo</h1>'); }
@@ -188,6 +189,7 @@ test('de punta a punta: entra, abre Cartola Histórica, descarga las del mes y s
     assert.deepEqual([visto.intentos, visto.salir], [1, 1], 'un ingreso y cierra la sesión');
     assert.deepEqual([visto.omitir, visto.registrar], [1, 0], '«Registra tu Dispositivo de confianza»: omite, nunca registra');
     assert.equal(visto.empresa, '78.194.394-0', 'en «Convenios Relacionados al Usuario» entra con la empresa pedida');
+    assert.ok(pasos.some((p) => /Eligiendo la empresa HOMEPYMES SPA \(intento 3\)/.test(p)), 'el enlace muerto no basta: prueba la fila (' + pasos.join(' | ') + ')');
 
     // Varias empresas y no se dijo cuál: se detiene y las nombra (sin adivinar). Una que no está: también.
     const sinEmpresa = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-09' }, { receta, oculto: true });

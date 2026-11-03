@@ -58,6 +58,8 @@ const RECETA = {
   conveniosTitulo: 'convenios relacionados',
   continuar: '^(continuar|aceptar|ingresar|seleccionar|entrar)$',
   esperaMs: 45 * 1000,
+  // Desde «Ingresar» hasta ver Cuentas: incluye «dispositivo de confianza» y «Convenios» (más lento que una página).
+  entradaMs: 2 * 60 * 1000,
   ingresoManualMs: 4 * 60 * 1000,
   descargaMs: 60 * 1000
 };
@@ -167,11 +169,29 @@ function convenios_() {
   return [];
 }
 /** Lo que se aprieta para entrar con esa empresa: su enlace, botón u opción; si no hay, la celda de la razón social. */
-function convenioDe_(rut) {
+// 03-11-2026: en el BCI real el primer clic en la fila no avanzó; no se sabe aún qué se aprieta (página JSF). Se
+// prueban, de a uno por intento, los candidatos de la fila: opciones, enlaces y botones, celdas con acción, la fila.
+function convenioDe_(rut, i) {
   const limpio = (t) => String(t || '').replace(/[^0-9kK]/g, '').toUpperCase();
   const tr = Array.from(document.querySelectorAll('tr')).find((x) => Array.from(x.querySelectorAll('td')).some((td) => limpio(td.innerText) === rut));
   if (!tr) return null;
-  return tr.querySelector('input[type=radio],input[type=checkbox],a,button,[role=button],[onclick]') || tr.querySelector('td:last-child') || tr;
+  const l = [];
+  const sumar = (e) => { if (e && l.indexOf(e) === -1) l.push(e); };
+  tr.querySelectorAll('input[type=radio],input[type=checkbox]').forEach(sumar);
+  tr.querySelectorAll('a,button,[role=button],[role=link],[onclick]').forEach(sumar);
+  if (tr.hasAttribute('onclick') || getComputedStyle(tr).cursor === 'pointer') sumar(tr);
+  Array.from(tr.querySelectorAll('td')).filter((td) => getComputedStyle(td).cursor === 'pointer').forEach(sumar);
+  Array.from(tr.querySelectorAll('td')).reverse().forEach(sumar); // al final, cada celda (la razón social primero)
+  return l[i] || null;
+}
+/** Cómo es la fila de esa empresa (para ajustar el robot): solo etiquetas y tipos de acción, nunca textos ni montos. */
+function filaConvenio_(rut) {
+  const limpio = (t) => String(t || '').replace(/[^0-9kK]/g, '').toUpperCase();
+  const tr = Array.from(document.querySelectorAll('tr')).find((x) => Array.from(x.querySelectorAll('td')).some((td) => limpio(td.innerText) === rut));
+  if (!tr) return [];
+  const desc = (e) => e.tagName.toLowerCase() + (e.type ? '[' + e.type + ']' : '') + (e.getAttribute('href') ? ' href=' + (/^(#|javascript)/i.test(e.getAttribute('href')) ? e.getAttribute('href').slice(0, 12) : 'url') : '') +
+    (e.hasAttribute('onclick') ? ' onclick' : '') + (getComputedStyle(e).cursor === 'pointer' ? ' mano' : '');
+  return ['fila: ' + desc(tr)].concat(Array.from(tr.querySelectorAll('td,a,button,input,[onclick],[role=button],[role=link],img,i,svg,span')).slice(0, 25).map(desc));
 }
 /** ¿La página tiene reCAPTCHA invisible? (solo para el diagnóstico: el banco evalúa el navegador sin pedir nada). */
 function hayCaptchaInvisible_() {
@@ -235,6 +255,12 @@ async function clic_(page, buscar, ...a) {
     return true;
   } catch (e) { return false; } finally { el.dispose().catch(() => null); }
 }
+/** Clic «desde la página» (element.click()): sirve cuando algo encima tapa el elemento o el banco escucha solo el evento. */
+async function clicDirecto_(page, buscar, ...a) {
+  const el = await elemento_(page, buscar, ...a);
+  if (!el) return false;
+  try { await el.evaluate((e) => { e.scrollIntoView({ block: 'center' }); e.click(); }); return true; } catch (e) { return false; } finally { el.dispose().catch(() => null); }
+}
 const clicTexto_ = (page, fuente) => clic_(page, buscarTexto_, fuente);
 async function hayTexto_(page, fuente) {
   const el = await elemento_(page, buscarTexto_, fuente);
@@ -284,12 +310,18 @@ async function adentro_(page, receta, dialogo) {
       if (dialogo.asistido) return false; // entrada a mano: la persona elige la empresa en la ventana
       throw new Detencion('EMPRESA', 'Ese usuario del banco tiene varias empresas: ' + lista + '. Escribe en «RUT de la empresa» con cuál entrar.');
     }
-    dialogo.convenios = (dialogo.convenios || 0) + 1;
-    if (dialogo.convenios > 4) throw new Detencion('PAGINA_DISTINTA', 'No se pudo entrar con la empresa ' + rutLegible_(fila.rut) + ' en «Convenios Relacionados al Usuario». Entra a mano esta vez.');
-    if (!(await clic_(page, convenioDe_, fila.rut))) throw new Detencion('PAGINA_DISTINTA', 'No se pudo elegir la empresa ' + rutLegible_(fila.rut) + ' en «Convenios Relacionados al Usuario».');
+    // Cada intento prueba un candidato de la fila: primero con el mouse y, si no avanzó, con un clic directo.
+    const n = dialogo.convenios = (dialogo.convenios || 0) + 1;
+    const i = Math.floor((n - 1) / 2), directo = (n - 1) % 2 === 1;
+    const sinSalida = 'No se pudo entrar con la empresa ' + rutLegible_(fila.rut) + ' en «Convenios Relacionados al Usuario» (se probaron ' + (n - 1) + ' formas). Revisa «Para ajustar el robot» y entra a mano esta vez.';
+    if (n > 16) throw new Detencion('PAGINA_DISTINTA', sinSalida);
+    if (dialogo.alPaso) dialogo.alPaso('Eligiendo la empresa ' + (fila.razon || rutLegible_(fila.rut)) + ' (intento ' + n + ')');
+    const ok = directo ? await clicDirecto_(page, convenioDe_, fila.rut, i) : await clic_(page, convenioDe_, fila.rut, i);
+    if (!ok && !(await elemento_(page, convenioDe_, fila.rut, i))) throw new Detencion('PAGINA_DISTINTA', sinSalida);
     await espera_(1200);
     await clicTexto_(page, receta.continuar); // si la elección pide confirmar
-    await espera_(1500);
+    // Se da tiempo a que el banco cambie de página antes de probar otra forma.
+    await hasta_(async () => !(await enAlguno_(page, tituloCalza_, receta.conveniosTitulo)), 6000, 'empresa').catch(() => null);
     return false;
   }
   if (ruta_(page.url()) === ruta_(receta.inicio)) return false;
@@ -351,7 +383,7 @@ async function ingresar_(page, receta, rut, clave, alPaso, dialogo, info) {
       if (a) throw new Detencion('CLAVE_INVALIDA', 'El banco no aceptó el ingreso: «' + a + '». No se reintentó (el BCI bloquea la clave tras varios intentos). Antes de volver a probar, entra una vez a mano al banco.');
     }
     return false;
-  }, receta.esperaMs, 'entrada al banco');
+  }, receta.entradaMs || receta.esperaMs, 'entrada al banco');
 }
 
 async function irACartolas_(page, receta, alPaso) {
@@ -407,6 +439,9 @@ async function diagnostico_(page, info) {
     d.elementos = d.elementos.slice(0, 80);
     // Empresas de «Convenios Relacionados al Usuario» (razón social y RUT de la empresa; nada de montos).
     ((await enAlguno_(page, convenios_)) || []).slice(0, 15).forEach((f) => d.formulario.push('empresa: ' + (f.razon || 'sin nombre') + ' (' + rutLegible_(f.rut) + ')'));
+    const pedida = info && info.rutEmpresa ? rutTeclas_(info.rutEmpresa) : '';
+    if (pedida) ((await enAlguno_(page, filaConvenio_, pedida)) || []).forEach((x) => d.formulario.push('fila de la empresa: ' + x));
+    if (info && info.dialogo && info.dialogo.convenios) d.formulario.push('intentos en Convenios: ' + info.dialogo.convenios);
     if (await enAlguno_(page, hayCaptchaInvisible_)) d.formulario.push('la página tiene reCAPTCHA invisible (el banco evalúa el navegador sin pedir nada)');
   } catch (e) { /* lo que se alcanzó a juntar */ }
   return d;
@@ -443,7 +478,8 @@ async function traerCartolas(datos, opciones) {
   const info = { formulario: [] };
   try {
     page = (await navegador.pages())[0] || await navegador.newPage();
-    const dialogo = { texto: '', rutEmpresa: (datos && datos.rutEmpresa) || '', asistido: !clave };
+    const dialogo = info.dialogo = { texto: '', rutEmpresa: (datos && datos.rutEmpresa) || '', asistido: !clave, alPaso };
+    info.rutEmpresa = dialogo.rutEmpresa;
     page.on('dialog', (d) => { dialogo.texto = String(d.message() || 'aviso sin texto').slice(0, 200); d.dismiss().catch(() => null); });
     const cdp = await page.target().createCDPSession();
     await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: dir });
