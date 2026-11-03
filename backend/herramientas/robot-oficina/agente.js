@@ -20,6 +20,9 @@
  * tras otro con una pausa entre cada uno; cada clave se borra apenas se usa, y
  * ante un bloqueo o CAPTCHA de la TGR detiene el resto del lote.
  *
+ * CARTOLAS DEL BCI (2026-11-03): el mismo programa trae, cuando Finanzas lo pide, los Excel de las cartolas de un mes
+ * del Banco en Línea Pyme (robotBci.js). Solo entra a Cuentas › Cartola Histórica: nunca a transferir ni a pagar.
+ *
  * Uso (desde la carpeta del proyecto SIGSO):
  *   node backend/herramientas/robot-oficina/agente.js configurar       (una vez: pega la llave)
  *   node backend/herramientas/robot-oficina/agente.js                  (dejar abierto)
@@ -35,6 +38,7 @@ const os = require('node:os');
 const path = require('node:path');
 const readline = require('node:readline');
 const Robot = require('../../logica/robotTgr');
+const RobotBci = require('../../logica/robotBci');
 
 const URL_SIGSO = 'https://api.ctrly.cl/v1/accion';
 const CARPETA = process.env.SIGSO_ROBOT_CARPETA || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.config'), 'SIGSO');
@@ -137,11 +141,11 @@ async function iniciar() {
   if (!Robot.disponible()) { log('No se encontró Chrome ni Edge en este PC: el robot los necesita.'); process.exit(SALIDA_DEFINITIVA); }
   const otro = tomarCandado();
   if (otro) { log('Ya hay un robot corriendo en este PC (proceso ' + otro + '): no se inicia otro.'); process.exit(SALIDA_DEFINITIVA); }
-  log('Robot TGR de la oficina conectado a ' + cfg.url.replace(/\/v1\/accion$/, '') + (ventana ? ' (se verá el navegador)' : '') + '. Esperando revisiones… (Ctrl+C para detener)');
+  log('Robot de la oficina (TGR y cartolas BCI) conectado a ' + cfg.url.replace(/\/v1\/accion$/, '') + (ventana ? ' (se verá el navegador)' : '') + '. Esperando pedidos… (Ctrl+C para detener)');
   let fallos = 0;
   for (;;) {
     let r;
-    try { r = await llamar(cfg, 'robotAgenteTomar', { capacidades: 'lote' }, 40000); } catch (e) {
+    try { r = await llamar(cfg, 'robotAgenteTomar', { capacidades: 'lote,bci' }, 40000); } catch (e) {
       fallos++;
       if (fallos === 1 || fallos % 10 === 0) log('Sin conexión con SIGSO; reintento en 10 s.');
       await espera(10000);
@@ -157,6 +161,7 @@ async function iniciar() {
     if (lote && Array.isArray(lote.trabajos)) { await revisarLote(cfg, lote, { ventana, receta }); continue; }
     const tr = r.data && r.data.trabajo;
     if (!tr) continue;
+    if (tr.tipo === 'BCI') { await traerCartolas(cfg, tr, { recetaBci: recetaBciDePrueba() }); continue; }
     log('Revisión recibida (RUT ' + tr.rut + '). Entrando a la TGR…');
     await revisarUno(cfg, tr, { ventana, receta });
   }
@@ -180,6 +185,37 @@ async function revisarUno(cfg, tr, o) {
   const entregado = await entregar(cfg, tr.trabajo_id, res);
   log('Revisión terminada (RUT ' + tr.rut + '): ' + res.estado + (res.estado === 'OK' ? ' (' + res.convenios.length + ' convenios)' : ' · ' + res.mensaje) + (entregado ? '' : ' · NO se pudo entregar a SIGSO'));
   return res;
+}
+/**
+ * Cartolas del BCI (Finanzas, 03-11-2026; robotBci.js): abre el Banco en Línea Pyme en una ventana de este PC. Con
+ * clave, entra solo; sin clave, espera a que alguien entre a mano. Descarga los Excel de las cartolas del mes y se
+ * los entrega a SIGSO (no se guardan en este PC: la carpeta de descargas es temporal y se borra).
+ */
+async function traerCartolas(cfg, tr, o) {
+  let clave = tr.clave || '';
+  tr.clave = '';
+  log('Pedido de cartolas del BCI (' + tr.periodo + ', ' + (clave ? 'con clave' : 'entrada a mano en este PC') + '). Abriendo el banco…');
+  let ultimo = 0;
+  const res = await RobotBci.traerCartolas({ rut: tr.rut, clave, periodo: tr.periodo }, {
+    receta: o.recetaBci || undefined,
+    alPaso: (p) => {
+      const ahora = Date.now();
+      if (ahora - ultimo < 800) return;
+      ultimo = ahora;
+      llamar(cfg, 'robotAgentePaso', { trabajo_id: tr.trabajo_id, paso: p }, 10000).catch(() => null);
+    }
+  }).catch((e) => ({ estado: 'ERROR', mensaje: 'El robot falló en el PC: ' + String((e && e.message) || e).slice(0, 200), archivos: [] }));
+  clave = '';
+  const entregado = await entregar(cfg, tr.trabajo_id, res);
+  log('Cartolas del BCI (' + tr.periodo + '): ' + res.estado + (res.estado === 'OK' ? ' (' + res.archivos.length + ' archivo(s))' : ' · ' + res.mensaje) + (entregado ? '' : ' · NO se pudo entregar a SIGSO'));
+}
+/** Solo para probar contra un sitio local que imita el BCI (nunca otro host). */
+function recetaBciDePrueba() {
+  const i = args.indexOf('--prueba-bci');
+  if (i === -1) return null;
+  const u = String(args[i + 1] || '');
+  if (!/^http:\/\/(localhost|127\.0\.0\.1):\d+\//.test(u)) { log('--prueba-bci solo acepta un sitio local (http://localhost:PUERTO/...).'); return { inicio: 'about:blank' }; }
+  return { inicio: u, esperaMs: 10000, ingresoManualMs: 60000 };
 }
 async function entregar(cfg, trabajoId, res) {
   for (let i = 0; i < 3; i++) {

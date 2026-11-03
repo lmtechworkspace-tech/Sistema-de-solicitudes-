@@ -65,6 +65,7 @@
           '<tr><td>Cartola de Santander</td><td colspan="2"><b>Aún no se puede leer:</b> falta una cartola real para construir y probar su lector. Mientras tanto, los movimientos de Santander anotados en el Excel BANCOS entran como borradores con su origen.</td></tr>' +
         '</tbody></table>' +
         '<div class="js-fca-progreso" aria-live="polite"></div></div>' }) +
+      (vista === 'cargas' ? robotHtml() : '') +
       U.card({ titulo: 'Archivos cargados', icono: 'carpeta', sub: L.lotes.length + ' archivo(s)', sinRelleno: true, cuerpo: L.lotes.length ? '<div class="fin2-tabla-envoltura"><table class="fin2-tabla"><thead><tr><th>Archivo</th><th>Tipo</th><th>Cargado</th><th>Hojas</th><th>Estado de las filas</th><th></th></tr></thead><tbody>' + L.lotes.map(function (l) {
         var tot = {}; l.hojas.forEach(function (h) { Object.keys(h.por_estado).forEach(function (k) { tot[k] = (tot[k] || 0) + h.por_estado[k]; }); });
         return '<tr><td><b>' + txt(l.nombre) + '</b></td><td>' + txt(l.tipo) + '</td><td class="fin2-num">' + txt(String(l.creado_en || '').slice(0, 16).replace('T', ' ')) + '<br><small class="fin2-ayuda">' + txt(l.creado_por) + '</small></td><td>' + l.hojas.length + '</td>' +
@@ -75,6 +76,86 @@
       }).join('') + '</ul>' : '<p class="fin2-ayuda">Se llena al publicar la hoja MEJORAS de la planilla SIGECO.</p>' }) : '') +
     '</div>');
     x_.aplicarCapacidades(x_.raiz());
+    if (vista === 'cargas') robotGeneral();
+  }
+
+  // ---- robot de la oficina: cartolas del BCI (03-11-2026; backend/logica/finanzasRobotBci.js) ------------------------
+  // El PC de la oficina abre el Banco en Línea Pyme, va a Cuentas › Cartola Histórica y descarga los Excel del mes.
+  // Cada Excel entra por el mismo cuadro de arriba («Subir un archivo»): se revisa y se importa con su botón.
+  var robot_ = { trabajo: '', vuelta: 0 };
+  function mesAnterior() { var d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); }
+  function robotHtml() {
+    return U.card({ titulo: 'Traer del BCI', icono: 'descargar', sub: 'robot de la oficina', cuerpo: '<div class="fin2-robot" data-cap="REGISTRAR">' +
+      '<p class="fin2-ayuda">El PC de la oficina abre el Banco en Línea Pyme, va a <b>Cuentas › Cartola Histórica</b> y descarga el Excel de cada cartola del mes (y la primera del mes siguiente, que trae los últimos días). Después cada una se revisa aquí antes de importar. El robot solo entra a Cuentas: nunca a transferir ni a pagar.</p>' +
+      '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>Mes</span><input type="month" class="fin2-input fin2-input--sm js-fcr-mes" value="' + mesAnterior() + '"></label>' +
+        U.boton({ texto: 'Traer cartolas', icono: 'descargar', variante: 'primario', sm: true, clase: 'js-fcr-ir' }) + '<span class="fin2-ayuda js-fcr-general" aria-live="polite"></span></div>' +
+      '<details class="fin2-robot__clave"><summary>Entrar con la clave desde aquí (si no, alguien entra a mano en el PC de la oficina)</summary>' +
+        '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>RUT</span><input class="fin2-input fin2-input--sm js-fcr-rut" autocomplete="off" placeholder="12.345.678-9"></label>' +
+        '<label class="fin2-campo fin2-campo--fila"><span>Clave</span><input type="password" class="fin2-input fin2-input--sm js-fcr-clave" autocomplete="off"></label></div>' +
+        '<p class="fin2-ayuda">La clave no se guarda: viaja al PC de la oficina, se escribe en el banco y se borra. Se intenta <b>una sola vez</b> (el BCI bloquea la clave tras varios intentos).</p></details>' +
+      '<div class="js-fcr-estado" aria-live="polite"></div></div>' });
+  }
+  function robotGeneral() {
+    var s = x_.raiz().querySelector('.js-fcr-general'); if (!s) return;
+    x_.api('finanzasRobotBciGeneral', {}).then(function (r) {
+      if (!r || !r.ok) { s.textContent = ''; return; }
+      var g = r.data;
+      s.innerHTML = g.conectado ? U.badge('Robot conectado', 'ok') : g.conectado_antiguo ? U.badge('El programa del PC está desactualizado', 'alerta') : U.badge('Robot no conectado', 'neutro');
+    });
+  }
+  function robotIniciar() {
+    var raiz = x_.raiz(), est = raiz.querySelector('.js-fcr-estado');
+    var mes = raiz.querySelector('.js-fcr-mes').value, rut = raiz.querySelector('.js-fcr-rut'), clave = raiz.querySelector('.js-fcr-clave');
+    if (!/^\d{4}-\d{2}$/.test(mes)) { x_.aviso('Elige el mes.', 'error'); return; }
+    var datos = { periodo: mes };
+    if (clave.value) { datos.rut = rut.value; datos.clave = clave.value; }
+    clave.value = '';
+    raiz.querySelector('.js-fcr-ir').disabled = true;
+    est.innerHTML = '<p class="fin2-ayuda">Enviando el pedido al PC de la oficina…</p>';
+    x_.api('finanzasRobotBciIniciar', datos).then(function (r) {
+      datos.clave = '';
+      if (!r || !r.ok) { raiz.querySelector('.js-fcr-ir').disabled = false; est.innerHTML = cinta('critico', txt((r && r.message) || 'No se pudo pedir las cartolas.')); robotGeneral(); return; }
+      robot_.trabajo = r.data.trabajo_id; robot_.vuelta++;
+      robotSeguir(robot_.vuelta);
+    });
+  }
+  function robotSeguir(vuelta) {
+    if (vuelta !== robot_.vuelta) return;
+    var raiz = x_.raiz(), est = raiz && raiz.querySelector('.js-fcr-estado');
+    if (!est) return; // se salió de la pantalla
+    x_.api('finanzasRobotBciEstado', { trabajo_id: robot_.trabajo }).then(function (r) {
+      if (vuelta !== robot_.vuelta || !raiz.contains(est)) return;
+      if (!r || !r.ok) { est.innerHTML = cinta('critico', txt((r && r.message) || 'Se perdió el pedido.')); raiz.querySelector('.js-fcr-ir').disabled = false; return; }
+      var e = r.data;
+      if (e.estado === 'EN_CURSO') {
+        est.innerHTML = cinta('info', '<b>' + txt(e.paso || 'Trabajando…') + '</b>' + (e.asistido && /Esperando que alguien/.test(e.paso || '') ? ' · En el PC de la oficina se abrió el banco: entra con el RUT y la clave de la empresa; el robot sigue solo.' : ''));
+        setTimeout(function () { robotSeguir(vuelta); }, 2500);
+        return;
+      }
+      raiz.querySelector('.js-fcr-ir').disabled = false;
+      robotResultado(e, est);
+    });
+  }
+  function robotResultado(e, est) {
+    var res = e.resultado || {};
+    if (e.estado !== 'LISTO') {
+      var dg = res.diagnostico && res.diagnostico.elementos && res.diagnostico.elementos.length
+        ? '<details class="fin2-p"><summary>Para ajustar el robot (dónde se detuvo)</summary><p class="fin2-ayuda">' + txt(res.diagnostico.url) + '</p><p class="fin2-ayuda">' + res.diagnostico.elementos.map(txt).join(' · ') + '</p></details>' : '';
+      est.innerHTML = cinta('alerta', '<b>El robot se detuvo.</b> ' + txt(res.mensaje || '')) + dg;
+      return;
+    }
+    est.innerHTML = cinta('ok', '<b>' + res.archivos.length + (res.archivos.length === 1 ? ' cartola descargada' : ' cartolas descargadas') + '</b> de ' + txt(e.periodo) + '. Revisa e importa cada una (lo repetido no se duplica).') +
+      '<ul class="fin2-lista-saldos">' + res.archivos.map(function (a, i) {
+        return '<li><span><b>Cartola N° ' + txt(a.numero) + '</b><small>del ' + txt(String(a.fecha).split('-').reverse().join('-')) + '</small></span>' + U.boton({ texto: 'Revisar e importar', sm: true, clase: 'js-fcr-revisar', datos: { i: i } }) + '</li>';
+      }).join('') + '</ul>';
+    robot_.archivos = res.archivos;
+  }
+  function robotRevisar(i) {
+    var a = (robot_.archivos || [])[i]; if (!a) return;
+    var bin = atob(a.base64), bytes = new Uint8Array(bin.length);
+    for (var k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+    subir(new File([bytes], a.nombre, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    var p = x_.raiz().querySelector('.js-fca-progreso'); if (p && p.scrollIntoView) p.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   // ---- subir ---------------------------------------------------------------------------
@@ -427,6 +508,8 @@
       var b = ev.target.closest('button'); if (!b || !raiz.querySelector('.fin2-cargas')) return;
       if (b.classList.contains('js-fca-lote')) abrirLote(b.dataset.id);
       else if (b.classList.contains('js-fca-ir')) x_.ir(b.dataset.vista);
+      else if (b.classList.contains('js-fcr-ir')) robotIniciar();
+      else if (b.classList.contains('js-fcr-revisar')) robotRevisar(Number(b.dataset.i));
     });
     raiz.addEventListener('keydown', function (ev) { var s = ev.target.closest && ev.target.closest('.js-fca-soltar'); if (s && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); s.querySelector('input').click(); } });
     raiz.addEventListener('dragover', function (ev) { var s = ev.target.closest && ev.target.closest('.js-fca-soltar'); if (s) { ev.preventDefault(); s.classList.add('fin2-soltar--sobre'); } });

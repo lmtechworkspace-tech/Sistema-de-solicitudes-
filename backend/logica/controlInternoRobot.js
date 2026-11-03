@@ -48,6 +48,7 @@ const PAUSA_LOTE_MS = 20 * 1000;          // entre un cliente y el siguiente (no
 const trabajos_ = new Map();
 let enCurso_ = null;
 let revisor_ = null;                      // inyectado en tests
+let revisorBanco_ = null;                 // inyectado en tests (cartolas del BCI)
 const pendientes_ = [];                   // trabajos esperando agente
 const esperando_ = [];                    // consultas de agentes abiertas
 const senales_ = new Map();               // agente_id -> último contacto (ms)
@@ -71,12 +72,13 @@ function conectados_(db) {
   const ahora = Date.now();
   return agentes_(db).filter((a) => (senales_.get(a.agente_id) || 0) > ahora - CONECTADO_MS || trabajando_(a.agente_id));
 }
-function enServidor_() { return !!revisor_ || process.env.SIGSO_ROBOT_EN_SERVIDOR === '1'; }
+function enServidor_() { return !!revisor_ || !!revisorBanco_ || process.env.SIGSO_ROBOT_EN_SERVIDOR === '1'; }
 
 // --- ciclo de un trabajo ------------------------------------------------------------------
 function terminar_(db, t, r, contexto) {
   if (t.estado === 'LISTO' || t.estado === 'DETENIDO') return;
   t.clave = '';
+  if (t.tipo === 'BCI') return terminarBanco_(t, r);
   const ok = r && r.estado === 'OK';
   const convenios = ((r && r.convenios) || []).filter((c) => c && Array.isArray(c.cuotas));
   t.resultado = {
@@ -160,13 +162,22 @@ function revisar(db, data, contexto) {
   [v1, v2].forEach((v) => { if (v.unref) v.unref(); });
   return { ok: true, trabajo_id: t.trabajo_id };
 }
+function soporta_(agenteId, cap) { return (capacidades_.get(agenteId) || []).includes(cap); }
+/** Las cartolas del BCI solo las toma un programa del PC que diga que sabe hacerlo (uno antiguo no). */
+function compatible_(t, agenteId) { return t.tipo !== 'BCI' || soporta_(agenteId, 'bci'); }
 function quitar_(id) { const i = pendientes_.indexOf(id); if (i !== -1) pendientes_.splice(i, 1); }
-function paraAgente_(t) { return { trabajo_id: t.trabajo_id, rut: t.rut, clave: t.clave }; }
+function paraAgente_(t) {
+  return t.tipo === 'BCI' ? { trabajo_id: t.trabajo_id, tipo: 'BCI', periodo: t.periodo, rut: t.rut, clave: t.clave }
+    : { trabajo_id: t.trabajo_id, rut: t.rut, clave: t.clave };
+}
 function despachar_(db) {
-  while (pendientes_.length && esperando_.length) {
-    const t = trabajos_.get(pendientes_.shift());
-    if (!t || !t.pendiente) continue; // cancelada: la consulta del agente sigue esperando
-    const w = esperando_.shift();
+  for (let i = 0; i < pendientes_.length && esperando_.length; i++) {
+    const t = trabajos_.get(pendientes_[i]);
+    if (!t || !t.pendiente) { pendientes_.splice(i--, 1); continue; } // cancelada: la consulta del agente sigue esperando
+    const j = esperando_.findIndex((w) => compatible_(t, w.agente.agente_id));
+    if (j === -1) continue;
+    const w = esperando_.splice(j, 1)[0];
+    pendientes_.splice(i--, 1);
     tomar_(t, w.agente);
     w.responder({ trabajo: paraAgente_(t) });
     t.clave = '';
@@ -179,7 +190,7 @@ function tomar_(t, agente) {
   t.paso = 'El robot de la oficina tomó la revisión';
 }
 
-function soportaLote_(agenteId) { return (capacidades_.get(agenteId) || []).includes('lote'); }
+function soportaLote_(agenteId) { return soporta_(agenteId, 'lote'); }
 function cancelarLote_(db, l, estadoFin, mensaje) {
   l.pendiente = false;
   l.trabajos.forEach((id) => { const t = trabajos_.get(id); if (t && t.estado === 'EN_CURSO') { t.clave = ''; terminar_(db, t, { estado: estadoFin, mensaje }, { email: t.email }); if (t._fin) t._fin(); } });
@@ -366,9 +377,9 @@ function agenteTomar(db, data) {
       return r;
     }
   }
-  const id = pendientes_.shift();
-  const t = id ? trabajos_.get(id) : null;
-  if (t && t.pendiente) {
+  const iT = pendientes_.findIndex((id) => { const x = trabajos_.get(id); return x && x.pendiente && compatible_(x, a.agente_id); });
+  const t = iT === -1 ? null : trabajos_.get(pendientes_.splice(iT, 1)[0]);
+  if (t) {
     tomar_(t, a);
     const r = { trabajo: paraAgente_(t) };
     t.clave = '';
@@ -404,10 +415,93 @@ function agenteEntregar(db, data) {
   return { ok: true };
 }
 
+// --- cartolas del BCI (Finanzas, 03-11-2026; robotBci.js) ----------------------------------------
+// Mismo PC, misma cola y un robot a la vez. Lo que trae (los Excel de las cartolas) queda en memoria 30 minutos y solo
+// lo ve quien lo pidió; entra a SIGSO por Finanzas › Subir archivos, revisando antes de importar. La clave del banco,
+// si la escribieron, se trata igual que la Clave Tributaria: se va con el trabajo y se borra.
+const BANCO_MAX_MS = 10 * 60 * 1000;      // 4 min para entrar a mano + las descargas
+const BANCO_ARCHIVOS = 8;
+
+function archivoSeguro_(f) {
+  if (!f || typeof f.base64 !== 'string' || !/^[A-Za-z0-9+/=]+$/.test(f.base64) || f.base64.length > 4500000) return null;
+  const nombre = String(f.nombre || '').replace(/[^\w .°-]/g, '').trim().slice(0, 120);
+  if (!/\.xlsx?$/i.test(nombre)) return null;
+  return { nombre, numero: String(f.numero || '').replace(/\D/g, '').slice(0, 6), fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(f.fecha || '')) ? f.fecha : '', base64: f.base64 };
+}
+function terminarBanco_(t, r) {
+  const ok = r && r.estado === 'OK';
+  const archivos = ((r && r.archivos) || []).slice(0, BANCO_ARCHIVOS).map(archivoSeguro_).filter(Boolean);
+  const disponibles = ((r && r.disponibles) || []).slice(0, 24).map((d) => ({ numero: String((d && d.numero) || '').replace(/\D/g, '').slice(0, 6), fecha: /^\d{4}-\d{2}-\d{2}$/.test(String((d && d.fecha) || '')) ? d.fecha : '' }));
+  const dg = r && r.diagnostico && typeof r.diagnostico === 'object'
+    ? { url: String(r.diagnostico.url || '').slice(0, 300), elementos: (Array.isArray(r.diagnostico.elementos) ? r.diagnostico.elementos : []).slice(0, 80).map((x) => String(x || '').slice(0, 60)) } : null;
+  t.resultado = { estado: ok && archivos.length ? 'OK' : ok ? 'SIN_ARCHIVOS' : String((r && r.estado) || 'ERROR').slice(0, 30), mensaje: String((r && r.mensaje) || '').slice(0, 400), archivos, disponibles, diagnostico: dg };
+  t.estado = t.resultado.estado === 'OK' ? 'LISTO' : 'DETENIDO';
+  t.fin = new Date().toISOString();
+  if (enCurso_ === t.trabajo_id) enCurso_ = null;
+  try { if (t.alTerminar) t.alTerminar(t.resultado); } catch (e) { /* sin bitácora no se pierden las cartolas */ }
+  t.alTerminar = null;
+  const v = setTimeout(() => trabajos_.delete(t.trabajo_id), VIDA_MS);
+  if (v.unref) v.unref();
+}
+/** ¿Hay un PC conectado que sepa traer cartolas? */
+function generalBanco_(db) {
+  const con = conectados_(db);
+  const sabe = con.some((a) => soporta_(a.agente_id, 'bci'));
+  return { en_servidor: enServidor_(), conectado: enServidor_() || sabe, conectado_antiguo: !enServidor_() && con.length > 0 && !sabe, ocupado: !!enCurso_ };
+}
+/**
+ * Pide las cartolas de un mes. d: { email, periodo, rut?, clave?, alTerminar? }. Sin clave, el robot espera a que
+ * alguien entre a mano en el PC de la oficina. Los permisos los revisa Finanzas (bóveda y capacidad).
+ */
+function iniciarBanco_(db, d) {
+  const borrar = () => { d.clave = ''; };
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(d.periodo || ''))) { borrar(); return { ok: false, message: 'Elige el mes de las cartolas.' }; }
+  const clave = typeof d.clave === 'string' ? d.clave : '';
+  if (clave.length > 64) { borrar(); return { ok: false, message: 'La clave es demasiado larga.' }; }
+  const rut = clave ? Robot.rutFormulario_(d.rut) : '';
+  if (clave && !rut) { borrar(); return { ok: false, message: 'Escribe el RUT con que se entra al banco (ej.: 12345678-9).' }; }
+  if (enCurso_) { borrar(); return { ok: false, ocupado: true, message: 'El robot de la oficina está ocupado con otra tarea. Espera unos minutos y vuelve a intentar.' }; }
+  const g = generalBanco_(db);
+  if (!g.conectado) {
+    borrar();
+    return { ok: false, sin_agente: true, message: g.conectado_antiguo ? 'El programa del PC de la oficina es de una versión anterior: actualízalo y reinícialo para traer cartolas.' : 'El robot de la oficina no está conectado: enciende el programa en el PC de la oficina.' };
+  }
+  const t = { trabajo_id: crypto.randomUUID(), tipo: 'BCI', email: String(d.email || '').toLowerCase(), periodo: d.periodo, rut, cliente: null, estado: 'EN_CURSO',
+    paso: 'Esperando al robot de la oficina', inicio: new Date().toISOString(), fin: '', resultado: null, agente: '', clave, asistido: !clave, alTerminar: d.alTerminar || null };
+  borrar();
+  trabajos_.set(t.trabajo_id, t);
+  enCurso_ = t.trabajo_id;
+  t.promesa = new Promise((fin) => { t._fin = fin; });
+  if (enServidor_()) {
+    const revisor = revisorBanco_ || require('./robotBci').traerCartolas;
+    const c = t.clave;
+    t.clave = '';
+    Promise.resolve().then(() => revisor({ rut, clave: c, periodo: t.periodo }, { alPaso: (p) => { t.paso = String(p || '').slice(0, 160); } }))
+      .then((r) => terminar_(db, t, r), (e) => terminar_(db, t, { estado: 'ERROR', mensaje: 'El robot falló: ' + String((e && e.message) || e).slice(0, 200) }))
+      .then(() => t._fin());
+    return { ok: true, trabajo_id: t.trabajo_id };
+  }
+  t.pendiente = true;
+  pendientes_.push(t.trabajo_id);
+  despachar_(db);
+  const v1 = setTimeout(() => { if (t.pendiente) { quitar_(t.trabajo_id); terminar_(db, t, { estado: 'SIN_AGENTE', mensaje: 'El robot de la oficina no tomó el pedido: puede estar apagado o sin internet.' }); t._fin(); } }, TOMA_MAX_MS);
+  const v2 = setTimeout(() => { if (t.estado === 'EN_CURSO') { terminar_(db, t, { estado: 'SIN_RESPUESTA', mensaje: 'El robot de la oficina no terminó a tiempo.' }); t._fin(); } }, BANCO_MAX_MS);
+  [v1, v2].forEach((v) => { if (v.unref) v.unref(); });
+  return { ok: true, trabajo_id: t.trabajo_id };
+}
+/** Avance de un pedido de cartolas (solo quien lo pidió), con los Excel cuando terminó. */
+function estadoBanco_(id, email) {
+  const t = trabajos_.get(String(id || ''));
+  if (!t || t.tipo !== 'BCI') return { ok: false, message: 'Ese pedido ya no está disponible (se guarda 30 minutos). Vuelve a pedir las cartolas.' };
+  if (t.email !== String(email || '').toLowerCase()) return { _forbidden: true, message: 'Ese pedido lo hizo otra persona.' };
+  return { ok: true, trabajo_id: t.trabajo_id, periodo: t.periodo, asistido: t.asistido, estado: t.estado, paso: t.paso, agente: t.agente, inicio: t.inicio, fin: t.fin, resultado: t.resultado };
+}
+
 // Solo para tests.
+function _usarBanco(revisor) { revisorBanco_ = revisor || null; }
 function _usar(revisor) { revisor_ = revisor || null; }
 function _esperar(id) { const t = trabajos_.get(id); return t ? t.promesa : Promise.resolve(); }
-function _reiniciar() { trabajos_.clear(); enCurso_ = null; pendientes_.length = 0; esperando_.length = 0; senales_.clear(); revisor_ = null; capacidades_.clear(); lotes_.clear(); lotesPendientes_.length = 0; }
+function _reiniciar() { trabajos_.clear(); enCurso_ = null; pendientes_.length = 0; esperando_.length = 0; senales_.clear(); revisor_ = null; revisorBanco_ = null; capacidades_.clear(); lotes_.clear(); lotesPendientes_.length = 0; }
 function _esperarLote(id) { const l = lotes_.get(id); return l ? Promise.all(l.trabajos.map((t) => _esperar(t))).then(() => l.promesa) : Promise.resolve(); }
 
-module.exports = { revisarLote, estadoLote, _esperarLote, revisar, estado, general, listarAgentes, crearAgente, revocarAgente, agenteTomar, agentePaso, agenteEntregar, _usar, _esperar, _reiniciar };
+module.exports = { iniciarBanco_, estadoBanco_, generalBanco_, _usarBanco, revisarLote, estadoLote, _esperarLote, revisar, estado, general, listarAgentes, crearAgente, revocarAgente, agenteTomar, agentePaso, agenteEntregar, _usar, _esperar, _reiniciar };

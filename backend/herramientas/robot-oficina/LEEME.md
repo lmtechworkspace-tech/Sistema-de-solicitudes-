@@ -102,7 +102,29 @@ permisos de administrador ni toca el registro de Windows.
 - El PC tiene que quedar con la sesión iniciada; para uso diario conviene un PC
   dedicado, siempre encendido.
 
-## Probar sin tocar la TGR real
+## Cartolas del BCI (desde el 3-11-2026)
+
+El mismo programa trae las cartolas del **BCI Pyme** cuando Finanzas las pide
+(Finanzas › Más › Subir archivos › **Traer del BCI**). Hace lo mismo que se hacía
+a mano: Banco en Línea Pyme › **Cuentas › Cartola Histórica** › flecha de cada
+cartola del mes › **Exportar › Descargar Excel**, y cierra la sesión del banco.
+Los Excel se le entregan a SIGSO (en el PC quedan en una carpeta temporal que se
+borra) y en Finanzas cada cartola se revisa antes de importar.
+
+- **Chrome siempre se ve** mientras trabaja en el banco (también con el arranque
+  automático).
+- Si en SIGSO no escribieron la clave, el robot abre el banco y **espera hasta 4
+  minutos a que alguien entre a mano en este PC**; después sigue solo. Así la
+  clave del banco no pasa por SIGSO.
+- Si la escribieron, entra con ella **una sola vez** (el BCI bloquea la clave
+  tras varios intentos) y la borra. Nunca va al registro ni al disco.
+- Solo entra a **Cuentas**: nunca a transferir ni a pagar.
+- Un programa de una versión anterior no toma estos pedidos: después de
+  actualizar la carpeta del proyecto (`git pull`), hay que reiniciar el robot
+  (`quitar-inicio` y `instalar-inicio`, o cerrar y abrir la terminal).
+
+## Probar sin tocar la TGR ni el banco reales
 
 `--prueba-tgr http://localhost:PUERTO/tramite` usa un sitio local que imita la
-TGR (lo arman los tests). Solo acepta direcciones locales.
+TGR, y `--prueba-bci http://localhost:PUERTO/login` uno que imita el BCI Pyme
+(los arman los tests). Solo aceptan direcciones locales.

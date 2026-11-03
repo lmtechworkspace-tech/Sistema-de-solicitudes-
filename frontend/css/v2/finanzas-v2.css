@@ -515,6 +515,12 @@
 .fin2-campo--fila > span { white-space: nowrap; font-weight: 600; }
 .fin2-campo--fila .fin2-input { width: auto; min-width: 140px; }
 .fin2-input--sm { padding: 7px 10px; font-size: .8125rem; border-radius: 9px; }
+/* Traer del BCI (robot de la oficina, 03-11-2026) */
+.fin2-robot { display: flex; flex-direction: column; gap: 10px; }
+.fin2-robot__fila { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.fin2-robot__clave { font-size: .8125rem; color: var(--sx-texto-2); }
+.fin2-robot__clave > summary { cursor: pointer; margin-bottom: 8px; }
+.fin2-robot__clave .fin2-robot__fila { margin-bottom: 6px; }
 .fin2-cinta { margin-bottom: var(--sx-e-3, 12px); }
 .fin2-cinta--alerta { background: var(--sx-alerta-suave, color-mix(in srgb, var(--sx-alerta, #b45309) 12%, transparent)); }
 .fin2-cinta--alerta > svg { color: var(--sx-alerta, #b45309); }
