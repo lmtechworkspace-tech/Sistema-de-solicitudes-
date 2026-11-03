@@ -105,8 +105,9 @@
     });
   }
   // La empresa con que se entra al BCI se recuerda en este navegador (comodidad; si no hay almacenamiento, queda vacía).
-  var CLAVE_EMPRESA = 'sigso.fin.bci.empresa';
-  function empresaGuardada() { try { return localStorage.getItem(CLAVE_EMPRESA) || ''; } catch (e) { return ''; } }
+  // Por defecto AYS (la única cuyas cartolas se traen, dijo el dueño el 03-11-2026).
+  var CLAVE_EMPRESA = 'sigso.fin.bci.empresa', EMPRESA_DEFECTO = '78.194.394-0';
+  function empresaGuardada() { try { return localStorage.getItem(CLAVE_EMPRESA) || EMPRESA_DEFECTO; } catch (e) { return EMPRESA_DEFECTO; } }
   function guardarEmpresa(v) { try { if (v) localStorage.setItem(CLAVE_EMPRESA, v); else localStorage.removeItem(CLAVE_EMPRESA); } catch (e) { /* sin almacenamiento */ } }
   function rutEmpresa(rut) {
     var s = String(rut || '').replace(/[^0-9kK]/g, '');
