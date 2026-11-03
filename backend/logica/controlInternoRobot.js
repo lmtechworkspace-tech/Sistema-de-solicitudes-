@@ -167,7 +167,7 @@ function soporta_(agenteId, cap) { return (capacidades_.get(agenteId) || []).inc
 function compatible_(t, agenteId) { return t.tipo !== 'BCI' || soporta_(agenteId, 'bci'); }
 function quitar_(id) { const i = pendientes_.indexOf(id); if (i !== -1) pendientes_.splice(i, 1); }
 function paraAgente_(t) {
-  return t.tipo === 'BCI' ? { trabajo_id: t.trabajo_id, tipo: 'BCI', periodo: t.periodo, rut: t.rut, clave: t.clave }
+  return t.tipo === 'BCI' ? { trabajo_id: t.trabajo_id, tipo: 'BCI', periodo: t.periodo, rut: t.rut, rut_empresa: t.rut_empresa || '', clave: t.clave }
     : { trabajo_id: t.trabajo_id, rut: t.rut, clave: t.clave };
 }
 function despachar_(db) {
@@ -451,7 +451,8 @@ function generalBanco_(db) {
   return { en_servidor: enServidor_(), conectado: enServidor_() || sabe, conectado_antiguo: !enServidor_() && con.length > 0 && !sabe, ocupado: !!enCurso_ };
 }
 /**
- * Pide las cartolas de un mes. d: { email, periodo, rut?, clave?, alTerminar? }. Sin clave, el robot espera a que
+ * Pide las cartolas de un mes. d: { email, periodo, rut?, rut_empresa?, clave?, alTerminar? }. rut_empresa: con qué
+ * empresa entrar cuando el usuario del banco tiene varias («Convenios Relacionados al Usuario»). Sin clave, el robot espera a que
  * alguien entre a mano en el PC de la oficina. Los permisos los revisa Finanzas (bóveda y capacidad).
  */
 function iniciarBanco_(db, d) {
@@ -461,13 +462,15 @@ function iniciarBanco_(db, d) {
   if (clave.length > 64) { borrar(); return { ok: false, message: 'La clave es demasiado larga.' }; }
   const rut = clave ? Robot.rutFormulario_(d.rut) : '';
   if (clave && !rut) { borrar(); return { ok: false, message: 'Escribe el RUT con que se entra al banco (ej.: 12345678-9).' }; }
+  const rutEmpresa = d.rut_empresa ? Robot.rutFormulario_(d.rut_empresa) : '';
+  if (d.rut_empresa && !rutEmpresa) { borrar(); return { ok: false, message: 'El RUT de la empresa no es válido (ej.: 76123456-7).' }; }
   if (enCurso_) { borrar(); return { ok: false, ocupado: true, message: 'El robot de la oficina está ocupado con otra tarea. Espera unos minutos y vuelve a intentar.' }; }
   const g = generalBanco_(db);
   if (!g.conectado) {
     borrar();
     return { ok: false, sin_agente: true, message: g.conectado_antiguo ? 'El programa del PC de la oficina es de una versión anterior: actualízalo y reinícialo para traer cartolas.' : 'El robot de la oficina no está conectado: enciende el programa en el PC de la oficina.' };
   }
-  const t = { trabajo_id: crypto.randomUUID(), tipo: 'BCI', email: String(d.email || '').toLowerCase(), periodo: d.periodo, rut, cliente: null, estado: 'EN_CURSO',
+  const t = { trabajo_id: crypto.randomUUID(), tipo: 'BCI', email: String(d.email || '').toLowerCase(), periodo: d.periodo, rut, rut_empresa: rutEmpresa, cliente: null, estado: 'EN_CURSO',
     paso: 'Esperando al robot de la oficina', inicio: new Date().toISOString(), fin: '', resultado: null, agente: '', clave, asistido: !clave, alTerminar: d.alTerminar || null };
   borrar();
   trabajos_.set(t.trabajo_id, t);
@@ -477,7 +480,7 @@ function iniciarBanco_(db, d) {
     const revisor = revisorBanco_ || require('./robotBci').traerCartolas;
     const c = t.clave;
     t.clave = '';
-    Promise.resolve().then(() => revisor({ rut, clave: c, periodo: t.periodo }, { alPaso: (p) => { t.paso = String(p || '').slice(0, 160); } }))
+    Promise.resolve().then(() => revisor({ rut, clave: c, periodo: t.periodo, rutEmpresa }, { alPaso: (p) => { t.paso = String(p || '').slice(0, 160); } }))
       .then((r) => terminar_(db, t, r), (e) => terminar_(db, t, { estado: 'ERROR', mensaje: 'El robot falló: ' + String((e && e.message) || e).slice(0, 200) }))
       .then(() => t._fin());
     return { ok: true, trabajo_id: t.trabajo_id };

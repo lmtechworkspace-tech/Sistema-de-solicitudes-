@@ -53,6 +53,10 @@ const RECETA = {
   // no queda como dispositivo de confianza de nadie.
   dispositivoTitulo: 'dispositivo de confianza',
   omitir: '^omitir$',
+  // Si el usuario del banco tiene varias empresas, el BCI pregunta con cuál entrar (03-11-2026: bel.bci.cl/
+  // LoginJSFGenerico, «Convenios Relacionados al Usuario», tabla Convenio · Rol · Rut · Razón Social).
+  conveniosTitulo: 'convenios relacionados',
+  continuar: '^(continuar|aceptar|ingresar|seleccionar|entrar)$',
   esperaMs: 45 * 1000,
   ingresoManualMs: 4 * 60 * 1000,
   descargaMs: 60 * 1000
@@ -70,6 +74,11 @@ const espera_ = (ms) => new Promise((r) => setTimeout(r, ms));
 function rutTeclas_(rut) {
   const s = String(rut || '').replace(/[.\s-]/g, '').toUpperCase();
   return /^\d{7,8}[\dK]$/.test(s) ? s : '';
+}
+/** 781943940 → 78.194.394-0 (para los mensajes). */
+function rutLegible_(r) {
+  const s = String(r || '');
+  return s.length < 2 ? s : s.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + '-' + s.slice(-1);
 }
 function host_(url) { try { return new URL(url).hostname; } catch (e) { return ''; } }
 function ruta_(url) { try { const u = new URL(url); return u.hostname + u.pathname; } catch (e) { return ''; } }
@@ -142,6 +151,27 @@ function hayCaptcha_() {
     if (/size=invisible/i.test(src) || f.closest('.grecaptcha-badge')) return false;
     return vis(f);
   });
+}
+/** Filas de «Convenios Relacionados al Usuario»: la tabla con columnas Rut y Razón Social. RUT solo dígitos y DV. */
+function convenios_() {
+  const limpio = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+  for (const tabla of Array.from(document.querySelectorAll('table'))) {
+    const cab = Array.from(tabla.querySelectorAll('th')).map((th) => limpio(th.innerText).toLowerCase());
+    const iRut = cab.findIndex((c) => /^rut/.test(c)), iRazon = cab.findIndex((c) => /raz[oó]n/.test(c));
+    if (iRut === -1) continue;
+    const filas = Array.from(tabla.querySelectorAll('tr')).map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => limpio(td.innerText)))
+      .filter((c) => c.length > iRut && /\d/.test(c[iRut]))
+      .map((c) => ({ rut: c[iRut].replace(/[^0-9kK]/g, '').toUpperCase(), razon: iRazon !== -1 ? (c[iRazon] || '') : '' }));
+    if (filas.length) return filas;
+  }
+  return [];
+}
+/** Lo que se aprieta para entrar con esa empresa: su enlace, botón u opción; si no hay, la celda de la razón social. */
+function convenioDe_(rut) {
+  const limpio = (t) => String(t || '').replace(/[^0-9kK]/g, '').toUpperCase();
+  const tr = Array.from(document.querySelectorAll('tr')).find((x) => Array.from(x.querySelectorAll('td')).some((td) => limpio(td.innerText) === rut));
+  if (!tr) return null;
+  return tr.querySelector('input[type=radio],input[type=checkbox],a,button,[role=button],[onclick]') || tr.querySelector('td:last-child') || tr;
 }
 /** ¿La página tiene reCAPTCHA invisible? (solo para el diagnóstico: el banco evalúa el navegador sin pedir nada). */
 function hayCaptchaInvisible_() {
@@ -239,6 +269,26 @@ async function adentro_(page, receta, dialogo) {
     dialogo.omitidos = (dialogo.omitidos || 0) + 1;
     if (dialogo.omitidos > 5) throw new Detencion('PAGINA_DISTINTA', 'El banco insiste en «Registra tu Dispositivo de confianza» y el robot no pudo omitirlo. Entra a mano esta vez y elige «Omitir».');
     if (!(await clicTexto_(page, receta.omitir))) throw new Detencion('PAGINA_DISTINTA', 'El banco pidió registrar un dispositivo de confianza y no se encontró «Omitir». El robot no registra dispositivos.');
+    await espera_(1500);
+    return false;
+  }
+  // «Convenios Relacionados al Usuario»: se entra con la empresa pedida (o con la única que haya).
+  if (receta.conveniosTitulo && await enAlguno_(page, tituloCalza_, receta.conveniosTitulo)) {
+    const filas = (await enAlguno_(page, convenios_)) || [];
+    if (!filas.length) return false;
+    const lista = filas.map((f) => (f.razon || 'sin nombre') + ' (' + rutLegible_(f.rut) + ')').join(' · ');
+    const pedida = dialogo.rutEmpresa ? rutTeclas_(dialogo.rutEmpresa) : '';
+    const fila = pedida ? filas.find((f) => f.rut === pedida) : (filas.length === 1 ? filas[0] : null);
+    if (pedida && !fila) throw new Detencion('EMPRESA', 'Ese usuario del banco no tiene la empresa ' + rutLegible_(pedida) + '. Sus empresas son: ' + lista + '.');
+    if (!fila) {
+      if (dialogo.asistido) return false; // entrada a mano: la persona elige la empresa en la ventana
+      throw new Detencion('EMPRESA', 'Ese usuario del banco tiene varias empresas: ' + lista + '. Escribe en «RUT de la empresa» con cuál entrar.');
+    }
+    dialogo.convenios = (dialogo.convenios || 0) + 1;
+    if (dialogo.convenios > 4) throw new Detencion('PAGINA_DISTINTA', 'No se pudo entrar con la empresa ' + rutLegible_(fila.rut) + ' en «Convenios Relacionados al Usuario». Entra a mano esta vez.');
+    if (!(await clic_(page, convenioDe_, fila.rut))) throw new Detencion('PAGINA_DISTINTA', 'No se pudo elegir la empresa ' + rutLegible_(fila.rut) + ' en «Convenios Relacionados al Usuario».');
+    await espera_(1200);
+    await clicTexto_(page, receta.continuar); // si la elección pide confirmar
     await espera_(1500);
     return false;
   }
@@ -355,13 +405,16 @@ async function diagnostico_(page, info) {
       } catch (e) { /* */ }
     }
     d.elementos = d.elementos.slice(0, 80);
+    // Empresas de «Convenios Relacionados al Usuario» (razón social y RUT de la empresa; nada de montos).
+    ((await enAlguno_(page, convenios_)) || []).slice(0, 15).forEach((f) => d.formulario.push('empresa: ' + (f.razon || 'sin nombre') + ' (' + rutLegible_(f.rut) + ')'));
     if (await enAlguno_(page, hayCaptchaInvisible_)) d.formulario.push('la página tiene reCAPTCHA invisible (el banco evalúa el navegador sin pedir nada)');
   } catch (e) { /* lo que se alcanzó a juntar */ }
   return d;
 }
 
 /**
- * Trae las cartolas de un mes. datos = { rut?, clave?, periodo: 'AAAA-MM' }. opciones = { receta, alPaso, rutaChrome }.
+ * Trae las cartolas de un mes. datos = { rut?, clave?, periodo: 'AAAA-MM', rutEmpresa? } (rutEmpresa: con qué empresa
+ * entrar si el usuario del banco tiene varias). opciones = { receta, alPaso, rutaChrome }.
  * Devuelve { estado: 'OK' | motivo de detención, mensaje, archivos: [{ nombre, numero, fecha, base64 }], disponibles, diagnostico? }.
  */
 async function traerCartolas(datos, opciones) {
@@ -390,7 +443,7 @@ async function traerCartolas(datos, opciones) {
   const info = { formulario: [] };
   try {
     page = (await navegador.pages())[0] || await navegador.newPage();
-    const dialogo = { texto: '' };
+    const dialogo = { texto: '', rutEmpresa: (datos && datos.rutEmpresa) || '', asistido: !clave };
     page.on('dialog', (d) => { dialogo.texto = String(d.message() || 'aviso sin texto').slice(0, 200); d.dismiss().catch(() => null); });
     const cdp = await page.target().createCDPSession();
     await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: dir });

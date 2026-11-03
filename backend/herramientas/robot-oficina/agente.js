@@ -196,7 +196,7 @@ async function traerCartolas(cfg, tr, o) {
   tr.clave = '';
   log('Pedido de cartolas del BCI (' + tr.periodo + ', ' + (clave ? 'con clave' : 'entrada a mano en este PC') + '). Abriendo el banco…');
   let ultimo = 0;
-  const res = await RobotBci.traerCartolas({ rut: tr.rut, clave, periodo: tr.periodo }, {
+  const res = await RobotBci.traerCartolas({ rut: tr.rut, clave, periodo: tr.periodo, rutEmpresa: tr.rut_empresa }, {
     receta: o.recetaBci || undefined,
     alPaso: (p) => {
       const ahora = Date.now();

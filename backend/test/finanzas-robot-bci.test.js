@@ -57,12 +57,13 @@ test('PC de la oficina: lo toma solo un programa que sabe; la clave se entrega u
   void viejo;
 
   const tomar = RB.agenteTomar(db, { agente_token: a, capacidades: 'lote,bci' });
-  const pedido = { email: 'Uno@demo.cl', periodo: '2026-09', rut: '12.345.678-5', clave: CLAVE };
+  assert.match(RB.iniciarBanco_(db, { email: 'uno@demo.cl', periodo: '2026-09', rut: '12.345.678-5', rut_empresa: 'empresa', clave: CLAVE }).message, /RUT de la empresa no es válido/);
+  const pedido = { email: 'Uno@demo.cl', periodo: '2026-09', rut: '12.345.678-5', rut_empresa: '78.194.394-0', clave: CLAVE };
   const r = RB.iniciarBanco_(db, pedido);
   assert.equal(r.ok, true);
   assert.equal(pedido.clave, '', 'el pedido suelta la clave');
   const { trabajo } = await tomar;
-  assert.deepEqual([trabajo.tipo, trabajo.periodo, trabajo.rut, trabajo.clave], ['BCI', '2026-09', '12345678-5', CLAVE]);
+  assert.deepEqual([trabajo.tipo, trabajo.periodo, trabajo.rut, trabajo.rut_empresa, trabajo.clave], ['BCI', '2026-09', '12345678-5', '78194394-0', CLAVE]);
   assert.equal(RB.iniciarBanco_(db, { email: 'uno@demo.cl', periodo: '2026-09' }).ocupado, true, 'un robot a la vez');
   RB.agentePaso(db, { agente_token: a, trabajo_id: r.trabajo_id, paso: 'Descargando la cartola N° 019' });
   let e = RB.estadoBanco_(r.trabajo_id, 'uno@demo.cl');
@@ -144,7 +145,14 @@ function sitio() {
       return html(res, '<a href="/salir">SALIR</a><h1>Registra tu Dispositivo de confianza</h1>' +
         '<button onclick="location.href=\'/omitir\'">Omitir</button><button onclick="location.href=\'/registrar\'">Ir a registrar</button>');
     }
-    if (u.pathname === '/omitir') { visto.omitir++; res.writeHead(302, { Location: '/portal' }); return res.end(); }
+    if (u.pathname === '/omitir') { visto.omitir++; res.writeHead(302, { Location: '/convenios' }); return res.end(); }
+    // Lo que mostró el BCI real el 03-11-2026 a un usuario con varias empresas (bel.bci.cl/LoginJSFGenerico).
+    if (u.pathname === '/convenios') {
+      return html(res, '<h1>Bci</h1><h3>Convenios Relacionados al Usuario</h3><table><tr><th>Convenio</th><th>Rol</th><th>Rut</th><th>Razón Social</th></tr>' +
+        [['001', '78.194.394-0', 'HOMEPYMES SPA'], ['002', '76.111.222-3', 'OTRA EMPRESA LTDA']].map((c) =>
+          '<tr><td><a href="/elegir?r=' + c[1] + '">' + c[0] + '</a></td><td>Apoderado</td><td>' + c[1] + '</td><td>' + c[2] + '</td></tr>').join('') + '</table>');
+    }
+    if (u.pathname === '/elegir') { visto.empresa = u.searchParams.get('r'); res.writeHead(302, { Location: '/portal' }); return res.end(); }
     if (u.pathname === '/registrar') { visto.registrar++; return html(res, '<h1>Registro de dispositivo</h1>'); }
     if (u.pathname === '/portal') return html(res, menu + '<h1>Inicio</h1>');
     if (u.pathname === '/cartolas') {
@@ -172,16 +180,26 @@ test('de punta a punta: entra, abre Cartola Histórica, descarga las del mes y s
   try {
     const receta = { inicio: url, esperaMs: 15000, descargaMs: 15000 };
     const pasos = [];
-    const r = await Bci.traerCartolas({ rut: '12.345.678-5', clave: CLAVE, periodo: '2026-09' }, { receta, oculto: true, alPaso: (p) => pasos.push(p) });
+    const r = await Bci.traerCartolas({ rut: '12.345.678-5', clave: CLAVE, periodo: '2026-09', rutEmpresa: '78194394-0' }, { receta, oculto: true, alPaso: (p) => pasos.push(p) });
     assert.equal(r.estado, 'OK', r.mensaje + ' ' + JSON.stringify(r.diagnostico));
     assert.deepEqual(r.archivos.map((a) => [a.numero, a.fecha, Buffer.from(a.base64, 'base64').toString()]),
       [['019', '2026-09-16', 'PK-falso-019'], ['020', '2026-09-30', 'PK-falso-020'], ['021', '2026-10-19', 'PK-falso-021']]);
     assert.match(r.archivos[0].nombre, /^Cartola BCI N° 019 del 2026-09-16\.xlsx$/);
     assert.deepEqual([visto.intentos, visto.salir], [1, 1], 'un ingreso y cierra la sesión');
     assert.deepEqual([visto.omitir, visto.registrar], [1, 0], '«Registra tu Dispositivo de confianza»: omite, nunca registra');
+    assert.equal(visto.empresa, '78.194.394-0', 'en «Convenios Relacionados al Usuario» entra con la empresa pedida');
+
+    // Varias empresas y no se dijo cuál: se detiene y las nombra (sin adivinar). Una que no está: también.
+    const sinEmpresa = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-09' }, { receta, oculto: true });
+    assert.equal(sinEmpresa.estado, 'EMPRESA', sinEmpresa.mensaje);
+    assert.match(sinEmpresa.mensaje, /HOMEPYMES SPA \(78\.194\.394-0\).*OTRA EMPRESA LTDA \(76\.111\.222-3\)/);
+    assert.ok(sinEmpresa.diagnostico.formulario.some((c) => /empresa: HOMEPYMES SPA/.test(c)));
+    const otra = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-09', rutEmpresa: '99.999.999-9' }, { receta, oculto: true });
+    assert.equal(otra.estado, 'EMPRESA', otra.mensaje);
+    assert.match(otra.mensaje, /no tiene la empresa 99\.999\.999-9/);
     assert.ok(pasos.some((p) => /Cartola Histórica/.test(p)));
 
-    const sinMes = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-12' }, { receta, oculto: true });
+    const sinMes = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-12', rutEmpresa: '781943940' }, { receta, oculto: true });
     assert.equal(sinMes.estado, 'SIN_CARTOLAS');
     assert.match(sinMes.mensaje, /N° 022 del 2026-10-30/);
 

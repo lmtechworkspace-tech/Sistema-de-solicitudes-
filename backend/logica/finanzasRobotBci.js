@@ -24,12 +24,12 @@ const general = B.conBoveda('', function (db) {
   return RB.generalBanco_(db);
 });
 
-/** Pide las cartolas de un mes. data: { periodo: 'AAAA-MM', rut?, clave? } (sin clave: alguien entra a mano en el PC). */
+/** Pide las cartolas de un mes. data: { periodo: 'AAAA-MM', rut?, rut_empresa?, clave? } (sin clave: alguien entra a mano en el PC). */
 const iniciar = B.conBoveda('', function (db, data, contexto, x) {
   const d = data || {};
   const e_ = Base.exigir_(contexto, 'REGISTRAR');
   if (e_) { d.clave = ''; return e_; }
-  const pedido = { email: email_(contexto), periodo: String(d.periodo || ''), rut: d.rut, clave: typeof d.clave === 'string' ? d.clave : '' };
+  const pedido = { email: email_(contexto), periodo: String(d.periodo || ''), rut: d.rut, rut_empresa: d.rut_empresa, clave: typeof d.clave === 'string' ? d.clave : '' };
   d.clave = '';
   const asistido = !pedido.clave;
   pedido.alTerminar = (r) => x.registrar('ROBOT_BCI', pedido.periodo + ' · ' + r.estado + (r.estado === 'OK' ? ' · ' + r.archivos.map((a) => 'N° ' + a.numero).join(', ') : ' · ' + r.mensaje.slice(0, 120)));

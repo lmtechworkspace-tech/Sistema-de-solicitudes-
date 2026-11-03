@@ -88,6 +88,7 @@
     return U.card({ titulo: 'Traer del BCI', icono: 'descargar', sub: 'robot de la oficina', cuerpo: '<div class="fin2-robot" data-cap="REGISTRAR">' +
       '<p class="fin2-ayuda">El PC de la oficina abre el Banco en Línea Pyme, va a <b>Cuentas › Cartola Histórica</b> y descarga el Excel de cada cartola del mes (y la primera del mes siguiente, que trae los últimos días). Después cada una se revisa aquí antes de importar. El robot solo entra a Cuentas: nunca a transferir ni a pagar.</p>' +
       '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>Mes</span><input type="month" class="fin2-input fin2-input--sm js-fcr-mes" value="' + mesAnterior() + '"></label>' +
+        '<label class="fin2-campo fin2-campo--fila"><span>RUT de la empresa</span><input class="fin2-input fin2-input--sm js-fcr-empresa" autocomplete="off" placeholder="76.123.456-7" value="' + txt(empresaGuardada()) + '" title="Si quien entra al banco tiene varias empresas, el BCI pregunta con cuál («Convenios Relacionados al Usuario»): el robot entra con esta."></label>' +
         U.boton({ texto: 'Traer cartolas', icono: 'descargar', variante: 'primario', sm: true, clase: 'js-fcr-ir' }) + '<span class="fin2-ayuda js-fcr-general" aria-live="polite"></span></div>' +
       '<details class="fin2-robot__clave"><summary>Entrar con la clave desde aquí (si no, alguien entra a mano en el PC de la oficina)</summary>' +
         '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>RUT con que se entra</span><input class="fin2-input fin2-input--sm js-fcr-rut" autocomplete="off" placeholder="12.345.678-9" title="El mismo RUT que se escribe al entrar a mano al Banco en Línea Pyme"><small class="fin2-ayuda js-fcr-rut-aviso" hidden>Parece RUT de empresa: el BCI Pyme suele pedir el de la persona que entra.</small></label>' +
@@ -103,6 +104,10 @@
       s.innerHTML = g.conectado ? U.badge('Robot conectado', 'ok') : g.conectado_antiguo ? U.badge('El programa del PC está desactualizado', 'alerta') : U.badge('Robot no conectado', 'neutro');
     });
   }
+  // La empresa con que se entra al BCI se recuerda en este navegador (comodidad; si no hay almacenamiento, queda vacía).
+  var CLAVE_EMPRESA = 'sigso.fin.bci.empresa';
+  function empresaGuardada() { try { return localStorage.getItem(CLAVE_EMPRESA) || ''; } catch (e) { return ''; } }
+  function guardarEmpresa(v) { try { if (v) localStorage.setItem(CLAVE_EMPRESA, v); else localStorage.removeItem(CLAVE_EMPRESA); } catch (e) { /* sin almacenamiento */ } }
   function rutEmpresa(rut) {
     var s = String(rut || '').replace(/[^0-9kK]/g, '');
     return s.length >= 8 && Number(s.slice(0, -1)) >= 50000000;
@@ -120,6 +125,9 @@
       return;
     }
     var datos = { periodo: mes };
+    var empresa = raiz.querySelector('.js-fcr-empresa').value.trim();
+    if (empresa) datos.rut_empresa = empresa;
+    guardarEmpresa(empresa);
     if (clave.value) { datos.rut = rut.value; datos.clave = clave.value; }
     clave.value = '';
     raiz.querySelector('.js-fcr-ir').disabled = true;
