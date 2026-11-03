@@ -117,7 +117,9 @@ const CARTOLAS = [['octubre', '30/10/2026', '022'], ['octubre', '19/10/2026', '0
 
 function sitio() {
   const visto = { intentos: 0, salir: 0, excel: [] };
-  const html = (res, cuerpo) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('<!doctype html><meta charset="utf-8"><body>' + cuerpo + '</body>'); };
+  // Como el BCI real: reCAPTCHA invisible en todas las páginas (no pide nada; no es un CAPTCHA que detenga al robot).
+  const invisible = '<div class="grecaptcha-badge" style="width:256px;height:60px"><iframe src="/recaptcha/api2/anchor?size=invisible" style="width:256px;height:60px"></iframe></div>';
+  const html = (res, cuerpo) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('<!doctype html><meta charset="utf-8"><body>' + cuerpo + invisible + '</body>'); };
   const menu = '<nav><a href="#" id="cu" onclick="document.getElementById(\'sub\').style.display=\'block\';return false">Cuentas</a>' +
     '<ul id="sub" style="display:none"><li><a href="/movimientos">Mis Movimientos</a></li><li><a href="/cartolas">Cartola Histórica</a></li></ul><a href="/salir">Salir</a></nav>';
   const S = http.createServer((req, res) => {
@@ -151,6 +153,7 @@ function sitio() {
       res.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="cartola_' + u.searchParams.get('n') + '.xlsx"' });
       return res.end('PK-falso-' + u.searchParams.get('n'));
     }
+    if (u.pathname === '/login-captcha') return html(res, '<iframe src="/recaptcha/api2/anchor?size=normal" style="width:304px;height:78px"></iframe>');
     if (u.pathname === '/salir') { visto.salir++; return html(res, '<h1>Sesión cerrada</h1>'); }
     res.writeHead(404); res.end();
   });
@@ -200,5 +203,10 @@ test('de punta a punta: entra, abre Cartola Histórica, descarga las del mes y s
     assert.equal(corta.estado, 'NO_INGRESADO', corta.mensaje);
     assert.match(corta.mensaje, /8 de 23 caracteres/);
     assert.equal(visto.intentos, 0, 'ninguno de los dos llegó al banco');
+    assert.ok(mala.diagnostico.formulario.some((c) => /reCAPTCHA invisible/.test(c)), 'el diagnóstico avisa del reCAPTCHA invisible');
+
+    // Un CAPTCHA que sí pide algo (la casilla «No soy un robot») detiene al robot; el invisible no.
+    const cap = await Bci.traerCartolas({ periodo: '2026-09' }, { receta: Object.assign({}, receta, { inicio: url.replace('/login', '/login-captcha'), ingresoManualMs: 5000 }), oculto: true });
+    assert.equal(cap.estado, 'CAPTCHA', cap.mensaje);
   } finally { S.close(); }
 });

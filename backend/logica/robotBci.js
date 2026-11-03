@@ -126,8 +126,21 @@ function flechaDe_(numero, fecha) {
   const celdas = tr.querySelectorAll('td,[role=cell],[role=gridcell]');
   return celdas[celdas.length - 1] || tr;
 }
+/**
+ * ¿Hay un CAPTCHA que pide algo a una persona (la casilla «No soy un robot» o el desafío de imágenes)? El reCAPTCHA
+ * INVISIBLE que el BCI tiene en todas sus páginas (03-11-2026: también en /pyme/clave-invalida) no pide nada y no cuenta.
+ */
 function hayCaptcha_() {
-  return !!document.querySelector('iframe[src*="recaptcha"],iframe[src*="hcaptcha"],iframe[src*="turnstile"],.g-recaptcha,.h-captcha,.cf-turnstile');
+  const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 30 && r.height > 30 && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).opacity !== '0'; };
+  return Array.from(document.querySelectorAll('iframe[src*="recaptcha"],iframe[src*="hcaptcha"],iframe[src*="turnstile"],iframe[src*="challenges.cloudflare"]')).some((f) => {
+    const src = String(f.getAttribute('src') || '');
+    if (/size=invisible/i.test(src) || f.closest('.grecaptcha-badge')) return false;
+    return vis(f);
+  });
+}
+/** ¿La página tiene reCAPTCHA invisible? (solo para el diagnóstico: el banco evalúa el navegador sin pedir nada). */
+function hayCaptchaInvisible_() {
+  return !!document.querySelector('.grecaptcha-badge,iframe[src*="recaptcha"][src*="size=invisible"]');
 }
 function avisoVisible_() {
   const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
@@ -213,8 +226,9 @@ async function rechazo_(page, receta) {
 /** ¿Ya se entró? (ya no se está en la página de ingreso y se ve el menú de Cuentas o la cartola). */
 async function adentro_(page, receta, dialogo) {
   revisarAviso_(dialogo);
-  if (await enAlguno_(page, hayCaptcha_)) throw new Detencion('CAPTCHA', 'El banco pidió un CAPTCHA: el robot se detuvo. Entra a mano esta vez.');
+  // Primero el rechazo: la página «clave inválida» del BCI también trae su reCAPTCHA invisible.
   if (await rechazo_(page, receta)) throw new Detencion('CLAVE_INVALIDA', MSJ_RECHAZO);
+  if (await enAlguno_(page, hayCaptcha_)) throw new Detencion('CAPTCHA', 'El banco pidió un CAPTCHA (la casilla «No soy un robot» o imágenes): el robot se detuvo. Entra a mano esta vez.');
   if (ruta_(page.url()) === ruta_(receta.inicio)) return false;
   return (await hayTexto_(page, receta.menuCartola)) || (await hayTexto_(page, receta.menuCuentas));
 }
@@ -328,6 +342,7 @@ async function diagnostico_(page, info) {
       } catch (e) { /* */ }
     }
     d.elementos = d.elementos.slice(0, 80);
+    if (await enAlguno_(page, hayCaptchaInvisible_)) d.formulario.push('la página tiene reCAPTCHA invisible (el banco evalúa el navegador sin pedir nada)');
   } catch (e) { /* lo que se alcanzó a juntar */ }
   return d;
 }
