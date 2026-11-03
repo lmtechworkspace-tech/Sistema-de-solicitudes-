@@ -116,7 +116,7 @@ const sinNavegador = !RUTA || process.env.CI ? 'sin navegador local (o en CI)' :
 const CARTOLAS = [['octubre', '30/10/2026', '022'], ['octubre', '19/10/2026', '021'], ['septiembre', '30/09/2026', '020'], ['septiembre', '16/09/2026', '019'], ['agosto', '31/08/2026', '018']];
 
 function sitio() {
-  const visto = { intentos: 0, salir: 0, excel: [] };
+  const visto = { intentos: 0, salir: 0, excel: [], omitir: 0, registrar: 0 };
   // Como el BCI real: reCAPTCHA invisible en todas las páginas (no pide nada; no es un CAPTCHA que detenga al robot).
   const invisible = '<div class="grecaptcha-badge" style="width:256px;height:60px"><iframe src="/recaptcha/api2/anchor?size=invisible" style="width:256px;height:60px"></iframe></div>';
   const html = (res, cuerpo) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('<!doctype html><meta charset="utf-8"><body>' + cuerpo + invisible + '</body>'); };
@@ -134,11 +134,18 @@ function sitio() {
     if (u.pathname === '/entrar') {
       let b = '';
       req.on('data', (c) => { b += c; });
-      req.on('end', () => { visto.intentos++; const p = new URLSearchParams(b); res.writeHead(302, { Location: p.get('rut') === '123456785' && p.get('clave') === CLAVE ? '/portal' : p.get('clave') === 'antigua' ? '/login?e=1' : '/pyme/clave-invalida' }); res.end(); });
+      req.on('end', () => { visto.intentos++; const p = new URLSearchParams(b); res.writeHead(302, { Location: p.get('rut') === '123456785' && p.get('clave') === CLAVE ? '/dispositivo-confianza' : p.get('clave') === 'antigua' ? '/login?e=1' : '/pyme/clave-invalida' }); res.end(); });
       return;
     }
     // Lo que respondió el BCI real el 03-11-2026 con una clave que no aceptó.
     if (u.pathname === '/pyme/clave-invalida') return html(res, '<header><a href="/">Personas</a><a href="/">Empresas</a></header><h1>Autentificación incorrecta</h1><a href="/login">Reintentar</a>');
+    // Lo que mostró el BCI real el 03-11-2026 tras un ingreso correcto (login.bci.cl/.../dispositivo-confianza).
+    if (u.pathname === '/dispositivo-confianza') {
+      return html(res, '<a href="/salir">SALIR</a><h1>Registra tu Dispositivo de confianza</h1>' +
+        '<button onclick="location.href=\'/omitir\'">Omitir</button><button onclick="location.href=\'/registrar\'">Ir a registrar</button>');
+    }
+    if (u.pathname === '/omitir') { visto.omitir++; res.writeHead(302, { Location: '/portal' }); return res.end(); }
+    if (u.pathname === '/registrar') { visto.registrar++; return html(res, '<h1>Registro de dispositivo</h1>'); }
     if (u.pathname === '/portal') return html(res, menu + '<h1>Inicio</h1>');
     if (u.pathname === '/cartolas') {
       return html(res, menu + '<h2>Cartola Histórica</h2><table><tr><th>Mes</th><th>Fecha</th><th>Nº de cartola</th><th>Ver Cartola</th></tr>' +
@@ -171,6 +178,7 @@ test('de punta a punta: entra, abre Cartola Histórica, descarga las del mes y s
       [['019', '2026-09-16', 'PK-falso-019'], ['020', '2026-09-30', 'PK-falso-020'], ['021', '2026-10-19', 'PK-falso-021']]);
     assert.match(r.archivos[0].nombre, /^Cartola BCI N° 019 del 2026-09-16\.xlsx$/);
     assert.deepEqual([visto.intentos, visto.salir], [1, 1], 'un ingreso y cierra la sesión');
+    assert.deepEqual([visto.omitir, visto.registrar], [1, 0], '«Registra tu Dispositivo de confianza»: omite, nunca registra');
     assert.ok(pasos.some((p) => /Cartola Histórica/.test(p)));
 
     const sinMes = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-12' }, { receta, oculto: true });

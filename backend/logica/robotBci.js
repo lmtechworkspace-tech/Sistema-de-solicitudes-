@@ -48,6 +48,11 @@ const RECETA = {
   // incorrecta · Reintentar»). Se reconoce por la dirección o por el título, y se detiene AL TIRO, sin reintentar.
   rechazoRuta: 'clave-invalida|clave-bloqueada|bloqueo|error-autenti',
   rechazoTexto: '^(autentificaci[oó]n incorrecta|autenticaci[oó]n incorrecta|clave (bloqueada|incorrecta|inv[aá]lida)|usuario bloqueado)',
+  // Tras un ingreso correcto el BCI ofrece registrar el navegador (03-11-2026: login.bci.cl/.../dispositivo-confianza,
+  // «Registra tu Dispositivo de confianza · Omitir · Ir a registrar»). El robot SIEMPRE omite: el navegador del robot
+  // no queda como dispositivo de confianza de nadie.
+  dispositivoTitulo: 'dispositivo de confianza',
+  omitir: '^omitir$',
   esperaMs: 45 * 1000,
   ingresoManualMs: 4 * 60 * 1000,
   descargaMs: 60 * 1000
@@ -229,6 +234,14 @@ async function adentro_(page, receta, dialogo) {
   // Primero el rechazo: la página «clave inválida» del BCI también trae su reCAPTCHA invisible.
   if (await rechazo_(page, receta)) throw new Detencion('CLAVE_INVALIDA', MSJ_RECHAZO);
   if (await enAlguno_(page, hayCaptcha_)) throw new Detencion('CAPTCHA', 'El banco pidió un CAPTCHA (la casilla «No soy un robot» o imágenes): el robot se detuvo. Entra a mano esta vez.');
+  // «Registra tu Dispositivo de confianza»: se omite (unas pocas veces como máximo, por si pide confirmar).
+  if (receta.dispositivoTitulo && await enAlguno_(page, tituloCalza_, receta.dispositivoTitulo)) {
+    dialogo.omitidos = (dialogo.omitidos || 0) + 1;
+    if (dialogo.omitidos > 5) throw new Detencion('PAGINA_DISTINTA', 'El banco insiste en «Registra tu Dispositivo de confianza» y el robot no pudo omitirlo. Entra a mano esta vez y elige «Omitir».');
+    if (!(await clicTexto_(page, receta.omitir))) throw new Detencion('PAGINA_DISTINTA', 'El banco pidió registrar un dispositivo de confianza y no se encontró «Omitir». El robot no registra dispositivos.');
+    await espera_(1500);
+    return false;
+  }
   if (ruta_(page.url()) === ruta_(receta.inicio)) return false;
   return (await hayTexto_(page, receta.menuCartola)) || (await hayTexto_(page, receta.menuCuentas));
 }
