@@ -381,7 +381,9 @@ async function traerCartolas(datos, opciones) {
   // Siempre con ventana: en modo asistido alguien entra a mano, y el banco no tiene por qué ver un navegador escondido.
   const navegador = await puppeteer.launch({
     executablePath: ruta, headless: o.oculto ? true : false, defaultViewport: null,
-    args: ['--no-first-run', '--disable-extensions', '--mute-audio', '--window-size=1280,900'],
+    // --disable-gpu, como el robot TGR: abierto desde el arranque con Windows (programa sin ventana), Chrome con
+    // GPU dejaba la ventana gris, sin dibujar (03-11-2026), y nadie podía entrar a mano en el modo sin clave.
+    args: ['--no-first-run', '--disable-extensions', '--mute-audio', '--disable-gpu', '--window-size=1280,900'],
     timeout: receta.esperaMs, protocolTimeout: 90 * 1000
   });
   let page = null;
