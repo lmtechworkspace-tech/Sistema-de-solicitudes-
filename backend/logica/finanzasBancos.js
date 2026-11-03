@@ -428,7 +428,10 @@ const catalogo = B.conBoveda('', function (db, data, contexto) {
     proyectos: proyectosSigso_(db),
     clientes: clientes_(db).map((c) => ({ id: c.id, nombre: c.nombre, rut: c.rut, alias: alias.get(c.id) || [] })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')),
     capacidades: Base.capacidades_(contexto),
-    capacidades_nombres: Base.CAPACIDADES
+    capacidades_nombres: Base.CAPACIDADES,
+    // v5.9: apartados que ve esta persona (SIGSO_FINANZAS_AREAS; sin ajuste, todos).
+    areas: require('./finanzasAreas').areasVisibles_(contexto),
+    areas_nombres: require('./finanzasAreas').AREAS
   };
 });
 /** Proyectos de SIGSO (módulo Proyectos) para usarlos como dimensión: solo id, código, nombre y estado. */

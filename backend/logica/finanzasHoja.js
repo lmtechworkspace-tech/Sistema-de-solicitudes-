@@ -55,7 +55,8 @@ function que_(f) {
   if (f.banco === 'falta') return { k: 'falta', t: 'Falta anotar' };
   // La OBS anotada manda (como en el Excel): una fila con empresa del grupo y OBS ABONO suma en ABONO.
   // v5.7: «Traspaso a cuenta empresa», «Préstamo recibido» o «Devolución de préstamo» tampoco son ingreso ni gasto.
-  if (/(^|\s)(TRASPASO|PRESTAMO)/.test(N(f.plan)) || (!f.obs && (f.tipo_mov === 'TRASPASO' || f.tipo_mov === 'PRESTAMO'))) return { k: 'tra', t: /PRESTAMO/.test(N(f.plan)) || f.tipo_mov === 'PRESTAMO' ? 'Préstamo' : 'Traspaso' };
+  // v5.9: «Aporte de socio» (plata que pone gerencia y no se devuelve) tampoco es ingreso.
+  if (/(^|\s)(TRASPASO|PRESTAMO|APORTE)/.test(N(f.plan)) || (!f.obs && (f.tipo_mov === 'TRASPASO' || f.tipo_mov === 'PRESTAMO'))) return { k: 'tra', t: /APORTE/.test(N(f.plan)) ? 'Aporte' : /PRESTAMO/.test(N(f.plan)) || f.tipo_mov === 'PRESTAMO' ? 'Préstamo' : 'Traspaso' };
   if (!f.obs) return { k: 'rev', t: 'Falta OBS' };
   // Como en el Excel, la OBS manda: una fila con OBS cuenta aunque le falte el nombre o el plan (se avisa).
   if (f.obs === 'ABONO' || f.obs === 'ABONO RENTA') {
@@ -418,7 +419,7 @@ const flujo = B.conBoveda('', function (db, data) {
   const cuentaRef = txt_(data && data.cuenta_ref), unaCuenta = cuentaRef ? ctx.cuentas.get(cuentaRef) : null;
   const empresa = unaCuenta ? unaCuenta.empresa : txt_(data && data.empresa);
   const cuentas = unaCuenta ? [unaCuenta] : [...ctx.cuentas.values()].filter((c) => !empresa || c.empresa === empresa);
-  const ing = {}, egr = {}, fon = { recibido: {}, pagado: {}, honorario: {}, a_favor: {} }, otros = { traspasos: {}, prestamos_entran: {}, prestamos_salen: {}, sin_completar: {} };
+  const ing = {}, egr = {}, fon = { recibido: {}, pagado: {}, honorario: {}, a_favor: {} }, otros = { traspasos: {}, prestamos_entran: {}, prestamos_salen: {}, aportes: {}, sin_completar: {} };
   F.cuentasDe_('INGRESO').forEach((p) => { ing[p] = {}; });
   F.cuentasDe_('EGRESO').forEach((p) => { egr[p] = {}; });
   const sumar = (o, k, mes, v) => { (o[k] = o[k] || {}); o[k][mes] = (o[k][mes] || 0) + v; };
@@ -434,6 +435,7 @@ const flujo = B.conBoveda('', function (db, data) {
         if (k === 'ing') sumar(ing, planFlujo_(f), mes, f.monto);
         else if (k === 'gas') sumar(egr, planFlujo_(f), mes, -f.monto);
         else if (k === 'fon') sumar(fon, f.monto > 0 ? 'recibido' : 'pagado', mes, Math.abs(f.monto));
+        else if (k === 'tra' && /APORTE/.test(N(f.plan))) sumar(otros, 'aportes', mes, f.monto);
         else if (k === 'tra') { if (/PRESTAMO/.test(N(f.plan))) sumar(otros, f.monto > 0 ? 'prestamos_entran' : 'prestamos_salen', mes, Math.abs(f.monto)); else sumar(otros, 'traspasos', mes, f.monto); }
         else sumar(otros, 'sin_completar', mes, f.monto);
       });

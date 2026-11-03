@@ -379,7 +379,14 @@
           U.campo('Empresa', '<select class="sx2-input js-fine-emp"><option value="">Todas</option>' + ((cat && cat.empresas) || []).map(function (e) { return '<option' + (e === c.empresa ? ' selected' : '') + '>' + txt(e) + '</option>'; }).join('') + '</select>') +
           U.campo('Formato', '<select class="sx2-input js-fine-fmt"><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV (;)</option></select>', 'El CSV neutraliza textos que Excel tomaría como fórmula.') + '</div>' +
         '<p class="fin2-ayuda">Cada archivo lleva sus metadatos: filtros, corte, base, estado de los datos, revisión y quién lo generó. Queda en la bitácora.</p>' +
-        '<div class="fin2-acciones">' + U.boton({ texto: 'Descargar', icono: 'descargar', variante: 'primario', clase: 'js-fine-ir', datos: { cap: 'EXPORTAR' } }) + '</div>' }) + '</div>');
+        '<div class="fin2-acciones">' + U.boton({ texto: 'Descargar', icono: 'descargar', variante: 'primario', clase: 'js-fine-ir', datos: { cap: 'EXPORTAR' } }) + '</div>' }) +
+        // v5.9 · Respaldo completo, cifrado: se abre fuera de SIGSO (doble clic) solo con la clave.
+        U.card({ titulo: 'Respaldo completo (cifrado)', icono: 'candado', cuerpo:
+          '<p class="fin2-ayuda">Un solo archivo con la planilla de todas las cuentas y meses, las facturas, las deudas anteriores y los préstamos. Se abre con doble clic en cualquier navegador, <b>sin SIGSO</b>, y pide la clave. Sin la clave nadie lo puede leer: guárdala en un lugar seguro, porque no se puede recuperar.</p>' +
+          '<div class="fin2-form-grid">' + U.campo('Clave de respaldo', '<input type="password" class="sx2-input js-fine-k1" autocomplete="new-password" minlength="10">', 'Al menos 10 caracteres.') +
+            U.campo('Repite la clave', '<input type="password" class="sx2-input js-fine-k2" autocomplete="new-password" minlength="10">') + '</div>' +
+          '<p class="fin2-ayuda">Además, si el servidor tiene configurada la clave y el correo de respaldo, SIGSO envía este mismo archivo cada lunes a las 08:00 y guarda las últimas 12 copias.</p>' +
+          '<div class="fin2-acciones">' + U.boton({ texto: 'Descargar respaldo', icono: 'descargar', variante: 'primario', clase: 'js-fine-resp', datos: { cap: 'EXPORTAR' } }) + '</div>' }) + '</div>');
     });
   }
   function exportar(b) {
@@ -394,6 +401,21 @@
       if (!r || !r.ok) { x_.aviso((r && r.message) || 'No se pudo exportar.', 'error'); return; }
       descargar(r.data.base64, r.data.nombre, r.data.mime);
       x_.aviso(r.data.filas + ' fila(s) exportadas.', 'exito');
+    });
+  }
+
+  function respaldo(b) {
+    var raiz = x_.raiz(), k1 = raiz.querySelector('.js-fine-k1'), k2 = raiz.querySelector('.js-fine-k2');
+    if (!k1.value || k1.value.length < 10) { x_.aviso('La clave debe tener al menos 10 caracteres.', 'error'); k1.focus(); return; }
+    if (k1.value !== k2.value) { x_.aviso('Las dos claves no son iguales.', 'error'); k2.focus(); return; }
+    b.disabled = true;
+    x_.api('finanzasDescargarRespaldo', { clave: k1.value }).then(function (r) {
+      b.disabled = false;
+      if (!r || !r.ok) { x_.aviso((r && r.message) || 'No se pudo armar el respaldo.', 'error'); return; }
+      k1.value = ''; k2.value = '';
+      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([r.data.html], { type: 'text/html' })); a.download = r.data.nombre;
+      document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+      x_.aviso('Respaldo descargado. Se abre con doble clic y tu clave.', 'exito');
     });
   }
 
@@ -425,6 +447,7 @@
       }
       else if (b.classList.contains('js-fini-ir')) { var f = {}; try { f = JSON.parse(b.dataset.filtros || '{}'); } catch (e) { f = {}; } x_.ir(b.dataset.vista, Object.assign({ periodo: est_.c ? est_.c.period : '' }, f)); }
       else if (b.classList.contains('js-fine-ir')) exportar(b);
+      else if (b.classList.contains('js-fine-resp')) respaldo(b);
     });
   }
 

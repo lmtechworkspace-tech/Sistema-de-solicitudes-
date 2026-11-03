@@ -742,8 +742,28 @@
     return '<div class="fin5-sem"><small class="fin5-sem__t">Cada semana</small><ol>' + c.semanas.map(function (w) {
       var sin = w.saldo === null, tono = sin ? 'neutro' : w.en_cero ? 'ok' : 'alerta';
       var tip = corta(w.desde) + ' al ' + corta(w.hasta) + ': saldo ' + (sin ? 'sin cartola' : plata(w.saldo)) + (sin || w.en_cero ? '' : ' · honorarios por traspasar ' + plata(w.por_traspasar) + ' · de clientes ' + plata(w.clientes || 0));
-      return '<li class="fin5-sem__d fin5-sem__d--' + tono + '" title="' + txt(tip) + '"><span>' + txt(Number(w.desde.slice(8)) + '–' + Number(w.hasta.slice(8))) + '</span><b>' + (sin ? '—' : w.en_cero ? U.ico('check', 12) + '$0' : txt(compacto(w.saldo))) + '</b></li>';
-    }).join('') + '</ol></div>';
+      return '<li class="fin5-sem__d fin5-sem__d--' + tono + '" title="' + txt(tip) + '"><button type="button" class="fin5-sem__b js-f5-sem" data-i="' + c.semanas.indexOf(w) + '" aria-pressed="' + (c.semanas.indexOf(w) === semanaElegida(c)) + '" aria-label="' + txt('Semana del ' + corta(w.desde) + ' al ' + corta(w.hasta) + ': ¿de qué es el saldo?') + '"><span>' + txt(Number(w.desde.slice(8)) + '–' + Number(w.hasta.slice(8))) + '</span><b>' + (sin ? '—' : w.en_cero ? U.ico('check', 12) + '$0' : txt(compacto(w.saldo))) + '</b></button></li>';
+    }).join('') + '</ol><div class="fin5-sem__det js-f5-sem-det" aria-live="polite">' + semanaDetalleHtml(c) + '</div></div>';
+  }
+  // La semana que se explica: la elegida, o la última que no quedó en $0.
+  function semanaElegida(c) {
+    if (est_.semSel != null && c.semanas[est_.semSel]) return est_.semSel;
+    for (var i = c.semanas.length - 1; i >= 0; i--) if (c.semanas[i].saldo !== null && !c.semanas[i].en_cero) return i;
+    return c.semanas.length - 1;
+  }
+  // v5.9 · «Me sobraron 200 mil, ¿de qué son?»: el saldo de esa semana, parte por parte.
+  function semanaDetalleHtml(c) {
+    var w = c.semanas[semanaElegida(c)]; if (!w) return '';
+    var cab = '<b>Semana del ' + txt(corta(w.desde) + ' al ' + corta(w.hasta)) + '</b> · saldo ' + (w.saldo === null ? 'sin cartola' : plata(w.saldo));
+    if (w.saldo === null) return '<p class="fin5-nota">' + cab + '. Falta cargar la cartola de esos días.</p>';
+    if (w.en_cero) return '<p class="fin5-nota">' + U.ico('check', 13) + ' ' + cab + ': en $0.</p>';
+    var l = [];
+    if (w.por_traspasar) l.push(['Honorarios por traspasar a la cuenta de la empresa', w.por_traspasar, '']);
+    (w.detalle || []).forEach(function (x) { l.push([x.cliente + (x.monto > 0 ? ' · dinero del cliente por pagar o a su favor' : ' · se pagó más de lo que mandó'), x.monto, '']); });
+    if (w.prestamos) l.push(['Préstamos y aportes', w.prestamos, '']);
+    if (w.sin_completar) l.push(['Movimientos sin anotar o completar', w.sin_completar, 'alerta']);
+    if (w.sin_identificar) l.push(['Sin identificar: no calza con ningún cliente', w.sin_identificar, 'alerta']);
+    return '<p class="fin5-nota">' + cab + ' = </p><ul class="fin5-cpaso__lista">' + l.map(function (x) { return '<li' + (x[2] ? ' class="fin5-sem__alerta"' : '') + '><div><b>' + txt(x[0]) + '</b></div><span class="' + (x[1] < 0 ? 'fin2-neg' : '') + '">' + plata(x[1]) + '</span></li>'; }).join('') + '</ul>';
   }
   function configurarPaso() {
     var d = est_.datos, c = d.cuenta_paso, otras = d.cuentas.filter(function (x) { return x.id !== d.cuenta_ref; });
@@ -1403,16 +1423,16 @@
       sec('Egresos', 'dinero') + d.egresos.map(function (l) { return fila(l.plan, l.valores, '', 'critico'); }).join('') + fila('Total egresos', te, 'fin4-subt', '', true) +
       fila('Margen del mes', mg, 'fin4-res', '', true) +
       sec('Fondos de clientes (no son de la empresa)', 'caja') + fila('Recibido de clientes', d.fondos.recibido, '', 'info') + fila('Pagado por cuenta de clientes', d.fondos.pagado, '', 'info') + fila('Lo que sobró, cobrado como honorario', d.fondos.honorario, '', 'ok') + fila('Lo que sobró, a favor del cliente', d.fondos.a_favor, '', 'info') +
-      sec('Otros (no son ingreso ni gasto)', 'capas') + fila('Traspasos entre cuentas', d.otros.traspasos, '', 'neutro') + fila('Préstamos recibidos', d.otros.prestamos_entran, '', 'neutro') + fila('Devoluciones de préstamos', d.otros.prestamos_salen, '', 'neutro') + fila('Sin completar', d.otros.sin_completar, '', 'alerta');
-    var comparar = rep_.flujoVista === 'comparar', proy = rep_.flujoVista === 'proyectos';
+      sec('Otros (no son ingreso ni gasto)', 'capas') + fila('Traspasos entre cuentas', d.otros.traspasos, '', 'neutro') + fila('Préstamos recibidos', d.otros.prestamos_entran, '', 'neutro') + fila('Devoluciones de préstamos', d.otros.prestamos_salen, '', 'neutro') + fila('Aportes de socios', d.otros.aportes || {}, '', 'neutro') + fila('Sin completar', d.otros.sin_completar, '', 'alerta');
+    var comparar = rep_.flujoVista === 'comparar', proy = rep_.flujoVista === 'proyectos', prest = rep_.flujoVista === 'prestamos';
     paginaVista('flujo', x.cab('flujo') + '<div class="sx2-pagina__cuerpo fin4 fin5">' +
       '<div class="fin5-barra fin5-entra" style="--i:0">' + selectorMes('js-f4-hasta', rep_.hasta, ultimosMeses(18), 'Hasta') +
         '<div class="fin5-seg" role="group" aria-label="Meses">' + [3, 6, 12].map(function (n) { return '<button type="button" class="js-f5-nmeses" data-n="' + n + '" aria-pressed="' + (n === rep_.meses) + '">' + n + ' meses</button>'; }).join('') + '</div>' +
         '<label class="fin5-select">' + U.ico('caja', 15) + '<select class="js-f4-flujo-cuenta" aria-label="Cuenta"><option value="">Todas las cuentas</option>' + (d.cuentas || []).map(function (c) { return '<option value="' + txt(c.id) + '"' + (c.id === d.cuenta_ref ? ' selected' : '') + '>' + txt(c.nombre) + '</option>'; }).join('') + '</select></label>' +
         (d.cuenta_ref ? '' : '<label class="fin5-select">' + U.ico('empresa', 15) + '<select class="js-f4-empresa" aria-label="Empresa"><option value="">Todo el grupo</option>' + d.empresas.map(function (e) { return '<option' + (e === rep_.empresa ? ' selected' : '') + '>' + txt(e) + '</option>'; }).join('') + '</select></label>') +
-        U.segmento([{ id: 'real', texto: 'Real', icono: 'tabla' }, { id: 'comparar', texto: 'Proyectado vs real', icono: 'diana' }, { id: 'proyectos', texto: 'Proyectos', icono: 'bandera' }], rep_.flujoVista, 'js-f5-flujo-vista') +
-      '</div>' + (comparar ? flujoComparar(d, ti, te) + '</div>' : proy ? proyectosHtml() + '</div>' : '') +
-      (comparar || proy ? '' : '<section class="fin5-kpis" aria-label="Totales del período">' +
+        U.segmento([{ id: 'real', texto: 'Real', icono: 'tabla' }, { id: 'comparar', texto: 'Proyectado vs real', icono: 'diana' }, { id: 'proyectos', texto: 'Proyectos', icono: 'bandera' }, { id: 'prestamos', texto: 'Préstamos y aportes', icono: 'dinero' }], rep_.flujoVista, 'js-f5-flujo-vista') +
+      '</div>' + (comparar ? flujoComparar(d, ti, te) + '</div>' : proy ? proyectosHtml() + '</div>' : prest ? prestamosHtml() + '</div>' : '') +
+      (comparar || proy || prest ? '' : '<section class="fin5-kpis" aria-label="Totales del período">' +
         kpi({ clave: 'fl-i', t: 'Ingresos', v: tI, ico: 'tendencia', tono: 'ok', sub: M.length + ' meses' }, 1) + kpi({ clave: 'fl-e', t: 'Egresos', v: -tE, ico: 'dinero', tono: 'critico', sub: 'gastos con plan de cuenta' }, 2) +
         kpi({ clave: 'fl-m', t: 'Margen', v: tM, ico: 'destello', tono: 'acento', sub: tI ? Math.round(tM / tI * 100) + '% de los ingresos' : '' }, 3) + kpi({ clave: 'fl-f', t: 'Fondos de clientes', v: tot(d.fondos.recibido), ico: 'caja', tono: 'info', sub: 'recibidos (aparte)' }, 4) +
       '</section>' +
@@ -1510,6 +1530,50 @@
         '</article>';
       }).join('') + '</div>' +
       '<p class="fin5-nota">' + txt(d.formulas.aporte) + '. Esperado: ' + txt(d.formulas.esperado).toLowerCase() + '. Los porcentajes se cambian con fecha («Cliente»), así la historia no cambia.</p>';
+  }
+  // v5.9 · Préstamos y aportes: la plata que entra «de afuera» (gerencia, socios, terceros) y lo que falta devolver.
+  var EST_PREST_ = { POR_DEVOLVER: ['Por devolver', 'alerta'], VENCIDO: ['Vencido', 'critico'], DEVUELTO: ['Devuelto', 'ok'], APORTE: ['Aporte', 'info'], SIN_MOVIMIENTO: ['Sin movimientos', 'neutro'] };
+  function pedirPrestamos() {
+    x_.api('finanzasPrestamosSocios', {}).then(function (r) {
+      if (!r || !r.ok) { error(r, 'No se pudieron calcular los préstamos.'); return; }
+      rep_.pres = r.data; if (rep_.flujoVista === 'prestamos') pintarFlujo();
+    });
+  }
+  function prestamosHtml() {
+    if (!rep_.pres) { pedirPrestamos(); return U.esqueleto('tabla', 6); }
+    var d = rep_.pres, T = d.totales, pl = puede('PLANIFICAR');
+    var agregar = pl ? U.boton({ texto: 'Ficha de un prestamista', icono: 'nueva', sm: true, variante: 'primario', clase: 'js-f5-pres-ficha' }) : '';
+    var como = '<p class="fin5-nota">' + U.ico('info', 13) + ' ' + txt(d.como) + '</p>';
+    if (!d.prestamistas.length) return '<div class="fin5-vacio fin5-entra"><span class="fin5-vacio__ico">' + U.ico('dinero', 26) + '</span><h3>Todavía no hay préstamos ni aportes anotados</h3><p>' + txt(d.como) + '</p>' + agregar + '</div>';
+    return '<section class="fin5-kpis" aria-label="Préstamos y aportes">' +
+        kpi({ clave: 'pr-d', t: 'Por devolver', v: T.por_devolver, ico: 'reloj', tono: T.por_devolver ? 'alerta' : 'ok', sub: T.prestamistas + ' prestamista(s)' + (T.vencido ? ' · vencido ' + plata(T.vencido) : '') }, 1) +
+        kpi({ clave: 'pr-e', t: 'Prestado en total', v: T.entro, ico: 'dinero', tono: 'neutro', sub: 'devuelto ' + plata(T.devuelto) }, 2) +
+        kpi({ clave: 'pr-a', t: 'Aportes de socios', v: T.aportes, ico: 'equipo', tono: 'info', sub: 'no se devuelven' }, 3) +
+      '</section><div class="fin5-proy-acc">' + agregar + '</div>' +
+      '<div class="fin5-proy-lista">' + d.prestamistas.map(function (g, k) {
+        var e = EST_PREST_[g.estado] || ['', 'neutro'];
+        return '<article class="fin5-card fin5-proy fin5-entra" style="--i:' + (k + 4) + '"><header class="fin5-card__cab"><div><h2>' + txt(g.nombre) + ' ' + U.badge(e[0], e[1]) + '</h2><small class="fin5-tenue">' + txt(g.tipo_nombre + (g.fecha_devolucion ? ' · devolver antes del ' + corta(g.fecha_devolucion) + '-' + g.fecha_devolucion.slice(2, 4) : '') + (g.nota ? ' · ' + g.nota : '')) + '</small></div>' +
+            (pl ? '<button type="button" class="fin5-mini js-f5-pres-ficha" data-n="' + txt(g.nombre) + '">' + U.ico('editar', 13) + 'Ficha</button>' : '') + '</header>' +
+          '<div class="fin5-proy__meta"><div><small>Falta devolver</small><b class="' + (g.saldo > 0 ? 'fin2-neg' : '') + '">' + plata(g.saldo) + '</b><span>prestó ' + plata(g.entro) + ' · devuelto ' + plata(g.devuelto) + (g.acordado ? ' · acordado ' + plata(g.acordado) : '') + '</span></div>' +
+            (g.aportes ? '<div class="fin5-proy__pct fin5-proy__pct--medio"><b>' + txt(compacto(g.aportes)) + '</b><small>aportes</small></div>' : '') + '</div>' +
+          (g.entro ? '<div class="fin5-progreso fin5-progreso--' + (g.saldo > 0 ? 'info' : 'ok') + '"><span style="width:' + Math.min(100, Math.round(g.devuelto / g.entro * 100)) + '%"></span></div>' : '') +
+          (g.movimientos.length ? '<table class="fin4-tab fin5-proy__cli"><thead><tr><th>Fecha</th><th>Qué</th><th>Cuenta</th><th class="fin4-n">Monto</th></tr></thead><tbody>' + g.movimientos.map(function (m) {
+            return '<tr><td class="fin2-num">' + txt(corta(m.fecha) + '-' + String(m.fecha).slice(2, 4)) + '</td><td>' + txt(m.tipo === 'entra' ? 'Préstamo recibido' : m.tipo === 'devuelve' ? 'Devolución' : 'Aporte') + '</td><td>' + txt(m.cuenta) + '</td><td class="fin4-n ' + (m.monto < 0 ? 'fin2-neg' : 'fin2-pos') + '">' + plata(m.monto) + '</td></tr>';
+          }).join('') + '</tbody></table>' : '<p class="fin5-nota">Sin movimientos en la planilla todavía.</p>') +
+          (g.vencido ? '<div class="fin5-aviso fin5-aviso--alerta">' + U.ico('alerta', 15) + '<span>Pasó la fecha acordada y faltan ' + plata(g.saldo) + ' por devolver.</span></div>' : '') +
+        '</article>';
+      }).join('') + '</div>' + como;
+  }
+  function formPrestamista(nombre) {
+    var d = rep_.pres || { prestamistas: [], tipos: {} }, g = nombre ? d.prestamistas.filter(function (x) { return x.nombre === nombre; })[0] : null;
+    U.formulario({ titulo: g ? 'Ficha de ' + g.nombre : 'Ficha de un prestamista', boton: 'Guardar',
+      campos: U.campo('Nombre (como va en la planilla)', '<input name="nombre" class="sx2-input" maxlength="120" required value="' + txt(g ? g.nombre : '') + '"' + (g ? ' readonly' : '') + ' placeholder="ROGELIO">', 'El mismo texto de la columna NOMBRE.') +
+        U.campo('Quién es', '<select name="tipo" class="sx2-input"><option value="">Sin definir</option>' + Object.keys(d.tipos || {}).map(function (k) { return '<option value="' + k + '"' + (g && g.tipo === k ? ' selected' : '') + '>' + txt(d.tipos[k]) + '</option>'; }).join('') + '</select>') +
+        U.campo('Monto acordado (opcional)', '<input name="acordado" class="sx2-input" inputmode="decimal" value="' + (g && g.acordado ? plata(g.acordado) : '') + '" placeholder="$2.000.000">') +
+        U.campo('Devolver antes del (opcional)', '<input name="fecha_devolucion" type="date" class="sx2-input" value="' + txt(g ? g.fecha_devolucion : '') + '">', 'Si pasa la fecha y queda saldo, se marca vencido.') +
+        U.campo('Nota', '<input name="nota" class="sx2-input" maxlength="300" value="' + txt(g ? g.nota : '') + '" placeholder="Para sueldos de octubre">'),
+      enviar: function (v) { return x_.api('finanzasGuardarPrestamista', v); },
+      aviso: 'Guardado.', listo: function () { rep_.pres = null; pintarFlujo(); } });
   }
   function mesNombreLargo(p) { return mesLargo(p).split(' ')[0]; }
   function formMetaProyecto(id) {
@@ -1864,6 +1928,8 @@
       if (b && b.classList.contains('js-f5-flujo-vista')) { if (rep_.flujoVista !== b.dataset.id) { rep_.flujoVista = b.dataset.id; pintarFlujo(); } return; }
       if (b && b.classList.contains('js-f5-ir-presupuesto')) { x_.ir('presupuesto'); return; }
       if (b && b.classList.contains('js-f5-proy-nuevo')) { formMetaProyecto(''); return; }
+      if (b && b.classList.contains('js-f5-pres-ficha')) { formPrestamista(b.dataset.n || ''); return; }
+      if (b && b.classList.contains('js-f5-sem')) { est_.semSel = Number(b.dataset.i); var dt = x_.raiz().querySelector('.js-f5-sem-det'); if (dt && est_.datos && est_.datos.cuenta_paso) dt.innerHTML = semanaDetalleHtml(est_.datos.cuenta_paso); Array.prototype.forEach.call(x_.raiz().querySelectorAll('.js-f5-sem'), function (y) { y.setAttribute('aria-pressed', String(Number(y.dataset.i) === est_.semSel)); }); return; }
       if (b && b.classList.contains('js-f5-proy-meta')) { formMetaProyecto(b.dataset.id); return; }
       if (b && b.classList.contains('js-f5-proy-cli')) { formClienteProyecto(b.dataset.id); return; }
       if (b && b.classList.contains('js-f5-pano-filtro')) { rep_.filtroPano = b.dataset.f; Array.prototype.forEach.call(x_.raiz().querySelectorAll('.js-f5-pano-filtro'), function (c) { c.setAttribute('aria-pressed', String(c.dataset.f === rep_.filtroPano)); }); var tp = x_.raiz().querySelector('.js-f5-pano'); if (tp) tp.innerHTML = cuerpoPanorama(); return; }

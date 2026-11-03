@@ -41,7 +41,7 @@ const SEMILLAS = {
     c_('Virtual Base', 'Virtual Base', { alias: ['VIRTUALBASE', 'VIRTUAL BASE', 'VIRTUAL BAAS'] })
   ],
   CONCEPTO: [].concat(
-    ['Servicio Mensual', 'Servicio Renta', 'Devolución Renta', 'Otros Ingresos', 'Cobro deuda anterior', 'Préstamo recibido'].map((n) => c_(n, n, { grupo: 'INGRESO' })),
+    ['Servicio Mensual', 'Servicio Renta', 'Devolución Renta', 'Otros Ingresos', 'Cobro deuda anterior', 'Préstamo recibido', 'Aporte de socio'].map((n) => c_(n, n, { grupo: 'INGRESO' })),
     ['Arriendo Mensual', 'Arriendo Reajuste', 'Cuentas Básicas', 'Sueldos', 'Anticipos', 'Finiquitos', 'Imposiciones', 'Convenios', 'IVA',
       'IVA Postergado', 'Renta', 'Multas Clientes', 'Caja Chica', 'Patente Comercial', 'Comisión Banco', 'Servidores y Sistemas',
       'Gastos Compartidos (prorrateo)', 'Otros Egresos', 'Traspaso a cuenta empresa', 'Devolución de préstamo'].map((n) => c_(n, n, { grupo: 'EGRESO' })),

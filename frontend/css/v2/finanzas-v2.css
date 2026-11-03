@@ -2154,3 +2154,12 @@ tr.fin5-deuda:focus-visible { outline: 2px solid var(--fin); outline-offset: -2p
 .fin5-proy { overflow: hidden; }
 .fin5-proy__cli th { font-weight: 600; }
 .fin5-proy__cli td.fin4-n { white-space: nowrap; }
+
+/* v5.9 · Cuenta de paso: cada semana se toca y abajo se explica «¿de qué es el saldo?» */
+.fin5-sem__d { padding: 0; cursor: default; }
+.fin5-sem__b { all: unset; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 2px; padding: 6px 7px; border-radius: 9px; cursor: pointer; }
+.fin5-sem__b:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: 1px; }
+.fin5-sem__b[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--sx-primario); }
+.fin5-sem__det { margin-top: 4px; }
+.fin5-sem__det .fin5-nota { margin: 2px 0; }
+.fin5-sem__alerta b, .fin5-sem__alerta span { color: color-mix(in srgb, var(--sx-alerta) 85%, var(--sx-texto)); }

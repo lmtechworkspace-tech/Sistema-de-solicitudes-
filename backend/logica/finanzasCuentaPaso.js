@@ -38,6 +38,7 @@ function db_() {
     Cat.asegurar_('CONCEPTO', PLAN_TRASPASO, { grupo: 'EGRESO' }, 'sistema');
     Cat.asegurar_('CONCEPTO', 'Devolución de préstamo', { grupo: 'EGRESO' }, 'sistema');
     Cat.asegurar_('CONCEPTO', 'Préstamo recibido', { grupo: 'INGRESO' }, 'sistema');
+    Cat.asegurar_('CONCEPTO', 'Aporte de socio', { grupo: 'INGRESO' }, 'sistema');
   } catch (e) { /* sin catálogo: quedan en la semilla */ }
   preparada_ = d;
   return d;
@@ -51,7 +52,8 @@ function config_(cuentaId) {
 }
 function mesMas_(p, n) { const [a, m] = p.split('-').map(Number); return new Date(Date.UTC(a, m - 1 + n, 1)).toISOString().slice(0, 7); }
 const esTraspaso_ = (plan) => /(^|\s)TRASPASO/.test(N(plan));
-const esPrestamo_ = (plan) => /PRESTAMO/.test(N(plan));
+// Préstamos y aportes de socios: plata de afuera, ni honorario ni de clientes (v5.9 suma los aportes).
+const esPrestamo_ = (plan) => /PRESTAMO|APORTE/.test(N(plan));
 
 /** El control de la cuenta de paso hasta un mes (o null si la cuenta no es de paso o el mes es anterior al control). */
 function control_(db, cuenta, periodo, ctx) {
@@ -62,10 +64,14 @@ function control_(db, cuenta, periodo, ctx) {
   const meses = []; for (let p = cfg.desde; p <= periodo && meses.length < 36; p = mesMas_(p, 1)) meses.push(p);
   const T = { honorarios: 0, traspasado: 0, clientes: 0, prestamos: 0, sin_completar: 0 };
   let inicial = null, final = null, cuadraCartola = true;
-  const todas = []; // las filas de todo el control, para el corte semanal
+  const todas = []; // las filas del mes, para el corte semanal
+  const delControl = []; // v5.9: las filas de TODO el control, para decir de qué cliente es el saldo de cada semana
   const porMes = meses.map((p) => {
     const h = H.construir_(db, cuenta, p, ctx);
     if (p === periodo) h.filas.forEach((f) => todas.push(f));
+    // Un grupo decidido como honorario ya no es dinero del cliente: lo que sobró pasa a «por traspasar».
+    const honorario = new Set((h.grupos || []).filter((g) => g.decision === 'ABONO' || g.decision === 'ABONO RENTA').map((g) => g.letra));
+    h.filas.forEach((f) => { if (!(f.grupo && honorario.has(f.grupo))) delControl.push(f); });
     const t = h.totales || {};
     let tras = 0, pres = 0;
     h.filas.forEach((f) => { if (f.que && f.que.k === 'tra') { if (esPrestamo_(f.plan)) pres += f.monto; else tras += f.monto; } });
@@ -80,7 +86,7 @@ function control_(db, cuenta, periodo, ctx) {
   const calculado = (inicial || 0) + porTraspasar + T.clientes + T.prestamos + T.sin_completar;
   // Lo de los meses anteriores del control entra con sus cifras de cierre; las semanas del mes suman sus filas encima.
   const ant = porMes.slice(0, -1).reduce((a, m) => ({ por_traspasar: a.por_traspasar + m.honorarios - m.traspasado, prestamos: a.prestamos + m.prestamos, sin_completar: a.sin_completar + m.sin_completar }), { por_traspasar: 0, prestamos: 0, sin_completar: 0 });
-  const semanas = semanas_(cuenta, periodo, todas, inicial || 0, ant, { por_traspasar: porTraspasar, saldo: final, prestamos: T.prestamos, sin_completar: T.sin_completar });
+  const semanas = semanas_(cuenta, periodo, todas, inicial || 0, ant, { por_traspasar: porTraspasar, saldo: final, prestamos: T.prestamos, sin_completar: T.sin_completar }, delControl);
   const enCero = final !== null && Math.abs(final) <= TOLERANCIA;
   const pendientes = [];
   if (porTraspasar > TOLERANCIA) pendientes.push({ id: 'traspasar', monto: porTraspasar, titulo: 'Honorarios por traspasar a la cuenta de la empresa', como: 'Traspasa ' + Base.plata_(porTraspasar) + ' a la cuenta de la empresa y anota ese movimiento con el plan «' + PLAN_TRASPASO + '».' });
@@ -107,7 +113,7 @@ function saldoAl_(cuentaId, fecha) {
     .map((x) => I.des_(x.datos)).find((m) => !m.sin_cartola && typeof m.saldo === 'number');
   return r ? r.saldo : null;
 }
-function semanas_(cuenta, periodo, filas, inicial, ant, cierre) {
+function semanas_(cuenta, periodo, filas, inicial, ant, cierre, delControl) {
   const fin = Base.ultimoDia_(periodo), cortes = [];
   for (let d = periodo + '-01'; d <= fin; d = Base.sumarDias_(d, 1)) {
     if (new Date(d + 'T12:00:00Z').getUTCDay() === 0 || d === fin) cortes.push(d);
@@ -126,7 +132,21 @@ function semanas_(cuenta, periodo, filas, inicial, ant, cierre) {
       else if (k === 'rev' || k === 'falta') sinCompletar += f.monto;
     });
     const clientes = saldo === null ? null : saldo - inicial - porTraspasar - prestamos - sinCompletar;
-    const s = { desde, hasta, saldo, por_traspasar: porTraspasar, clientes, sin_completar: sinCompletar, en_cero: saldo !== null && Math.abs(saldo) <= TOLERANCIA };
+    const s = { desde, hasta, saldo, por_traspasar: porTraspasar, clientes, sin_completar: sinCompletar, prestamos, en_cero: saldo !== null && Math.abs(saldo) <= TOLERANCIA };
+    // v5.9 · «Me sobraron 200 mil, ¿de qué son?»: el dinero de clientes de esa semana, cliente por cliente (lo que
+    // mandó − lo que se pagó por él, desde que empezó el control). Lo que no calza con ningún cliente queda «sin identificar».
+    if (clientes !== null) {
+      const por = new Map();
+      (delControl || []).forEach((f) => {
+        const fb = f.fecha_banco || f.fecha; if (!fb || fb > hasta || !f.monto) return;
+        const k = f.que && f.que.k; if (!(k === 'fon' || (f.grupo && k !== 'tra'))) return;
+        const clave = f.cliente_id || N(f.nombre) || '?';
+        const x = por.get(clave) || { cliente: f.nombre || 'Sin nombre', cliente_id: f.cliente_id || '', monto: 0 }; x.monto += f.monto; por.set(clave, x);
+      });
+      s.detalle = [...por.values()].filter((x) => Math.abs(x.monto) > TOLERANCIA).sort((a, b) => b.monto - a.monto);
+      s.sin_identificar = clientes - s.detalle.reduce((a, x) => a + x.monto, 0);
+      if (Math.abs(s.sin_identificar) <= TOLERANCIA) s.sin_identificar = 0;
+    }
     desde = Base.sumarDias_(hasta, 1);
     return s;
   });

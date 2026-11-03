@@ -95,6 +95,7 @@ const ReporteExcel = require('../logica/reporteExcel');
 const ArchivosSolicitud = require('../logica/archivosSolicitud');
 const Preferencias = require('../logica/preferencias');
 const FinanzasBoveda = require('../logica/finanzasBoveda');
+const FinanzasAreas = require('../logica/finanzasAreas');
 const FinanzasBancos = require('../logica/finanzasBancos');
 const FinanzasCobranza = require('../logica/finanzasCobranza');
 const FinanzasPendientes = require('../logica/finanzasPendientes');
@@ -123,6 +124,8 @@ const FinanzasDocBanco = require('../logica/finanzasDocBanco');
 const FinanzasCuentaPaso = require('../logica/finanzasCuentaPaso');
 const FinanzasPanorama = require('../logica/finanzasPanorama');
 const FinanzasProyectosFin = require('../logica/finanzasProyectosFin');
+const FinanzasPrestamosSocio = require('../logica/finanzasPrestamosSocio');
+const FinanzasRespaldo = require('../logica/finanzasRespaldo');
 const Credenciales = require('../logica/credenciales');
 const CredClientes = require('../logica/credencialesClientes');
 const Hompy = require('../logica/hompy');
@@ -918,6 +921,9 @@ const ACCIONES = {
   finanzasPanoramaClientes: (db, data, contexto) => FinanzasPanorama.panorama(db, data, contexto),
   finanzasFinanciamiento: (db, data, contexto) => FinanzasProyectosFin.financiamiento(db, data, contexto),
   finanzasGuardarMetaProyecto: (db, data, contexto) => FinanzasProyectosFin.guardarMeta(db, data, contexto),
+  finanzasPrestamosSocios: (db, data, contexto) => FinanzasPrestamosSocio.prestamos(db, data, contexto),
+  finanzasGuardarPrestamista: (db, data, contexto) => FinanzasPrestamosSocio.guardarPrestamista(db, data, contexto),
+  finanzasDescargarRespaldo: (db, data, contexto) => FinanzasRespaldo.descargar(db, data, contexto),
   finanzasHojaFlujo: (db, data, contexto) => FinanzasHoja.flujo(db, data, contexto),
   finanzasHojaClientes: (db, data, contexto) => FinanzasHoja.clientes(db, data, contexto),
   finanzasHojaCobranza: (db, data, contexto) => FinanzasHoja.cobranza(db, data, contexto),
@@ -1080,6 +1086,12 @@ async function ejecutarAccion(db, action, data, meta) {
   }
   // La IP (que fija Caddy) solo la usa hoy la bitácora de Finanzas.
   contexto.ip = meta.ip || '';
+  // Finanzas v5.9: apartados por persona (SIGSO_FINANZAS_AREAS). Solo para quien ya está en la lista de la bóveda;
+  // a los demás la acción les sigue respondiendo «no existe».
+  if (action.indexOf('finanzas') === 0 && FinanzasBoveda.tieneAcceso(db, contexto)) {
+    const vetada = FinanzasAreas.exigirArea_(action, contexto);
+    if (vetada) return responderResultado_(vetada);
+  }
   const resultado = await fn(db, data, contexto);
   // Finanzas, para quien no está en la lista: idéntico a una acción que no existe.
   if (resultado && resultado._noEncontrado) {

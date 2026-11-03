@@ -26,6 +26,7 @@ const Objetivos = require('../logica/objetivosSgc');
 const MatrizCobertura = require('../logica/matrizCoberturaSgc');
 const CierreAutomatico = require('../logica/cierreAutomaticoSolicitudes');
 const AgendaDepto = require('../logica/agendaDepto');
+const FinanzasRespaldo = require('../logica/finanzasRespaldo');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -73,6 +74,10 @@ const intervaloTriggersDiarios = setInterval(() => {
     Notificaciones.detectarPatrones(db).catch((err) => {
       console.error('error detectando patrones:', err);
     });
+  }
+  // Finanzas v5.9: respaldo cifrado de la bóveda, los lunes a las 08:00 (una vez por semana; sin clave configurada no hace nada).
+  if (ahora.getDay() === 1 && enVentanaDiaria_(ahora, 8)) {
+    FinanzasRespaldo.programado(db, ahora).catch((err) => { console.error('error en el respaldo semanal de Finanzas:', err); });
   }
   if (enVentanaDiaria_(ahora, 18)) {
     Notificaciones.enviarDigestJefatura(db).catch((err) => {

@@ -50,7 +50,13 @@
   ];
   var RETIRADAS = { mes: 'planilla', libro: 'planilla', registro: 'planilla', movimientos: 'planilla', conciliacion: 'planilla', pendientes: 'planilla', fondos: 'saldos',
     gastos: 'flujo', prestamos: 'flujo', proyectos: 'flujo', provisiones: 'flujo', proyeccion: 'flujo', migracion: 'cargas' };
-  function vistaValida(v) { return AREAS.some(function (a) { return a.vistas.some(function (x) { return x[0] === v; }); }); }
+  // v5.9: el apartado (área del servidor) de cada pantalla; quien tiene SIGSO_FINANZAS_AREAS solo ve los suyos.
+  var AREA_DE_VISTA = { planilla: 'PLANILLA', cargas: 'PLANILLA', cierre: 'PLANILLA', informe: 'INFORMES', tablero: 'INFORMES', exportar: 'INFORMES',
+    flujo: 'FLUJO', presupuesto: 'FLUJO', saldos: 'SALDOS', cobros: 'COBRANZA', clientes: 'COBRANZA', cobranza: 'COBRANZA',
+    bancos: 'AJUSTES', catalogos: 'AJUSTES', reglas: 'AJUSTES' };
+  function permitida(v) { var a = AREA_DE_VISTA[v]; return !a || !cat_ || !cat_.areas || cat_.areas.indexOf(a) !== -1; }
+  function primeraPermitida() { for (var i = 0; i < AREAS.length; i++) for (var j = 0; j < AREAS[i].vistas.length; j++) if (permitida(AREAS[i].vistas[j][0])) return AREAS[i].vistas[j][0]; return 'inicio'; }
+  function vistaValida(v) { return permitida(v) && AREAS.some(function (a) { return a.vistas.some(function (x) { return x[0] === v; }); }); }
   function nombreVista(v) { for (var i = 0; i < AREAS.length; i++) for (var j = 0; j < AREAS[i].vistas.length; j++) if (AREAS[i].vistas[j][0] === v) return AREAS[i].vistas[j][1]; return ''; }
   /**
    * I08.2 · La navegación del módulo vive en la segunda columna de SIGSO (la misma
@@ -60,8 +66,9 @@
   function registrarArbol() {
     if (!window.SigsoNav) return;
     SigsoNav.registrar('finanzas', { nombre: 'Finanzas', submodulos: AREAS.map(function (a) {
-      return { id: a.id, nombre: a.texto, icono: a.icono, plano: a.vistas.length === 1 ? true : undefined, items: a.vistas.map(function (v) { return { id: v[0], nombre: v[1] }; }) };
-    }) });
+      var vs = a.vistas.filter(function (v) { return permitida(v[0]); });
+      return vs.length ? { id: a.id, nombre: a.texto, icono: a.icono, plano: a.vistas.length === 1 ? true : undefined, items: vs.map(function (v) { return { id: v[0], nombre: v[1] }; }) } : null;
+    }).filter(Boolean) });
   }
   registrarArbol();
   // La última pantalla válida (solo su nombre: nada sensible) para volver a ella al abrir la bóveda.
@@ -178,7 +185,7 @@
   function catalogo(forzar) {
     if (cat_ && !forzar) return Promise.resolve(cat_);
     if (catP_ && !forzar) return catP_;
-    catP_ = api('finanzasCatalogo').then(function (r) { catP_ = null; if (r && r.ok) { cat_ = r.data; aplicarCapacidades(raiz_); } return cat_; });
+    catP_ = api('finanzasCatalogo').then(function (r) { catP_ = null; if (r && r.ok) { cat_ = r.data; aplicarCapacidades(raiz_); if (cat_.areas && cat_.areas.length < Object.keys(cat_.areas_nombres || {}).length) { registrarArbol(); if (!permitida(vista_)) { vista_ = primeraPermitida(); abrir(); } } } return cat_; });
     return catP_;
   }
   function puede(cap) { return !!(cat_ && (cat_.capacidades || []).indexOf(cap) !== -1); }
@@ -367,6 +374,8 @@
     if (contexto().fuente_ci && vista_ !== 'registro') vista_ = 'registro';
     // v3: una pantalla retirada (enlace viejo o vista recordada) abre la que la reemplaza.
     else if (RETIRADAS[vista_]) vista_ = RETIRADAS[vista_];
+    // v5.9: una pantalla fuera de los apartados de la persona abre la primera que sí puede ver.
+    if (!permitida(vista_)) vista_ = primeraPermitida();
     if (vista_ === 'bitacora') return verBitacora();
     publicar();
     var m = MODULOS[vista_] && MODULOS[vista_]();
@@ -440,7 +449,11 @@
           (ingresos ? '<ul class="fin2-ing">' + ingresos + '</ul>' : U.vacio({ icono: 'reloj', texto: 'Aún no hay ingresos.' })) }) +
         U.card({ titulo: 'Tu acceso', icono: 'llave', i: 3, cuerpo: '<ul class="fin2-capas">' + Object.keys((cat_ && cat_.capacidades_nombres) || {}).map(function (k) {
           return capa(puede(k), cat_.capacidades_nombres[k], puede(k) ? 'Permitido' : 'No incluido en tu acceso');
-        }).join('') + '</ul>' }) +
+        }).join('') + '</ul>' +
+          // v5.9: los apartados que ve esta persona (se ajustan en el servidor).
+          (cat_ && cat_.areas_nombres ? '<h4 class="fin2-sub">Apartados que ves</h4><ul class="fin2-capas">' + Object.keys(cat_.areas_nombres).map(function (k) {
+            var si = (cat_.areas || []).indexOf(k) !== -1; return capa(si, cat_.areas_nombres[k], si ? 'Lo ves' : 'No incluido en tu acceso');
+          }).join('') + '</ul>' : '') }) +
       '</div>');
     if (U.animar) U.animar(raiz_);
   }

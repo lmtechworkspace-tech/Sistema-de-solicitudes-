@@ -495,5 +495,7 @@ module.exports = {
   memoria_: () => ({ textos_descifrados: claro_.size }),
   estado, prepararAutenticador, activarAutenticador, entrar, salir, bitacora, resumen,
   // pruebas / herramientas
-  codigoTotp, base32, desdeBase32, contadorActual_, verificarCadena_, reiniciarAutenticador_, reiniciarParaPruebas_
+  codigoTotp, base32, desdeBase32, contadorActual_, verificarCadena_, reiniciarAutenticador_, reiniciarParaPruebas_,
+  // v5.9: el respaldo semanal deja su huella en la bitácora
+  registrar_
 };
