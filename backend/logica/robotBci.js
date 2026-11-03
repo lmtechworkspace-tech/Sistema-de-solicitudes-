@@ -44,6 +44,10 @@ const RECETA = {
   exportar: '^exportar',
   descargarExcel: '^descargar excel$',
   salir: '^(salir|cerrar sesi[oó]n)$',
+  // Respuesta del banco cuando no acepta el ingreso (03-11-2026: www.bci.cl/pyme/clave-invalida, «Autentificación
+  // incorrecta · Reintentar»). Se reconoce por la dirección o por el título, y se detiene AL TIRO, sin reintentar.
+  rechazoRuta: 'clave-invalida|clave-bloqueada|bloqueo|error-autenti',
+  rechazoTexto: '^(autentificaci[oó]n incorrecta|autenticaci[oó]n incorrecta|clave (bloqueada|incorrecta|inv[aá]lida)|usuario bloqueado)',
   esperaMs: 45 * 1000,
   ingresoManualMs: 4 * 60 * 1000,
   descargaMs: 60 * 1000
@@ -131,6 +135,29 @@ function avisoVisible_() {
     .filter(vis).map((e) => String(e.innerText || '').trim()).filter(Boolean).join(' | ').slice(0, 200);
 }
 
+/** ¿Algún título o alerta visible dice esto? (solo títulos: un enlace «¿Clave bloqueada?» del ingreso no cuenta). */
+function tituloCalza_(fuente) {
+  const re = new RegExp(fuente, 'i');
+  return Array.from(document.querySelectorAll('h1,h2,h3,[role=heading],[role=alert],[role=alertdialog]'))
+    .some((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && re.test(String(e.innerText || '').replace(/\s+/g, ' ').trim()); });
+}
+/**
+ * Los campos visibles del formulario de ingreso, para ajustar la receta: tipo, id, nombre, etiqueta, largo máximo y
+ * cuántos caracteres tiene escritos. NUNCA su contenido.
+ */
+function camposIngreso_() {
+  const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+  const etiqueta = (el) => {
+    const l = (el.id && document.querySelector('label[for="' + el.id + '"]')) || el.closest('label');
+    return String((l && l.innerText) || el.getAttribute('aria-label') || el.placeholder || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  };
+  return Array.from(document.querySelectorAll('input,select,textarea'))
+    .filter((e) => !/^(hidden|submit|button|image|reset|file)$/i.test(e.type || '') && vis(e))
+    .map((e) => ({ tag: e.tagName.toLowerCase(), tipo: e.type || '', id: e.id || '', nombre: e.name || '', etiqueta: etiqueta(e),
+      maximo: e.maxLength > 0 ? e.maxLength : 0, escrito: String(e.value || '').length, marcado: !!e.checked }))
+    .slice(0, 20);
+}
+
 // --- piezas ----------------------------------------------------------------------------------
 /** En cada recuadro de la página (el banco puede usar varios): el primero que devuelva algo. */
 async function enAlguno_(page, fn, ...a) {
@@ -175,15 +202,33 @@ function revisarAviso_(dialogo) {
   throw new Detencion('AVISO', 'El banco mostró un aviso: «' + t + '». El robot se detuvo sin reintentar.');
 }
 
+const MSJ_RECHAZO = 'El BCI respondió «Autentificación incorrecta»: no aceptó el RUT o la clave. No se reintentó (el BCI bloquea la clave tras varios intentos). Antes de volver a probar, entra una vez a mano al banco.';
+
+/** ¿El banco ya dijo que no? (la página «clave inválida» o su título). */
+async function rechazo_(page, receta) {
+  if (receta.rechazoRuta && new RegExp(receta.rechazoRuta, 'i').test(ruta_(page.url()))) return true;
+  return !!(receta.rechazoTexto && await enAlguno_(page, tituloCalza_, receta.rechazoTexto));
+}
+
 /** ¿Ya se entró? (ya no se está en la página de ingreso y se ve el menú de Cuentas o la cartola). */
 async function adentro_(page, receta, dialogo) {
   revisarAviso_(dialogo);
   if (await enAlguno_(page, hayCaptcha_)) throw new Detencion('CAPTCHA', 'El banco pidió un CAPTCHA: el robot se detuvo. Entra a mano esta vez.');
+  if (await rechazo_(page, receta)) throw new Detencion('CLAVE_INVALIDA', MSJ_RECHAZO);
   if (ruta_(page.url()) === ruta_(receta.inicio)) return false;
   return (await hayTexto_(page, receta.menuCartola)) || (await hayTexto_(page, receta.menuCuentas));
 }
 
-async function ingresar_(page, receta, rut, clave, alPaso, dialogo) {
+/** Escribe en un campo desde cero (borra lo que hubiera, p. ej. un autocompletado). */
+async function escribir_(page, selector, texto) {
+  await page.click(selector, { clickCount: 3 });
+  await page.$eval(selector, (e) => { e.value = ''; });
+  await page.type(selector, texto, { delay: 70 });
+}
+/** El RUT tal como quedó en el campo, solo cuerpo y dígito (sin puntos ni guion). */
+const rutEscrito_ = (v) => String(v || '').replace(/[^0-9kK]/g, '').toUpperCase();
+
+async function ingresar_(page, receta, rut, clave, alPaso, dialogo, info) {
   alPaso('Abriendo el Banco en Línea Pyme');
   await page.goto(receta.inicio, { waitUntil: 'domcontentloaded', timeout: receta.esperaMs });
   await espera_(1500);
@@ -198,11 +243,27 @@ async function ingresar_(page, receta, rut, clave, alPaso, dialogo) {
   }
   alPaso('Escribiendo el RUT y la clave');
   await page.waitForSelector(receta.rut, { visible: true, timeout: receta.esperaMs });
-  await page.click(receta.rut);
-  await page.type(receta.rut, rut, { delay: 60 });
-  await page.click(receta.clave);
-  await page.type(receta.clave, clave, { delay: 60 });
-  await espera_(400);
+  await escribir_(page, receta.rut, rut);
+  await page.waitForSelector(receta.clave, { visible: true, timeout: receta.esperaMs });
+  await escribir_(page, receta.clave, clave);
+  await espera_(600);
+  // Antes de apretar «Ingresar» (que gasta uno de los intentos del banco): que lo escrito haya quedado tal cual.
+  info.formulario = (await page.evaluate(camposIngreso_).catch(() => [])) || [];
+  const enRut = rutEscrito_(await page.$eval(receta.rut, (e) => e.value).catch(() => ''));
+  if (enRut !== rut) throw new Detencion('NO_INGRESADO', 'El RUT no quedó bien escrito en el formulario del banco (quedaron ' + enRut.length + ' de ' + rut.length + ' caracteres). No se apretó «Ingresar»: no se gastó ningún intento.');
+  const largoClave = await page.$eval(receta.clave, (e) => String(e.value || '').length).catch(() => -1);
+  if (largoClave !== clave.length) throw new Detencion('NO_INGRESADO', 'La clave no quedó completa en el formulario del banco (quedaron ' + Math.max(0, largoClave) + ' de ' + clave.length + ' caracteres; puede que el banco acepte menos). No se apretó «Ingresar»: no se gastó ningún intento.');
+  const otro = await page.evaluate((selRut, selClave) => {
+    const c = document.querySelector(selClave), f = c && c.form;
+    if (!f) return '';
+    const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+    const e = Array.from(f.querySelectorAll('input,select,textarea')).find((x) => !x.matches(selRut) && !x.matches(selClave) &&
+      !/^(hidden|submit|button|image|reset|file|checkbox|radio)$/i.test(x.type || '') && vis(x) && !String(x.value || '').trim());
+    if (!e) return '';
+    const l = (e.id && document.querySelector('label[for="' + e.id + '"]')) || e.closest('label');
+    return String((l && l.innerText) || e.getAttribute('aria-label') || e.placeholder || e.name || e.id || 'sin nombre').replace(/\s+/g, ' ').trim().slice(0, 40);
+  }, receta.rut, receta.clave).catch(() => '');
+  if (otro) throw new Detencion('NO_INGRESADO', 'El formulario del banco pide otro dato que el robot no conoce («' + otro + '»). No se apretó «Ingresar»: no se gastó ningún intento.');
   if (!(await clicTexto_(page, receta.ingresar))) throw new Detencion('PAGINA_DISTINTA', 'No se encontró el botón «Ingresar» del banco.');
   alPaso('Entrando al banco');
   await hasta_(async () => {
@@ -210,7 +271,7 @@ async function ingresar_(page, receta, rut, clave, alPaso, dialogo) {
     // Sigue en el ingreso con un mensaje del banco: la clave no sirvió (un solo intento).
     if (ruta_(page.url()) === ruta_(receta.inicio)) {
       const a = await enAlguno_(page, avisoVisible_);
-      if (a) throw new Detencion('CLAVE_INVALIDA', 'El banco no aceptó el ingreso: «' + a + '». No se reintentó (el BCI bloquea la clave tras varios intentos).');
+      if (a) throw new Detencion('CLAVE_INVALIDA', 'El banco no aceptó el ingreso: «' + a + '». No se reintentó (el BCI bloquea la clave tras varios intentos). Antes de volver a probar, entra una vez a mano al banco.');
     }
     return false;
   }, receta.esperaMs, 'entrada al banco');
@@ -250,9 +311,12 @@ async function descarga_(dir, antes, ms) {
   }, ms, 'descarga del Excel').catch((e) => { if (e.estado === 'SIN_RESPUESTA') throw new Detencion('SIN_DESCARGA', 'El banco no entregó el Excel de la cartola.'); throw e; });
 }
 
-async function diagnostico_(page) {
-  // Solo la dirección y los nombres de botones y títulos: nada de montos ni movimientos del banco.
-  const d = { url: '', elementos: [] };
+async function diagnostico_(page, info) {
+  // Solo la dirección, los nombres de botones y títulos y cómo es el formulario de ingreso: nada de montos, ni
+  // movimientos, ni lo escrito (de los campos solo cuántos caracteres tienen).
+  const campo = (c) => [c.tag + (c.tipo ? '[' + c.tipo + ']' : ''), c.id && '#' + c.id, c.nombre && 'name=' + c.nombre, c.etiqueta && '«' + c.etiqueta + '»',
+    c.maximo && 'máx ' + c.maximo, (c.tipo === 'checkbox' || c.tipo === 'radio') ? (c.marcado ? 'marcado' : 'sin marcar') : c.escrito + ' escritos'].filter(Boolean).join(' ');
+  const d = { url: '', elementos: [], formulario: ((info && info.formulario) || []).map(campo) };
   try {
     d.url = ruta_(page.url());
     for (const f of page.frames()) {
@@ -293,6 +357,7 @@ async function traerCartolas(datos, opciones) {
     timeout: receta.esperaMs, protocolTimeout: 90 * 1000
   });
   let page = null;
+  const info = { formulario: [] };
   try {
     page = (await navegador.pages())[0] || await navegador.newPage();
     const dialogo = { texto: '' };
@@ -300,7 +365,7 @@ async function traerCartolas(datos, opciones) {
     const cdp = await page.target().createCDPSession();
     await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: dir });
 
-    await ingresar_(page, receta, rut, clave, alPaso, dialogo);
+    await ingresar_(page, receta, rut, clave, alPaso, dialogo, info);
     clave = ''; // ya se usó: no se vuelve a necesitar
     const filas = await irACartolas_(page, receta, alPaso);
     const disponibles = filas.slice(0, 24);
@@ -336,7 +401,7 @@ async function traerCartolas(datos, opciones) {
   } catch (e) {
     const estado = e instanceof Detencion ? e.estado : 'ERROR';
     const mensaje = e instanceof Detencion ? e.message : 'El robot no pudo terminar: ' + String((e && e.message) || e).slice(0, 200);
-    const diagnostico = page ? await diagnostico_(page) : null;
+    const diagnostico = page ? await diagnostico_(page, info) : null;
     if (page) { try { await clicTexto_(page, receta.salir); await espera_(1500); } catch (x) { /* */ } }
     return { estado, mensaje, archivos: [], diagnostico };
   } finally {

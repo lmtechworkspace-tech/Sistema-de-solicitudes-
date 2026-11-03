@@ -90,9 +90,9 @@
       '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>Mes</span><input type="month" class="fin2-input fin2-input--sm js-fcr-mes" value="' + mesAnterior() + '"></label>' +
         U.boton({ texto: 'Traer cartolas', icono: 'descargar', variante: 'primario', sm: true, clase: 'js-fcr-ir' }) + '<span class="fin2-ayuda js-fcr-general" aria-live="polite"></span></div>' +
       '<details class="fin2-robot__clave"><summary>Entrar con la clave desde aquí (si no, alguien entra a mano en el PC de la oficina)</summary>' +
-        '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>RUT</span><input class="fin2-input fin2-input--sm js-fcr-rut" autocomplete="off" placeholder="12.345.678-9"></label>' +
+        '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>RUT con que se entra</span><input class="fin2-input fin2-input--sm js-fcr-rut" autocomplete="off" placeholder="12.345.678-9" title="El mismo RUT que se escribe al entrar a mano al Banco en Línea Pyme"></label>' +
         '<label class="fin2-campo fin2-campo--fila"><span>Clave</span><input type="password" class="fin2-input fin2-input--sm js-fcr-clave" autocomplete="off"></label></div>' +
-        '<p class="fin2-ayuda">La clave no se guarda: viaja al PC de la oficina, se escribe en el banco y se borra. Se intenta <b>una sola vez</b> (el BCI bloquea la clave tras varios intentos).</p></details>' +
+        '<p class="fin2-ayuda">La clave no se guarda: viaja al PC de la oficina, se escribe en el banco y se borra. Se intenta <b>una sola vez</b> (el BCI bloquea la clave tras varios intentos). Usa el <b>mismo RUT y la misma clave con que se entra a mano</b> al Banco en Línea Pyme (no la clave de la tarjeta de coordenadas ni la del celular). Si el robot ve que algo no quedó bien escrito, se detiene <b>antes</b> de apretar «Ingresar» y no gasta el intento.</p></details>' +
       '<div class="js-fcr-estado" aria-live="polite"></div></div>' });
   }
   function robotGeneral() {
@@ -128,7 +128,7 @@
       if (!r || !r.ok) { est.innerHTML = cinta('critico', txt((r && r.message) || 'Se perdió el pedido.')); raiz.querySelector('.js-fcr-ir').disabled = false; return; }
       var e = r.data;
       if (e.estado === 'EN_CURSO') {
-        est.innerHTML = cinta('info', '<b>' + txt(e.paso || 'Trabajando…') + '</b>' + (e.asistido && /Esperando que alguien/.test(e.paso || '') ? ' · En el PC de la oficina se abrió el banco: entra con el RUT y la clave de la empresa; el robot sigue solo.' : ''));
+        est.innerHTML = cinta('info', '<b>' + txt(e.paso || 'Trabajando…') + '</b>' + (e.asistido && /Esperando que alguien/.test(e.paso || '') ? ' · En el PC de la oficina se abrió el banco: entra con el RUT y la clave de siempre; el robot sigue solo.' : ''));
         setTimeout(function () { robotSeguir(vuelta); }, 2500);
         return;
       }
@@ -139,9 +139,19 @@
   function robotResultado(e, est) {
     var res = e.resultado || {};
     if (e.estado !== 'LISTO') {
-      var dg = res.diagnostico && res.diagnostico.elementos && res.diagnostico.elementos.length
-        ? '<details class="fin2-p"><summary>Para ajustar el robot (dónde se detuvo)</summary><p class="fin2-ayuda">' + txt(res.diagnostico.url) + '</p><p class="fin2-ayuda">' + res.diagnostico.elementos.map(txt).join(' · ') + '</p></details>' : '';
-      est.innerHTML = cinta('alerta', '<b>El robot se detuvo.</b> ' + txt(res.mensaje || '')) + dg;
+      var d = res.diagnostico || {}, form = d.formulario || [], elem = d.elementos || [];
+      var dg = elem.length || form.length
+        ? '<details class="fin2-p"><summary>Para ajustar el robot (dónde se detuvo)</summary><p class="fin2-ayuda">' + txt(d.url || '') + '</p>' +
+          (form.length ? '<p class="fin2-ayuda"><b>Formulario de ingreso</b> (sin lo escrito): ' + form.map(txt).join(' · ') + '</p>' : '') +
+          (elem.length ? '<p class="fin2-ayuda">' + elem.map(txt).join(' · ') + '</p>' : '') + '</details>' : '';
+      var ayuda = res.estado === 'CLAVE_INVALIDA'
+        ? '<div class="fin2-ayuda fin2-p"><b>Qué revisar antes de volver a probar</b> (cada intento fallido acerca el bloqueo de la clave):<ol style="margin:4px 0 0 18px;padding:0">' +
+          '<li>Entra <b>una vez a mano</b> al banco con ese RUT y esa clave. Si entra bien, el contador de intentos fallidos normalmente vuelve a cero.</li>' +
+          '<li>El RUT tiene que ser el <b>mismo que se escribe al entrar a mano</b> (el de la persona que entra al Banco en Línea Pyme, que no siempre es el de la empresa).</li>' +
+          '<li>La clave es la del <b>Banco en Línea</b>, no la de la tarjeta de coordenadas ni la del celular.</li>' +
+          '<li>Prueba <b>sin clave</b> (deja vacío «Entrar con la clave desde aquí»): el robot abre el banco y alguien entra a mano en el PC de la oficina. Si así funciona, el problema está solo en cómo se escribe la clave; si a mano en esa ventana también sale «Autentificación incorrecta», el banco no acepta el navegador del robot.</li></ol></div>'
+        : res.estado === 'NO_INGRESADO' ? '<p class="fin2-ayuda fin2-p">No se gastó ningún intento del banco. Envía «Para ajustar el robot» (abajo) para corregir el formulario.</p>' : '';
+      est.innerHTML = cinta('alerta', '<b>El robot se detuvo.</b> ' + txt(res.mensaje || '')) + ayuda + dg;
       return;
     }
     est.innerHTML = cinta('ok', '<b>' + res.archivos.length + (res.archivos.length === 1 ? ' cartola descargada' : ' cartolas descargadas') + '</b> de ' + txt(e.periodo) + '. Revisa e importa cada una (lo repetido no se duplica).') +

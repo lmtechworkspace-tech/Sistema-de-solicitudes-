@@ -122,17 +122,21 @@ function sitio() {
     '<ul id="sub" style="display:none"><li><a href="/movimientos">Mis Movimientos</a></li><li><a href="/cartolas">Cartola Histórica</a></li></ul><a href="/salir">Salir</a></nav>';
   const S = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
-    if (u.pathname === '/login') {
-      return html(res, '<div id="onetrust"><button id="onetrust-reject-all-handler" onclick="this.parentNode.remove()">Rechazar opcionales</button></div>' +
+    if (u.pathname === '/login' || u.pathname === '/login-extra' || u.pathname === '/login-corta') {
+      const extra = u.pathname === '/login-extra' ? '<label for="rut_emp">RUT empresa</label><input id="rut_emp" name="rut_emp">' : '';
+      const max = u.pathname === '/login-corta' ? ' maxlength="8"' : '';
+      return html(res, '<a href="/ayuda">¿Clave bloqueada?</a><div id="onetrust"><button id="onetrust-reject-all-handler" onclick="this.parentNode.remove()">Rechazar opcionales</button></div>' +
         (u.searchParams.get('e') ? '<div class="error">Clave incorrecta. Te quedan 2 intentos.</div>' : '') +
-        '<form method="post" action="/entrar"><input id="rut_aux" name="rut"><input id="clave" name="clave" type="password"><button type="submit">INGRESAR</button></form>');
+        '<form method="post" action="/entrar"><input id="rut_aux" name="rut">' + extra + '<input id="clave" name="clave" type="password"' + max + '><label><input type="checkbox" name="recordar">Recordar RUT</label><button type="submit">INGRESAR</button></form>');
     }
     if (u.pathname === '/entrar') {
       let b = '';
       req.on('data', (c) => { b += c; });
-      req.on('end', () => { visto.intentos++; const p = new URLSearchParams(b); res.writeHead(302, { Location: p.get('rut') === '123456785' && p.get('clave') === CLAVE ? '/portal' : '/login?e=1' }); res.end(); });
+      req.on('end', () => { visto.intentos++; const p = new URLSearchParams(b); res.writeHead(302, { Location: p.get('rut') === '123456785' && p.get('clave') === CLAVE ? '/portal' : p.get('clave') === 'antigua' ? '/login?e=1' : '/pyme/clave-invalida' }); res.end(); });
       return;
     }
+    // Lo que respondió el BCI real el 03-11-2026 con una clave que no aceptó.
+    if (u.pathname === '/pyme/clave-invalida') return html(res, '<header><a href="/">Personas</a><a href="/">Empresas</a></header><h1>Autentificación incorrecta</h1><a href="/login">Reintentar</a>');
     if (u.pathname === '/portal') return html(res, menu + '<h1>Inicio</h1>');
     if (u.pathname === '/cartolas') {
       return html(res, menu + '<h2>Cartola Histórica</h2><table><tr><th>Mes</th><th>Fecha</th><th>Nº de cartola</th><th>Ver Cartola</th></tr>' +
@@ -171,9 +175,30 @@ test('de punta a punta: entra, abre Cartola Histórica, descarga las del mes y s
     assert.match(sinMes.mensaje, /N° 022 del 2026-10-30/);
 
     visto.intentos = 0;
-    const mala = await Bci.traerCartolas({ rut: '12345678-5', clave: 'otra', periodo: '2026-09' }, { receta, oculto: true });
+    const t0 = Date.now();
+    const mala = await Bci.traerCartolas({ rut: '12345678-5', clave: 'otra-clave', periodo: '2026-09' }, { receta, oculto: true });
     assert.equal(mala.estado, 'CLAVE_INVALIDA', mala.mensaje);
+    assert.match(mala.mensaje, /Autentificación incorrecta/);
+    assert.ok(Date.now() - t0 < 12000, 'la página «clave inválida» del BCI se reconoce al tiro, sin esperar el plazo');
     assert.equal(visto.intentos, 1, 'no reintenta: el banco bloquea la clave');
-    assert.ok(!JSON.stringify(mala).includes('otra@'), 'el diagnóstico no lleva datos');
+    assert.equal(mala.diagnostico.url, '127.0.0.1/pyme/clave-invalida');
+    const dg = JSON.stringify(mala.diagnostico);
+    assert.ok(!dg.includes('otra-clave') && !dg.includes('12345678'), 'el diagnóstico no lleva el RUT ni la clave');
+    assert.ok(mala.diagnostico.formulario.some((c) => /#clave/.test(c) && /10 escritos/.test(c)), 'del formulario solo cuántos caracteres: ' + dg);
+
+    // Un aviso en la misma página de ingreso también se reconoce (un solo intento).
+    visto.intentos = 0;
+    const antigua = await Bci.traerCartolas({ rut: '12345678-5', clave: 'antigua', periodo: '2026-09' }, { receta, oculto: true });
+    assert.deepEqual([antigua.estado, visto.intentos], ['CLAVE_INVALIDA', 1], antigua.mensaje);
+
+    // Si el formulario pide otro dato o la clave no cabe, se detiene ANTES de «Ingresar»: no gasta ningún intento.
+    visto.intentos = 0;
+    const extra = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-09' }, { receta: Object.assign({}, receta, { inicio: url.replace('/login', '/login-extra') }), oculto: true });
+    assert.equal(extra.estado, 'NO_INGRESADO', extra.mensaje);
+    assert.match(extra.mensaje, /RUT empresa/);
+    const corta = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-09' }, { receta: Object.assign({}, receta, { inicio: url.replace('/login', '/login-corta') }), oculto: true });
+    assert.equal(corta.estado, 'NO_INGRESADO', corta.mensaje);
+    assert.match(corta.mensaje, /8 de 23 caracteres/);
+    assert.equal(visto.intentos, 0, 'ninguno de los dos llegó al banco');
   } finally { S.close(); }
 });
