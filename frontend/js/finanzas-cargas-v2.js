@@ -90,7 +90,7 @@
       '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>Mes</span><input type="month" class="fin2-input fin2-input--sm js-fcr-mes" value="' + mesAnterior() + '"></label>' +
         U.boton({ texto: 'Traer cartolas', icono: 'descargar', variante: 'primario', sm: true, clase: 'js-fcr-ir' }) + '<span class="fin2-ayuda js-fcr-general" aria-live="polite"></span></div>' +
       '<details class="fin2-robot__clave"><summary>Entrar con la clave desde aquí (si no, alguien entra a mano en el PC de la oficina)</summary>' +
-        '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>RUT con que se entra</span><input class="fin2-input fin2-input--sm js-fcr-rut" autocomplete="off" placeholder="12.345.678-9" title="El mismo RUT que se escribe al entrar a mano al Banco en Línea Pyme"></label>' +
+        '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>RUT con que se entra</span><input class="fin2-input fin2-input--sm js-fcr-rut" autocomplete="off" placeholder="12.345.678-9" title="El mismo RUT que se escribe al entrar a mano al Banco en Línea Pyme"><small class="fin2-ayuda js-fcr-rut-aviso" hidden>Parece RUT de empresa: el BCI Pyme suele pedir el de la persona que entra.</small></label>' +
         '<label class="fin2-campo fin2-campo--fila"><span>Clave</span><input type="password" class="fin2-input fin2-input--sm js-fcr-clave" autocomplete="off"></label></div>' +
         '<p class="fin2-ayuda">La clave no se guarda: viaja al PC de la oficina, se escribe en el banco y se borra. Se intenta <b>una sola vez</b> (el BCI bloquea la clave tras varios intentos). Usa el <b>mismo RUT y la misma clave con que se entra a mano</b> al Banco en Línea Pyme (no la clave de la tarjeta de coordenadas ni la del celular). Si el robot ve que algo no quedó bien escrito, se detiene <b>antes</b> de apretar «Ingresar» y no gasta el intento.</p></details>' +
       '<div class="js-fcr-estado" aria-live="polite"></div></div>' });
@@ -103,10 +103,22 @@
       s.innerHTML = g.conectado ? U.badge('Robot conectado', 'ok') : g.conectado_antiguo ? U.badge('El programa del PC está desactualizado', 'alerta') : U.badge('Robot no conectado', 'neutro');
     });
   }
+  function rutEmpresa(rut) {
+    var s = String(rut || '').replace(/[^0-9kK]/g, '');
+    return s.length >= 8 && Number(s.slice(0, -1)) >= 50000000;
+  }
   function robotIniciar() {
     var raiz = x_.raiz(), est = raiz.querySelector('.js-fcr-estado');
     var mes = raiz.querySelector('.js-fcr-mes').value, rut = raiz.querySelector('.js-fcr-rut'), clave = raiz.querySelector('.js-fcr-clave');
     if (!/^\d{4}-\d{2}$/.test(mes)) { x_.aviso('Elige el mes.', 'error'); return; }
+    // RUT de empresa (cuerpo de 50 millones o más): el BCI Pyme suele pedir el de la persona que entra (caso real
+    // 03-11-2026: con el RUT de la empresa respondió «Autentificación incorrecta»). Se confirma antes de gastar el intento.
+    if (clave.value && rutEmpresa(rut.value) && !robotIniciar.confirmado) {
+      U.confirmar({ titulo: 'Ese RUT parece de una empresa', boton: 'Sí, entrar con ese RUT',
+        texto: 'El Banco en Línea Pyme normalmente pide el RUT de la persona que entra, no el de la empresa. Usa el mismo RUT que escribes al entrar a mano: cada intento fallido acerca el bloqueo de la clave.' })
+        .then(function (si) { if (!si) return; robotIniciar.confirmado = true; try { robotIniciar(); } finally { robotIniciar.confirmado = false; } });
+      return;
+    }
     var datos = { periodo: mes };
     if (clave.value) { datos.rut = rut.value; datos.clave = clave.value; }
     clave.value = '';
@@ -514,6 +526,10 @@
     if (enlazado_ || !raiz) return;
     enlazado_ = true;
     raiz.addEventListener('change', function (ev) { if (ev.target.classList.contains('js-fca-archivo')) subir(ev.target.files[0]); });
+    raiz.addEventListener('input', function (ev) {
+      if (!ev.target.classList.contains('js-fcr-rut')) return;
+      var a = raiz.querySelector('.js-fcr-rut-aviso'); if (a) a.hidden = !rutEmpresa(ev.target.value);
+    });
     raiz.addEventListener('click', function (ev) {
       var b = ev.target.closest('button'); if (!b || !raiz.querySelector('.fin2-cargas')) return;
       if (b.classList.contains('js-fca-lote')) abrirLote(b.dataset.id);
