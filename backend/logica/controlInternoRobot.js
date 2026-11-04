@@ -500,6 +500,16 @@ function estadoBanco_(id, email) {
   if (t.email !== String(email || '').toLowerCase()) return { _forbidden: true, message: 'Ese pedido lo hizo otra persona.' };
   return { ok: true, trabajo_id: t.trabajo_id, periodo: t.periodo, asistido: t.asistido, estado: t.estado, paso: t.paso, agente: t.agente, inicio: t.inicio, fin: t.fin, resultado: t.resultado };
 }
+/**
+ * El último pedido de cartolas de esta persona (de los 30 minutos que se guardan), o null. Sirve cuando la respuesta
+ * de «Traer cartolas» no llegó a la pantalla (internet lento, servidor reiniciando): el pedido pudo quedar hecho igual.
+ */
+function ultimoBanco_(email) {
+  const e = String(email || '').toLowerCase();
+  let ult = null;
+  for (const t of trabajos_.values()) if (t.tipo === 'BCI' && t.email === e && (!ult || t.inicio > ult.inicio)) ult = t;
+  return ult ? estadoBanco_(ult.trabajo_id, e) : null;
+}
 
 // Solo para tests.
 function _usarBanco(revisor) { revisorBanco_ = revisor || null; }
@@ -508,4 +518,4 @@ function _esperar(id) { const t = trabajos_.get(id); return t ? t.promesa : Prom
 function _reiniciar() { trabajos_.clear(); enCurso_ = null; pendientes_.length = 0; esperando_.length = 0; senales_.clear(); revisor_ = null; revisorBanco_ = null; capacidades_.clear(); lotes_.clear(); lotesPendientes_.length = 0; }
 function _esperarLote(id) { const l = lotes_.get(id); return l ? Promise.all(l.trabajos.map((t) => _esperar(t))).then(() => l.promesa) : Promise.resolve(); }
 
-module.exports = { iniciarBanco_, estadoBanco_, generalBanco_, _usarBanco, revisarLote, estadoLote, _esperarLote, revisar, estado, general, listarAgentes, crearAgente, revocarAgente, agenteTomar, agentePaso, agenteEntregar, _usar, _esperar, _reiniciar };
+module.exports = { iniciarBanco_, estadoBanco_, ultimoBanco_, generalBanco_, _usarBanco, revisarLote, estadoLote, _esperarLote, revisar, estado, general, listarAgentes, crearAgente, revocarAgente, agenteTomar, agentePaso, agenteEntregar, _usar, _esperar, _reiniciar };

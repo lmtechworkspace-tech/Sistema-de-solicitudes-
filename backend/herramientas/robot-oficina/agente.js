@@ -208,6 +208,14 @@ async function traerCartolas(cfg, tr, o) {
   clave = '';
   const entregado = await entregar(cfg, tr.trabajo_id, res);
   log('Cartolas del BCI (' + tr.periodo + '): ' + res.estado + (res.estado === 'OK' ? ' (' + res.archivos.length + ' archivo(s))' : ' · ' + res.mensaje) + (entregado ? '' : ' · NO se pudo entregar a SIGSO'));
+  // Dónde se detuvo, también aquí: si la pantalla de SIGSO perdió el pedido, el registro del PC lo conserva.
+  // Es lo mismo que ve «Para ajustar el robot»: dirección, botones, títulos y cómo es el formulario (nunca montos ni lo escrito).
+  const d = res.estado !== 'OK' && res.diagnostico;
+  if (d) {
+    log('  dónde: ' + (d.url || '—'));
+    if ((d.formulario || []).length) log('  formulario: ' + d.formulario.join(' · '));
+    if ((d.elementos || []).length) log('  en pantalla: ' + d.elementos.join(' · '));
+  }
 }
 /** Solo para probar contra un sitio local que imita el BCI (nunca otro host). */
 function recetaBciDePrueba() {

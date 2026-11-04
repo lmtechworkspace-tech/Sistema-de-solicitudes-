@@ -178,7 +178,8 @@
     }).catch(function (e) {
       // I08: un corte de red llega del navegador en inglés («Failed to fetch»): se dice en palabras de la oficina.
       var m = (e && e.message) || '';
-      return { ok: false, message: (!m || /fetch|network|load failed/i.test(m)) ? 'No hay conexión con el servidor. Revisa tu internet y vuelve a abrir la pantalla.' : m };
+      // transporte: la respuesta no llegó (red o tiempo); el servidor pudo haber hecho la acción igual.
+      return { ok: false, transporte: true, message: (!m || /fetch|network|load failed/i.test(m)) ? 'No hay conexión con el servidor. Revisa tu internet y vuelve a abrir la pantalla.' : m };
     });
   }
   /** Catálogo único (empresas, conceptos, clientes, capacidades…): una vez por sesión de bóveda. */

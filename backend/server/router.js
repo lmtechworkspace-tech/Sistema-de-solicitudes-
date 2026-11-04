@@ -928,6 +928,7 @@ const ACCIONES = {
   finanzasRobotBciGeneral: (db, data, contexto) => FinanzasRobotBci.general(db, data, contexto),
   finanzasRobotBciIniciar: (db, data, contexto) => FinanzasRobotBci.iniciar(db, data, contexto),
   finanzasRobotBciEstado: (db, data, contexto) => FinanzasRobotBci.estado(db, data, contexto),
+  finanzasRobotBciUltimo: (db, data, contexto) => FinanzasRobotBci.ultimo(db, data, contexto),
   finanzasHojaFlujo: (db, data, contexto) => FinanzasHoja.flujo(db, data, contexto),
   finanzasHojaClientes: (db, data, contexto) => FinanzasHoja.clientes(db, data, contexto),
   finanzasHojaCobranza: (db, data, contexto) => FinanzasHoja.cobranza(db, data, contexto),

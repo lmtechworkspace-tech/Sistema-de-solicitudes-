@@ -48,4 +48,12 @@ const estado = B.conBoveda('', function (db, data, contexto) {
   return r;
 });
 
-module.exports = { general, iniciar, estado };
+/** El último pedido de esta persona (o { trabajo: null }): para retomarlo si la respuesta de «Traer cartolas» se perdió. */
+const ultimo = B.conBoveda('', function (db, data, contexto) {
+  const r = RB.ultimoBanco_(email_(contexto));
+  if (!r || !r.ok) return { trabajo: null };
+  delete r.ok;
+  return { trabajo: r };
+});
+
+module.exports = { general, iniciar, estado, ultimo };

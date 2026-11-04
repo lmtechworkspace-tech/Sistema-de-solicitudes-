@@ -105,6 +105,11 @@ test('en Finanzas: bóveda y REGISTRAR para pedir; la bitácora no guarda la cla
     assert.deepEqual([e.estado, e.resultado.archivos.length], ['LISTO', 1]);
     assert.equal(ejecutarAccion(db, 'finanzasRobotBciEstado', D2({ trabajo_id: r.trabajo_id }), ctx2)._forbidden, true);
     assert.equal(ejecutarAccion(db, 'finanzasRobotBciGeneral', D({}), ctx).en_servidor, true);
+    // Si la respuesta de «Traer cartolas» no llega a la pantalla, el último pedido se retoma; solo el propio.
+    const u = ejecutarAccion(db, 'finanzasRobotBciUltimo', D({}), ctx).trabajo;
+    assert.deepEqual([u.trabajo_id, u.estado, u.resultado.archivos.length], [r.trabajo_id, 'LISTO', 1]);
+    assert.equal(ejecutarAccion(db, 'finanzasRobotBciUltimo', D2({}), ctx2).trabajo, null, 'el de otra persona no aparece');
+    assert.ok(!JSON.stringify(u).includes(CLAVE));
     const bit = B.dbFin().prepare("SELECT detalle FROM FIN_BITACORA WHERE accion = 'ROBOT_BCI' ORDER BY id").all().map((x) => x.detalle);
     assert.deepEqual(bit, ['Pidió las cartolas de 2026-09', '2026-09 · OK · N° 020']);
     assert.ok(!JSON.stringify(B.dbFin().prepare('SELECT * FROM FIN_BITACORA').all()).includes(CLAVE));

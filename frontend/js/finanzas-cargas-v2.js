@@ -76,7 +76,7 @@
       }).join('') + '</ul>' : '<p class="fin2-ayuda">Se llena al publicar la hoja MEJORAS de la planilla SIGECO.</p>' }) : '') +
     '</div>');
     x_.aplicarCapacidades(x_.raiz());
-    if (vista === 'cargas') robotGeneral();
+    if (vista === 'cargas') { robotGeneral(); robotAlAbrir(); }
   }
 
   // ---- robot de la oficina: cartolas del BCI (03-11-2026; backend/logica/finanzasRobotBci.js) ------------------------
@@ -102,6 +102,18 @@
       if (!r || !r.ok) { s.textContent = ''; return; }
       var g = r.data;
       s.innerHTML = g.conectado ? U.badge('Robot conectado', 'ok') : g.conectado_antiguo ? U.badge('El programa del PC está desactualizado', 'alerta') : U.badge('Robot no conectado', 'neutro');
+    });
+  }
+  /** Al abrir la pantalla: si hay un pedido de los últimos 30 minutos, se retoma (en curso) o se muestra lo que trajo. */
+  function robotAlAbrir() {
+    var raiz = x_.raiz(), est = raiz.querySelector('.js-fcr-estado'); if (!est) return;
+    var vuelta = robot_.vuelta;
+    x_.api('finanzasRobotBciUltimo', {}).then(function (r) {
+      var t = r && r.ok && r.data.trabajo;
+      if (!t || vuelta !== robot_.vuelta || !raiz.contains(est)) return;
+      robot_.trabajo = t.trabajo_id; robot_.vuelta++;
+      if (t.estado === 'EN_CURSO') { raiz.querySelector('.js-fcr-ir').disabled = true; robotSeguir(robot_.vuelta); return; }
+      robotResultado(t, est);
     });
   }
   // La empresa con que se entra al BCI se recuerda en este navegador (comodidad; si no hay almacenamiento, queda vacía).
@@ -133,20 +145,44 @@
     clave.value = '';
     raiz.querySelector('.js-fcr-ir').disabled = true;
     est.innerHTML = '<p class="fin2-ayuda">Enviando el pedido al PC de la oficina…</p>';
+    var antes = new Date(Date.now() - 60000).toISOString();
     x_.api('finanzasRobotBciIniciar', datos).then(function (r) {
       datos.clave = '';
-      if (!r || !r.ok) { raiz.querySelector('.js-fcr-ir').disabled = false; est.innerHTML = cinta('critico', txt((r && r.message) || 'No se pudo pedir las cartolas.')); robotGeneral(); return; }
-      robot_.trabajo = r.data.trabajo_id; robot_.vuelta++;
-      robotSeguir(robot_.vuelta);
+      if (r && r.ok) { robot_.trabajo = r.data.trabajo_id; robot_.vuelta++; robotSeguir(robot_.vuelta); return; }
+      // La respuesta no llegó (internet lento, servidor reiniciando): el pedido pudo quedar hecho igual. Se busca antes
+      // de decir que falló, para no mandar un segundo pedido (y gastar otro intento de la clave) sin saberlo.
+      if (r && r.transporte) { est.innerHTML = cinta('info', 'La respuesta del servidor no llegó. Revisando si el pedido quedó hecho…'); robotRetomar(antes, 0, r.message); return; }
+      raiz.querySelector('.js-fcr-ir').disabled = false; est.innerHTML = cinta('critico', txt((r && r.message) || 'No se pudo pedir las cartolas.')); robotGeneral();
     });
   }
-  function robotSeguir(vuelta) {
+  /** Busca el último pedido de esta persona (hecho después de `antes`) y lo sigue; si no aparece, lo dice. */
+  function robotRetomar(antes, intento, mensaje) {
+    var raiz = x_.raiz(), est = raiz && raiz.querySelector('.js-fcr-estado');
+    if (!est) return;
+    x_.api('finanzasRobotBciUltimo', {}).then(function (r) {
+      if (!raiz.contains(est)) return;
+      var t = r && r.ok && r.data.trabajo;
+      if (t && t.inicio >= antes) { robot_.trabajo = t.trabajo_id; robot_.vuelta++; robotSeguir(robot_.vuelta); return; }
+      if (r && r.transporte && intento < 5) { setTimeout(function () { robotRetomar(antes, intento + 1, mensaje); }, 4000); return; }
+      raiz.querySelector('.js-fcr-ir').disabled = false;
+      est.innerHTML = cinta('critico', txt(mensaje || 'No se pudo pedir las cartolas.') + ' El pedido no alcanzó a llegar al robot: vuelve a tocar «Traer cartolas».');
+      robotGeneral();
+    });
+  }
+  function robotSeguir(vuelta, fallos) {
     if (vuelta !== robot_.vuelta) return;
     var raiz = x_.raiz(), est = raiz && raiz.querySelector('.js-fcr-estado');
     if (!est) return; // se salió de la pantalla
     x_.api('finanzasRobotBciEstado', { trabajo_id: robot_.trabajo }).then(function (r) {
       if (vuelta !== robot_.vuelta || !raiz.contains(est)) return;
-      if (!r || !r.ok) { est.innerHTML = cinta('critico', txt((r && r.message) || 'Se perdió el pedido.')); raiz.querySelector('.js-fcr-ir').disabled = false; return; }
+      // Una consulta del avance que no llegó no detiene al robot (sigue trabajando en el PC): se vuelve a preguntar.
+      // Se rinde recién tras ~2 minutos seguidos sin respuesta.
+      if (r && r.transporte && (fallos || 0) < 24) {
+        est.innerHTML = cinta('alerta', 'El servidor no responde por ahora; el robot sigue trabajando en el PC de la oficina. Vuelvo a preguntar…');
+        setTimeout(function () { robotSeguir(vuelta, (fallos || 0) + 1); }, 5000);
+        return;
+      }
+      if (!r || !r.ok) { est.innerHTML = cinta('critico', txt((r && r.message) || 'Se perdió el pedido.') + (r && r.transporte ? ' Lo que traiga el robot queda guardado 30 minutos: abre de nuevo esta pantalla y aparecerá aquí.' : '')); raiz.querySelector('.js-fcr-ir').disabled = false; return; }
       var e = r.data;
       if (e.estado === 'EN_CURSO') {
         est.innerHTML = cinta('info', '<b>' + txt(e.paso || 'Trabajando…') + '</b>' + (e.asistido && /Esperando que alguien/.test(e.paso || '') ? ' · En el PC de la oficina se abrió el banco: entra con el RUT y la clave de siempre; el robot sigue solo.' : ''));
