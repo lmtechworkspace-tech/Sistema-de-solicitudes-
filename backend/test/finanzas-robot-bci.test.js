@@ -172,12 +172,27 @@ function sitio() {
     if (u.pathname === '/omitir') { visto.omitir++; res.writeHead(302, { Location: '/convenios' }); return res.end(); }
     // Lo que mostró el BCI real el 03-11-2026 a un usuario con varias empresas (bel.bci.cl/LoginJSFGenerico).
     if (u.pathname === '/convenios') {
-      return html(res, '<h1>Bci</h1><h3>Convenios Relacionados al Usuario</h3><table><tr><th>Convenio</th><th>Rol</th><th>Rut</th><th>Razón Social</th></tr>' +
-        [['001', '78.194.394-0', 'HOMEPYMES SPA'], ['002', '76.111.222-3', 'OTRA EMPRESA LTDA']].map((c) =>
-          // Como pasó con el BCI real: el enlace de la fila no lleva a ninguna parte; entra la fila completa (JSF).
-          '<tr style="cursor:pointer" onclick="location.href=\'/elegir?r=' + c[1] + '\'"><td><a href="#" onclick="event.stopPropagation();return false">' + c[0] + '</a></td><td>Apoderado</td><td>' + c[1] + '</td><td>' + c[2] + '</td></tr>').join('') + '</table>');
+      // Recorrido real del 04-11-2026: el título NO es un encabezado y lo que se aprieta es el enlace con el número de
+      // convenio (a#conveniosForm:lista:N:linkConvenio).
+      return html(res, '<h1>Bci</h1><div class="tituloTabla">Convenios Relacionados al Usuario</div><table><tr><th>Convenio</th><th>Rol</th><th>Rut</th><th>Razón Social</th></tr>' +
+        [['337991', '77921008-1', 'ASESORIAS INTEGRALES Y TRIBUTARIAS RPD SPA'], ['341596', '78194394-0', 'ASESORIAS INTEGRALES AYS SPA'], ['338182', '76111222-3', 'OTRA EMPRESA LTDA']].map((c, i) =>
+          '<tr><td><a id="conveniosForm:lista:' + i + ':linkConvenio" href="/elegir?r=' + c[1] + '">' + c[0] + '</a></td><td>APO</td><td>' + c[1] + '</td><td>' + c[2] + '</td></tr>').join('') + '</table>');
     }
-    if (u.pathname === '/elegir') { visto.empresa = u.searchParams.get('r'); res.writeHead(302, { Location: '/portal' }); return res.end(); }
+    // Tras elegir la empresa, el portal real (bel.bci.cl/…/contenidoLayoutOSSPyme.jsf) muestra todo dentro de un recuadro.
+    if (u.pathname === '/elegir') { visto.empresa = u.searchParams.get('r'); res.writeHead(302, { Location: '/portal-marco' }); return res.end(); }
+    if (u.pathname === '/portal-marco') return html(res, '<h1>Bci Pyme</h1><input id="btn-continuar-navegando-oculto" type="button" style="display:none"><iframe src="/portal-bci" style="width:1200px;height:800px;border:0"></iframe>');
+    const menuReal = '<ul><li id="li-item-title2" onclick="document.getElementById(\'sub2\').style.display=\'block\'"><i>account_balance_wallet</i><span>Cuentas</span></li>' +
+      '<ul id="sub2" style="display:none"><li id="li-subitem-title21" onclick="location.href=\'/portal-bci\'">Mis Movimientos</li><li id="li-subitem-title22" onclick="location.href=\'/cartolas-bci\'">Cartola Histórica</li></ul></ul>' +
+      '<button id="boton-close-session" onclick="top.location.href=\'/salir\'">Cerrar Sesión</button>';
+    if (u.pathname === '/portal-bci') return html(res, menuReal + '<h2>Resumen</h2>');
+    if (u.pathname === '/cartolas-bci') {
+      return html(res, menuReal + '<h2>Cartola Histórica</h2><table><tr><th>Mes</th><th>Fecha</th><th>Nº de cartola</th><th>Ver Cartola</th></tr>' +
+        CARTOLAS.map((c) => '<tr><td>' + c[0] + '</td><td>' + c[1] + '</td><td>' + c[2] + '</td><td onclick="location.href=\'/detalle-bci?n=' + c[2] + '\'"><i>arrow_forward</i> Ver detalles</td></tr>').join('') + '</table>');
+    }
+    if (u.pathname === '/detalle-bci') {
+      return html(res, menuReal + '<h2>Detalle Cartola Histórica</h2><div onclick="document.getElementById(\'m\').style.display=\'block\'">Exportar <i>keyboard_arrow_down</i></div>' +
+        '<div id="m" style="display:none"><span>Imprimir Pantalla</span><span onclick="location.href=\'/excel?n=' + u.searchParams.get('n') + '\'">Descargar Excel</span></div>');
+    }
     if (u.pathname === '/registrar') { visto.registrar++; return html(res, '<h1>Registro de dispositivo</h1>'); }
     if (u.pathname === '/portal') return html(res, menu + '<h1>Inicio</h1>');
     if (u.pathname === '/cartolas') {
@@ -212,14 +227,14 @@ test('de punta a punta: entra, abre Cartola Histórica, descarga las del mes y s
     assert.match(r.archivos[0].nombre, /^Cartola BCI N° 019 del 2026-09-16\.xlsx$/);
     assert.deepEqual([visto.intentos, visto.salir], [1, 1], 'un ingreso y cierra la sesión');
     assert.deepEqual([visto.omitir, visto.registrar], [1, 0], '«Registra tu Dispositivo de confianza»: omite, nunca registra');
-    assert.equal(visto.empresa, '78.194.394-0', 'en «Convenios Relacionados al Usuario» entra con la empresa pedida');
-    assert.ok(pasos.some((p) => /Eligiendo la empresa HOMEPYMES SPA \(intento 3\)/.test(p)), 'el enlace muerto no basta: prueba la fila (' + pasos.join(' | ') + ')');
+    assert.equal(visto.empresa, '78194394-0', 'en «Convenios Relacionados al Usuario» entra con la empresa pedida (AYS)');
+    assert.ok(pasos.some((p) => /Eligiendo la empresa ASESORIAS INTEGRALES AYS SPA \(intento 1\)/.test(p)), 'al primer intento, con el enlace del convenio (' + pasos.join(' | ') + ')');
 
     // Varias empresas y no se dijo cuál: se detiene y las nombra (sin adivinar). Una que no está: también.
     const sinEmpresa = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-09' }, { receta, oculto: true });
     assert.equal(sinEmpresa.estado, 'EMPRESA', sinEmpresa.mensaje);
-    assert.match(sinEmpresa.mensaje, /HOMEPYMES SPA \(78\.194\.394-0\).*OTRA EMPRESA LTDA \(76\.111\.222-3\)/);
-    assert.ok(sinEmpresa.diagnostico.formulario.some((c) => /empresa: HOMEPYMES SPA/.test(c)));
+    assert.match(sinEmpresa.mensaje, /RPD SPA \(77\.921\.008-1\).*AYS SPA \(78\.194\.394-0\).*OTRA EMPRESA LTDA \(76\.111\.222-3\)/);
+    assert.ok(sinEmpresa.diagnostico.formulario.some((c) => /empresa: ASESORIAS INTEGRALES AYS SPA/.test(c)));
     const otra = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-09', rutEmpresa: '99.999.999-9' }, { receta, oculto: true });
     assert.equal(otra.estado, 'EMPRESA', otra.mensaje);
     assert.match(otra.mensaje, /no tiene la empresa 99\.999\.999-9/);

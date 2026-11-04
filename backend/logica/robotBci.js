@@ -170,7 +170,9 @@ function hayCaptcha_() {
 function convenios_() {
   const limpio = (t) => String(t || '').replace(/\s+/g, ' ').trim();
   for (const tabla of Array.from(document.querySelectorAll('table'))) {
-    const cab = Array.from(tabla.querySelectorAll('th')).map((th) => limpio(th.innerText).toLowerCase());
+    // Títulos de columna: los <th>; si la tabla no los usa (JSF), la primera fila.
+    let cab = Array.from(tabla.querySelectorAll('th')).map((th) => limpio(th.innerText).toLowerCase());
+    if (!cab.some((c) => /^rut/.test(c))) { const f = tabla.querySelector('tr'); cab = f ? Array.from(f.children).map((c) => limpio(c.innerText).toLowerCase()) : []; }
     const iRut = cab.findIndex((c) => /^rut/.test(c)), iRazon = cab.findIndex((c) => /raz[oó]n/.test(c));
     if (iRut === -1) continue;
     const filas = Array.from(tabla.querySelectorAll('tr')).map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => limpio(td.innerText)))
@@ -189,6 +191,8 @@ function convenioDe_(rut, i) {
   if (!tr) return null;
   const l = [];
   const sumar = (e) => { if (e && l.indexOf(e) === -1) l.push(e); };
+  // 04-11-2026, recorrido real: lo que funciona es el enlace con el número de convenio (a#conveniosForm:lista:N:linkConvenio).
+  tr.querySelectorAll('a[id*="linkConvenio" i]').forEach(sumar);
   tr.querySelectorAll('input[type=radio],input[type=checkbox]').forEach(sumar);
   tr.querySelectorAll('a,button,[role=button],[role=link],[onclick]').forEach(sumar);
   if (tr.hasAttribute('onclick') || getComputedStyle(tr).cursor === 'pointer') sumar(tr);
@@ -298,6 +302,12 @@ async function rechazo_(page, receta) {
   return !!(receta.rechazoTexto && await enAlguno_(page, tituloCalza_, receta.rechazoTexto));
 }
 
+/** ¿Es la página «Convenios Relacionados al Usuario»? Por su texto (sea o no encabezado) y su tabla de empresas. */
+async function enConvenios_(page, receta) {
+  if (!((await enAlguno_(page, convenios_)) || []).length) return false;
+  return !!((await enAlguno_(page, tituloCalza_, receta.conveniosTitulo)) || (await hayTexto_(page, receta.conveniosTitulo)));
+}
+
 /** ¿Ya se entró? (ya no se está en la página de ingreso y se ve el menú de Cuentas o la cartola). */
 async function adentro_(page, receta, dialogo) {
   revisarAviso_(dialogo);
@@ -313,9 +323,10 @@ async function adentro_(page, receta, dialogo) {
     return false;
   }
   // «Convenios Relacionados al Usuario»: se entra con la empresa pedida (o con la única que haya).
-  if (receta.conveniosTitulo && await enAlguno_(page, tituloCalza_, receta.conveniosTitulo)) {
-    const filas = (await enAlguno_(page, convenios_)) || [];
-    if (!filas.length) return false;
+  // 04-11-2026, recorrido real: en el BCI ese título NO es un encabezado (h1-h3), así que el robot no reconocía la
+  // página y se quedaba 2 minutos sin hacer nada. Se reconoce por la tabla de empresas (Rut · Razón Social).
+  const filas = receta.conveniosTitulo ? ((await enAlguno_(page, convenios_)) || []) : [];
+  if (filas.length && await enConvenios_(page, receta)) {
     const lista = filas.map((f) => (f.razon || 'sin nombre') + ' (' + rutLegible_(f.rut) + ')').join(' · ');
     const pedida = dialogo.rutEmpresa ? rutTeclas_(dialogo.rutEmpresa) : '';
     const fila = pedida ? filas.find((f) => f.rut === pedida) : (filas.length === 1 ? filas[0] : null);
@@ -335,7 +346,7 @@ async function adentro_(page, receta, dialogo) {
     await espera_(1200);
     await clicTexto_(page, receta.continuar); // si la elección pide confirmar
     // Se da tiempo a que el banco cambie de página antes de probar otra forma.
-    await hasta_(async () => !(await enAlguno_(page, tituloCalza_, receta.conveniosTitulo)), 6000, 'empresa').catch(() => null);
+    await hasta_(async () => !(await enConvenios_(page, receta)), 6000, 'empresa').catch(() => null);
     return false;
   }
   if (ruta_(page.url()) === ruta_(receta.inicio)) { dialogo.fueraDesde = 0; return false; }
@@ -631,6 +642,7 @@ async function traerCartolas(datos, opciones) {
   const pid = !o.oculto && navegador.process() ? navegador.process().pid : 0;
   S.mostrar = async () => { const n = await mostrarVentanas_(pid); if (n > 0) registro('ventana del banco estaba oculta: se mostró (' + n + ')'); };
   let page = null;
+  const bajadas = [];                       // las cartolas que ya bajaron (se entregan aunque después algo falle)
   try {
     const dialogo = info.dialogo = { texto: '', rutEmpresa: (datos && datos.rutEmpresa) || '', asistido: !clave, alPaso: paso };
     info.rutEmpresa = dialogo.rutEmpresa;
@@ -657,16 +669,15 @@ async function traerCartolas(datos, opciones) {
     if (!elegidas.length) {
       return { estado: 'SIN_CARTOLAS', mensaje: 'El banco no tiene cartolas de ' + periodo + ' (la última es la N° ' + (filas[0] ? filas[0].numero + ' del ' + filas[0].fecha : '—') + '). Si el mes no ha cerrado, sus movimientos aún no están en una cartola.', archivos: [], disponibles };
     }
-    const archivos = [];
+    const archivos = bajadas;
     let enLista = true;
     for (let i = 0; i < elegidas.length; i++) {
       const c = elegidas[i];
       paso('Descargando la cartola N° ' + c.numero + ' del ' + c.fecha.split('-').reverse().join('-') + ' (' + (i + 1) + ' de ' + elegidas.length + ')');
       if (!enLista) {
-        // De vuelta a la lista: primero «atrás»; si no aparece, de nuevo por el menú (la sesión sigue).
-        await S.page.goBack({ waitUntil: 'domcontentloaded', timeout: receta.esperaMs }).catch(() => null);
-        const ok = await hasta_(() => enAlguno_(S.page, filasCartola_), 8000, 'lista').catch(() => null);
-        if (!ok) await irACartolas_(S, receta, () => {});
+        // De vuelta a la lista por el menú «Cartola Histórica» (04-11-2026: el portal real vive en un recuadro y
+        // «atrás» del navegador no volvía a la lista de forma confiable). La sesión sigue abierta.
+        await irACartolas_(S, receta, () => {});
       }
       const lista = S.page;
       if (!(await clic_(S.page, flechaDe_, c.numero, c.fecha))) throw new Detencion('PAGINA_DISTINTA', 'No se pudo abrir la cartola N° ' + c.numero + '.');
@@ -694,6 +705,11 @@ async function traerCartolas(datos, opciones) {
     const actual = S.page || page;
     const diagnostico = actual ? await diagnostico_(actual, info) : null;
     if (actual) { try { await clicTexto_(actual, receta.salir); await espera_(1500); } catch (x) { /* */ } }
+    // Lo ya descargado no se pierde (04-11-2026: la N° 021 bajó bien y se descartó porque la 022 falló): se entrega
+    // como resultado bueno, diciendo qué faltó.
+    if (bajadas.length) {
+      return { estado: 'OK', mensaje: bajadas.length + (bajadas.length === 1 ? ' cartola descargada' : ' cartolas descargadas') + '; las demás no se pudieron traer: ' + mensaje, archivos: bajadas, disponibles: [], diagnostico };
+    }
     return { estado, mensaje, archivos: [], diagnostico };
   } finally {
     clave = '';
