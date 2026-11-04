@@ -196,11 +196,12 @@
   function robotResultado(e, est) {
     var res = e.resultado || {};
     if (e.estado !== 'LISTO') {
-      var d = res.diagnostico || {}, form = d.formulario || [], elem = d.elementos || [];
-      var dg = elem.length || form.length
+      var d = res.diagnostico || {}, form = d.formulario || [], elem = d.elementos || [], rec = d.recorrido || [];
+      var dg = elem.length || form.length || rec.length
         ? '<details class="fin2-p"><summary>Para ajustar el robot (dónde se detuvo)</summary><p class="fin2-ayuda">' + txt(d.url || '') + '</p>' +
           (form.length ? '<p class="fin2-ayuda"><b>Formulario de ingreso</b> (sin lo escrito): ' + form.map(txt).join(' · ') + '</p>' : '') +
-          (elem.length ? '<p class="fin2-ayuda">' + elem.map(txt).join(' · ') + '</p>' : '') + '</details>' : '';
+          (elem.length ? '<p class="fin2-ayuda">' + elem.map(txt).join(' · ') + '</p>' : '') +
+          (rec.length ? '<p class="fin2-ayuda"><b>Recorrido</b> (páginas, pestañas y clics, sin montos):</p><ol class="fin2-ayuda" style="margin:0 0 0 18px;padding:0">' + rec.map(function (l) { return '<li>' + txt(l) + '</li>'; }).join('') + '</ol>' : '') + '</details>' : '';
       var ayuda = res.estado === 'CLAVE_INVALIDA'
         ? '<div class="fin2-ayuda fin2-p"><b>Qué revisar antes de volver a probar</b> (cada intento fallido acerca el bloqueo de la clave):<ol style="margin:4px 0 0 18px;padding:0">' +
           '<li>Entra <b>una vez a mano</b> al banco con ese RUT y esa clave. Si entra bien, el contador de intentos fallidos normalmente vuelve a cero.</li>' +

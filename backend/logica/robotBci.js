@@ -57,6 +57,11 @@ const RECETA = {
   // LoginJSFGenerico, «Convenios Relacionados al Usuario», tabla Convenio · Rol · Rut · Razón Social).
   conveniosTitulo: 'convenios relacionados',
   continuar: '^(continuar|aceptar|ingresar|seleccionar|entrar)$',
+  // Páginas que todavía son parte del ingreso (después de ellas viene el portal). Fuera de estas y con la página quieta
+  // `quietoMs`, el robot da por hecho que entró y busca el menú (y si no lo encuentra, dice dónde quedó).
+  rutasIngreso: 'bci\\.cl/corporativo/banco-en-linea|login\\.bci\\.cl|loginjsf|clave-invalida|dispositivo-confianza',
+  quietoMs: 20 * 1000,
+  abrirMenu: '^(men[uú]|☰|≡)$',                          // menú plegado (ventana angosta)
   esperaMs: 45 * 1000,
   // Desde «Ingresar» hasta ver Cuentas: incluye «dispositivo de confianza» y «Convenios» (más lento que una página).
   entradaMs: 2 * 60 * 1000,
@@ -101,8 +106,13 @@ async function hasta_(prueba, ms, queEspero) {
 }
 
 // --- dentro de la página (se ejecuta en el navegador) ----------------------------------------
+// OJO (04-11-2026, revisión a fondo): las páginas nuevas del banco pueden armar su contenido con «componentes»
+// (shadow DOM), donde document.querySelectorAll NO entra: el robot no veía «Cuentas» aunque estuviera en pantalla.
+// Por eso cada función de página busca con `todos` (documento + cada shadow root abierto). Va repetido en cada una
+// porque cada función viaja sola al navegador.
 /** El elemento visible más chico cuyo texto calza con la expresión (un botón, un enlace o una opción del menú). */
 function buscarTexto_(fuente) {
+  const todos = (s) => { const o = []; const w = (r) => { r.querySelectorAll(s).forEach((e) => o.push(e)); r.querySelectorAll('*').forEach((e) => { if (e.shadowRoot) w(e.shadowRoot); }); }; w(document); return o; };
   const re = new RegExp(fuente, 'i');
   const vis = (el) => {
     for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
@@ -112,15 +122,16 @@ function buscarTexto_(fuente) {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   };
-  const l = Array.from(document.querySelectorAll('a,button,[role=button],[role=menuitem],[role=tab],li,span,div,td,p,label,h1,h2,h3,h4'))
+  const l = todos('a,button,[role=button],[role=menuitem],[role=tab],[role=link],li,span,div,td,p,label,h1,h2,h3,h4')
     .filter((el) => re.test(String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim()) && vis(el));
   l.sort((a, b) => { const x = a.getBoundingClientRect(), y = b.getBoundingClientRect(); return x.width * x.height - y.width * y.height; });
   return l[0] || null;
 }
 /** Filas de la cartola histórica: las de la tabla que tienen fecha dd/mm/aaaa y número de cartola. */
 function filasCartola_() {
+  const todos = (s) => { const o = []; const w = (r) => { r.querySelectorAll(s).forEach((e) => o.push(e)); r.querySelectorAll('*').forEach((e) => { if (e.shadowRoot) w(e.shadowRoot); }); }; w(document); return o; };
   const out = [];
-  Array.from(document.querySelectorAll('tr,[role=row]')).forEach((tr) => {
+  todos('tr,[role=row]').forEach((tr) => {
     const celdas = Array.from(tr.querySelectorAll('td,[role=cell],[role=gridcell]')).map((c) => String(c.innerText || c.textContent || '').replace(/\s+/g, ' ').trim());
     if (celdas.length < 2) return;
     const f = celdas.map((c) => /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(c)).find(Boolean);
@@ -131,8 +142,9 @@ function filasCartola_() {
 }
 /** La flecha («Ver Cartola») de la fila de esa cartola. */
 function flechaDe_(numero, fecha) {
+  const todos = (s) => { const o = []; const w = (r) => { r.querySelectorAll(s).forEach((e) => o.push(e)); r.querySelectorAll('*').forEach((e) => { if (e.shadowRoot) w(e.shadowRoot); }); }; w(document); return o; };
   const dmy = fecha.split('-').reverse().join('/');
-  const tr = Array.from(document.querySelectorAll('tr,[role=row]')).find((x) => {
+  const tr = todos('tr,[role=row]').find((x) => {
     const c = Array.from(x.querySelectorAll('td,[role=cell],[role=gridcell]')).map((y) => String(y.innerText || y.textContent || '').replace(/\s+/g, ' ').trim());
     return c.includes(numero) && c.includes(dmy);
   });
@@ -198,15 +210,17 @@ function hayCaptchaInvisible_() {
   return !!document.querySelector('.grecaptcha-badge,iframe[src*="recaptcha"][src*="size=invisible"]');
 }
 function avisoVisible_() {
+  const todos = (s) => { const o = []; const w = (r) => { r.querySelectorAll(s).forEach((e) => o.push(e)); r.querySelectorAll('*').forEach((e) => { if (e.shadowRoot) w(e.shadowRoot); }); }; w(document); return o; };
   const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
-  return Array.from(document.querySelectorAll('[class*=error],[class*=alert],[id*=error],[role=alert],.invalid-feedback,[class*=mensaje]'))
+  return todos('[class*=error],[class*=alert],[id*=error],[role=alert],.invalid-feedback,[class*=mensaje]')
     .filter(vis).map((e) => String(e.innerText || '').trim()).filter(Boolean).join(' | ').slice(0, 200);
 }
 
 /** ¿Algún título o alerta visible dice esto? (solo títulos: un enlace «¿Clave bloqueada?» del ingreso no cuenta). */
 function tituloCalza_(fuente) {
+  const todos = (s) => { const o = []; const w = (r) => { r.querySelectorAll(s).forEach((e) => o.push(e)); r.querySelectorAll('*').forEach((e) => { if (e.shadowRoot) w(e.shadowRoot); }); }; w(document); return o; };
   const re = new RegExp(fuente, 'i');
-  return Array.from(document.querySelectorAll('h1,h2,h3,[role=heading],[role=alert],[role=alertdialog]'))
+  return todos('h1,h2,h3,[role=heading],[role=alert],[role=alertdialog]')
     .some((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && re.test(String(e.innerText || '').replace(/\s+/g, ' ').trim()); });
 }
 /**
@@ -324,8 +338,41 @@ async function adentro_(page, receta, dialogo) {
     await hasta_(async () => !(await enAlguno_(page, tituloCalza_, receta.conveniosTitulo)), 6000, 'empresa').catch(() => null);
     return false;
   }
-  if (ruta_(page.url()) === ruta_(receta.inicio)) return false;
-  return (await hayTexto_(page, receta.menuCartola)) || (await hayTexto_(page, receta.menuCuentas));
+  if (ruta_(page.url()) === ruta_(receta.inicio)) { dialogo.fueraDesde = 0; return false; }
+  if ((await hayTexto_(page, receta.menuCartola)) || (await hayTexto_(page, receta.menuCuentas))) return true;
+  // 04-11-2026: antes, si después de entrar el robot no veía «Cuentas», esperaba hasta agotar el plazo y decía «el
+  // banco no respondió (entrada al banco)», sin saber dónde estaba. Ahora: fuera de las páginas de ingreso y quieto un
+  // rato, se da por adentro y se busca el menú (irACartolas_), que si falla dice en qué página quedó.
+  if (receta.rutasIngreso && new RegExp(receta.rutasIngreso, 'i').test(ruta_(page.url()))) { dialogo.fueraDesde = 0; return false; }
+  if (!dialogo.fueraDesde) dialogo.fueraDesde = Date.now();
+  return Date.now() - dialogo.fueraDesde > (receta.quietoMs || 20000) ? 'sin-menu' : false;
+}
+/** Un botón de menú plegado («hamburguesa»): por su etiqueta accesible. */
+function botonMenu_() {
+  const todos = (s) => { const o = []; const w = (r) => { r.querySelectorAll(s).forEach((e) => o.push(e)); r.querySelectorAll('*').forEach((e) => { if (e.shadowRoot) w(e.shadowRoot); }); }; w(document); return o; };
+  return todos('button,[role=button],a').find((e) => {
+    const r = e.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && /men[uú]|navegaci[oó]n/i.test(String(e.getAttribute('aria-label') || e.title || ''));
+  }) || null;
+}
+/**
+ * Graba los clics que se hacen en la página (de la persona en la entrada a mano, y los del robot): solo la etiqueta
+ * del elemento y su texto corto, con los dígitos tapados (#). Nunca lo escrito ni montos. Sale por la consola.
+ */
+function grabarClics_() {
+  if (window.__sigsoGrabando) return;
+  window.__sigsoGrabando = true;
+  document.addEventListener('click', (ev) => {
+    try {
+      const t = (ev.composedPath && ev.composedPath()[0]) || ev.target;
+      const el = t && t.closest ? (t.closest('a,button,[role=button],[role=menuitem],[role=link],[role=tab],li,td,tr,label') || t) : t;
+      if (!el || !el.tagName) return;
+      const txt = /^(input|textarea|select)$/i.test(el.tagName) ? '' : String(el.innerText || el.getAttribute('aria-label') || el.title || '').replace(/\s+/g, ' ').trim().replace(/\d/g, '#').slice(0, 40);
+      const raiz = el.getRootNode && el.getRootNode();
+      console.debug('__sigso_clic ' + el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.getAttribute('role') ? '[' + el.getAttribute('role') + ']' : '') +
+        (txt ? ' «' + txt + '»' : '') + (raiz && raiz !== document ? ' (dentro de un componente)' : '') + (window.top !== window ? ' (en un recuadro)' : ''));
+    } catch (e) { /* grabar nunca molesta a la página */ }
+  }, true);
 }
 
 /** Escribe en un campo desde cero (borra lo que hubiera, p. ej. un autocompletado). */
@@ -337,7 +384,26 @@ async function escribir_(page, selector, texto) {
 /** El RUT tal como quedó en el campo, solo cuerpo y dígito (sin puntos ni guion). */
 const rutEscrito_ = (v) => String(v || '').replace(/[^0-9kK]/g, '').toUpperCase();
 
-async function ingresar_(page, receta, rut, clave, alPaso, dialogo, info) {
+/**
+ * ¿El banco abrió otra pestaña o ventana (o cerró la actual)? Se sigue a la más nueva. 04-11-2026: el robot solo
+ * miraba la primera pestaña; si el portal se abre aparte, se quedaba esperando en la de ingreso hasta agotar el plazo.
+ */
+async function adoptar_(S) {
+  const ps = await S.navegador.pages().catch(() => []);
+  const abiertas = ps.filter((p) => !p.isClosed());
+  let nueva = abiertas.filter((p) => p !== S.page && !S.vistas.has(p) && p.url() !== 'about:blank').pop();
+  if (!nueva && (S.page.isClosed() || abiertas.indexOf(S.page) === -1)) nueva = abiertas.filter((p) => p.url() !== 'about:blank').pop();
+  if (!nueva) return false;
+  S.vistas.add(nueva);
+  await S.preparar(nueva);
+  S.page = nueva;
+  try { await nueva.bringToFront(); } catch (e) { /* */ }
+  S.registro('el banco siguió en otra pestaña: ' + ruta_(nueva.url()));
+  return true;
+}
+
+async function ingresar_(S, receta, rut, clave, alPaso, dialogo, info) {
+  const page = S.page;
   alPaso('Abriendo el Banco en Línea Pyme');
   await page.goto(receta.inicio, { waitUntil: 'domcontentloaded', timeout: receta.esperaMs });
   await espera_(1500);
@@ -346,8 +412,13 @@ async function ingresar_(page, receta, rut, clave, alPaso, dialogo, info) {
     // Asistido: la persona entra a mano en la ventana del PC de la oficina.
     alPaso('Esperando que alguien entre al BCI en el PC de la oficina (hasta 4 minutos)');
     try { await page.bringToFront(); } catch (e) { /* */ }
-    await hasta_(() => adentro_(page, receta, dialogo), receta.ingresoManualMs, 'nadie entró al banco en el PC de la oficina')
-      .catch((e) => { if (e.estado === 'SIN_RESPUESTA') throw new Detencion('SIN_INGRESO', 'Nadie entró al banco en el PC de la oficina dentro de 4 minutos.'); throw e; });
+    await hasta_(async () => { await adoptar_(S); return adentro_(S.page, receta, dialogo); }, receta.ingresoManualMs, 'nadie entró al banco en el PC de la oficina')
+      .catch((e) => {
+        if (e.estado !== 'SIN_RESPUESTA') throw e;
+        const donde = ruta_(S.page.url());
+        if (donde === ruta_(receta.inicio)) throw new Detencion('SIN_INGRESO', 'Nadie entró al banco en el PC de la oficina dentro de 4 minutos.');
+        throw new Detencion('PAGINA_DISTINTA', 'Pasaron 4 minutos y la ventana del banco quedó en ' + donde + ', sin llegar a «Cuentas». En «Para ajustar el robot» está el recorrido.');
+      });
     return;
   }
   alPaso('Escribiendo el RUT y la clave');
@@ -376,23 +447,43 @@ async function ingresar_(page, receta, rut, clave, alPaso, dialogo, info) {
   if (!(await clicTexto_(page, receta.ingresar))) throw new Detencion('PAGINA_DISTINTA', 'No se encontró el botón «Ingresar» del banco.');
   alPaso('Entrando al banco');
   await hasta_(async () => {
-    if (await adentro_(page, receta, dialogo)) return true;
+    await adoptar_(S);
+    if (await adentro_(S.page, receta, dialogo)) return true;
     // Sigue en el ingreso con un mensaje del banco: la clave no sirvió (un solo intento).
-    if (ruta_(page.url()) === ruta_(receta.inicio)) {
-      const a = await enAlguno_(page, avisoVisible_);
+    if (ruta_(S.page.url()) === ruta_(receta.inicio)) {
+      const a = await enAlguno_(S.page, avisoVisible_);
       if (a) throw new Detencion('CLAVE_INVALIDA', 'El banco no aceptó el ingreso: «' + a + '». No se reintentó (el BCI bloquea la clave tras varios intentos). Antes de volver a probar, entra una vez a mano al banco.');
     }
     return false;
-  }, receta.entradaMs || receta.esperaMs, 'entrada al banco');
+  }, receta.entradaMs || receta.esperaMs, 'entrada al banco')
+    .catch((e) => {
+      if (e.estado !== 'SIN_RESPUESTA') throw e;
+      throw new Detencion('SIN_RESPUESTA', 'El banco aceptó «Ingresar», pero la página no llegó a «Cuentas» en ' + Math.round((receta.entradaMs || receta.esperaMs) / 60000) + ' minutos (quedó en ' + ruta_(S.page.url()) + '). En «Para ajustar el robot» está el recorrido.');
+    });
 }
 
-async function irACartolas_(page, receta, alPaso) {
+/**
+ * Cuentas › Cartola Histórica. Espera a que el menú aparezca (la página puede seguir cargando); si está plegado, lo
+ * abre. Si no lo encuentra, dice en qué página quedó (antes se rendía al primer intento, sin esperar).
+ */
+async function irACartolas_(S, receta, alPaso) {
   alPaso('Abriendo Cuentas › Cartola Histórica');
-  if (!(await clicTexto_(page, receta.menuCartola))) {
-    if (!(await clicTexto_(page, receta.menuCuentas))) throw new Detencion('PAGINA_DISTINTA', 'Se entró al banco, pero no aparece el menú «Cuentas».');
-    await hasta_(() => clicTexto_(page, receta.menuCartola), receta.esperaMs, 'opción «Cartola Histórica»');
-  }
-  return hasta_(() => enAlguno_(page, filasCartola_), receta.esperaMs, 'lista de cartolas');
+  let menu = 0;
+  await hasta_(async () => {
+    await adoptar_(S);
+    if (await clicTexto_(S.page, receta.menuCartola)) return true;
+    if (await clicTexto_(S.page, receta.menuCuentas)) {
+      await espera_(1200);
+      if (await clicTexto_(S.page, receta.menuCartola)) return true;
+    }
+    if (Date.now() - menu > 5000) { menu = Date.now(); if (!(await clicTexto_(S.page, receta.abrirMenu))) await clic_(S.page, botonMenu_); }
+    return false;
+  }, receta.esperaMs, 'menú')
+    .catch((e) => {
+      if (e.estado !== 'SIN_RESPUESTA') throw e;
+      throw new Detencion('PAGINA_DISTINTA', 'Se entró al banco, pero no se encontró «Cuentas › Cartola Histórica» (la página es ' + ruta_(S.page.url()) + '). En «Para ajustar el robot» están sus botones y el recorrido.');
+    });
+  return hasta_(async () => { await adoptar_(S); return enAlguno_(S.page, filasCartola_); }, receta.esperaMs, 'lista de cartolas');
 }
 
 /**
@@ -425,14 +516,19 @@ async function diagnostico_(page, info) {
   // movimientos, ni lo escrito (de los campos solo cuántos caracteres tienen).
   const campo = (c) => [c.tag + (c.tipo ? '[' + c.tipo + ']' : ''), c.id && '#' + c.id, c.nombre && 'name=' + c.nombre, c.etiqueta && '«' + c.etiqueta + '»',
     c.maximo && 'máx ' + c.maximo, (c.tipo === 'checkbox' || c.tipo === 'radio') ? (c.marcado ? 'marcado' : 'sin marcar') : c.escrito + ' escritos'].filter(Boolean).join(' ');
-  const d = { url: '', elementos: [], formulario: ((info && info.formulario) || []).map(campo) };
+  // El recorrido: páginas, pestañas, pasos y clics (sin montos ni lo escrito; ver grabarClics_).
+  const d = { url: '', elementos: [], formulario: ((info && info.formulario) || []).map(campo), recorrido: ((info && info.recorrido) || []).slice(-40) };
   try {
     d.url = ruta_(page.url());
     for (const f of page.frames()) {
       try {
-        const l = await f.evaluate(() => Array.from(document.querySelectorAll('a,button,[role=button],[role=menuitem],h1,h2,h3,th'))
-          .map((e) => (e.tagName.toLowerCase() + ':' + String(e.innerText || '').replace(/\s+/g, ' ').trim()).slice(0, 60))
-          .filter((t) => !/\d{3}/.test(t)).slice(0, 60));
+        const l = await f.evaluate(() => {
+          const todos = (s) => { const o = []; const w = (r) => { r.querySelectorAll(s).forEach((e) => o.push(e)); r.querySelectorAll('*').forEach((e) => { if (e.shadowRoot) w(e.shadowRoot); }); }; w(document); return o; };
+          return todos('a,button,[role=button],[role=menuitem],[role=link],h1,h2,h3,th')
+            .map((e) => (e.tagName.toLowerCase() + ':' + String(e.innerText || e.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim()).slice(0, 60))
+            .filter((t) => !/\d{3}/.test(t) && !/:$/.test(t)).slice(0, 60);
+        });
+        if (f !== page.mainFrame() && l.length) d.elementos.push('[recuadro ' + ruta_(f.url()) + ']');
         d.elementos.push(...l);
       } catch (e) { /* */ }
     }
@@ -474,54 +570,82 @@ async function traerCartolas(datos, opciones) {
     args: ['--no-first-run', '--disable-extensions', '--mute-audio', '--disable-gpu', '--window-size=1280,900'],
     timeout: receta.esperaMs, protocolTimeout: 90 * 1000
   });
+  // El recorrido (04-11-2026): cada página, pestaña, paso y clic queda anotado, para saber DÓNDE se detuvo sin tener que
+  // adivinar y gastar otro intento en el banco. Va al registro del PC (opciones.registro) y al diagnóstico.
+  const info = { formulario: [], recorrido: [] };
+  const registro = (m) => {
+    const s = String(m || '').slice(0, 160);
+    if (!s || info.recorrido[info.recorrido.length - 1] === s) return;
+    info.recorrido.push(s);
+    if (info.recorrido.length > 80) info.recorrido.shift();
+    try { if (typeof o.registro === 'function') o.registro(s); } catch (e) { /* */ }
+  };
+  const paso = (p) => { registro('paso: ' + p); alPaso(p); };
+  const S = { navegador, page: null, vistas: new Set(), registro };
   let page = null;
-  const info = { formulario: [] };
   try {
-    page = (await navegador.pages())[0] || await navegador.newPage();
-    const dialogo = info.dialogo = { texto: '', rutEmpresa: (datos && datos.rutEmpresa) || '', asistido: !clave, alPaso };
+    const dialogo = info.dialogo = { texto: '', rutEmpresa: (datos && datos.rutEmpresa) || '', asistido: !clave, alPaso: paso };
     info.rutEmpresa = dialogo.rutEmpresa;
-    page.on('dialog', (d) => { dialogo.texto = String(d.message() || 'aviso sin texto').slice(0, 200); d.dismiss().catch(() => null); });
+    // Cada pestaña que se use: avisos, páginas visitadas y clics grabados.
+    S.preparar = async (p) => {
+      p.on('dialog', (d) => { dialogo.texto = String(d.message() || 'aviso sin texto').slice(0, 200); registro('aviso del banco: ' + dialogo.texto.replace(/\d/g, '#')); d.dismiss().catch(() => null); });
+      p.on('framenavigated', (f) => { if (f === p.mainFrame()) registro('página: ' + ruta_(f.url())); });
+      p.on('console', (m) => { const t = m.text(); if (t.indexOf('__sigso_clic ') === 0) registro('clic: ' + t.slice(13)); });
+      await p.evaluateOnNewDocument(grabarClics_).catch(() => null);
+      await p.evaluate(grabarClics_).catch(() => null);
+    };
+    page = S.page = (await navegador.pages())[0] || await navegador.newPage();
+    S.vistas.add(page);
+    await S.preparar(page);
     const cdp = await page.target().createCDPSession();
     await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: dir });
 
-    await ingresar_(page, receta, rut, clave, alPaso, dialogo, info);
+    await ingresar_(S, receta, rut, clave, paso, dialogo, info);
     clave = ''; // ya se usó: no se vuelve a necesitar
-    const filas = await irACartolas_(page, receta, alPaso);
+    const filas = await irACartolas_(S, receta, paso);
+    page = S.page;
     const disponibles = filas.slice(0, 24);
     const elegidas = elegir_(filas, periodo);
     if (!elegidas.length) {
       return { estado: 'SIN_CARTOLAS', mensaje: 'El banco no tiene cartolas de ' + periodo + ' (la última es la N° ' + (filas[0] ? filas[0].numero + ' del ' + filas[0].fecha : '—') + '). Si el mes no ha cerrado, sus movimientos aún no están en una cartola.', archivos: [], disponibles };
     }
     const archivos = [];
+    let enLista = true;
     for (let i = 0; i < elegidas.length; i++) {
       const c = elegidas[i];
-      alPaso('Descargando la cartola N° ' + c.numero + ' del ' + c.fecha.split('-').reverse().join('-') + ' (' + (i + 1) + ' de ' + elegidas.length + ')');
-      if (i) {
+      paso('Descargando la cartola N° ' + c.numero + ' del ' + c.fecha.split('-').reverse().join('-') + ' (' + (i + 1) + ' de ' + elegidas.length + ')');
+      if (!enLista) {
         // De vuelta a la lista: primero «atrás»; si no aparece, de nuevo por el menú (la sesión sigue).
-        await page.goBack({ waitUntil: 'domcontentloaded', timeout: receta.esperaMs }).catch(() => null);
-        const ok = await hasta_(() => enAlguno_(page, filasCartola_), 8000, 'lista').catch(() => null);
-        if (!ok) await irACartolas_(page, receta, () => {});
+        await S.page.goBack({ waitUntil: 'domcontentloaded', timeout: receta.esperaMs }).catch(() => null);
+        const ok = await hasta_(() => enAlguno_(S.page, filasCartola_), 8000, 'lista').catch(() => null);
+        if (!ok) await irACartolas_(S, receta, () => {});
       }
-      if (!(await clic_(page, flechaDe_, c.numero, c.fecha))) throw new Detencion('PAGINA_DISTINTA', 'No se pudo abrir la cartola N° ' + c.numero + '.');
-      await hasta_(() => hayTexto_(page, receta.exportar), receta.esperaMs, 'detalle de la cartola N° ' + c.numero);
+      const lista = S.page;
+      if (!(await clic_(S.page, flechaDe_, c.numero, c.fecha))) throw new Detencion('PAGINA_DISTINTA', 'No se pudo abrir la cartola N° ' + c.numero + '.');
+      // El detalle puede abrirse en la misma pestaña o en otra.
+      await hasta_(async () => { await adoptar_(S); return hayTexto_(S.page, receta.exportar); }, receta.esperaMs, 'detalle de la cartola N° ' + c.numero);
       const antes = new Set(fs.readdirSync(dir));
-      await clicTexto_(page, receta.exportar);
-      await hasta_(() => clicTexto_(page, receta.descargarExcel), 10000, 'opción «Descargar Excel»');
+      await clicTexto_(S.page, receta.exportar);
+      await hasta_(() => clicTexto_(S.page, receta.descargarExcel), 10000, 'opción «Descargar Excel»');
       const p = await descarga_(dir, antes, receta.descargaMs);
       const buf = fs.readFileSync(p);
       if (buf.length > MAX_BYTES) throw new Detencion('SIN_DESCARGA', 'El Excel de la cartola N° ' + c.numero + ' es demasiado grande.');
       const ext = (/\.(xlsx|xls)$/i.exec(p) || ['', 'xlsx'])[1].toLowerCase();
       archivos.push({ nombre: 'Cartola BCI N° ' + c.numero + ' del ' + c.fecha + '.' + ext, numero: c.numero, fecha: c.fecha, base64: buf.toString('base64') });
       fs.unlinkSync(p);
+      registro('cartola N° ' + c.numero + ' descargada');
+      if (S.page !== lista && !lista.isClosed()) { await S.page.close().catch(() => null); S.page = lista; enLista = true; } else enLista = false;
     }
-    alPaso('Cerrando la sesión del banco');
-    if (await clicTexto_(page, receta.salir)) await espera_(2500);
+    paso('Cerrando la sesión del banco');
+    if (await clicTexto_(S.page, receta.salir)) await espera_(2500);
     return { estado: 'OK', mensaje: archivos.length + (archivos.length === 1 ? ' cartola descargada.' : ' cartolas descargadas.'), archivos, disponibles };
   } catch (e) {
     const estado = e instanceof Detencion ? e.estado : 'ERROR';
     const mensaje = e instanceof Detencion ? e.message : 'El robot no pudo terminar: ' + String((e && e.message) || e).slice(0, 200);
-    const diagnostico = page ? await diagnostico_(page, info) : null;
-    if (page) { try { await clicTexto_(page, receta.salir); await espera_(1500); } catch (x) { /* */ } }
+    registro('se detuvo: ' + estado);
+    const actual = S.page || page;
+    const diagnostico = actual ? await diagnostico_(actual, info) : null;
+    if (actual) { try { await clicTexto_(actual, receta.salir); await espera_(1500); } catch (x) { /* */ } }
     return { estado, mensaje, archivos: [], diagnostico };
   } finally {
     clave = '';

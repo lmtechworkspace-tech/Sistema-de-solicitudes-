@@ -130,6 +130,20 @@ function sitio() {
     '<ul id="sub" style="display:none"><li><a href="/movimientos">Mis Movimientos</a></li><li><a href="/cartolas">Cartola Histórica</a></li></ul><a href="/salir">Salir</a></nav>';
   const S = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
+    // Revisión 04-11-2026: lo que puede pasar después de «Ingresar» y que el robot antes no veía.
+    //  - pestana: el portal se abre en OTRA pestaña (el formulario tiene target=_blank);
+    //  - sombra: el menú vive dentro de un componente (shadow DOM);
+    //  - raro: una página que el robot no conoce (debe decir dónde quedó, no «el banco no respondió»).
+    const variante = /^\/login-(pestana|sombra|raro)$/.exec(u.pathname);
+    if (variante) {
+      return html(res, '<form method="post" action="/entrar?d=' + variante[1] + '"' + (variante[1] === 'pestana' ? ' target="_blank"' : '') + '><input id="rut_aux" name="rut"><input id="clave" name="clave" type="password"><button type="submit">INGRESAR</button></form>');
+    }
+    if (u.pathname === '/destino-sombra') {
+      return html(res, '<script>customElements.define("bci-menu", class extends HTMLElement { constructor() { super(); const r = this.attachShadow({ mode: "open" });' +
+        ' r.innerHTML = \'<nav><a href="#" id="cu">Cuentas</a><ul id="sub" style="display:none"><li><a href="/cartolas">Cartola Histórica</a></li></ul><a href="/salir">Salir</a></nav>\';' +
+        ' r.getElementById("cu").onclick = (e) => { e.preventDefault(); r.getElementById("sub").style.display = "block"; }; } });</script><bci-menu></bci-menu><h1>Inicio</h1>');
+    }
+    if (u.pathname === '/destino-raro') return html(res, '<h1>Bienvenido a tu banco</h1><button>Productos</button><button>Ayuda</button>');
     if (u.pathname === '/login' || u.pathname === '/login-extra' || u.pathname === '/login-corta') {
       const extra = u.pathname === '/login-extra' ? '<label for="rut_emp">RUT empresa</label><input id="rut_emp" name="rut_emp">' : '';
       const max = u.pathname === '/login-corta' ? ' maxlength="8"' : '';
@@ -140,7 +154,12 @@ function sitio() {
     if (u.pathname === '/entrar') {
       let b = '';
       req.on('data', (c) => { b += c; });
-      req.on('end', () => { visto.intentos++; const p = new URLSearchParams(b); res.writeHead(302, { Location: p.get('rut') === '123456785' && p.get('clave') === CLAVE ? '/dispositivo-confianza' : p.get('clave') === 'antigua' ? '/login?e=1' : '/pyme/clave-invalida' }); res.end(); });
+      req.on('end', () => {
+        visto.intentos++;
+        const p = new URLSearchParams(b), ok = p.get('rut') === '123456785' && p.get('clave') === CLAVE, d = u.searchParams.get('d');
+        res.writeHead(302, { Location: ok && d ? (d === 'pestana' ? '/portal' : '/destino-' + d) : ok ? '/dispositivo-confianza' : p.get('clave') === 'antigua' ? '/login?e=1' : '/pyme/clave-invalida' });
+        res.end();
+      });
       return;
     }
     // Lo que respondió el BCI real el 03-11-2026 con una clave que no aceptó.
@@ -241,5 +260,34 @@ test('de punta a punta: entra, abre Cartola Histórica, descarga las del mes y s
     // Un CAPTCHA que sí pide algo (la casilla «No soy un robot») detiene al robot; el invisible no.
     const cap = await Bci.traerCartolas({ periodo: '2026-09' }, { receta: Object.assign({}, receta, { inicio: url.replace('/login', '/login-captcha'), ingresoManualMs: 5000 }), oculto: true });
     assert.equal(cap.estado, 'CAPTCHA', cap.mensaje);
+  } finally { S.close(); }
+});
+
+test('revisión 04-11: portal en otra pestaña, menú dentro de un componente y página desconocida con su recorrido', { skip: sinNavegador, timeout: 180000 }, async () => {
+  const { S, visto, url } = await sitio();
+  try {
+    const receta = { inicio: url, esperaMs: 12000, descargaMs: 15000, quietoMs: 3000, entradaMs: 20000 };
+    const con = (v) => Object.assign({}, receta, { inicio: url.replace('/login', '/login-' + v) });
+    // 1) El banco abre el portal en otra pestaña: el robot la sigue (antes esperaba en la de ingreso hasta agotar el plazo).
+    const lineas = [];
+    const pes = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-10' }, { receta: con('pestana'), oculto: true, registro: (m) => lineas.push(m) });
+    assert.equal(pes.estado, 'OK', pes.mensaje + ' ' + JSON.stringify(pes.diagnostico));
+    assert.deepEqual(pes.archivos.map((a) => a.numero), ['021', '022']);
+    assert.ok(lineas.some((l) => /otra pestaña/.test(l)), 'queda anotado en el recorrido: ' + lineas.join(' | '));
+    assert.ok(lineas.some((l) => /^clic: .*«Cartola Histórica»/.test(l)), 'los clics quedan grabados');
+    assert.ok(!lineas.join(' ').includes(CLAVE) && !lineas.join(' ').includes('12345678'), 'el recorrido no lleva la clave ni el RUT');
+    // 2) El menú está dentro de un componente (shadow DOM): igual lo encuentra.
+    const som = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-10' }, { receta: con('sombra'), oculto: true });
+    assert.equal(som.estado, 'OK', som.mensaje + ' ' + JSON.stringify(som.diagnostico));
+    // 3) Una página que no conoce: dice dónde quedó (no «el banco no respondió»), con sus botones y el recorrido.
+    visto.intentos = 0;
+    const t0 = Date.now();
+    const raro = await Bci.traerCartolas({ rut: '12345678-5', clave: CLAVE, periodo: '2026-10' }, { receta: con('raro'), oculto: true });
+    assert.equal(raro.estado, 'PAGINA_DISTINTA', raro.mensaje);
+    assert.match(raro.mensaje, /127\.0\.0\.1\/destino-raro/);
+    assert.ok(Date.now() - t0 < 40000, 'no espera el plazo largo de la entrada');
+    assert.equal(visto.intentos, 1);
+    assert.ok(raro.diagnostico.elementos.some((e) => /Productos/.test(e)), JSON.stringify(raro.diagnostico));
+    assert.ok(raro.diagnostico.recorrido.some((l) => /^página: 127\.0\.0\.1\/destino-raro/.test(l)), JSON.stringify(raro.diagnostico.recorrido));
   } finally { S.close(); }
 });

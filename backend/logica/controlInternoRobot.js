@@ -434,7 +434,8 @@ function terminarBanco_(t, r) {
   const disponibles = ((r && r.disponibles) || []).slice(0, 24).map((d) => ({ numero: String((d && d.numero) || '').replace(/\D/g, '').slice(0, 6), fecha: /^\d{4}-\d{2}-\d{2}$/.test(String((d && d.fecha) || '')) ? d.fecha : '' }));
   const dg = r && r.diagnostico && typeof r.diagnostico === 'object'
     ? { url: String(r.diagnostico.url || '').slice(0, 300), elementos: (Array.isArray(r.diagnostico.elementos) ? r.diagnostico.elementos : []).slice(0, 80).map((x) => String(x || '').slice(0, 60)),
-      formulario: (Array.isArray(r.diagnostico.formulario) ? r.diagnostico.formulario : []).slice(0, 20).map((x) => String(x || '').slice(0, 140)) } : null;
+      formulario: (Array.isArray(r.diagnostico.formulario) ? r.diagnostico.formulario : []).slice(0, 20).map((x) => String(x || '').slice(0, 140)),
+      recorrido: (Array.isArray(r.diagnostico.recorrido) ? r.diagnostico.recorrido : []).slice(-40).map((x) => String(x || '').slice(0, 160)) } : null;
   t.resultado = { estado: ok && archivos.length ? 'OK' : ok ? 'SIN_ARCHIVOS' : String((r && r.estado) || 'ERROR').slice(0, 30), mensaje: String((r && r.mensaje) || '').slice(0, 400), archivos, disponibles, diagnostico: dg };
   t.estado = t.resultado.estado === 'OK' ? 'LISTO' : 'DETENIDO';
   t.fin = new Date().toISOString();

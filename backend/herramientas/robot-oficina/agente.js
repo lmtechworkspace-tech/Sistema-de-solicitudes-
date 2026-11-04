@@ -198,6 +198,8 @@ async function traerCartolas(cfg, tr, o) {
   let ultimo = 0;
   const res = await RobotBci.traerCartolas({ rut: tr.rut, clave, periodo: tr.periodo, rutEmpresa: tr.rut_empresa }, {
     receta: o.recetaBci || undefined,
+    // El recorrido (páginas, pestañas, pasos y clics; nunca montos ni lo escrito), línea a línea en el registro del PC.
+    registro: (m) => log('  · ' + m),
     alPaso: (p) => {
       const ahora = Date.now();
       if (ahora - ultimo < 800) return;
