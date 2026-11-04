@@ -186,8 +186,10 @@ function sitio() {
       '<button id="boton-close-session" onclick="top.location.href=\'/salir\'">Cerrar Sesión</button>';
     if (u.pathname === '/portal-bci') return html(res, menuReal + '<h2>Resumen</h2>');
     if (u.pathname === '/cartolas-bci') {
+      // Como el BCI real (04-11-2026): la lista se ve antes de que «Ver detalles» funcione; un clic inmediato no hace nada.
       return html(res, menuReal + '<h2>Cartola Histórica</h2><table><tr><th>Mes</th><th>Fecha</th><th>Nº de cartola</th><th>Ver Cartola</th></tr>' +
-        CARTOLAS.map((c) => '<tr><td>' + c[0] + '</td><td>' + c[1] + '</td><td>' + c[2] + '</td><td onclick="location.href=\'/detalle-bci?n=' + c[2] + '\'"><i>arrow_forward</i> Ver detalles</td></tr>').join('') + '</table>');
+        CARTOLAS.map((c) => '<tr><td>' + c[0] + '</td><td>' + c[1] + '</td><td>' + c[2] + '</td><td class="ver" data-n="' + c[2] + '"><i>arrow_forward</i> Ver detalles</td></tr>').join('') + '</table>' +
+        '<script>setTimeout(function () { document.querySelectorAll(".ver").forEach(function (td) { td.onclick = function () { location.href = "/detalle-bci?n=" + td.dataset.n; }; }); }, 2500);</script>');
     }
     if (u.pathname === '/detalle-bci') {
       return html(res, menuReal + '<h2>Detalle Cartola Histórica</h2><div onclick="document.getElementById(\'m\').style.display=\'block\'">Exportar <i>keyboard_arrow_down</i></div>' +

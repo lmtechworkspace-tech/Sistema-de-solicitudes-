@@ -680,9 +680,24 @@ async function traerCartolas(datos, opciones) {
         await irACartolas_(S, receta, () => {});
       }
       const lista = S.page;
-      if (!(await clic_(S.page, flechaDe_, c.numero, c.fecha))) throw new Detencion('PAGINA_DISTINTA', 'No se pudo abrir la cartola N° ' + c.numero + '.');
-      // El detalle puede abrirse en la misma pestaña o en otra.
-      await hasta_(async () => { await adoptar_(S); return hayTexto_(S.page, receta.exportar); }, receta.esperaMs, 'detalle de la cartola N° ' + c.numero);
+      // «Ver detalles» con paciencia (04-11-2026: el robot apretó en el mismo segundo en que apareció la lista, aún
+      // cargando, y se rindió al primer intento). Cada 3 s vuelve a apretar, alternando clic del mouse y clic directo,
+      // hasta que aparece el detalle (puede abrirse en la misma pestaña o en otra).
+      const exportarAntes = await hayTexto_(S.page, receta.exportar);
+      let intentos = 0, ultimo = 0;
+      await hasta_(async () => {
+        await adoptar_(S);
+        if (intentos && await hayTexto_(S.page, receta.exportar) && (!exportarAntes || S.page !== lista || await hayTexto_(S.page, receta.detalle))) return true;
+        if (Date.now() - ultimo > 3000) {
+          ultimo = Date.now(); intentos++;
+          const ok = intentos % 2 ? await clic_(S.page, flechaDe_, c.numero, c.fecha) : await clicDirecto_(S.page, flechaDe_, c.numero, c.fecha);
+          if (intentos > 1) registro('abriendo la cartola N° ' + c.numero + ': intento ' + intentos + (ok ? '' : ' (aún no se ve «Ver detalles»)'));
+        }
+        return false;
+      }, receta.esperaMs, 'detalle de la cartola N° ' + c.numero).catch((e) => {
+        if (e.estado !== 'SIN_RESPUESTA') throw e;
+        throw new Detencion('PAGINA_DISTINTA', 'No se pudo abrir la cartola N° ' + c.numero + ' («Ver detalles»; ' + intentos + ' intentos).');
+      });
       const antes = new Set(fs.readdirSync(dir));
       await clicTexto_(S.page, receta.exportar);
       await hasta_(() => clicTexto_(S.page, receta.descargarExcel), 10000, 'opción «Descargar Excel»');
