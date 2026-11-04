@@ -385,6 +385,43 @@ async function escribir_(page, selector, texto) {
 const rutEscrito_ = (v) => String(v || '').replace(/[^0-9kK]/g, '').toUpperCase();
 
 /**
+ * Muestra las ventanas de Chrome que estén ocultas (Windows). 04-11-2026, CAUSA de las fallas: el robot arranca con
+ * Windows SIN ventana (wscript … , 0) y Chrome hereda ese modo: su ventana existía pero OCULTA (comprobado en el PC:
+ * IsWindowVisible = False). La persona veía una ventana en blanco y no podía entrar a mano, y Chrome trata una página
+ * oculta como de fondo (la frena), así que con clave el portal del banco tampoco terminaba de armarse. Se muestran con
+ * ShowWindow (SW_RESTORE): solo las ventanas de ESTE Chrome (por su número de proceso). Devuelve cuántas mostró.
+ */
+function mostrarVentanas_(pid) {
+  if (process.platform !== 'win32' || !pid) return Promise.resolve(0);
+  const script = [
+    'Add-Type @\'',
+    'using System; using System.Runtime.InteropServices; using System.Text;',
+    'public class SigsoVentanas {',
+    '  public delegate bool Proc(IntPtr h, IntPtr l);',
+    '  [DllImport("user32.dll")] public static extern bool EnumWindows(Proc f, IntPtr l);',
+    '  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);',
+    '  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);',
+    '  [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr h);',
+    '  [DllImport("user32.dll")] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);',
+    '  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);',
+    '  public static int Mostrar(uint pid) {',
+    '    int n = 0;',
+    '    EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p != pid || IsWindowVisible(h) || GetWindowTextLength(h) == 0) return true;',
+    '      var c = new StringBuilder(64); GetClassName(h, c, 64); if (c.ToString() != "Chrome_WidgetWin_1") return true; ShowWindow(h, 9); n++; return true; }, IntPtr.Zero);',
+    '    return n;',
+    '  }',
+    '}',
+    '\'@',
+    '[SigsoVentanas]::Mostrar([uint32]$env:SIGSO_CHROME_PID)'
+  ].join('\n');
+  return new Promise((ok) => {
+    require('node:child_process').execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
+      { env: Object.assign({}, process.env, { SIGSO_CHROME_PID: String(pid) }), timeout: 20000, windowsHide: true },
+      (err, salida) => ok(err ? -1 : (Number(String(salida || '').trim()) || 0)));
+  });
+}
+
+/**
  * ¿El banco abrió otra pestaña o ventana (o cerró la actual)? Se sigue a la más nueva. 04-11-2026: el robot solo
  * miraba la primera pestaña; si el portal se abre aparte, se quedaba esperando en la de ingreso hasta agotar el plazo.
  */
@@ -399,6 +436,7 @@ async function adoptar_(S) {
   S.page = nueva;
   try { await nueva.bringToFront(); } catch (e) { /* */ }
   S.registro('el banco siguió en otra pestaña: ' + ruta_(nueva.url()));
+  await S.mostrar();
   return true;
 }
 
@@ -406,13 +444,19 @@ async function ingresar_(S, receta, rut, clave, alPaso, dialogo, info) {
   const page = S.page;
   alPaso('Abriendo el Banco en Línea Pyme');
   await page.goto(receta.inicio, { waitUntil: 'domcontentloaded', timeout: receta.esperaMs });
+  await S.mostrar();
   await espera_(1500);
   try { const c = await page.$(receta.rechazarCookies); if (c) await c.click(); } catch (e) { /* sin aviso de cookies */ }
   if (!clave) {
     // Asistido: la persona entra a mano en la ventana del PC de la oficina.
     alPaso('Esperando que alguien entre al BCI en el PC de la oficina (hasta 4 minutos)');
     try { await page.bringToFront(); } catch (e) { /* */ }
-    await hasta_(async () => { await adoptar_(S); return adentro_(S.page, receta, dialogo); }, receta.ingresoManualMs, 'nadie entró al banco en el PC de la oficina')
+    let visto = Date.now();
+    await hasta_(async () => {
+      if (Date.now() - visto > 10000) { visto = Date.now(); await S.mostrar(); } // por si una ventana nueva nace oculta
+      await adoptar_(S);
+      return adentro_(S.page, receta, dialogo);
+    }, receta.ingresoManualMs, 'nadie entró al banco en el PC de la oficina')
       .catch((e) => {
         if (e.estado !== 'SIN_RESPUESTA') throw e;
         const donde = ruta_(S.page.url());
@@ -567,7 +611,9 @@ async function traerCartolas(datos, opciones) {
     executablePath: ruta, headless: o.oculto ? true : false, defaultViewport: null,
     // --disable-gpu, como el robot TGR: abierto desde el arranque con Windows (programa sin ventana), Chrome con
     // GPU dejaba la ventana gris, sin dibujar (03-11-2026), y nadie podía entrar a mano en el modo sin clave.
-    args: ['--no-first-run', '--disable-extensions', '--mute-audio', '--disable-gpu', '--window-size=1280,900'],
+    // 04-11-2026: además, que Chrome no frene la página aunque la crea de fondo u oculta (ver mostrarVentanas_).
+    args: ['--no-first-run', '--disable-extensions', '--mute-audio', '--disable-gpu', '--window-size=1280,900',
+      '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'],
     timeout: receta.esperaMs, protocolTimeout: 90 * 1000
   });
   // El recorrido (04-11-2026): cada página, pestaña, paso y clic queda anotado, para saber DÓNDE se detuvo sin tener que
@@ -582,6 +628,8 @@ async function traerCartolas(datos, opciones) {
   };
   const paso = (p) => { registro('paso: ' + p); alPaso(p); };
   const S = { navegador, page: null, vistas: new Set(), registro };
+  const pid = !o.oculto && navegador.process() ? navegador.process().pid : 0;
+  S.mostrar = async () => { const n = await mostrarVentanas_(pid); if (n > 0) registro('ventana del banco estaba oculta: se mostró (' + n + ')'); };
   let page = null;
   try {
     const dialogo = info.dialogo = { texto: '', rutEmpresa: (datos && datos.rutEmpresa) || '', asistido: !clave, alPaso: paso };
