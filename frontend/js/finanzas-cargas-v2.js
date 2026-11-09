@@ -65,7 +65,7 @@
           '<tr><td>Cartola de Santander</td><td colspan="2"><b>Aún no se puede leer:</b> falta una cartola real para construir y probar su lector. Mientras tanto, los movimientos de Santander anotados en el Excel BANCOS entran como borradores con su origen.</td></tr>' +
         '</tbody></table>' +
         '<div class="js-fca-progreso" aria-live="polite"></div></div>' }) +
-      (vista === 'cargas' ? robotHtml() : '') +
+      (vista === 'cargas' ? robotHtml() + siiHtml() : '') +
       U.card({ titulo: 'Archivos cargados', icono: 'carpeta', sub: L.lotes.length + ' archivo(s)', sinRelleno: true, cuerpo: L.lotes.length ? '<div class="fin2-tabla-envoltura"><table class="fin2-tabla"><thead><tr><th>Archivo</th><th>Tipo</th><th>Cargado</th><th>Hojas</th><th>Estado de las filas</th><th></th></tr></thead><tbody>' + L.lotes.map(function (l) {
         var tot = {}; l.hojas.forEach(function (h) { Object.keys(h.por_estado).forEach(function (k) { tot[k] = (tot[k] || 0) + h.por_estado[k]; }); });
         return '<tr><td><b>' + txt(l.nombre) + '</b></td><td>' + txt(l.tipo) + '</td><td class="fin2-num">' + txt(String(l.creado_en || '').slice(0, 16).replace('T', ' ')) + '<br><small class="fin2-ayuda">' + txt(l.creado_por) + '</small></td><td>' + l.hojas.length + '</td>' +
@@ -76,7 +76,7 @@
       }).join('') + '</ul>' : '<p class="fin2-ayuda">Se llena al publicar la hoja MEJORAS de la planilla SIGECO.</p>' }) : '') +
     '</div>');
     x_.aplicarCapacidades(x_.raiz());
-    if (vista === 'cargas') { robotGeneral(); robotAlAbrir(); }
+    if (vista === 'cargas') { robotGeneral(); robotAlAbrir(); siiGeneral(); siiAlAbrir(); }
   }
 
   // ---- robot de la oficina: cartolas del BCI (03-11-2026; backend/logica/finanzasRobotBci.js) ------------------------
@@ -223,6 +223,115 @@
     var bin = atob(a.base64), bytes = new Uint8Array(bin.length);
     for (var k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
     subir(new File([bytes], a.nombre, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    var p = x_.raiz().querySelector('.js-fca-progreso'); if (p && p.scrollIntoView) p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // ---- robot de la oficina: ventas del SII (09-11-2026; backend/logica/finanzasRobotSii.js) ---------------------------
+  // El PC de la oficina entra al SII con el RUT de la empresa, va al Registro de Compras y Ventas › VENTA y aprieta
+  // «Descargar Detalles». El CSV entra por el cuadro de arriba (Registro de Ventas del SII): se revisa y se importa.
+  var sii_ = { trabajo: '', vuelta: 0, archivos: [] };
+  var CLAVE_EMPRESA_SII = 'sigso.fin.sii.empresa';
+  function empresaSii() { try { return localStorage.getItem(CLAVE_EMPRESA_SII) || ''; } catch (e) { return ''; } }
+  function guardarEmpresaSii(v) { try { if (v) localStorage.setItem(CLAVE_EMPRESA_SII, v); else localStorage.removeItem(CLAVE_EMPRESA_SII); } catch (e) { /* sin almacenamiento */ } }
+  function siiHtml() {
+    return U.card({ titulo: 'Traer del SII', icono: 'descargar', sub: 'ventas del mes · robot de la oficina', cuerpo: '<div class="fin2-robot" data-cap="REGISTRAR">' +
+      '<p class="fin2-ayuda">El PC de la oficina entra al SII con el <b>RUT de la empresa</b>, va a <b>Servicios online › Impuestos mensuales › Registro de compras y ventas</b>, consulta el mes, abre <b>VENTA</b> y aprieta <b>Descargar Detalles</b> (cada factura y nota de crédito con su cliente). Después se revisa aquí antes de importar a Cobranza. El robot solo lee: nunca agrega documentos ni toca la propuesta F29.</p>' +
+      '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>Mes</span><input type="month" class="fin2-input fin2-input--sm js-fcs-mes" value="' + mesAnterior() + '"></label>' +
+        '<label class="fin2-campo fin2-campo--fila"><span>RUT de la empresa</span><input class="fin2-input fin2-input--sm js-fcs-rut" autocomplete="off" placeholder="76.123.456-7" value="' + txt(empresaSii()) + '" title="El RUT con que se entra al SII (el de la empresa). En el Registro de Compras y Ventas el robot elige esta empresa."></label>' +
+        U.boton({ texto: 'Traer ventas', icono: 'descargar', variante: 'primario', sm: true, clase: 'js-fcs-ir' }) + '<span class="fin2-ayuda js-fcs-general" aria-live="polite"></span></div>' +
+      '<details class="fin2-robot__clave"><summary>Entrar con la Clave Tributaria desde aquí (si no, alguien entra a mano en el PC de la oficina)</summary>' +
+        '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>Clave Tributaria</span><input type="password" class="fin2-input fin2-input--sm js-fcs-clave" autocomplete="off"></label></div>' +
+        '<p class="fin2-ayuda">La clave no se guarda: viaja al PC de la oficina, se escribe en el SII y se borra. Se intenta <b>una sola vez</b> (tras varios intentos el SII pide verificar un correo). Si algo no quedó bien escrito, el robot se detiene <b>antes</b> de apretar «Ingresar».</p></details>' +
+      '<div class="js-fcs-estado" aria-live="polite"></div></div>' });
+  }
+  function siiGeneral() {
+    var s = x_.raiz().querySelector('.js-fcs-general'); if (!s) return;
+    x_.api('finanzasRobotSiiGeneral', {}).then(function (r) {
+      if (!r || !r.ok) { s.textContent = ''; return; }
+      var g = r.data;
+      s.innerHTML = g.conectado ? U.badge('Robot conectado', 'ok') : g.conectado_antiguo ? U.badge('El programa del PC está desactualizado', 'alerta') : U.badge('Robot no conectado', 'neutro');
+    });
+  }
+  function siiAlAbrir() {
+    var raiz = x_.raiz(), est = raiz.querySelector('.js-fcs-estado'); if (!est) return;
+    var vuelta = sii_.vuelta;
+    x_.api('finanzasRobotSiiUltimo', {}).then(function (r) {
+      var t = r && r.ok && r.data.trabajo;
+      if (!t || vuelta !== sii_.vuelta || !raiz.contains(est)) return;
+      sii_.trabajo = t.trabajo_id; sii_.vuelta++;
+      if (t.estado === 'EN_CURSO') { raiz.querySelector('.js-fcs-ir').disabled = true; siiSeguir(sii_.vuelta); return; }
+      siiResultado(t, est);
+    });
+  }
+  function siiIniciar() {
+    var raiz = x_.raiz(), est = raiz.querySelector('.js-fcs-estado');
+    var mes = raiz.querySelector('.js-fcs-mes').value, rut = raiz.querySelector('.js-fcs-rut').value.trim(), clave = raiz.querySelector('.js-fcs-clave');
+    if (!/^\d{4}-\d{2}$/.test(mes)) { x_.aviso('Elige el mes.', 'error'); return; }
+    if (clave.value && !rut) { x_.aviso('Escribe el RUT de la empresa con que se entra al SII.', 'error'); return; }
+    guardarEmpresaSii(rut);
+    var datos = { periodo: mes };
+    if (rut) datos.rut = rut;
+    if (clave.value) datos.clave = clave.value;
+    clave.value = '';
+    raiz.querySelector('.js-fcs-ir').disabled = true;
+    est.innerHTML = '<p class="fin2-ayuda">Enviando el pedido al PC de la oficina…</p>';
+    x_.api('finanzasRobotSiiIniciar', datos).then(function (r) {
+      datos.clave = '';
+      if (r && r.ok) { sii_.trabajo = r.data.trabajo_id; sii_.vuelta++; siiSeguir(sii_.vuelta); return; }
+      if (r && r.transporte) { est.innerHTML = cinta('info', 'La respuesta del servidor no llegó. Revisando si el pedido quedó hecho…'); setTimeout(function () { raiz.querySelector('.js-fcs-ir').disabled = false; siiAlAbrir(); }, 4000); return; }
+      raiz.querySelector('.js-fcs-ir').disabled = false; est.innerHTML = cinta('critico', txt((r && r.message) || 'No se pudo pedir las ventas.')); siiGeneral();
+    });
+  }
+  function siiSeguir(vuelta, fallos) {
+    if (vuelta !== sii_.vuelta) return;
+    var raiz = x_.raiz(), est = raiz && raiz.querySelector('.js-fcs-estado');
+    if (!est) return;
+    x_.api('finanzasRobotSiiEstado', { trabajo_id: sii_.trabajo }).then(function (r) {
+      if (vuelta !== sii_.vuelta || !raiz.contains(est)) return;
+      if (r && r.transporte && (fallos || 0) < 24) {
+        est.innerHTML = cinta('alerta', 'El servidor no responde por ahora; el robot sigue trabajando en el PC de la oficina. Vuelvo a preguntar…');
+        setTimeout(function () { siiSeguir(vuelta, (fallos || 0) + 1); }, 5000);
+        return;
+      }
+      if (!r || !r.ok) { est.innerHTML = cinta('critico', txt((r && r.message) || 'Se perdió el pedido.')); raiz.querySelector('.js-fcs-ir').disabled = false; return; }
+      var e = r.data;
+      if (e.estado === 'EN_CURSO') {
+        est.innerHTML = cinta('info', '<b>' + txt(e.paso || 'Trabajando…') + '</b>' + (e.asistido && /Esperando que alguien/.test(e.paso || '') ? ' · En el PC de la oficina se abrió el SII: entra con el RUT y la Clave Tributaria de la empresa; el robot sigue solo.' : ''));
+        setTimeout(function () { siiSeguir(vuelta); }, 2500);
+        return;
+      }
+      raiz.querySelector('.js-fcs-ir').disabled = false;
+      siiResultado(e, est);
+    });
+  }
+  function siiResultado(e, est) {
+    var res = e.resultado || {};
+    if (e.estado !== 'LISTO') {
+      if (res.estado === 'SIN_VENTAS') { est.innerHTML = cinta('info', txt(res.mensaje || 'El SII no tiene ventas de ese mes.')); return; }
+      var d = res.diagnostico || {}, form = d.formulario || [], elem = d.elementos || [], rec = d.recorrido || [];
+      var dg = elem.length || form.length || rec.length
+        ? '<details class="fin2-p"><summary>Para ajustar el robot (dónde se detuvo)</summary><p class="fin2-ayuda">' + txt(d.url || '') + '</p>' +
+          (form.length ? '<p class="fin2-ayuda"><b>Formulario</b> (sin lo escrito): ' + form.map(txt).join(' · ') + '</p>' : '') +
+          (elem.length ? '<p class="fin2-ayuda">' + elem.map(txt).join(' · ') + '</p>' : '') +
+          (rec.length ? '<p class="fin2-ayuda"><b>Recorrido</b> (páginas y clics, sin montos):</p><ol class="fin2-ayuda" style="margin:0 0 0 18px;padding:0">' + rec.map(function (l) { return '<li>' + txt(l) + '</li>'; }).join('') + '</ol>' : '') + '</details>' : '';
+      var ayuda = res.estado === 'CLAVE_INVALIDA'
+        ? '<p class="fin2-ayuda fin2-p">Revisa que sea el <b>RUT de la empresa</b> y su <b>Clave Tributaria</b> (la misma con que se entra a mano al SII). Antes de volver a probar, entra una vez a mano: tras varios intentos fallidos el SII pide verificar un correo. También puedes probar <b>sin clave</b> y entrar tú en el PC de la oficina.</p>'
+        : res.estado === 'NO_INGRESADO' ? '<p class="fin2-ayuda fin2-p">No se gastó ningún intento del SII. Envía «Para ajustar el robot» (abajo) para corregir el formulario.</p>'
+        : res.estado === 'DIFERIDA' ? '<p class="fin2-ayuda fin2-p">En el SII: Registro de Compras y Ventas › pestaña <b>Descargas Diferidas</b>. Cuando esté lista, bájala y arrástrala al cuadro «Subir un archivo».</p>' : '';
+      est.innerHTML = cinta('alerta', '<b>El robot se detuvo.</b> ' + txt(res.mensaje || '')) + ayuda + dg;
+      return;
+    }
+    est.innerHTML = cinta('ok', '<b>Detalle de ventas descargado</b> de ' + txt(e.periodo) + '. Revísalo e impórtalo (lo repetido no se duplica).') +
+      '<ul class="fin2-lista-saldos">' + res.archivos.map(function (a, i) {
+        return '<li><span><b>Registro de Ventas</b><small>empresa ' + txt(a.rut || '') + ' · ' + txt(a.periodo || e.periodo) + '</small></span>' + U.boton({ texto: 'Revisar e importar', sm: true, clase: 'js-fcs-revisar', datos: { i: i } }) + '</li>';
+      }).join('') + '</ul>';
+    sii_.archivos = res.archivos;
+  }
+  function siiRevisar(i) {
+    var a = (sii_.archivos || [])[i]; if (!a) return;
+    var bin = atob(a.base64), bytes = new Uint8Array(bin.length);
+    for (var k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+    subir(new File([bytes], a.nombre, { type: 'text/csv' }));
     var p = x_.raiz().querySelector('.js-fca-progreso'); if (p && p.scrollIntoView) p.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
@@ -582,6 +691,8 @@
       else if (b.classList.contains('js-fca-ir')) x_.ir(b.dataset.vista);
       else if (b.classList.contains('js-fcr-ir')) robotIniciar();
       else if (b.classList.contains('js-fcr-revisar')) robotRevisar(Number(b.dataset.i));
+      else if (b.classList.contains('js-fcs-ir')) siiIniciar();
+      else if (b.classList.contains('js-fcs-revisar')) siiRevisar(Number(b.dataset.i));
     });
     raiz.addEventListener('keydown', function (ev) { var s = ev.target.closest && ev.target.closest('.js-fca-soltar'); if (s && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); s.querySelector('input').click(); } });
     raiz.addEventListener('dragover', function (ev) { var s = ev.target.closest && ev.target.closest('.js-fca-soltar'); if (s) { ev.preventDefault(); s.classList.add('fin2-soltar--sobre'); } });

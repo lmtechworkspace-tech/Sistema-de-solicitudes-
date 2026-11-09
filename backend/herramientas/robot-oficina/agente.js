@@ -39,6 +39,7 @@ const path = require('node:path');
 const readline = require('node:readline');
 const Robot = require('../../logica/robotTgr');
 const RobotBci = require('../../logica/robotBci');
+const RobotSii = require('../../logica/robotSii');
 
 const URL_SIGSO = 'https://api.ctrly.cl/v1/accion';
 const CARPETA = process.env.SIGSO_ROBOT_CARPETA || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.config'), 'SIGSO');
@@ -141,11 +142,11 @@ async function iniciar() {
   if (!Robot.disponible()) { log('No se encontró Chrome ni Edge en este PC: el robot los necesita.'); process.exit(SALIDA_DEFINITIVA); }
   const otro = tomarCandado();
   if (otro) { log('Ya hay un robot corriendo en este PC (proceso ' + otro + '): no se inicia otro.'); process.exit(SALIDA_DEFINITIVA); }
-  log('Robot de la oficina (TGR y cartolas BCI) conectado a ' + cfg.url.replace(/\/v1\/accion$/, '') + (ventana ? ' (se verá el navegador)' : '') + '. Esperando pedidos… (Ctrl+C para detener)');
+  log('Robot de la oficina (TGR, cartolas BCI y ventas del SII) conectado a ' + cfg.url.replace(/\/v1\/accion$/, '') + (ventana ? ' (se verá el navegador)' : '') + '. Esperando pedidos… (Ctrl+C para detener)');
   let fallos = 0;
   for (;;) {
     let r;
-    try { r = await llamar(cfg, 'robotAgenteTomar', { capacidades: 'lote,bci' }, 40000); } catch (e) {
+    try { r = await llamar(cfg, 'robotAgenteTomar', { capacidades: 'lote,bci,sii' }, 40000); } catch (e) {
       fallos++;
       if (fallos === 1 || fallos % 10 === 0) log('Sin conexión con SIGSO; reintento en 10 s.');
       await espera(10000);
@@ -162,6 +163,7 @@ async function iniciar() {
     const tr = r.data && r.data.trabajo;
     if (!tr) continue;
     if (tr.tipo === 'BCI') { await traerCartolas(cfg, tr, { recetaBci: recetaBciDePrueba() }); continue; }
+    if (tr.tipo === 'SII_VENTAS') { await traerVentas(cfg, tr, { recetaSii: recetaSiiDePrueba() }); continue; }
     log('Revisión recibida (RUT ' + tr.rut + '). Entrando a la TGR…');
     await revisarUno(cfg, tr, { ventana, receta });
   }
@@ -218,6 +220,45 @@ async function traerCartolas(cfg, tr, o) {
     if ((d.formulario || []).length) log('  formulario: ' + d.formulario.join(' · '));
     if ((d.elementos || []).length) log('  en pantalla: ' + d.elementos.join(' · '));
   }
+}
+/**
+ * Ventas del SII (Finanzas, 09-11-2026; robotSii.js): abre el SII en una ventana de este PC. Con la Clave Tributaria
+ * de la empresa, entra solo; sin clave, espera a que alguien entre a mano. Va al Registro de Compras y Ventas › VENTA ›
+ * «Descargar Detalles» y entrega el CSV a SIGSO (no queda en este PC: la carpeta de descargas es temporal y se borra).
+ */
+async function traerVentas(cfg, tr, o) {
+  let clave = tr.clave || '';
+  tr.clave = '';
+  log('Pedido de ventas del SII (' + tr.periodo + ', ' + (clave ? 'con clave' : 'entrada a mano en este PC') + '). Abriendo el SII…');
+  let ultimo = 0;
+  const res = await RobotSii.traerVentas({ rut: tr.rut, clave, periodo: tr.periodo }, {
+    receta: o.recetaSii || undefined,
+    registro: (m) => log('  · ' + m),
+    alPaso: (p) => {
+      const ahora = Date.now();
+      if (ahora - ultimo < 800) return;
+      ultimo = ahora;
+      llamar(cfg, 'robotAgentePaso', { trabajo_id: tr.trabajo_id, paso: p }, 10000).catch(() => null);
+    }
+  }).catch((e) => ({ estado: 'ERROR', mensaje: 'El robot falló en el PC: ' + String((e && e.message) || e).slice(0, 200), archivos: [] }));
+  clave = '';
+  const entregado = await entregar(cfg, tr.trabajo_id, res);
+  log('Ventas del SII (' + tr.periodo + '): ' + res.estado + (res.estado === 'OK' ? ' (' + res.archivos.map((a) => a.nombre).join(', ') + ')' : ' · ' + res.mensaje) + (entregado ? '' : ' · NO se pudo entregar a SIGSO'));
+  const d = res.estado !== 'OK' && res.diagnostico;
+  if (d) {
+    log('  dónde: ' + (d.url || '—'));
+    if ((d.formulario || []).length) log('  formulario: ' + d.formulario.join(' · '));
+    if ((d.elementos || []).length) log('  en pantalla: ' + d.elementos.join(' · '));
+  }
+}
+/** Solo para probar contra un sitio local que imita el SII (nunca otro host). */
+function recetaSiiDePrueba() {
+  const i = args.indexOf('--prueba-sii');
+  if (i === -1) return null;
+  const u = String(args[i + 1] || '');
+  if (!/^http:\/\/(localhost|127\.0\.0\.1):\d+\//.test(u)) { log('--prueba-sii solo acepta un sitio local (http://localhost:PUERTO/...).'); return { inicio: 'about:blank', rcv: 'about:blank', misii: 'about:blank', salirUrl: '' }; }
+  const base = new URL(u).origin;
+  return { inicio: u, rcv: base + '/rcv', misii: base + '/misii', salirUrl: '', hostsIngreso: [], esperaMs: 10000, ingresoManualMs: 60000 };
 }
 /** Solo para probar contra un sitio local que imita el BCI (nunca otro host). */
 function recetaBciDePrueba() {
