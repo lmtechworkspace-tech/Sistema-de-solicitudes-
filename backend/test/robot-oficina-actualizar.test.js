@@ -22,12 +22,13 @@ function armar() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sigso-act-'));
   const remoto = path.join(base, 'remoto.git'), dev = path.join(base, 'dev'), robot = path.join(base, 'robot');
   g(base, 'init', '-q', '--bare', '-b', 'main', remoto);
-  g(base, 'clone', '-q', remoto, dev);
-  const cfg = (d) => { g(d, 'config', 'user.email', 'prueba@demo.cl'); g(d, 'config', 'user.name', 'Prueba'); g(d, 'config', 'commit.gpgsign', 'false'); };
+  g(base, 'clone', '-q', '-c', 'core.autocrlf=false', remoto, dev);
+  const cfg = (d) => { g(d, 'config', 'user.email', 'prueba@demo.cl'); g(d, 'config', 'user.name', 'Prueba'); g(d, 'config', 'commit.gpgsign', 'false'); g(d, 'config', 'core.autocrlf', 'false'); };
   cfg(dev);
   fs.writeFileSync(path.join(dev, 'robot.js'), 'v1\n');
   g(dev, 'add', '.'); g(dev, 'commit', '-q', '-m', 'v1'); g(dev, 'push', '-q', 'origin', 'HEAD:main');
-  g(base, 'clone', '-q', '-b', 'main', remoto, robot);
+  // Sin conversión de saltos de línea (en Windows core.autocrlf=true dejaría «v2\r\n» en la carpeta).
+  g(base, 'clone', '-q', '-c', 'core.autocrlf=false', '-b', 'main', remoto, robot);
   cfg(robot);
   const publicar = (archivo, texto) => { fs.writeFileSync(path.join(dev, archivo), texto); g(dev, 'add', '.'); g(dev, 'commit', '-q', '-m', archivo); g(dev, 'push', '-q', 'origin', 'HEAD:main'); };
   return { base, robot, publicar };
