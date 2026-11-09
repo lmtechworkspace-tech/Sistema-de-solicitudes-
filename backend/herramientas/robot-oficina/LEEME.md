@@ -123,6 +123,26 @@ borra) y en Finanzas cada cartola se revisa antes de importar.
   actualizar la carpeta del proyecto (`git pull`), hay que reiniciar el robot
   (`quitar-inicio` y `instalar-inicio`, o cerrar y abrir la terminal).
 
+## Ventas del SII (desde el 9-11-2026)
+
+El mismo programa trae el **detalle del Registro de Ventas** del SII cuando
+Finanzas lo pide (Finanzas › Más › Subir archivos › **Traer del SII**). Hace lo
+mismo que se hacía a mano: entra al SII con el **RUT de la empresa** y su Clave
+Tributaria › Servicios online › Impuestos mensuales › **Registro de compras y
+ventas** › Ingresar › RUT y período › **Consultar** › **VENTA** › **Descargar
+Detalles**, y cierra la sesión. El CSV se le entrega a SIGSO y en Finanzas se
+revisa antes de importar a Cobranza.
+
+- Igual que con el BCI: con la clave escrita en SIGSO entra solo, **una sola
+  vez**; sin clave, abre el SII y espera hasta 4 minutos a que alguien entre a
+  mano en este PC.
+- Solo **lee**: nunca aprieta «Agregar documento», «Agregar resumen», «Ir a
+  propuesta F29» ni nada de la pestaña COMPRA.
+- Si el SII deja la descarga como «diferida» (meses con muchos documentos), el
+  robot lo dice: se baja después desde «Descargas Diferidas» y se sube a mano.
+- Un programa anterior no toma estos pedidos: actualiza la carpeta (`git pull`)
+  y reinicia el robot (`quitar-inicio` y `instalar-inicio`).
+
 ## Probar sin tocar la TGR ni el banco reales
 
 `--prueba-tgr http://localhost:PUERTO/tramite` usa un sitio local que imita la

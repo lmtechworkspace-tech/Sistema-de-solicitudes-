@@ -49,6 +49,7 @@ const trabajos_ = new Map();
 let enCurso_ = null;
 let revisor_ = null;                      // inyectado en tests
 let revisorBanco_ = null;                 // inyectado en tests (cartolas del BCI)
+let revisorSii_ = null;                   // inyectado en tests (ventas del SII)
 const pendientes_ = [];                   // trabajos esperando agente
 const esperando_ = [];                    // consultas de agentes abiertas
 const senales_ = new Map();               // agente_id -> último contacto (ms)
@@ -72,13 +73,16 @@ function conectados_(db) {
   const ahora = Date.now();
   return agentes_(db).filter((a) => (senales_.get(a.agente_id) || 0) > ahora - CONECTADO_MS || trabajando_(a.agente_id));
 }
-function enServidor_() { return !!revisor_ || !!revisorBanco_ || process.env.SIGSO_ROBOT_EN_SERVIDOR === '1'; }
+function enServidor_() { return !!revisor_ || !!revisorBanco_ || !!revisorSii_ || process.env.SIGSO_ROBOT_EN_SERVIDOR === '1'; }
+/** Pedidos de archivos (cartolas del BCI, ventas del SII): misma cola, mismo ciclo. */
+const DESCARGAS = { BCI: { cap: 'bci', que: 'las cartolas', donde: 'al banco' }, SII_VENTAS: { cap: 'sii', que: 'las ventas del SII', donde: 'al SII' } };
+const esDescarga_ = (t) => !!DESCARGAS[t && t.tipo];
 
 // --- ciclo de un trabajo ------------------------------------------------------------------
 function terminar_(db, t, r, contexto) {
   if (t.estado === 'LISTO' || t.estado === 'DETENIDO') return;
   t.clave = '';
-  if (t.tipo === 'BCI') return terminarBanco_(t, r);
+  if (esDescarga_(t)) return terminarBanco_(t, r);
   const ok = r && r.estado === 'OK';
   const convenios = ((r && r.convenios) || []).filter((c) => c && Array.isArray(c.cuotas));
   t.resultado = {
@@ -164,9 +168,10 @@ function revisar(db, data, contexto) {
 }
 function soporta_(agenteId, cap) { return (capacidades_.get(agenteId) || []).includes(cap); }
 /** Las cartolas del BCI solo las toma un programa del PC que diga que sabe hacerlo (uno antiguo no). */
-function compatible_(t, agenteId) { return t.tipo !== 'BCI' || soporta_(agenteId, 'bci'); }
+function compatible_(t, agenteId) { return !esDescarga_(t) || soporta_(agenteId, DESCARGAS[t.tipo].cap); }
 function quitar_(id) { const i = pendientes_.indexOf(id); if (i !== -1) pendientes_.splice(i, 1); }
 function paraAgente_(t) {
+  if (t.tipo === 'SII_VENTAS') return { trabajo_id: t.trabajo_id, tipo: 'SII_VENTAS', periodo: t.periodo, rut: t.rut, clave: t.clave };
   return t.tipo === 'BCI' ? { trabajo_id: t.trabajo_id, tipo: 'BCI', periodo: t.periodo, rut: t.rut, rut_empresa: t.rut_empresa || '', clave: t.clave }
     : { trabajo_id: t.trabajo_id, rut: t.rut, clave: t.clave };
 }
@@ -422,21 +427,28 @@ function agenteEntregar(db, data) {
 const BANCO_MAX_MS = 10 * 60 * 1000;      // 4 min para entrar a mano + las descargas
 const BANCO_ARCHIVOS = 8;
 
-function archivoSeguro_(f) {
-  if (!f || typeof f.base64 !== 'string' || !/^[A-Za-z0-9+/=]+$/.test(f.base64) || f.base64.length > 4500000) return null;
+function archivoSeguro_(f, tipo) {
+  if (!f || typeof f.base64 !== 'string' || !/^[A-Za-z0-9+/=]+$/.test(f.base64) || f.base64.length > 11000000) return null;
   const nombre = String(f.nombre || '').replace(/[^\w .°-]/g, '').trim().slice(0, 120);
+  if (tipo === 'SII_VENTAS') {
+    // El detalle del Registro de Ventas: un CSV con el nombre del SII (de ahí SIGSO saca la empresa y el período).
+    if (!/^RCV_VENTA_\d{7,8}-[\dkK]_20\d{4}\.csv$/i.test(nombre)) return null;
+    return { nombre, rut: String(f.rut || '').replace(/[^\dkK-]/g, '').slice(0, 12), periodo: /^\d{4}-\d{2}$/.test(String(f.periodo || '')) ? f.periodo : '', base64: f.base64 };
+  }
+  if (f.base64.length > 4500000) return null;
   if (!/\.xlsx?$/i.test(nombre)) return null;
   return { nombre, numero: String(f.numero || '').replace(/\D/g, '').slice(0, 6), fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(f.fecha || '')) ? f.fecha : '', base64: f.base64 };
 }
 function terminarBanco_(t, r) {
   const ok = r && r.estado === 'OK';
-  const archivos = ((r && r.archivos) || []).slice(0, BANCO_ARCHIVOS).map(archivoSeguro_).filter(Boolean);
+  const archivos = ((r && r.archivos) || []).slice(0, BANCO_ARCHIVOS).map((f) => archivoSeguro_(f, t.tipo)).filter(Boolean);
   const disponibles = ((r && r.disponibles) || []).slice(0, 24).map((d) => ({ numero: String((d && d.numero) || '').replace(/\D/g, '').slice(0, 6), fecha: /^\d{4}-\d{2}-\d{2}$/.test(String((d && d.fecha) || '')) ? d.fecha : '' }));
   const dg = r && r.diagnostico && typeof r.diagnostico === 'object'
     ? { url: String(r.diagnostico.url || '').slice(0, 300), elementos: (Array.isArray(r.diagnostico.elementos) ? r.diagnostico.elementos : []).slice(0, 80).map((x) => String(x || '').slice(0, 60)),
       formulario: (Array.isArray(r.diagnostico.formulario) ? r.diagnostico.formulario : []).slice(0, 20).map((x) => String(x || '').slice(0, 140)),
       recorrido: (Array.isArray(r.diagnostico.recorrido) ? r.diagnostico.recorrido : []).slice(-40).map((x) => String(x || '').slice(0, 160)) } : null;
-  t.resultado = { estado: ok && archivos.length ? 'OK' : ok ? 'SIN_ARCHIVOS' : String((r && r.estado) || 'ERROR').slice(0, 30), mensaje: String((r && r.mensaje) || '').slice(0, 400), archivos, disponibles, diagnostico: dg };
+  const ruts = ((r && r.ruts) || []).slice(0, 20).map((x) => String(x || '').replace(/[^\dkK-]/g, '').slice(0, 12)).filter(Boolean);
+  t.resultado = { estado: ok && archivos.length ? 'OK' : ok ? 'SIN_ARCHIVOS' : String((r && r.estado) || 'ERROR').slice(0, 30), mensaje: String((r && r.mensaje) || '').slice(0, 400), archivos, disponibles, ruts, diagnostico: dg };
   t.estado = t.resultado.estado === 'OK' ? 'LISTO' : 'DETENIDO';
   t.fin = new Date().toISOString();
   if (enCurso_ === t.trabajo_id) enCurso_ = null;
@@ -446,9 +458,10 @@ function terminarBanco_(t, r) {
   if (v.unref) v.unref();
 }
 /** ¿Hay un PC conectado que sepa traer cartolas? */
-function generalBanco_(db) {
+function generalBanco_(db, tipo) {
   const con = conectados_(db);
-  const sabe = con.some((a) => soporta_(a.agente_id, 'bci'));
+  const cap = (DESCARGAS[tipo] || DESCARGAS.BCI).cap;
+  const sabe = con.some((a) => soporta_(a.agente_id, cap));
   return { en_servidor: enServidor_(), conectado: enServidor_() || sabe, conectado_antiguo: !enServidor_() && con.length > 0 && !sabe, ocupado: !!enCurso_ };
 }
 /**
@@ -458,27 +471,30 @@ function generalBanco_(db) {
  */
 function iniciarBanco_(db, d) {
   const borrar = () => { d.clave = ''; };
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(d.periodo || ''))) { borrar(); return { ok: false, message: 'Elige el mes de las cartolas.' }; }
+  const tipo = d.tipo === 'SII_VENTAS' ? 'SII_VENTAS' : 'BCI', D = DESCARGAS[tipo];
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(d.periodo || ''))) { borrar(); return { ok: false, message: tipo === 'BCI' ? 'Elige el mes de las cartolas.' : 'Elige el mes de las ventas.' }; }
   const clave = typeof d.clave === 'string' ? d.clave : '';
   if (clave.length > 64) { borrar(); return { ok: false, message: 'La clave es demasiado larga.' }; }
-  const rut = clave ? Robot.rutFormulario_(d.rut) : '';
-  if (clave && !rut) { borrar(); return { ok: false, message: 'Escribe el RUT con que se entra al banco (ej.: 12345678-9).' }; }
+  // En el SII el RUT es el de la empresa: con clave es el de ingreso; sin clave, cuál elegir en el RCV (si se dio).
+  const rut = clave || (tipo === 'SII_VENTAS' && d.rut) ? Robot.rutFormulario_(d.rut) : '';
+  if (tipo === 'SII_VENTAS' && d.rut && !rut) { borrar(); return { ok: false, message: 'El RUT de la empresa no es válido (ej.: 76123456-7).' }; }
+  if (clave && !rut) { borrar(); return { ok: false, message: tipo === 'BCI' ? 'Escribe el RUT con que se entra al banco (ej.: 12345678-9).' : 'Escribe el RUT de la empresa con que se entra al SII (ej.: 76123456-7).' }; }
   const rutEmpresa = d.rut_empresa ? Robot.rutFormulario_(d.rut_empresa) : '';
   if (d.rut_empresa && !rutEmpresa) { borrar(); return { ok: false, message: 'El RUT de la empresa no es válido (ej.: 76123456-7).' }; }
   if (enCurso_) { borrar(); return { ok: false, ocupado: true, message: 'El robot de la oficina está ocupado con otra tarea. Espera unos minutos y vuelve a intentar.' }; }
-  const g = generalBanco_(db);
+  const g = generalBanco_(db, tipo);
   if (!g.conectado) {
     borrar();
-    return { ok: false, sin_agente: true, message: g.conectado_antiguo ? 'El programa del PC de la oficina es de una versión anterior: actualízalo y reinícialo para traer cartolas.' : 'El robot de la oficina no está conectado: enciende el programa en el PC de la oficina.' };
+    return { ok: false, sin_agente: true, message: g.conectado_antiguo ? 'El programa del PC de la oficina es de una versión anterior: actualízalo y reinícialo para traer ' + D.que + '.' : 'El robot de la oficina no está conectado: enciende el programa en el PC de la oficina.' };
   }
-  const t = { trabajo_id: crypto.randomUUID(), tipo: 'BCI', email: String(d.email || '').toLowerCase(), periodo: d.periodo, rut, rut_empresa: rutEmpresa, cliente: null, estado: 'EN_CURSO',
+  const t = { trabajo_id: crypto.randomUUID(), tipo, email: String(d.email || '').toLowerCase(), periodo: d.periodo, rut, rut_empresa: rutEmpresa, cliente: null, estado: 'EN_CURSO',
     paso: 'Esperando al robot de la oficina', inicio: new Date().toISOString(), fin: '', resultado: null, agente: '', clave, asistido: !clave, alTerminar: d.alTerminar || null };
   borrar();
   trabajos_.set(t.trabajo_id, t);
   enCurso_ = t.trabajo_id;
   t.promesa = new Promise((fin) => { t._fin = fin; });
   if (enServidor_()) {
-    const revisor = revisorBanco_ || require('./robotBci').traerCartolas;
+    const revisor = tipo === 'SII_VENTAS' ? (revisorSii_ || require('./robotSii').traerVentas) : (revisorBanco_ || require('./robotBci').traerCartolas);
     const c = t.clave;
     t.clave = '';
     Promise.resolve().then(() => revisor({ rut, clave: c, periodo: t.periodo, rutEmpresa }, { alPaso: (p) => { t.paso = String(p || '').slice(0, 160); } }))
@@ -495,9 +511,10 @@ function iniciarBanco_(db, d) {
   return { ok: true, trabajo_id: t.trabajo_id };
 }
 /** Avance de un pedido de cartolas (solo quien lo pidió), con los Excel cuando terminó. */
-function estadoBanco_(id, email) {
+function estadoBanco_(id, email, tipo) {
+  const tp = tipo === 'SII_VENTAS' ? 'SII_VENTAS' : 'BCI';
   const t = trabajos_.get(String(id || ''));
-  if (!t || t.tipo !== 'BCI') return { ok: false, message: 'Ese pedido ya no está disponible (se guarda 30 minutos). Vuelve a pedir las cartolas.' };
+  if (!t || t.tipo !== tp) return { ok: false, message: 'Ese pedido ya no está disponible (se guarda 30 minutos). Vuelve a pedir ' + DESCARGAS[tp].que + '.' };
   if (t.email !== String(email || '').toLowerCase()) return { _forbidden: true, message: 'Ese pedido lo hizo otra persona.' };
   return { ok: true, trabajo_id: t.trabajo_id, periodo: t.periodo, asistido: t.asistido, estado: t.estado, paso: t.paso, agente: t.agente, inicio: t.inicio, fin: t.fin, resultado: t.resultado };
 }
@@ -505,18 +522,20 @@ function estadoBanco_(id, email) {
  * El último pedido de cartolas de esta persona (de los 30 minutos que se guardan), o null. Sirve cuando la respuesta
  * de «Traer cartolas» no llegó a la pantalla (internet lento, servidor reiniciando): el pedido pudo quedar hecho igual.
  */
-function ultimoBanco_(email) {
+function ultimoBanco_(email, tipo) {
+  const tp = tipo === 'SII_VENTAS' ? 'SII_VENTAS' : 'BCI';
   const e = String(email || '').toLowerCase();
   let ult = null;
-  for (const t of trabajos_.values()) if (t.tipo === 'BCI' && t.email === e && (!ult || t.inicio > ult.inicio)) ult = t;
-  return ult ? estadoBanco_(ult.trabajo_id, e) : null;
+  for (const t of trabajos_.values()) if (t.tipo === tp && t.email === e && (!ult || t.inicio > ult.inicio)) ult = t;
+  return ult ? estadoBanco_(ult.trabajo_id, e, tp) : null;
 }
 
 // Solo para tests.
 function _usarBanco(revisor) { revisorBanco_ = revisor || null; }
+function _usarSii(revisor) { revisorSii_ = revisor || null; }
 function _usar(revisor) { revisor_ = revisor || null; }
 function _esperar(id) { const t = trabajos_.get(id); return t ? t.promesa : Promise.resolve(); }
-function _reiniciar() { trabajos_.clear(); enCurso_ = null; pendientes_.length = 0; esperando_.length = 0; senales_.clear(); revisor_ = null; revisorBanco_ = null; capacidades_.clear(); lotes_.clear(); lotesPendientes_.length = 0; }
+function _reiniciar() { trabajos_.clear(); enCurso_ = null; pendientes_.length = 0; esperando_.length = 0; senales_.clear(); revisor_ = null; revisorBanco_ = null; revisorSii_ = null; capacidades_.clear(); lotes_.clear(); lotesPendientes_.length = 0; }
 function _esperarLote(id) { const l = lotes_.get(id); return l ? Promise.all(l.trabajos.map((t) => _esperar(t))).then(() => l.promesa) : Promise.resolve(); }
 
-module.exports = { iniciarBanco_, estadoBanco_, ultimoBanco_, generalBanco_, _usarBanco, revisarLote, estadoLote, _esperarLote, revisar, estado, general, listarAgentes, crearAgente, revocarAgente, agenteTomar, agentePaso, agenteEntregar, _usar, _esperar, _reiniciar };
+module.exports = { iniciarBanco_, estadoBanco_, ultimoBanco_, generalBanco_, _usarBanco, _usarSii, revisarLote, estadoLote, _esperarLote, revisar, estado, general, listarAgentes, crearAgente, revocarAgente, agenteTomar, agentePaso, agenteEntregar, _usar, _esperar, _reiniciar };

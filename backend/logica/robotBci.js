@@ -733,4 +733,9 @@ async function traerCartolas(datos, opciones) {
   }
 }
 
-module.exports = { traerCartolas, elegir_, rutTeclas_, RECETA, MAX_CARTOLAS, disponible: () => !!PdfChromium.rutaChrome() };
+// Las piezas de navegación también las usa el robot del SII (robotSii.js): un solo lugar para lo aprendido en el PC de
+// la oficina (ventana oculta, pestañas nuevas, clics con paciencia, recorrido sin datos).
+const piezas = { Detencion, espera_, hasta_, ruta_, host_, buscarTexto_, hayCaptcha_, hayCaptchaInvisible_, avisoVisible_, camposIngreso_,
+  enAlguno_, elemento_, clic_, clicDirecto_, clicTexto_, hayTexto_, grabarClics_, escribir_, rutEscrito_, mostrarVentanas_, adoptar_, diagnostico_ };
+
+module.exports = { traerCartolas, elegir_, rutTeclas_, RECETA, MAX_CARTOLAS, piezas, disponible: () => !!PdfChromium.rutaChrome() };
