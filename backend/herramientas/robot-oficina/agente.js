@@ -23,6 +23,10 @@
  * CARTOLAS DEL BCI (2026-11-03): el mismo programa trae, cuando Finanzas lo pide, los Excel de las cartolas de un mes
  * del Banco en Línea Pyme (robotBci.js). Solo entra a Cuentas › Cartola Histórica: nunca a transferir ni a pagar.
  *
+ * SE ACTUALIZA SOLO (2026-11-09): entre pedido y pedido, cada 15 minutos, revisa si hay una versión nueva publicada de
+ * su rama (actualizar.js: solo avanza, nunca pisa cambios locales); si la hay, la trae y se reinicia (el arranque con
+ * Windows lo vuelve a abrir en 30 s). Abierto a mano en una consola, solo avisa. `--sin-actualizar` lo apaga.
+ *
  * Uso (desde la carpeta del proyecto SIGSO):
  *   node backend/herramientas/robot-oficina/agente.js configurar       (una vez: pega la llave)
  *   node backend/herramientas/robot-oficina/agente.js                  (dejar abierto)
@@ -40,6 +44,7 @@ const readline = require('node:readline');
 const Robot = require('../../logica/robotTgr');
 const RobotBci = require('../../logica/robotBci');
 const RobotSii = require('../../logica/robotSii');
+const Actualizar = require('./actualizar');
 
 const URL_SIGSO = 'https://api.ctrly.cl/v1/accion';
 const CARPETA = process.env.SIGSO_ROBOT_CARPETA || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.config'), 'SIGSO');
@@ -58,6 +63,7 @@ const args = process.argv.slice(2);
 const OCULTO = args.includes('--oculto');      // lo inicia el arranque con Windows: sin consola, al registro
 // Salidas que el lanzador NO debe reintentar (configuración, llave, otro robot ya corriendo).
 const SALIDA_DEFINITIVA = 2;
+const ACTUALIZAR_CADA_MS = 15 * 60 * 1000;
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 const hora = () => new Date().toLocaleString('es-CL');
 /** A la consola y, siempre, al registro (nunca claves: solo estados y RUT). */
@@ -144,7 +150,20 @@ async function iniciar() {
   if (otro) { log('Ya hay un robot corriendo en este PC (proceso ' + otro + '): no se inicia otro.'); process.exit(SALIDA_DEFINITIVA); }
   log('Robot de la oficina (TGR, cartolas BCI y ventas del SII) conectado a ' + cfg.url.replace(/\/v1\/accion$/, '') + (ventana ? ' (se verá el navegador)' : '') + '. Esperando pedidos… (Ctrl+C para detener)');
   let fallos = 0;
+  let revisado = 0, avisado = '';
+  const conQue = Actualizar.head(PROYECTO);   // la versión con que partió este programa
   for (;;) {
+    // ¿Versión nueva publicada? Solo entre pedidos (nunca con un banco o el SII abiertos).
+    if (!args.includes('--sin-actualizar') && Date.now() - revisado > ACTUALIZAR_CADA_MS) {
+      revisado = Date.now();
+      const a = Actualizar.revisar({ proyecto: PROYECTO });
+      // También si alguien ya trajo la versión nueva a mano (`agente.js actualizar`) y este programa sigue con la anterior.
+      if (a.estado === 'AL_DIA' && conQue && a.antes && a.antes !== conQue) { a.estado = 'ACTUALIZADO'; a.mensaje = 'La carpeta ya tiene una versión nueva (' + conQue.slice(0, 7) + ' → ' + a.antes.slice(0, 7) + ').'; }
+      if (a.estado === 'ACTUALIZADO') {
+        if (OCULTO) { log(a.mensaje + ' Reiniciando el robot con la versión nueva…'); process.exit(0); }
+        log(a.mensaje + ' Cierra esta ventana (Ctrl+C) y vuelve a abrir el robot para usarla.');
+      } else if (a.estado !== 'AL_DIA' && a.mensaje !== avisado) { avisado = a.mensaje; log(a.mensaje); }
+    }
     let r;
     try { r = await llamar(cfg, 'robotAgenteTomar', { capacidades: 'lote,bci,sii' }, 40000); } catch (e) {
       fallos++;
@@ -379,5 +398,10 @@ function estadoInicio() {
   } catch (e) { console.log('Todavía no hay registro.'); }
 }
 
-const ORDENES = { configurar, 'instalar-inicio': instalarInicio, 'quitar-inicio': quitarInicio, estado: estadoInicio };
+/** `agente.js actualizar`: trae la versión nueva ahora (si la hay) y dice si hay que reiniciar. */
+function actualizarAhora() {
+  const a = Actualizar.revisar({ proyecto: PROYECTO });
+  console.log(a.mensaje + (a.estado === 'ACTUALIZADO' ? (candadoActivo() ? ' El robot que está corriendo se reiniciará solo con ella en los próximos 15 minutos.' : '') : ''));
+}
+const ORDENES = { configurar, 'instalar-inicio': instalarInicio, 'quitar-inicio': quitarInicio, estado: estadoInicio, actualizar: actualizarAhora };
 Promise.resolve().then(() => (ORDENES[args[0]] || iniciar)()).catch((e) => { log('Error: ' + (e && e.message)); process.exit(1); });

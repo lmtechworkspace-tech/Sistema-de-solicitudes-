@@ -143,6 +143,24 @@ revisa antes de importar a Cobranza.
 - Un programa anterior no toma estos pedidos: actualiza la carpeta (`git pull`)
   y reinicia el robot (`quitar-inicio` y `instalar-inicio`).
 
+## Actualizarse solo (desde el 9-11-2026)
+
+El robot se pone al día **solo**: entre pedido y pedido, cada 15 minutos, revisa
+si hay una versión nueva publicada de su rama. Si la hay, la trae (y si cambiaron
+las dependencias, corre `npm install`) y se reinicia; el arranque con Windows lo
+vuelve a abrir a los 30 segundos. Nunca lo hace con un pedido en curso.
+
+- Funciona en la carpeta **solo del robot** (`C:\SIGSO-robot`, rama
+  `robot-oficina` que sigue a `origin/main`). Se crea una vez con:
+  `git worktree add --track -B robot-oficina C:\SIGSO-robot origin/main`,
+  `npm.cmd install` e `instalar-inicio` desde esa carpeta.
+- Solo **avanza**: si la carpeta tiene cambios sin subir o commits propios, no
+  toca nada y lo anota en el registro (`robot-oficina.log`).
+- Abierto a mano en una consola, solo avisa que hay versión nueva.
+- `node backend/herramientas/robot-oficina/agente.js actualizar` la trae al
+  tiro; el robot que está corriendo se reinicia con ella en menos de 15 minutos.
+- `--sin-actualizar` lo apaga.
+
 ## Probar sin tocar la TGR ni el banco reales
 
 `--prueba-tgr http://localhost:PUERTO/tramite` usa un sitio local que imita la
