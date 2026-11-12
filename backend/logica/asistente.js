@@ -541,7 +541,7 @@ function herramientas_(contexto, modelo) {
 /** Texto corto para mostrar en pantalla mientras corre una herramienta. */
 function descripcionHerramienta_(nombre, input) {
   const i = input || {};
-  if (nombre === 'consultar_sigso') return 'Consultando ' + (MODULO_DE_ACCION[i.accion] || 'SIGSO') + ' (' + i.accion + ')';
+  if (nombre === 'consultar_sigso') return 'Consultando ' + (MODULO_DE_ACCION[i.accion] || 'SIGSO') + ' en SIGSO';
   if (nombre === 'leer_archivo_sigso') return 'Abriendo un archivo de ' + ({ sgc: 'Calidad', proyecto: 'Proyectos', novedad: 'Novedades' }[i.origen] || 'SIGSO');
   if (nombre === 'buscar_en_manuales') return 'Buscando en los manuales: ' + String(i.consulta || '').slice(0, 60);
   if (nombre === 'explorar_tabla') return 'Revisando la tabla ' + i.tabla;
