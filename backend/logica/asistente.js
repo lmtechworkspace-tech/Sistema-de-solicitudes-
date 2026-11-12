@@ -26,7 +26,7 @@
  *
  * Variables del servidor (/etc/sigso/*.env):
  *   ANTHROPIC_API_KEY            obligatoria (sin ella el asistente dice "no configurado")
- *   SIGSO_ASISTENTE_MODELO       por defecto claude-opus-5-5
+ *   SIGSO_ASISTENTE_MODELO       por defecto claude-haiku-5-5 (etapa de pruebas, lo más barato); claude-sonnet-5-5 o claude-opus-5-5 para más calidad
  *   SIGSO_ASISTENTE_ESFUERZO     low | medium | high (por defecto medium)
  *   SIGSO_ASISTENTE_TOPE_DIA     preguntas por persona al día (por defecto 60)
  *   SIGSO_ASISTENTE_TODOS        "si" = todas las cuentas; si no, ADM, super admin y módulo `asistente`
@@ -60,7 +60,7 @@ const PRECIOS = {
   'claude-haiku-5-5': [0.1, 0.5, 0.01, 0.125]
 };
 
-function modelo_() { return String(process.env.SIGSO_ASISTENTE_MODELO || 'claude-opus-5-5').trim(); }
+function modelo_() { return String(process.env.SIGSO_ASISTENTE_MODELO || 'claude-haiku-5-5').trim(); }
 function esfuerzo_() { const e = String(process.env.SIGSO_ASISTENTE_ESFUERZO || 'medium').trim(); return ['low', 'medium', 'high', 'xhigh', 'max'].indexOf(e) !== -1 ? e : 'medium'; }
 function topeDia_() { const n = Number(process.env.SIGSO_ASISTENTE_TOPE_DIA || 60); return n > 0 ? n : 60; }
 function webActiva_() { return String(process.env.SIGSO_ASISTENTE_WEB || '').toLowerCase() !== 'no'; }
@@ -485,7 +485,7 @@ const ESQUEMA_VER = {
   }
 };
 
-function herramientas_(contexto) {
+function herramientas_(contexto, modelo) {
   const lista = [
     {
       name: 'consultar_sigso',
@@ -530,7 +530,10 @@ function herramientas_(contexto) {
     });
   }
   if (webActiva_()) {
-    lista.push({ type: 'web_search_20260209', name: 'web_search', max_uses: 4, user_location: { type: 'approximate', country: 'CL', timezone: 'America/Santiago' } });
+    // La versión con filtrado dinámico (20260209) solo la aceptan Opus y Sonnet;
+    // Haiku usa la búsqueda web básica.
+    const tipo = /^claude-(opus|sonnet|fable|mythos)-/.test(modelo || modelo_()) ? 'web_search_20260209' : 'web_search_20250305';
+    lista.push({ type: tipo, name: 'web_search', max_uses: 4, user_location: { type: 'approximate', country: 'CL', timezone: 'America/Santiago' } });
   }
   return lista;
 }
@@ -671,7 +674,7 @@ async function conversar(db, cuerpo, emitir, opciones) {
   mensajes.push(mensajeUsuario_(contexto, { texto: pregunta, contexto: ctxTexto, adjuntos: cuerpo.adjuntos || [] }));
 
   const modelo = modelo_();
-  const tools = herramientas_(contexto);
+  const tools = herramientas_(contexto, modelo);
   const u = { modelo, input: 0, output: 0, cache_read: 0, cache_write: 0, herramientas: 0 };
   const inicio = Date.now();
   let error = '';

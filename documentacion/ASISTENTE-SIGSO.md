@@ -39,7 +39,7 @@ Variables opcionales:
 
 | Variable | Por defecto | Para qué |
 |---|---|---|
-| `SIGSO_ASISTENTE_MODELO` | `claude-opus-5-5` | `claude-sonnet-5-5` cuesta la mitad |
+| `SIGSO_ASISTENTE_MODELO` | `claude-haiku-5-5` | etapa de pruebas: ~US$0,003 por pregunta. `claude-sonnet-5-5` (más fino) u `claude-opus-5-5` (el mejor, ~10-40 veces más caro) |
 | `SIGSO_ASISTENTE_ESFUERZO` | `medium` | `low` más rápido y barato, `high` más prolijo |
 | `SIGSO_ASISTENTE_TOPE_DIA` | `60` | preguntas por persona al día |
 | `SIGSO_ASISTENTE_TODOS` | (vacío) | `si` = todas las cuentas |
@@ -47,7 +47,7 @@ Variables opcionales:
 
 ## Costo
 
-Se paga por uso a Anthropic. Con Claude Opus 5.5 una pregunta típica (2-4 consultas a SIGSO) cuesta del orden de **US$0,03 a US$0,15**; con documentos largos, más. El prompt fijo queda en caché, así que preguntas seguidas salen más baratas. Cada pregunta queda registrada (solo tokens y costo, **nunca el texto**) en la tabla `ASISTENTE_USO`; la acción `asistenteUso` da el total del mes por persona.
+Se paga por uso a Anthropic (saldo prepagado, sin mensualidad). Por defecto usa Claude Haiku 5.5: del orden de **US$0,003 por pregunta** (con US$5 alcanza para más de mil). Con Claude Opus 5.5 una pregunta típica (2-4 consultas a SIGSO) cuesta del orden de **US$0,03 a US$0,15**; con documentos largos, más. El prompt fijo queda en caché, así que preguntas seguidas salen más baratas. Cada pregunta queda registrada (solo tokens y costo, **nunca el texto**) en la tabla `ASISTENTE_USO`; la acción `asistenteUso` da el total del mes por persona.
 
 ## Cómo está hecho
 

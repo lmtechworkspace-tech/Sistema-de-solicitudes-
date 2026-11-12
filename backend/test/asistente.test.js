@@ -253,3 +253,24 @@ test('Cada consulta del catálogo y cada origen de archivo existe en el router y
   });
   Object.keys(ARCHIVOS).forEach((k) => assert.equal(typeof ACCIONES[ARCHIVOS[k].accion], 'function', ARCHIVOS[k].accion));
 });
+
+test('Modelo: Haiku por defecto (pruebas) y búsqueda web compatible con cada modelo', async () => {
+  const antes = process.env.SIGSO_ASISTENTE_MODELO;
+  delete process.env.SIGSO_ASISTENTE_MODELO;
+  try {
+    const db = db_();
+    assert.equal(Asistente.estado(db, {}, ADM).modelo, 'claude-haiku-5-5');
+    const web = (m) => I.herramientas_(ADM, m).find((t) => t.name === 'web_search').type;
+    assert.equal(web('claude-haiku-5-5'), 'web_search_20250305');
+    assert.equal(web('claude-opus-5-5'), 'web_search_20260209');
+    assert.equal(web('claude-sonnet-5-5'), 'web_search_20260209');
+    // Con Haiku no se mandan los fallbacks (solo existen para Opus/Sonnet 5.5).
+    const tok = Sesiones.crearSesion(db, 'C-ADM');
+    const claude = claudeFalso([{ stop_reason: 'end_turn', content: [{ type: 'text', text: 'ok' }] }]);
+    await Asistente.conversar(db, { portal_token: tok, pregunta: 'hola' }, () => {}, { cliente: claude });
+    assert.equal(claude.llamadas[0].model, 'claude-haiku-5-5');
+    assert.equal(claude.llamadas[0].fallbacks, undefined);
+  } finally {
+    if (antes !== undefined) process.env.SIGSO_ASISTENTE_MODELO = antes;
+  }
+});
