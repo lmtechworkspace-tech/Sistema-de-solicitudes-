@@ -69,7 +69,8 @@ const RECETA = {
   descargaMs: 60 * 1000
 };
 const PASO_MS = 700;
-const MAX_CARTOLAS = 6;
+const MAX_CARTOLAS = 6;                    // por mes
+const MAX_MESES = 12;                      // por pedido (una sola entrada al banco)
 const MAX_BYTES = 3 * 1024 * 1024;
 
 class Detencion extends Error {
@@ -542,16 +543,48 @@ async function irACartolas_(S, receta, alPaso) {
 }
 
 /**
- * Qué cartolas traer para un mes: las de ese mes y la primera del mes siguiente (trae los últimos días del mes, que
- * quedan después de la última cartola). Sin repetir y hasta MAX_CARTOLAS.
+ * Qué cartolas traer para un mes (o un rango de meses, 12-11-2026): las de esos meses y la primera del mes siguiente al
+ * último (trae los últimos días del mes, que quedan después de la última cartola). Sin repetir y hasta MAX_CARTOLAS por mes.
  */
-function elegir_(filas, periodo) {
+function elegir_(filas, periodo, hasta) {
+  const fin = hasta && hasta > periodo ? hasta : periodo;
   const vistas = new Set();
   const l = (filas || []).filter((f) => { const k = f.numero + '|' + f.fecha; if (vistas.has(k)) return false; vistas.add(k); return true; })
     .sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
-  const del = l.filter((f) => f.fecha.slice(0, 7) === periodo);
-  const sig = l.find((f) => f.fecha.slice(0, 7) > periodo);
-  return (sig && del.length ? del.concat(sig) : del).slice(-MAX_CARTOLAS);
+  const del = l.filter((f) => f.fecha.slice(0, 7) >= periodo && f.fecha.slice(0, 7) <= fin);
+  const sig = l.find((f) => f.fecha.slice(0, 7) > fin);
+  return (sig && del.length ? del.concat(sig) : del).slice(-MAX_CARTOLAS * meses_(periodo, fin).length);
+}
+/** Los meses de un rango, en orden: meses_('2026-11', '2027-01') → ['2026-11', '2026-12', '2027-01']. */
+function meses_(desde, hasta) {
+  const out = [];
+  if (!/^\d{4}-\d{2}$/.test(String(desde || ''))) return out;
+  let [a, m] = desde.split('-').map(Number);
+  const fin = hasta && hasta > desde ? hasta : desde;
+  for (let k = 0; k < 60; k++) {
+    const p = a + '-' + String(m).padStart(2, '0');
+    if (p > fin) break;
+    out.push(p);
+    if (++m > 12) { m = 1; a++; }
+  }
+  return out;
+}
+/**
+ * Cómo quedó cada mes pedido: cuántas cartolas bajaron (por la fecha de cada cartola) y, si no hubo, por qué. La primera
+ * cartola del mes siguiente al último cuenta para el último (trae sus últimos días).
+ */
+function resumenMeses_(lista, archivos, faltaron, filas) {
+  const primera = (filas || []).map((f) => f.fecha).sort()[0] || '';
+  const ultimo = lista[lista.length - 1];
+  return lista.map((p) => {
+    const del = (a) => a.fecha.slice(0, 7) === p || (p === ultimo && a.fecha.slice(0, 7) > ultimo);
+    const bajadas = archivos.filter(del).map((a) => a.numero);
+    const falta = faltaron.filter(del).map((a) => a.numero);
+    if (bajadas.length) return { periodo: p, estado: falta.length ? 'INCOMPLETO' : 'OK', mensaje: falta.length ? 'Faltó la N° ' + falta.join(', ') : '', numeros: bajadas };
+    if (falta.length) return { periodo: p, estado: 'FALLO', mensaje: 'No se pudo bajar la N° ' + falta.join(', '), numeros: [] };
+    const antes = primera && (p + '-31') < primera;
+    return { periodo: p, estado: 'SIN_CARTOLAS', mensaje: antes ? 'El banco muestra cartolas solo desde el ' + primera.split('-').reverse().join('-') : 'El banco no tiene cartolas de este mes (si no ha cerrado, aún no hay cartola).', numeros: [] };
+  });
 }
 
 /** Espera el archivo nuevo de la carpeta de descargas (sin el «.crdownload» de Chrome y con su tamaño quieto). */
@@ -611,6 +644,13 @@ async function traerCartolas(datos, opciones) {
   let clave = String((datos && datos.clave) || '');
   const rut = rutTeclas_(datos && datos.rut);
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodo)) return { estado: 'DATOS', mensaje: 'Falta el mes de las cartolas.', archivos: [] };
+  // Varios meses (12-11-2026): una sola entrada al banco y todas las cartolas del rango.
+  const hasta = /^\d{4}-(0[1-9]|1[0-2])$/.test(String((datos && datos.hasta) || '')) && datos.hasta > periodo ? datos.hasta : periodo;
+  const lista = meses_(periodo, hasta);
+  if (lista.length > MAX_MESES) return { estado: 'DATOS', mensaje: 'Hasta ' + MAX_MESES + ' meses por pedido.', archivos: [] };
+  const alArchivo = typeof o.alArchivo === 'function' ? o.alArchivo : () => {};
+  const alMes = typeof o.alMes === 'function' ? o.alMes : () => {};
+  const nombreRango = periodo + (hasta !== periodo ? ' a ' + hasta : '');
   if (clave && !rut) return { estado: 'DATOS', mensaje: 'El RUT no es válido.', archivos: [] };
   const ruta = o.rutaChrome || PdfChromium.rutaChrome();
   if (!ruta) return { estado: 'SIN_NAVEGADOR', mensaje: 'Este PC no tiene Chrome ni Edge.', archivos: [] };
@@ -664,22 +704,58 @@ async function traerCartolas(datos, opciones) {
     clave = ''; // ya se usó: no se vuelve a necesitar
     const filas = await irACartolas_(S, receta, paso);
     page = S.page;
-    const disponibles = filas.slice(0, 24);
-    const elegidas = elegir_(filas, periodo);
+    const disponibles = filas.slice(0, 60);
+    info.filas = filas;
+    const elegidas = elegir_(filas, periodo, hasta);
     if (!elegidas.length) {
-      return { estado: 'SIN_CARTOLAS', mensaje: 'El banco no tiene cartolas de ' + periodo + ' (la última es la N° ' + (filas[0] ? filas[0].numero + ' del ' + filas[0].fecha : '—') + '). Si el mes no ha cerrado, sus movimientos aún no están en una cartola.', archivos: [], disponibles };
+      const meses = resumenMeses_(lista, [], [], filas);
+      meses.forEach((m) => { try { alMes(m); } catch (e) { /* */ } });
+      return { estado: 'SIN_CARTOLAS', mensaje: 'El banco no tiene cartolas de ' + nombreRango + ' (la última es la N° ' + (filas[0] ? filas[0].numero + ' del ' + filas[0].fecha : '—') + '). Si el mes no ha cerrado, sus movimientos aún no están en una cartola.', archivos: [], disponibles, meses };
     }
     const archivos = bajadas;
-    let enLista = true;
+    const faltaron = info.faltaron = [];
+    let enLista = true, seguidas = 0;
+    const avisados = new Set();
+    // Un mes queda listo cuando ya se pasó a una cartola de un mes posterior: se avisa al tiro (la pantalla lo pinta).
+    const avisarHasta = (fecha) => resumenMeses_(lista, archivos, faltaron, filas)
+      .filter((m) => !avisados.has(m.periodo) && (m.periodo + '-31') < fecha && m.periodo !== lista[lista.length - 1])
+      .forEach((m) => { avisados.add(m.periodo); try { alMes(m); } catch (e) { /* */ } });
     for (let i = 0; i < elegidas.length; i++) {
       const c = elegidas[i];
-      paso('Descargando la cartola N° ' + c.numero + ' del ' + c.fecha.split('-').reverse().join('-') + ' (' + (i + 1) + ' de ' + elegidas.length + ')');
-      if (!enLista) {
+      avisarHasta(c.fecha);
+      paso('Cartola ' + (i + 1) + ' de ' + elegidas.length + ' · N° ' + c.numero + ' del ' + c.fecha.split('-').reverse().join('-'));
+      // Una cartola que no baja no detiene el resto: se intenta otra vez desde la lista y, si vuelve a fallar, se anota y
+      // se sigue con la siguiente. Dos cartolas seguidas que fallan = la sesión del banco se cayó: se detiene ahí.
+      let bajo = false, error = null;
+      for (let intento = 0; intento < 2 && !bajo; intento++) {
+        try {
+          await bajarUna_(c, !enLista || intento > 0);
+          bajo = true;
+        } catch (e) {
+          if (!(e instanceof Detencion) || /CAPTCHA|CLAVE_INVALIDA|AVISO/.test(e.estado)) throw e;
+          error = e; enLista = false;
+          registro('cartola N° ' + c.numero + ': ' + e.estado + (intento ? ' (segunda vez)' : ' · se vuelve a intentar desde la lista'));
+        }
+      }
+      if (bajo) { seguidas = 0; continue; }
+      faltaron.push(c);
+      if (++seguidas >= 2) throw error;
+    }
+    const meses = resumenMeses_(lista, archivos, faltaron, filas);
+    meses.filter((m) => !avisados.has(m.periodo)).forEach((m) => { try { alMes(m); } catch (e) { /* */ } });
+    paso('Cerrando la sesión del banco');
+    if (await clicTexto_(S.page, receta.salir)) await espera_(2500);
+    const n = archivos.length;
+    return { estado: 'OK', mensaje: n + (n === 1 ? ' cartola descargada' : ' cartolas descargadas') + (lista.length > 1 ? ' de ' + nombreRango : '') + (faltaron.length ? '; no se pudo bajar la N° ' + faltaron.map((f) => f.numero).join(', ') : '') + '.', archivos, disponibles, meses };
+
+    /** Abre una cartola de la lista y baja su Excel. `volver`: primero regresa a la lista por el menú. */
+    async function bajarUna_(c, volver) {
+      if (volver) {
         // De vuelta a la lista por el menú «Cartola Histórica» (04-11-2026: el portal real vive en un recuadro y
         // «atrás» del navegador no volvía a la lista de forma confiable). La sesión sigue abierta.
         await irACartolas_(S, receta, () => {});
       }
-      const lista = S.page;
+      const pagLista = S.page;
       // «Ver detalles» con paciencia (04-11-2026: el robot apretó en el mismo segundo en que apareció la lista, aún
       // cargando, y se rindió al primer intento). Cada 3 s vuelve a apretar, alternando clic del mouse y clic directo,
       // hasta que aparece el detalle (puede abrirse en la misma pestaña o en otra).
@@ -687,7 +763,7 @@ async function traerCartolas(datos, opciones) {
       let intentos = 0, ultimo = 0;
       await hasta_(async () => {
         await adoptar_(S);
-        if (intentos && await hayTexto_(S.page, receta.exportar) && (!exportarAntes || S.page !== lista || await hayTexto_(S.page, receta.detalle))) return true;
+        if (intentos && await hayTexto_(S.page, receta.exportar) && (!exportarAntes || S.page !== pagLista || await hayTexto_(S.page, receta.detalle))) return true;
         if (Date.now() - ultimo > 3000) {
           ultimo = Date.now(); intentos++;
           const ok = intentos % 2 ? await clic_(S.page, flechaDe_, c.numero, c.fecha) : await clicDirecto_(S.page, flechaDe_, c.numero, c.fecha);
@@ -705,14 +781,14 @@ async function traerCartolas(datos, opciones) {
       const buf = fs.readFileSync(p);
       if (buf.length > MAX_BYTES) throw new Detencion('SIN_DESCARGA', 'El Excel de la cartola N° ' + c.numero + ' es demasiado grande.');
       const ext = (/\.(xlsx|xls)$/i.exec(p) || ['', 'xlsx'])[1].toLowerCase();
-      archivos.push({ nombre: 'Cartola BCI N° ' + c.numero + ' del ' + c.fecha + '.' + ext, numero: c.numero, fecha: c.fecha, base64: buf.toString('base64') });
+      const archivo = { nombre: 'Cartola BCI N° ' + c.numero + ' del ' + c.fecha + '.' + ext, numero: c.numero, fecha: c.fecha, base64: buf.toString('base64') };
+      archivos.push(archivo);
       fs.unlinkSync(p);
       registro('cartola N° ' + c.numero + ' descargada');
-      if (S.page !== lista && !lista.isClosed()) { await S.page.close().catch(() => null); S.page = lista; enLista = true; } else enLista = false;
+      // Se entrega apenas baja (12-11-2026): si algo falla después, lo ya bajado no se pierde y la pantalla lo muestra.
+      try { await alArchivo(archivo); } catch (e) { /* se entrega al final */ }
+      if (S.page !== pagLista && !pagLista.isClosed()) { await S.page.close().catch(() => null); S.page = pagLista; enLista = true; } else enLista = false;
     }
-    paso('Cerrando la sesión del banco');
-    if (await clicTexto_(S.page, receta.salir)) await espera_(2500);
-    return { estado: 'OK', mensaje: archivos.length + (archivos.length === 1 ? ' cartola descargada.' : ' cartolas descargadas.'), archivos, disponibles };
   } catch (e) {
     const estado = e instanceof Detencion ? e.estado : 'ERROR';
     const mensaje = e instanceof Detencion ? e.message : 'El robot no pudo terminar: ' + String((e && e.message) || e).slice(0, 200);
@@ -722,10 +798,11 @@ async function traerCartolas(datos, opciones) {
     if (actual) { try { await clicTexto_(actual, receta.salir); await espera_(1500); } catch (x) { /* */ } }
     // Lo ya descargado no se pierde (04-11-2026: la N° 021 bajó bien y se descartó porque la 022 falló): se entrega
     // como resultado bueno, diciendo qué faltó.
+    const meses = info.filas ? resumenMeses_(lista, bajadas, (info.faltaron || []).concat(elegir_(info.filas, periodo, hasta).filter((c) => !bajadas.some((a) => a.numero === c.numero && a.fecha === c.fecha) && !(info.faltaron || []).includes(c))), info.filas) : [];
     if (bajadas.length) {
-      return { estado: 'OK', mensaje: bajadas.length + (bajadas.length === 1 ? ' cartola descargada' : ' cartolas descargadas') + '; las demás no se pudieron traer: ' + mensaje, archivos: bajadas, disponibles: [], diagnostico };
+      return { estado: 'OK', mensaje: bajadas.length + (bajadas.length === 1 ? ' cartola descargada' : ' cartolas descargadas') + '; las demás no se pudieron traer: ' + mensaje, archivos: bajadas, disponibles: [], diagnostico, meses };
     }
-    return { estado, mensaje, archivos: [], diagnostico };
+    return { estado, mensaje, archivos: [], diagnostico, meses };
   } finally {
     clave = '';
     await navegador.close().catch(() => null);
@@ -738,4 +815,4 @@ async function traerCartolas(datos, opciones) {
 const piezas = { Detencion, espera_, hasta_, ruta_, host_, buscarTexto_, hayCaptcha_, hayCaptchaInvisible_, avisoVisible_, camposIngreso_,
   enAlguno_, elemento_, clic_, clicDirecto_, clicTexto_, hayTexto_, grabarClics_, escribir_, rutEscrito_, mostrarVentanas_, adoptar_, diagnostico_ };
 
-module.exports = { traerCartolas, elegir_, rutTeclas_, RECETA, MAX_CARTOLAS, piezas, disponible: () => !!PdfChromium.rutaChrome() };
+module.exports = { traerCartolas, elegir_, meses_, resumenMeses_, rutTeclas_, RECETA, MAX_CARTOLAS, MAX_MESES, piezas, disponible: () => !!PdfChromium.rutaChrome() };

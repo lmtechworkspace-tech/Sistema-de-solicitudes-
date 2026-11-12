@@ -29,13 +29,14 @@ const iniciar = B.conBoveda('', function (db, data, contexto, x) {
   const d = data || {};
   const e_ = Base.exigir_(contexto, 'REGISTRAR');
   if (e_) { d.clave = ''; return e_; }
-  const pedido = { tipo: TIPO, email: email_(contexto), periodo: String(d.periodo || ''), rut: d.rut, clave: typeof d.clave === 'string' ? d.clave : '' };
+  const pedido = { tipo: TIPO, email: email_(contexto), periodo: String(d.periodo || ''), hasta: d.hasta ? String(d.hasta) : '', rut: d.rut, clave: typeof d.clave === 'string' ? d.clave : '' };
   d.clave = '';
   const asistido = !pedido.clave;
-  pedido.alTerminar = (r) => x.registrar('ROBOT_SII', pedido.periodo + ' · ' + r.estado + (r.estado === 'OK' ? ' · ' + r.archivos.map((a) => a.nombre).join(', ') : ' · ' + r.mensaje.slice(0, 120)));
+  const rango = pedido.periodo + (pedido.hasta && pedido.hasta !== pedido.periodo ? ' a ' + pedido.hasta : '');
+  pedido.alTerminar = (r) => x.registrar('ROBOT_SII', rango + ' · ' + r.estado + (r.estado === 'OK' ? ' · ' + r.archivos.map((a) => a.nombre).join(', ') : ' · ' + r.mensaje.slice(0, 120)));
   const r = RB.iniciarBanco_(db, pedido);
   if (!r.ok) return Object.assign(errorValidacion('robot', r.message), { codigo: r.ocupado ? 'OCUPADO' : r.sin_agente ? 'SIN_AGENTE' : undefined });
-  x.registrar('ROBOT_SII', 'Pidió las ventas de ' + pedido.periodo + (asistido ? ' (entrada a mano en el PC de la oficina)' : ''));
+  x.registrar('ROBOT_SII', 'Pidió las ventas de ' + rango + (asistido ? ' (entrada a mano en el PC de la oficina)' : ''));
   return { trabajo_id: r.trabajo_id };
 });
 
@@ -48,6 +49,14 @@ const estado = B.conBoveda('', function (db, data, contexto) {
   return r;
 });
 
+/** El contenido de un archivo traído (por su nombre): la pantalla lo pide al revisarlo. */
+const archivo = B.conBoveda('', function (db, data, contexto) {
+  const r = RB.archivoBanco_(data && data.trabajo_id, email_(contexto), TIPO, data && data.nombre);
+  if (r._forbidden) return r;
+  if (!r.ok) return errorValidacion('nombre', r.message);
+  return { archivo: r.archivo };
+});
+
 /** El último pedido de esta persona (o { trabajo: null }): para retomarlo al volver a la pantalla. */
 const ultimo = B.conBoveda('', function (db, data, contexto) {
   const r = RB.ultimoBanco_(email_(contexto), TIPO);
@@ -56,4 +65,4 @@ const ultimo = B.conBoveda('', function (db, data, contexto) {
   return { trabajo: r };
 });
 
-module.exports = { general, iniciar, estado, ultimo };
+module.exports = { general, iniciar, estado, archivo, ultimo };

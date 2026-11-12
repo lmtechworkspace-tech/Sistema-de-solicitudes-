@@ -167,7 +167,7 @@ function conCorreoVerificado_(accion, fn) {
 const ACCIONES_PUBLICAS = new Set([
   // Robot TGR de la oficina (2026-10-02): el PC se identifica con su propia
   // llave (se verifica adentro, contra el hash guardado), no con una sesión.
-  'robotAgenteTomar', 'robotAgentePaso', 'robotAgenteEntregar',
+  'robotAgenteTomar', 'robotAgentePaso', 'robotAgenteEntregar', 'robotAgenteParcial',
   'portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud',
   'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes', 'verificarCodigoAcceso',
   'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'enviarMensajeSolicitud', 'validarCierre',
@@ -682,6 +682,7 @@ const ACCIONES = {
   robotAgenteTomar: (db, data) => ControlInternoRobot.agenteTomar(db, data),
   robotAgentePaso: (db, data) => ControlInternoRobot.agentePaso(db, data),
   robotAgenteEntregar: (db, data) => ControlInternoRobot.agenteEntregar(db, data),
+  robotAgenteParcial: (db, data) => ControlInternoRobot.agenteParcial(db, data),
   revisarSII: (db, data, contexto) => ControlInternoSII.revisar(db, data, contexto),
   aplicarSII: (db, data, contexto) => ControlInternoSII.aplicar(db, data, contexto),
   marcarCuotasTGR: (db, data, contexto) => ControlInternoConvenios.marcarCuotas(db, data, contexto),
@@ -930,10 +931,12 @@ const ACCIONES = {
   finanzasRobotBciIniciar: (db, data, contexto) => FinanzasRobotBci.iniciar(db, data, contexto),
   finanzasRobotBciEstado: (db, data, contexto) => FinanzasRobotBci.estado(db, data, contexto),
   finanzasRobotBciUltimo: (db, data, contexto) => FinanzasRobotBci.ultimo(db, data, contexto),
+  finanzasRobotBciArchivo: (db, data, contexto) => FinanzasRobotBci.archivo(db, data, contexto),
   finanzasRobotSiiGeneral: (db, data, contexto) => FinanzasRobotSii.general(db, data, contexto),
   finanzasRobotSiiIniciar: (db, data, contexto) => FinanzasRobotSii.iniciar(db, data, contexto),
   finanzasRobotSiiEstado: (db, data, contexto) => FinanzasRobotSii.estado(db, data, contexto),
   finanzasRobotSiiUltimo: (db, data, contexto) => FinanzasRobotSii.ultimo(db, data, contexto),
+  finanzasRobotSiiArchivo: (db, data, contexto) => FinanzasRobotSii.archivo(db, data, contexto),
   finanzasHojaFlujo: (db, data, contexto) => FinanzasHoja.flujo(db, data, contexto),
   finanzasHojaClientes: (db, data, contexto) => FinanzasHoja.clientes(db, data, contexto),
   finanzasHojaCobranza: (db, data, contexto) => FinanzasHoja.cobranza(db, data, contexto),

@@ -166,3 +166,22 @@ vuelve a abrir a los 30 segundos. Nunca lo hace con un pedido en curso.
 `--prueba-tgr http://localhost:PUERTO/tramite` usa un sitio local que imita la
 TGR, y `--prueba-bci http://localhost:PUERTO/login` uno que imita el BCI Pyme
 (los arman los tests). Solo aceptan direcciones locales.
+
+## Varios meses de una vez (desde el 12-11-2026)
+
+En Finanzas, «Traer del BCI» y «Traer del SII» piden un rango **Desde · Hasta**
+(hasta 12 meses). El robot entra **una sola vez** al banco o al SII y recorre
+todos los meses del rango en la misma sesión (la clave, si la escribieron, se usa
+una sola vez igual que antes).
+
+- Cada archivo se le entrega a SIGSO **apenas baja** (y cómo quedó cada mes): si
+  algo falla a mitad, lo ya bajado no se pierde. Al final no se repite nada.
+- Un mes con problema (sin cartolas, sin ventas, descarga diferida, una cartola
+  que no abre) se anota y el robot **sigue con el siguiente**. Solo se detiene si
+  dos seguidos fallan porque la página se rompió (la sesión probablemente cayó).
+- Ya no hay un tope fijo de 10 minutos: el pedido se da por perdido si el PC pasa
+  **8 minutos sin dar noticias** (cada paso cuenta), con un máximo de 2 horas.
+- Lo traído queda **12 horas** en SIGSO: se puede dejar trabajando y volver.
+- Un programa anterior sigue sirviendo para un mes; para varios hay que tener
+  esta versión (el robot **se actualiza solo** entre pedidos, en menos de 15
+  minutos, si quedó instalado con `instalar-inicio`).

@@ -102,8 +102,12 @@ test('en Finanzas: bóveda y REGISTRAR para pedir; la bitácora no guarda la cla
     assert.equal(ejecutarAccion(db, 'finanzasRobotSiiEstado', D2({ trabajo_id: r.trabajo_id }), ctx2)._forbidden, true);
     assert.equal(ejecutarAccion(db, 'finanzasRobotSiiUltimo', D({}), ctx).trabajo.trabajo_id, r.trabajo_id);
     assert.equal(ejecutarAccion(db, 'finanzasRobotSiiGeneral', D({}), ctx).en_servidor, true);
+    // El avance no lleva el contenido (se pregunta seguido): se pide aparte, por nombre, y solo quien lo pidió.
+    assert.equal(e.resultado.archivos[0].base64, undefined);
+    assert.ok(e.resultado.archivos[0].kb >= 1);
+    assert.equal(ejecutarAccion(db, 'finanzasRobotSiiArchivo', D2({ trabajo_id: r.trabajo_id, nombre: e.resultado.archivos[0].nombre }), ctx2)._forbidden, true);
     // Lo que trajo entra por el lector de siempre: detalle del RCV de ventas, con la empresa y el período del nombre.
-    const a = e.resultado.archivos[0];
+    const a = ejecutarAccion(db, 'finanzasRobotSiiArchivo', D({ trabajo_id: r.trabajo_id, nombre: e.resultado.archivos[0].nombre }), ctx).archivo;
     const leido = SiiLector.leer_(Buffer.from(a.base64, 'base64').toString(), a.nombre);
     assert.deepEqual([leido.fuente, leido.nivel, leido.tipo, leido.rut, leido.periodo, leido.documentos.length], ['rcv', 'detalle', 'ventas', RUT, '2026-M10', 2]);
     const rv = ejecutarAccion(db, 'finanzasRevisarVentas', D({ texto: Buffer.from(a.base64, 'base64').toString(), nombre: a.nombre }), ctx);
@@ -131,7 +135,7 @@ function sitio() {
     'setTimeout(function(){document.getElementById("tabs").innerHTML=\'<a href="#" onclick="ver(0);return false">COMPRA</a> <a href="#" onclick="ver(1);return false">VENTA</a> <a href="#">Documentos Observados</a> <a href="#">Descargas Diferidas</a>\';ver(0)},400)}' +
     'function ver(v){var mm=("0"+q.m).slice(-2),c=document.getElementById("cont");' +
     'if(!v){c.innerHTML="<h3>RESUMEN REGISTRO DE COMPRAS "+q.a+mm+"</h3><button onclick=\\"location.href=\'/prohibido?b=compra\'\\">Descargar Detalles</button>";return}' +
-    'if(q.m!=="10"){c.innerHTML="<p>No existen registros de ventas para el periodo consultado.</p>";return}' +
+    'if(q.m!=="10"&&q.m!=="8"){c.innerHTML="<p>No existen registros de ventas para el periodo consultado.</p>";return}' +
     'setTimeout(function(){c.innerHTML="<h3>RESUMEN REGISTRO DE VENTAS "+q.a+mm+"</h3><table><tr><th>Tipo Documento</th></tr><tr><td>Factura Electrónica (33)</td></tr></table>"+' +
     '"<button onclick=\\"location.href=\'/csv?r="+q.r+"&p="+q.a+mm+"&n=0\'\\">Descargar Resumenes</button> <button onclick=\\"location.href=\'/csv?r="+q.r+"&p="+q.a+mm+"&n=1\'\\">Descargar Detalles</button> "+' +
     '"<button onclick=\\"location.href=\'/prohibido?b=agregar\'\\">Agregar resumen de boletas u otros</button> <button onclick=\\"location.href=\'/prohibido?b=f29\'\\">Ir a propuesta F29</button>"},300)}</script>';
@@ -229,5 +233,22 @@ test('de punta a punta, sin clave: espera la entrada a mano y elige en el RCV la
     assert.ok(!pasos.some((x) => /Escribiendo/.test(x)), 'sin clave el robot no escribe nada en el ingreso');
     assert.deepEqual(r.archivos.map((a) => a.nombre), ['RCV_VENTA_77111222-3_202610.csv'], 'la empresa pedida, no la que venía elegida');
     assert.deepEqual([visto.intentos, visto.prohibido], [1, []]);
+  } finally { S.close(); }
+});
+
+test('varios meses (12-11-2026): una sola entrada al SII, un detalle por mes; un mes sin ventas no detiene el resto', { skip: sinNavegador, timeout: 240000 }, async () => {
+  const { S, visto, receta } = await sitio();
+  try {
+    const llegaron = [], meses = [], pasos = [];
+    const r = await Sii.traerVentas({ rut: RUT, clave: CLAVE, periodo: '2026-08', hasta: '2026-10' }, { receta: Object.assign({}, receta, { pausaMesMs: 200 }), oculto: true,
+      alPaso: (p) => pasos.push(p), alArchivo: (a) => llegaron.push(a.nombre), alMes: (m) => meses.push(m.periodo + ':' + m.estado) });
+    assert.equal(r.estado, 'OK', r.mensaje + ' ' + JSON.stringify(r.diagnostico));
+    assert.deepEqual(r.archivos.map((a) => [a.nombre, a.periodo]), [['RCV_VENTA_' + RUT + '_202608.csv', '2026-08'], ['RCV_VENTA_' + RUT + '_202610.csv', '2026-10']]);
+    assert.deepEqual(r.meses.map((m) => m.periodo + ':' + m.estado), ['2026-08:OK', '2026-09:SIN_VENTAS', '2026-10:OK']);
+    assert.deepEqual(llegaron, r.archivos.map((a) => a.nombre), 'cada archivo se entrega apenas baja');
+    assert.deepEqual(meses, ['2026-08:OK', '2026-09:SIN_VENTAS', '2026-10:OK'], 'cada mes se avisa al terminar');
+    assert.deepEqual([visto.intentos, visto.csv, visto.prohibido], [1, 2, []], 'un solo ingreso para los tres meses');
+    assert.ok(pasos.some((p) => /^Mes 2 de 3 · Consultando septiembre 2026/.test(p)), pasos.join(' | '));
+    assert.equal((await Sii.traerVentas({ rut: RUT, clave: CLAVE, periodo: '2025-01', hasta: '2026-02' }, { receta, oculto: true })).estado, 'DATOS', 'hasta 12 meses');
   } finally { S.close(); }
 });

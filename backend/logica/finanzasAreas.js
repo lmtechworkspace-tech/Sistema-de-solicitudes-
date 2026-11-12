@@ -38,7 +38,7 @@ const POR_AREA = {
     'finanzasObservarCierre', 'finanzasResolverObservacion', 'finanzasExcepcionCierre', 'finanzasVersionCierre', 'finanzasRevisarAntes', 'finanzasElMes',
     'finanzasConciliacion', 'finanzasCandidatos', 'finanzasConciliar', 'finanzasDesconciliar', 'finanzasMarcarDistintas', 'finanzasExplicarRemanente',
     'finanzasCandidatas', 'finanzasGestionDeCandidata', 'finanzasCuadroControl', 'finanzasParalelo', 'finanzasPasoRetiro',
-    'finanzasRobotBciGeneral', 'finanzasRobotBciIniciar', 'finanzasRobotBciEstado', 'finanzasRobotBciUltimo'],
+    'finanzasRobotBciGeneral', 'finanzasRobotBciIniciar', 'finanzasRobotBciEstado', 'finanzasRobotBciUltimo', 'finanzasRobotBciArchivo'],
   INFORMES: ['finanzasInforme', 'finanzasInformePdf', 'finanzasReporte', 'finanzasReporteDetalle', 'finanzasExportar', 'finanzasDescargarRespaldo'],
   FLUJO: ['finanzasHojaFlujo', 'finanzasLibroFlujo', 'finanzasFinanciamiento', 'finanzasGuardarMetaProyecto', 'finanzasPresupuesto', 'finanzasGuardarPresupuesto',
     'finanzasAprobarPresupuesto', 'finanzasPrestamos', 'finanzasGuardarPrestamo', 'finanzasVincularPrestamo', 'finanzasPrestamosSocios', 'finanzasGuardarPrestamista',

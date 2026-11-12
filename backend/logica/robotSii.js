@@ -57,7 +57,8 @@ const RECETA = {
   salir: '^(cerrar sesi[oó]n|salir)$',
   esperaMs: 45 * 1000,
   ingresoManualMs: 4 * 60 * 1000,
-  descargaMs: 90 * 1000
+  descargaMs: 90 * 1000,
+  pausaMesMs: 2500                            // entre un mes y el siguiente (no apurar al SII)
 };
 const MAX_BYTES = 8 * 1024 * 1024;
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -240,10 +241,17 @@ async function traerVentas(datos, opciones) {
   const rut = rutTeclas_(datos && datos.rut);
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodo)) return { estado: 'DATOS', mensaje: 'Falta el mes de las ventas.', archivos: [] };
   if (clave && !rut) return { estado: 'DATOS', mensaje: 'El RUT de la empresa no es válido.', archivos: [] };
+  // Varios meses (12-11-2026): una sola entrada al SII y un detalle por mes.
+  const hasta = /^\d{4}-(0[1-9]|1[0-2])$/.test(String((datos && datos.hasta) || '')) && datos.hasta > periodo ? datos.hasta : periodo;
+  const lista = Bci.meses_(periodo, hasta);
+  if (lista.length > Bci.MAX_MESES) return { estado: 'DATOS', mensaje: 'Hasta ' + Bci.MAX_MESES + ' meses por pedido.', archivos: [] };
+  const nombreRango = periodo + (hasta !== periodo ? ' a ' + hasta : '');
+  const alArchivo = typeof o.alArchivo === 'function' ? o.alArchivo : () => {};
+  const alMes = typeof o.alMes === 'function' ? o.alMes : () => {};
+  const meses = [], bajados = [];
   const ruta = o.rutaChrome || PdfChromium.rutaChrome();
   if (!ruta) return { estado: 'SIN_NAVEGADOR', mensaje: 'Este PC no tiene Chrome ni Edge.', archivos: [] };
   const [anio, mm] = periodo.split('-');
-  const aaaamm = anio + mm;
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sigso-sii-'));
   const puppeteer = require('puppeteer-core');
@@ -284,12 +292,52 @@ async function traerVentas(datos, opciones) {
 
     await ingresar_(S, receta, rut, clave, paso, dialogo, info);
     clave = ''; // ya se usó: no se vuelve a necesitar
-    const { frame, r } = await irAlRcv_(S, receta, paso, [rut, MESES[Number(mm) - 1], anio]);
+    // Varios meses (12-11-2026): una sola entrada al SII; cada mes se consulta y se descarga en el mismo formulario del RCV.
+    // Un mes con problema (diferido, sin el período, sin descarga) se anota y se sigue con el siguiente; dos meses seguidos
+    // con la página rota = se detiene ahí. Lo ya bajado siempre se entrega.
+    let seguidas = 0, ruts = [];
+    for (let k = 0; k < lista.length; k++) {
+      const p = lista[k];
+      const [a, m] = p.split('-');
+      if (k) await espera_(receta.pausaMesMs);
+      try {
+        const res = await unMes_(p, a, m, k);
+        ruts = res.ruts || ruts;
+        meses.push(res.mes);
+        seguidas = 0;
+      } catch (e) {
+        if (!(e instanceof Detencion) || /^(CAPTCHA|CLAVE_INVALIDA|DESAFIO|CAMBIO_CLAVE|EMPRESA|AVISO)$/.test(e.estado)) throw e;
+        registro(p + ': ' + e.estado);
+        meses.push({ periodo: p, estado: e.estado, mensaje: e.message });
+        try { alMes(meses[meses.length - 1]); } catch (x) { /* */ }
+        if (/^(PAGINA_DISTINTA|SIN_RESPUESTA)$/.test(e.estado) && ++seguidas >= 2) { info.meses = meses; throw e; }
+        if (/^(PAGINA_DISTINTA|SIN_RESPUESTA)$/.test(e.estado)) await S.page.goto(receta.rcv, { waitUntil: 'domcontentloaded', timeout: receta.esperaMs }).catch(() => null);
+      }
+    }
+    paso('Cerrando la sesión del SII');
+    await salir_(S, receta);
+    const archivos = bajados;
+    if (!archivos.length) {
+      const vacios = meses.every((x) => x.estado === 'SIN_VENTAS');
+      const primero = meses.find((x) => x.estado !== 'SIN_VENTAS');
+      return { estado: vacios ? 'SIN_VENTAS' : primero.estado, mensaje: vacios ? (lista.length > 1 ? 'El SII no tiene ventas registradas de ' + nombreRango + '.' : meses[0].mensaje) : primero.mensaje, archivos: [], ruts, meses };
+    }
+    const malos = meses.filter((x) => x.estado !== 'OK' && x.estado !== 'SIN_VENTAS');
+    return { estado: 'OK', mensaje: lista.length > 1 ? archivos.length + ' mes(es) descargados de ' + nombreRango + (malos.length ? '; con problema: ' + malos.map((x) => x.periodo).join(', ') : '') + '.' : 'Detalle de ventas de ' + MESES[Number(mm) - 1] + ' ' + anio + ' descargado.', archivos, ruts, meses };
+
+    /** Un mes: elegir RUT · mes · año, Consultar, VENTA y «Descargar Detalles». */
+    async function unMes_(p, anio, mm, k) {
+    const aaaamm = anio + mm;
+    const etiqueta = MESES[Number(mm) - 1] + ' ' + anio;
+    const pre = lista.length > 1 ? 'Mes ' + (k + 1) + ' de ' + lista.length + ' · ' : '';
+    const { frame, r } = k === 0 ? await irAlRcv_(S, receta, paso, [rut, MESES[Number(mm) - 1], anio])
+      : (await hasta_(async () => { await adoptar_(S); return formulario_(S.page, rut, MESES[Number(mm) - 1], anio); }, receta.esperaMs, 'formulario del RCV')
+        .catch((e) => { if (e.estado === 'SIN_RESPUESTA') return irAlRcv_(S, receta, paso, [rut, MESES[Number(mm) - 1], anio]); throw e; }));
     if (!r.rut) {
       throw new Detencion('EMPRESA', 'En el Registro de Compras y Ventas no aparece el RUT ' + conGuion_(rut) + '. Aparecen: ' + (r.ruts.map(conGuion_).join(', ') || 'ninguno') + '.');
     }
-    if (!r.mes || !r.anio) throw new Detencion('SIN_PERIODO', 'El SII no ofrece el período ' + MESES[Number(mm) - 1] + ' ' + anio + ' en el Registro de Compras y Ventas.');
-    paso('Consultando ' + MESES[Number(mm) - 1] + ' ' + anio + ' de la empresa ' + conGuion_(r.rut.r));
+    if (!r.mes || !r.anio) throw new Detencion('SIN_PERIODO', 'El SII no ofrece el período ' + etiqueta + ' en el Registro de Compras y Ventas.');
+    paso(pre + 'Consultando ' + etiqueta + ' de la empresa ' + conGuion_(r.rut.r));
     const elegirEn = async (cual, valor) => { const h = await frame.$('[data-sigso-rcv=' + cual + ']'); if (!h) throw new Detencion('PAGINA_DISTINTA', 'El formulario del RCV cambió mientras se llenaba.'); await h.select(valor); await h.dispose(); };
     await elegirEn('rut', r.rut.v);
     await elegirEn('mes', r.mes);
@@ -298,12 +346,15 @@ async function traerVentas(datos, opciones) {
     const consultar = await frame.$('[data-sigso-rcv=consultar]');
     if (!consultar) throw new Detencion('PAGINA_DISTINTA', 'No se encontró el botón «Consultar» del RCV.');
     await consultar.click(); await consultar.dispose();
+    const consultadoEn = Date.now();
     // VENTA (nunca COMPRA): con paciencia, porque la consulta tarda y la pestaña aparece después.
-    paso('Abriendo la pestaña VENTA');
+    paso(pre + 'Abriendo la pestaña VENTA de ' + etiqueta);
     let ultimo = 0, intentos = 0;
     const estado = await hasta_(async () => {
       revisarAviso_(dialogo);
       const e = await enAlguno_(S.page, estadoVenta_, aaaamm);
+      // «Sin registros» del mes anterior puede seguir en pantalla un momento: el vacío cuenta solo tras unos segundos.
+      if (e === 'vacio' && k && Date.now() - consultadoEn < 4000) return null;
       if (e && intentos) return e;
       if (Date.now() - ultimo > 3000 && (await hayTexto_(S.page, receta.venta))) {
         ultimo = Date.now(); intentos++;
@@ -312,23 +363,29 @@ async function traerVentas(datos, opciones) {
       return null;
     }, receta.esperaMs, 'registro de ventas de ' + aaaamm);
     if (estado === 'vacio') {
-      paso('Cerrando la sesión del SII');
-      await salir_(S, receta);
-      return { estado: 'SIN_VENTAS', mensaje: 'El SII no tiene ventas registradas de ' + MESES[Number(mm) - 1] + ' ' + anio + ' para la empresa ' + conGuion_(r.rut.r) + '.', archivos: [], ruts: r.ruts };
+      const mes = { periodo: p, estado: 'SIN_VENTAS', mensaje: 'El SII no tiene ventas registradas de ' + etiqueta + ' para la empresa ' + conGuion_(r.rut.r) + '.' };
+      try { alMes(mes); } catch (x) { /* */ }
+      return { mes, ruts: r.ruts };
     }
-    paso('Descargando el detalle de ventas');
+    paso(pre + 'Descargando el detalle de ventas de ' + etiqueta);
     const antes = new Set(fs.readdirSync(dir));
     if (!(await clicTexto_(S.page, receta.descargarDetalles))) throw new Detencion('PAGINA_DISTINTA', 'No se encontró el botón «Descargar Detalles».');
-    const p = await descarga_(S, dir, antes, receta.descargaMs, dialogo);
-    const buf = fs.readFileSync(p);
-    if (buf.length > MAX_BYTES) throw new Detencion('SIN_DESCARGA', 'El detalle de ventas es demasiado grande para traerlo por el robot. Bájalo a mano.');
-    if (!/\.(csv|txt)$/i.test(p)) throw new Detencion('FORMATO', 'El SII entregó un archivo que no es CSV (' + path.extname(p) + ').');
+    const archivoBajado = await descarga_(S, dir, antes, receta.descargaMs, dialogo);
+    const buf = fs.readFileSync(archivoBajado);
+    try { fs.unlinkSync(archivoBajado); } catch (x) { /* */ }
+    if (buf.length > MAX_BYTES) throw new Detencion('SIN_DESCARGA', 'El detalle de ventas de ' + etiqueta + ' es demasiado grande para traerlo por el robot. Bájalo a mano.');
+    if (!/\.(csv|txt)$/i.test(archivoBajado)) throw new Detencion('FORMATO', 'El SII entregó un archivo que no es CSV (' + path.extname(archivoBajado) + ').');
     // El nombre del SII (RCV_VENTA_<RUT>_<AAAAMM>.csv): de ahí SIGSO saca la empresa emisora y el período.
     const nombre = 'RCV_VENTA_' + conGuion_(r.rut.r) + '_' + aaaamm + '.csv';
-    registro('detalle de ventas descargado (' + Math.round(buf.length / 1024) + ' KB)');
-    paso('Cerrando la sesión del SII');
-    await salir_(S, receta);
-    return { estado: 'OK', mensaje: 'Detalle de ventas de ' + MESES[Number(mm) - 1] + ' ' + anio + ' descargado.', archivos: [{ nombre, rut: conGuion_(r.rut.r), periodo, base64: buf.toString('base64') }], ruts: r.ruts };
+    registro('detalle de ventas de ' + aaaamm + ' descargado (' + Math.round(buf.length / 1024) + ' KB)');
+    const archivo = { nombre, rut: conGuion_(r.rut.r), periodo: p, base64: buf.toString('base64') };
+    bajados.push(archivo);
+    // Se entrega apenas baja (12-11-2026): si algo falla después, lo ya bajado no se pierde.
+    try { await alArchivo(archivo); } catch (x) { /* se entrega al final */ }
+    const mes = { periodo: p, estado: 'OK', mensaje: '', nombre };
+    try { alMes(mes); } catch (x) { /* */ }
+    return { mes, ruts: r.ruts };
+    }
   } catch (e) {
     const estado = e instanceof Detencion ? e.estado : 'ERROR';
     const mensaje = e instanceof Detencion ? e.message : 'El robot no pudo terminar: ' + String((e && e.message) || e).slice(0, 200);
@@ -336,7 +393,10 @@ async function traerVentas(datos, opciones) {
     const actual = S.page || page;
     const diagnostico = actual ? await diagnostico_(actual, info) : null;
     if (actual && estado !== 'NO_INGRESADO') await salir_(S, receta).catch(() => null);
-    return { estado, mensaje, archivos: [], diagnostico };
+    // Los meses que no alcanzaron a pedirse quedan dichos; lo ya bajado se entrega como resultado bueno.
+    lista.filter((p) => !meses.some((x) => x.periodo === p)).forEach((p) => meses.push({ periodo: p, estado: 'NO_PEDIDO', mensaje: 'No alcanzó a pedirse: ' + mensaje }));
+    if (bajados.length) return { estado: 'OK', mensaje: bajados.length + ' mes(es) descargados; el resto no se pudo traer: ' + mensaje, archivos: bajados, meses, diagnostico };
+    return { estado, mensaje, archivos: [], diagnostico, meses: lista.length > 1 ? meses : undefined };
   } finally {
     clave = '';
     await navegador.close().catch(() => null);

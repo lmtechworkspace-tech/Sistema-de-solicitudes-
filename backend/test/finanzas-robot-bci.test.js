@@ -75,7 +75,10 @@ test('PC de la oficina: lo toma solo un programa que sabe; la clave se entrega u
     disponibles: [{ numero: '019', fecha: '2026-09-16' }] } });
   e = RB.estadoBanco_(r.trabajo_id, 'uno@demo.cl');
   assert.equal(e.estado, 'LISTO');
-  assert.deepEqual(e.resultado.archivos.map((f) => [f.nombre, f.numero, Buffer.from(f.base64, 'base64').toString()]), [['Cartola BCI N° 019 del 2026-09-16.xlsx', '019', 'PK-019']], 'solo Excel con contenido válido');
+  assert.deepEqual(e.resultado.archivos.map((f) => [f.nombre, f.numero, f.base64]), [['Cartola BCI N° 019 del 2026-09-16.xlsx', '019', undefined]], 'solo Excel con contenido válido; el avance no lleva el contenido');
+  const f019 = RB.archivoBanco_(r.trabajo_id, 'uno@demo.cl', 'BCI', 'Cartola BCI N° 019 del 2026-09-16.xlsx');
+  assert.equal(Buffer.from(f019.archivo.base64, 'base64').toString(), 'PK-019', 'el contenido se pide aparte, por nombre');
+  assert.equal(RB.archivoBanco_(r.trabajo_id, 'otra@demo.cl', 'BCI', 'Cartola BCI N° 019 del 2026-09-16.xlsx')._forbidden, true);
   assert.equal(RB.estadoBanco_(r.trabajo_id, 'otra@demo.cl')._forbidden, true, 'solo quien lo pidió');
   // Sin clave: asistido (alguien entra a mano en el PC).
   const t2 = RB.agenteTomar(db, { agente_token: a, capacidades: 'lote,bci' });
@@ -306,5 +309,22 @@ test('revisión 04-11: portal en otra pestaña, menú dentro de un componente y 
     assert.equal(visto.intentos, 1);
     assert.ok(raro.diagnostico.elementos.some((e) => /Productos/.test(e)), JSON.stringify(raro.diagnostico));
     assert.ok(raro.diagnostico.recorrido.some((l) => /^página: 127\.0\.0\.1\/destino-raro/.test(l)), JSON.stringify(raro.diagnostico.recorrido));
+  } finally { S.close(); }
+});
+
+test('varios meses (12-11-2026): una sola entrada al banco, todas las cartolas del rango, cada una entregada al bajar', { skip: sinNavegador, timeout: 240000 }, async () => {
+  const { S, visto, url } = await sitio();
+  try {
+    const receta = { inicio: url, esperaMs: 15000, descargaMs: 15000 };
+    const llegaron = [], meses = [];
+    const r = await Bci.traerCartolas({ rut: '12.345.678-5', clave: CLAVE, periodo: '2026-08', hasta: '2026-09', rutEmpresa: '78194394-0' },
+      { receta, oculto: true, alArchivo: (a) => llegaron.push(a.numero), alMes: (m) => meses.push(m.periodo + ':' + m.estado + ':' + m.numeros.join('/')) });
+    assert.equal(r.estado, 'OK', r.mensaje + ' ' + JSON.stringify(r.diagnostico));
+    assert.deepEqual(r.archivos.map((a) => a.numero), ['018', '019', '020', '021'], 'agosto, septiembre y la primera de octubre (cierre de septiembre)');
+    assert.deepEqual(llegaron, ['018', '019', '020', '021']);
+    assert.deepEqual(r.meses.map((m) => m.periodo + ':' + m.estado + ':' + m.numeros.join('/')), ['2026-08:OK:018', '2026-09:OK:019/020/021']);
+    assert.deepEqual(meses, ['2026-08:OK:018', '2026-09:OK:019/020/021'], 'agosto se avisa apenas se pasa a septiembre');
+    assert.deepEqual([visto.intentos, visto.salir], [1, 1], 'un ingreso y una salida para todo el rango');
+    assert.match(r.mensaje, /4 cartolas descargadas de 2026-08 a 2026-09/);
   } finally { S.close(); }
 });

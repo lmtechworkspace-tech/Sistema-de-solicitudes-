@@ -165,7 +165,7 @@ async function iniciar() {
       } else if (a.estado !== 'AL_DIA' && a.mensaje !== avisado) { avisado = a.mensaje; log(a.mensaje); }
     }
     let r;
-    try { r = await llamar(cfg, 'robotAgenteTomar', { capacidades: 'lote,bci,sii' }, 40000); } catch (e) {
+    try { r = await llamar(cfg, 'robotAgenteTomar', { capacidades: 'lote,bci,sii,meses,parcial' }, 40000); } catch (e) {
       fallos++;
       if (fallos === 1 || fallos % 10 === 0) log('Sin conexión con SIGSO; reintento en 10 s.');
       await espera(10000);
@@ -215,10 +215,12 @@ async function revisarUno(cfg, tr, o) {
 async function traerCartolas(cfg, tr, o) {
   let clave = tr.clave || '';
   tr.clave = '';
-  log('Pedido de cartolas del BCI (' + tr.periodo + ', ' + (clave ? 'con clave' : 'entrada a mano en este PC') + '). Abriendo el banco…');
+  const rango = tr.periodo + (tr.hasta && tr.hasta !== tr.periodo ? ' a ' + tr.hasta : '');
+  log('Pedido de cartolas del BCI (' + rango + ', ' + (clave ? 'con clave' : 'entrada a mano en este PC') + '). Abriendo el banco…');
   let ultimo = 0;
-  const res = await RobotBci.traerCartolas({ rut: tr.rut, clave, periodo: tr.periodo, rutEmpresa: tr.rut_empresa }, {
-    receta: o.recetaBci || undefined,
+  const parte = porPartes(cfg, tr.trabajo_id);
+  const res = await RobotBci.traerCartolas({ rut: tr.rut, clave, periodo: tr.periodo, hasta: tr.hasta, rutEmpresa: tr.rut_empresa }, {
+    receta: o.recetaBci || undefined, alArchivo: parte.archivo, alMes: parte.mes,
     // El recorrido (páginas, pestañas, pasos y clics; nunca montos ni lo escrito), línea a línea en el registro del PC.
     registro: (m) => log('  · ' + m),
     alPaso: (p) => {
@@ -229,8 +231,8 @@ async function traerCartolas(cfg, tr, o) {
     }
   }).catch((e) => ({ estado: 'ERROR', mensaje: 'El robot falló en el PC: ' + String((e && e.message) || e).slice(0, 200), archivos: [] }));
   clave = '';
-  const entregado = await entregar(cfg, tr.trabajo_id, res);
-  log('Cartolas del BCI (' + tr.periodo + '): ' + res.estado + (res.estado === 'OK' ? ' (' + res.archivos.length + ' archivo(s))' : ' · ' + res.mensaje) + (entregado ? '' : ' · NO se pudo entregar a SIGSO'));
+  const entregado = await entregar(cfg, tr.trabajo_id, parte.resto(res));
+  log('Cartolas del BCI (' + rango + '): ' + res.estado + (res.estado === 'OK' ? ' (' + res.archivos.length + ' archivo(s))' : ' · ' + res.mensaje) + (entregado ? '' : ' · NO se pudo entregar a SIGSO'));
   // Dónde se detuvo, también aquí: si la pantalla de SIGSO perdió el pedido, el registro del PC lo conserva.
   // Es lo mismo que ve «Para ajustar el robot»: dirección, botones, títulos y cómo es el formulario (nunca montos ni lo escrito).
   const d = res.estado !== 'OK' && res.diagnostico;
@@ -248,10 +250,12 @@ async function traerCartolas(cfg, tr, o) {
 async function traerVentas(cfg, tr, o) {
   let clave = tr.clave || '';
   tr.clave = '';
-  log('Pedido de ventas del SII (' + tr.periodo + ', ' + (clave ? 'con clave' : 'entrada a mano en este PC') + '). Abriendo el SII…');
+  const rango = tr.periodo + (tr.hasta && tr.hasta !== tr.periodo ? ' a ' + tr.hasta : '');
+  log('Pedido de ventas del SII (' + rango + ', ' + (clave ? 'con clave' : 'entrada a mano en este PC') + '). Abriendo el SII…');
   let ultimo = 0;
-  const res = await RobotSii.traerVentas({ rut: tr.rut, clave, periodo: tr.periodo }, {
-    receta: o.recetaSii || undefined,
+  const parte = porPartes(cfg, tr.trabajo_id);
+  const res = await RobotSii.traerVentas({ rut: tr.rut, clave, periodo: tr.periodo, hasta: tr.hasta }, {
+    receta: o.recetaSii || undefined, alArchivo: parte.archivo, alMes: parte.mes,
     registro: (m) => log('  · ' + m),
     alPaso: (p) => {
       const ahora = Date.now();
@@ -261,8 +265,8 @@ async function traerVentas(cfg, tr, o) {
     }
   }).catch((e) => ({ estado: 'ERROR', mensaje: 'El robot falló en el PC: ' + String((e && e.message) || e).slice(0, 200), archivos: [] }));
   clave = '';
-  const entregado = await entregar(cfg, tr.trabajo_id, res);
-  log('Ventas del SII (' + tr.periodo + '): ' + res.estado + (res.estado === 'OK' ? ' (' + res.archivos.map((a) => a.nombre).join(', ') + ')' : ' · ' + res.mensaje) + (entregado ? '' : ' · NO se pudo entregar a SIGSO'));
+  const entregado = await entregar(cfg, tr.trabajo_id, parte.resto(res));
+  log('Ventas del SII (' + rango + '): ' + res.estado + (res.estado === 'OK' ? ' (' + res.archivos.map((a) => a.nombre).join(', ') + ')' : ' · ' + res.mensaje) + (entregado ? '' : ' · NO se pudo entregar a SIGSO'));
   const d = res.estado !== 'OK' && res.diagnostico;
   if (d) {
     log('  dónde: ' + (d.url || '—'));
@@ -286,6 +290,32 @@ function recetaBciDePrueba() {
   const u = String(args[i + 1] || '');
   if (!/^http:\/\/(localhost|127\.0\.0\.1):\d+\//.test(u)) { log('--prueba-bci solo acepta un sitio local (http://localhost:PUERTO/...).'); return { inicio: 'about:blank' }; }
   return { inicio: u, esperaMs: 10000, ingresoManualMs: 60000 };
+}
+/**
+ * Entrega por partes (12-11-2026): cada archivo se manda a SIGSO apenas baja, y cómo quedó cada mes. Lo que SIGSO ya
+ * recibió no se vuelve a mandar al final (en un pedido de 12 meses la entrega final sería enorme). Si SIGSO todavía no
+ * conoce la entrega por partes, todo va en la entrega final, como antes.
+ */
+function porPartes(cfg, trabajoId) {
+  const recibidos = new Set();
+  let sinPartes = false;
+  const mandar = async (data) => {
+    if (sinPartes) return false;
+    for (let i = 0; i < 2; i++) {
+      try {
+        const r = await llamar(cfg, 'robotAgenteParcial', Object.assign({ trabajo_id: trabajoId }, data), 60000);
+        if (r && r.ok !== false) return true;
+        if (r && /desconocid|no existe|unknown/i.test(String(r.message || r.error || ''))) sinPartes = true;
+        return false;
+      } catch (e) { await espera(2000); }
+    }
+    return false;
+  };
+  return {
+    archivo: async (a) => { if (await mandar({ archivo: a })) recibidos.add(a.nombre); },
+    mes: (m) => { mandar({ mes: m }).catch(() => null); },
+    resto: (res) => Object.assign({}, res, { archivos: (res.archivos || []).filter((a) => !recibidos.has(a.nombre)) })
+  };
 }
 async function entregar(cfg, trabajoId, res) {
   for (let i = 0; i < 3; i++) {
