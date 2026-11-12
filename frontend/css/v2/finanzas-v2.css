@@ -532,6 +532,14 @@
 .fin2-robot__pedido .fin2-campo--fila .fin2-input { min-width: 0; }
 .fin2-robot__pedido input[type=month] { width: 150px; }
 .fin2-robot__pedido .js-rb-empresa { width: 140px; }
+/* «Traer lo que falta» (12-11-2026): qué falta según lo ya importado, con su botón */
+.fin2-robot__falta { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px; font-size: .8125rem; background: var(--sx-superficie); border: 1px solid var(--sx-borde); }
+.fin2-robot__falta > span { flex: 1 1 220px; }
+.fin2-robot__falta > svg { flex: none; }
+.fin2-robot__falta--falta { border-color: color-mix(in srgb, var(--sx-alerta, #b45309) 45%, transparent); background: color-mix(in srgb, var(--sx-alerta, #b45309) 8%, var(--sx-superficie)); }
+.fin2-robot__falta--falta > svg { color: var(--sx-alerta, #b45309); }
+.fin2-robot__falta--ok > svg { color: var(--sx-ok, #15803d); }
+.fin2-robot__falta--neutro > svg { color: var(--sx-texto-3); }
 .fin2-robot__atajos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .fin2-robot__atajos .sx2-chip { padding: 4px 10px; font-size: .75rem; }
 .fin2-robot__atajos .js-rb-nota { margin-left: auto; font-weight: 600; color: var(--sx-texto-2); }

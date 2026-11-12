@@ -76,7 +76,7 @@
       }).join('') + '</ul>' : '<p class="fin2-ayuda">Se llena al publicar la hoja MEJORAS de la planilla SIGECO.</p>' }) : '') +
     '</div>');
     x_.aplicarCapacidades(x_.raiz());
-    if (vista === 'cargas') ['bci', 'sii'].forEach(function (k) { robotGeneral(k); notaRango(k); robotAlAbrir(k); });
+    if (vista === 'cargas') ['bci', 'sii'].forEach(function (k) { robotGeneral(k); notaRango(k); robotAlAbrir(k); robotFalta(k); });
   }
 
   // ---- robots de la oficina: cartolas del BCI y ventas del SII (03-11 y 09-11-2026; varios meses 12-11-2026) ----------
@@ -100,7 +100,7 @@
 
   var ROBOTS = {
     bci: {
-      api: 'finanzasRobotBci', titulo: 'Traer del BCI', sub: 'cartolas · robot de la oficina', boton: 'Traer cartolas', sitio: 'el banco',
+      api: 'finanzasRobotBci', titulo: 'Traer del BCI', sub: 'cartolas · robot de la oficina', boton: 'Traer cartolas', sitio: 'al banco',
       ayuda: 'El PC de la oficina entra <b>una sola vez</b> al Banco en Línea Pyme, va a <b>Cuentas › Cartola Histórica</b> y baja el Excel de cada cartola de los meses que elijas (y la primera del mes siguiente, que trae los últimos días). Solo entra a Cuentas: nunca a transferir ni a pagar.',
       empresa: { ls: 'sigso.fin.bci.empresa', defecto: '78.194.394-0', titulo: 'Si quien entra al banco tiene varias empresas, el BCI pregunta con cuál («Convenios Relacionados al Usuario»): el robot entra con esta.' },
       clave: '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>RUT con que se entra</span><input class="fin2-input fin2-input--sm js-rb-rut js-fcr-rut" autocomplete="off" placeholder="12.345.678-9" title="El mismo RUT que se escribe al entrar a mano al Banco en Línea Pyme"><small class="fin2-ayuda js-fcr-rut-aviso" hidden>Parece RUT de empresa: el BCI Pyme suele pedir el de la persona que entra.</small></label>' +
@@ -121,7 +121,7 @@
       }
     },
     sii: {
-      api: 'finanzasRobotSii', titulo: 'Traer del SII', sub: 'ventas · robot de la oficina', boton: 'Traer ventas', sitio: 'el SII',
+      api: 'finanzasRobotSii', titulo: 'Traer del SII', sub: 'ventas · robot de la oficina', boton: 'Traer ventas', sitio: 'al SII',
       ayuda: 'El PC de la oficina entra <b>una sola vez</b> al SII con el <b>RUT de la empresa</b>, abre el <b>Registro de Compras y Ventas</b> y, mes por mes, consulta, abre <b>VENTA</b> y aprieta <b>Descargar Detalles</b> (cada factura y nota de crédito con su cliente). Solo lee: nunca agrega documentos ni toca la propuesta F29.',
       empresa: { ls: 'sigso.fin.sii.empresa', defecto: '', titulo: 'El RUT con que se entra al SII (el de la empresa). En el Registro de Compras y Ventas el robot elige esta empresa.' },
       clave: '<div class="fin2-robot__fila"><label class="fin2-campo fin2-campo--fila"><span>Clave Tributaria</span><input type="password" class="fin2-input fin2-input--sm js-rb-clave" autocomplete="off"></label></div>' +
@@ -145,6 +145,7 @@
     return U.card({ titulo: R.titulo, icono: 'descargar', sub: R.sub, clase: 'fin2-robot-card', cuerpo: '<div class="fin2-robot" data-cap="REGISTRAR" data-robot="' + k + '">' +
       '<div class="fin2-robot__cab"><p class="fin2-ayuda">' + R.ayuda + '</p><span class="js-rb-general" aria-live="polite"></span></div>' +
       '<div class="fin2-robot__pedido">' +
+        '<div class="fin2-robot__falta js-rb-falta" aria-live="polite" hidden></div>' +
         '<div class="fin2-robot__fila">' +
           '<label class="fin2-campo fin2-campo--fila"><span>Desde</span><input type="month" class="fin2-input fin2-input--sm js-rb-desde" value="' + ant + '" max="' + ant.slice(0, 4) + '-12"></label>' +
           '<label class="fin2-campo fin2-campo--fila"><span>Hasta</span><input type="month" class="fin2-input fin2-input--sm js-rb-hasta" value="' + ant + '"></label>' +
@@ -170,6 +171,36 @@
       notaRango(k);
     });
   }
+  /**
+   * «Traer lo que falta» (12-11-2026; finanzasRobotFalta.js): SIGSO mira lo último que se importó y propone desde ahí hasta
+   * el mes pasado (como mucho 12 meses). Un clic llena «Desde · Hasta» y hace el pedido.
+   */
+  function robotFalta(k) {
+    var c = caja(k), el = c && c.querySelector('.js-rb-falta'); if (!el) return;
+    var rut = c.querySelector('.js-rb-empresa').value.trim();
+    x_.api('finanzasRobotFalta', { tipo: k === 'sii' ? 'SII' : 'BCI', rut: rut }).then(function (r) {
+      if (!c.isConnected) return;
+      if (!r || !r.ok) { el.hidden = true; return; }
+      var f = rb_[k].falta = r.data;
+      var ultimo = f.ultimo ? (k === 'bci' ? 'la última cartola importada es del ' + fechaCl(f.ultimo) : 'las últimas ventas importadas son de ' + nombreMes(f.ultimo)) : '';
+      el.hidden = false;
+      el.className = 'fin2-robot__falta js-rb-falta fin2-robot__falta--' + (f.al_dia ? 'ok' : f.sin_historial ? 'neutro' : 'falta');
+      if (f.al_dia) { el.innerHTML = U.ico('check', 16) + '<span><b>Al día</b> hasta ' + txt(nombreMes(f.hasta)) + ': ' + txt(ultimo) + '.</span>'; return; }
+      if (f.sin_historial) { el.innerHTML = U.ico('info', 16) + '<span>' + txt(f.motivo || 'Todavía no hay nada importado: elige el rango a mano.') + '</span>'; return; }
+      var n = Bmeses(f.desde, f.hasta);
+      el.innerHTML = U.ico('alerta', 16) + '<span><b>Falta traer ' + txt(n === 1 ? nombreMes(f.desde) : nombreMes(f.desde) + ' a ' + nombreMes(f.hasta)) + '</b> (' + n + (n === 1 ? ' mes' : ' meses') + ')' +
+        (ultimo ? ' · ' + txt(ultimo) : '') + (f.recortado ? ' · en total faltan ' + f.faltan_meses + ' meses: primero estos 12, después el resto' : '') + '.</span>' +
+        U.boton({ texto: 'Traer lo que falta', icono: 'descargar', variante: 'primario', sm: true, clase: 'js-rb-falta-ir' });
+    });
+  }
+  function Bmeses(d, h) { return listaMeses(d, h).length; }
+  function traerFalta(k) {
+    var c = caja(k), f = rb_[k].falta; if (!f || !f.desde) return;
+    c.querySelector('.js-rb-desde').value = f.desde; c.querySelector('.js-rb-hasta').value = f.hasta;
+    c.querySelectorAll('.js-rb-atajo').forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+    notaRango(k);
+    robotIniciar(k);
+  }
   function rango(k) {
     var c = caja(k), d = c.querySelector('.js-rb-desde').value, h = c.querySelector('.js-rb-hasta').value || d;
     return { desde: d, hasta: h, n: /^\d{4}-\d{2}$/.test(d) && /^\d{4}-\d{2}$/.test(h) && h >= d ? listaMeses(d, h).length : 0 };
@@ -180,7 +211,7 @@
     n.className = 'fin2-ayuda js-rb-nota';
     if (!r.n) { n.textContent = '«Hasta» no puede ser antes de «Desde».'; n.classList.add('fin2-robot__nota--mal'); return; }
     if (r.n > max) { n.textContent = max === 1 ? 'El programa del PC todavía no sabe traer varios meses (se actualiza solo en unos minutos): pide un mes.' : 'Hasta ' + max + ' meses por pedido (elegiste ' + r.n + ').'; n.classList.add('fin2-robot__nota--mal'); return; }
-    n.textContent = r.n === 1 ? nombreMes(r.desde) + ' · un mes' : r.n + ' meses (' + nombreMes(r.desde) + ' a ' + nombreMes(r.hasta) + ') · una sola entrada a ' + ROBOTS[k].sitio;
+    n.textContent = r.n === 1 ? nombreMes(r.desde) + ' · un mes' : r.n + ' meses (' + nombreMes(r.desde) + ' a ' + nombreMes(r.hasta) + ') · una sola entrada ' + ROBOTS[k].sitio;
   }
   function atajo(k, n) {
     var c = caja(k), ant = mesAnterior(), d = n === 'anio' ? new Date().getFullYear() + '-01' : mesMas(ant, 1 - Number(n));
@@ -422,7 +453,7 @@
         });
       }).then(function () { pintarRevision(k); });
     }, Promise.resolve()).then(function () {
-      L.importando = false; pintarRevision(k);
+      L.importando = false; pintarRevision(k); robotFalta(k);
       var n = L.filas.filter(function (f) { return f.estado === 'importado'; }).length;
       x_.aviso(n + ' archivo(s) importados.', 'exito');
     });
@@ -773,7 +804,12 @@
     var raiz = x.raiz();
     if (enlazado_ || !raiz) return;
     enlazado_ = true;
-    raiz.addEventListener('change', function (ev) { if (ev.target.classList.contains('js-fca-archivo')) subir(ev.target.files[0]); });
+    raiz.addEventListener('change', function (ev) {
+      if (ev.target.classList.contains('js-fca-archivo')) subir(ev.target.files[0]);
+      // Otra empresa: lo que falta se vuelve a calcular para ella.
+      var k = ev.target.classList.contains('js-rb-empresa') && ev.target.closest('[data-robot]');
+      if (k) robotFalta(k.dataset.robot);
+    });
     raiz.addEventListener('input', function (ev) {
       var k = ev.target.closest && ev.target.closest('[data-robot]');
       if (k && (ev.target.classList.contains('js-rb-desde') || ev.target.classList.contains('js-rb-hasta'))) {
@@ -794,6 +830,7 @@
         var c = b.closest('[data-robot]'), k = c && c.dataset.robot;
         if (!k) return;
         if (b.classList.contains('js-rb-ir')) robotIniciar(k);
+        else if (b.classList.contains('js-rb-falta-ir')) traerFalta(k);
         else if (b.classList.contains('js-rb-atajo')) atajo(k, b.dataset.n);
         else if (b.classList.contains('js-rb-revisar')) robotRevisar(k, Number(b.dataset.i));
         else if (b.classList.contains('js-rb-todo')) revisarTodo(k);
