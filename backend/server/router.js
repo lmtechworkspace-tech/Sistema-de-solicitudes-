@@ -980,6 +980,11 @@ const ACCIONES = {
   hompyMarcarReembolso: (db, data, contexto) => Hompy.marcarReembolso(db, data, contexto),
   hompyGuardarPreparacion: (db, data, contexto) => Hompy.guardarPreparacion(db, data, contexto),
   hompyRegistrarTraje: (db, data, contexto) => Hompy.registrarTraje(db, data, contexto),
+  // Asistente SIGSO (2026-11-11): la conversación va por POST /v1/asistente (en vivo,
+  // ver app.js); aquí solo el estado, los adjuntos y el consumo del mes.
+  asistenteEstado: (db, data, contexto) => require('../logica/asistente').estado(db, data, contexto),
+  asistenteAdjuntar: (db, data, contexto) => require('../logica/asistente').adjuntar(db, data, contexto),
+  asistenteUso: (db, data, contexto) => require('../logica/asistente').uso(db, data, contexto),
   obtenerPreferencias: (db, data, contexto) => Preferencias.obtener(db, data, contexto),
   guardarFijados: (db, data, contexto) => Preferencias.guardarFijados(db, data, contexto),
   // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y

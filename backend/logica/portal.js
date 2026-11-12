@@ -82,6 +82,9 @@ function perfilPublico(cuenta, db) {
   if (db && credencialesDe_(db, cuenta)) perfil.credenciales = true;
   // Portal de clientes (2026-10-07): super admin o con permiso (solo pinta el menú).
   if (db && portalClientesDe_(db, cuenta)) perfil.portal_clientes = true;
+  // Asistente SIGSO (2026-11-11): ADM, super admin o módulo `asistente` (solo pinta el botón;
+  // el servidor lo vuelve a verificar en cada pregunta).
+  if (asistenteDe_(cuenta)) perfil.asistente = true;
   return perfil;
 }
 function contextoDe_(cuenta) {
@@ -97,6 +100,11 @@ function colasDe_(db, cuenta) { try { return require('./serviciosSolicitud').col
 function finanzasDe_(db, cuenta) { try { return require('./finanzasBoveda').tieneAcceso(db, { cuenta_id: cuenta.cuenta_id, email: parsearListaPortal(cuenta.emails)[0] || '' }); } catch (e) { return false; } }
 function credencialesDe_(db, cuenta) { try { return require('./credenciales').tieneAcceso(db, { cuenta_id: cuenta.cuenta_id, super_admin: cuenta.super_admin === true || cuenta.super_admin === 'TRUE' || cuenta.super_admin === 1 }); } catch (e) { return false; } }
 function portalClientesDe_(db, cuenta) { try { return require('./portalClientes').tieneAcceso(db, { email: parsearListaPortal(cuenta.emails)[0] || '', super_admin: cuenta.super_admin === true || cuenta.super_admin === 'TRUE' || cuenta.super_admin === 1 }); } catch (e) { return false; } }
+function asistenteDe_(cuenta) {
+  try {
+    return require('./asistente').puedeUsar(Object.assign(contextoDe_(cuenta), { super_admin: cuenta.super_admin === true || cuenta.super_admin === 'TRUE' || cuenta.super_admin === 1 }));
+  } catch (e) { return false; }
+}
 function jefaturaDe_(db, cuenta) { return require('./controlInterno').jefaturaDeDepartamentos_(db, contextoDe_(cuenta)); }
 
 function login(db, data, ip) {

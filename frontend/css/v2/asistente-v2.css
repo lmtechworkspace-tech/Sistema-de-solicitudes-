@@ -1,0 +1,158 @@
+/*
+ * asistente-v2.css — el Asistente SIGSO (2026-11-11): botón flotante en todo
+ * SIGSO y panel lateral de conversación (asistente-v2.js). Solo tokens v2
+ * (--sx-*), así sigue el tema claro/oscuro sin reglas propias.
+ */
+
+.asis-fab {
+  position: fixed; right: 20px; bottom: 20px; z-index: 900;
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 48px; padding: 0 18px 0 14px; border: 0; border-radius: var(--sx-radio-full);
+  background: linear-gradient(135deg, var(--sx-primario), var(--sx-primario-intenso));
+  color: var(--sx-sobre-primario); font: 600 14px/1 inherit; font-family: inherit;
+  box-shadow: var(--sx-sombra-3); cursor: pointer;
+  transition: transform var(--sx-dur-rapida) var(--sx-curva), box-shadow var(--sx-dur-rapida) var(--sx-curva);
+}
+.asis-fab:hover { transform: translateY(-2px); }
+.asis-fab:focus-visible { outline: none; box-shadow: var(--sx-sombra-3), var(--sx-anillo-foco); }
+.asis-fab svg { flex: none; }
+.asis-fab[hidden] { display: none; }
+/* En el celular la barra inferior del shell (≤ 900 px) ocupa el borde: el botón va encima. */
+@media (max-width: 900px) {
+  .asis-fab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 640px) {
+  .asis-fab { right: 14px; width: 52px; height: 52px; padding: 0; justify-content: center; }
+  .asis-fab .asis-fab-texto { display: none; }
+}
+/* Los otros flotantes de la esquina (aviso de agenda, Hompy, avisos, interruptor de
+   Proyectos) suben para no quedar encima ni debajo del botón. */
+html.asis-con-fab .ag-aviso,
+html.asis-con-fab .hp2a-flota,
+html.asis-con-fab .sigso-avisos { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+html.asis-con-fab .sx2-py-interruptor { bottom: 84px; }
+@media (max-width: 900px) {
+  html.asis-con-fab .ag-aviso,
+  html.asis-con-fab .hp2a-flota,
+  html.asis-con-fab .sigso-avisos { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* --- panel ---------------------------------------------------------------------------- */
+.asis-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 950;
+  width: min(440px, 100vw); display: flex; flex-direction: column;
+  background: var(--sx-superficie); color: var(--sx-texto);
+  border-left: 1px solid var(--sx-borde); box-shadow: var(--sx-sombra-3);
+  transform: translateX(105%); transition: transform var(--sx-dur) var(--sx-curva-sale), width var(--sx-dur) var(--sx-curva);
+}
+.asis-panel.abierto { transform: none; }
+.asis-panel.ancho { width: min(820px, 100vw); }
+@media (prefers-reduced-motion: reduce) { .asis-panel, .asis-fab { transition: none; } }
+
+.asis-cabeza {
+  display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px;
+  border-bottom: 1px solid var(--sx-borde-suave); flex: none;
+}
+.asis-logo {
+  width: 34px; height: 34px; border-radius: var(--sx-radio); flex: none;
+  display: grid; place-items: center; color: var(--sx-sobre-primario);
+  background: linear-gradient(135deg, var(--sx-primario), var(--sx-primario-intenso));
+}
+.asis-titulo { flex: 1; min-width: 0; }
+.asis-titulo b { display: block; font-size: 15px; }
+.asis-titulo span { display: block; font-size: 12px; color: var(--sx-texto-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.asis-btn-icono {
+  width: 34px; height: 34px; border: 0; border-radius: var(--sx-radio); background: transparent;
+  color: var(--sx-texto-2); display: grid; place-items: center; cursor: pointer; flex: none;
+}
+.asis-btn-icono:hover { background: var(--sx-superficie-hover); color: var(--sx-texto); }
+.asis-btn-icono:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.asis-btn-icono[aria-pressed="true"] { background: var(--sx-primario-suave); color: var(--sx-primario); }
+.asis-btn-icono:disabled { opacity: .45; cursor: default; }
+
+/* --- mensajes ------------------------------------------------------------------------- */
+.asis-cuerpo { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; overscroll-behavior: contain; }
+
+.asis-bienvenida { margin: auto 0; text-align: left; }
+.asis-bienvenida h2 { font-size: 20px; margin: 0 0 6px; }
+.asis-bienvenida p { margin: 0 0 14px; color: var(--sx-texto-2); font-size: 14px; line-height: 1.5; }
+.asis-sugerencias { display: grid; gap: 8px; }
+.asis-sugerencia {
+  text-align: left; padding: 10px 12px; border-radius: var(--sx-radio); cursor: pointer;
+  border: 1px solid var(--sx-borde); background: var(--sx-superficie-2); color: var(--sx-texto);
+  font: inherit; font-size: 13.5px; line-height: 1.35; display: flex; gap: 10px; align-items: flex-start;
+}
+.asis-sugerencia:hover { border-color: var(--sx-primario); background: var(--sx-primario-suave); }
+.asis-sugerencia svg { color: var(--sx-primario); flex: none; margin-top: 1px; }
+
+.asis-msg { max-width: 100%; font-size: 14px; line-height: 1.55; }
+.asis-msg.usuario {
+  align-self: flex-end; max-width: 88%; padding: 9px 13px; border-radius: 16px 16px 4px 16px;
+  background: var(--sx-primario); color: var(--sx-sobre-primario); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.asis-msg.usuario .asis-adjuntos-msg { margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.asis-msg.usuario .asis-chip { background: color-mix(in srgb, var(--sx-sobre-primario) 18%, transparent); color: inherit; border-color: transparent; }
+.asis-msg.asistente { align-self: stretch; overflow-wrap: anywhere; }
+.asis-msg.asistente p { margin: 0 0 8px; }
+.asis-msg.asistente p:last-child { margin-bottom: 0; }
+.asis-msg.asistente h3, .asis-msg.asistente h4 { font-size: 15px; margin: 12px 0 6px; }
+.asis-msg.asistente ul, .asis-msg.asistente ol { margin: 4px 0 8px; padding-left: 22px; }
+.asis-msg.asistente li { margin: 2px 0; }
+.asis-msg.asistente code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; padding: 1px 5px; border-radius: 5px; background: var(--sx-superficie-2); }
+.asis-msg.asistente pre { white-space: pre-wrap; padding: 10px; border-radius: var(--sx-radio); background: var(--sx-superficie-2); font-size: 12.5px; }
+.asis-msg.asistente a { color: var(--sx-primario); }
+.asis-msg.asistente blockquote { margin: 6px 0; padding: 4px 10px; border-left: 3px solid var(--sx-borde-fuerte); color: var(--sx-texto-2); }
+.asis-tabla { overflow-x: auto; margin: 6px 0 10px; border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio); }
+.asis-tabla table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.asis-tabla th, .asis-tabla td { padding: 6px 9px; border-bottom: 1px solid var(--sx-borde-suave); text-align: left; vertical-align: top; }
+.asis-tabla th { background: var(--sx-superficie-2); font-weight: 600; }
+.asis-tabla tr:last-child td { border-bottom: 0; }
+
+.asis-estado { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--sx-texto-3); }
+.asis-puntos { display: inline-flex; gap: 3px; }
+.asis-puntos i { width: 5px; height: 5px; border-radius: 50%; background: var(--sx-primario); animation: asis-punto 1.1s infinite ease-in-out; }
+.asis-puntos i:nth-child(2) { animation-delay: .15s; }
+.asis-puntos i:nth-child(3) { animation-delay: .3s; }
+@keyframes asis-punto { 0%, 80%, 100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .asis-puntos i { animation: none; opacity: .7; } }
+
+.asis-acciones-msg { display: flex; gap: 2px; margin-top: 6px; }
+.asis-acciones-msg .asis-btn-icono { width: 28px; height: 28px; }
+.asis-error {
+  padding: 10px 12px; border-radius: var(--sx-radio); font-size: 13.5px;
+  background: var(--sx-critico-suave); color: var(--sx-critico);
+}
+
+/* --- caja de escribir ------------------------------------------------------------------ */
+.asis-pie { flex: none; padding: 10px 12px 12px; border-top: 1px solid var(--sx-borde-suave); }
+.asis-adjuntos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.asis-adjuntos:empty { display: none; }
+.asis-chip {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 220px; padding: 3px 4px 3px 8px;
+  border-radius: var(--sx-radio-full); border: 1px solid var(--sx-borde); background: var(--sx-superficie-2);
+  font-size: 12px;
+}
+.asis-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asis-chip button { border: 0; background: transparent; color: inherit; cursor: pointer; padding: 2px; display: grid; place-items: center; border-radius: 50%; }
+.asis-chip.subiendo { opacity: .6; }
+.asis-chip.mal { border-color: var(--sx-critico); color: var(--sx-critico); }
+.asis-caja {
+  display: flex; align-items: flex-end; gap: 4px; padding: 6px; border-radius: var(--sx-radio-lg);
+  border: 1px solid var(--sx-borde); background: var(--sx-superficie-2);
+}
+.asis-caja:focus-within { border-color: var(--sx-primario); box-shadow: var(--sx-anillo-foco); }
+.asis-caja textarea, .asis-caja textarea:focus {
+  flex: 1; min-width: 0; resize: none; border: 0 !important; outline: none; box-shadow: none !important; background: transparent !important; color: var(--sx-texto);
+  font: inherit; font-size: 14px; line-height: 1.45; padding: 7px 4px; min-height: 36px !important; height: 36px; max-height: 160px;
+}
+.asis-enviar { background: var(--sx-primario); color: var(--sx-sobre-primario); }
+.asis-enviar:hover { background: var(--sx-primario-intenso); color: var(--sx-sobre-primario); }
+.asis-mic.escuchando { background: var(--sx-critico); color: var(--sx-sobre-critico); animation: asis-latido 1.2s infinite; }
+@keyframes asis-latido { 50% { box-shadow: 0 0 0 6px var(--sx-critico-suave); } }
+.asis-nota { margin: 7px 2px 0; font-size: 11.5px; color: var(--sx-texto-3); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.asis-soltar {
+  position: absolute; inset: 0; display: none; place-items: center; z-index: 2;
+  background: color-mix(in srgb, var(--sx-primario) 12%, var(--sx-superficie)); border: 2px dashed var(--sx-primario);
+  font-weight: 600; color: var(--sx-primario);
+}
+.asis-panel.soltando .asis-soltar { display: grid; }

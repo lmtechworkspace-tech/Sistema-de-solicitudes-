@@ -961,6 +961,13 @@ const COLUMNAS = {
   HOMPY_COLABORACIONES: [
     'colab_id', 'marca_id', 'titulo', 'tipo', 'estado', 'fecha_inicio', 'fecha_fin', 'entregamos', 'recibimos', 'valor', 'resultado', 'calificacion',
     'evento_ids', 'idea_ids', 'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activo'
+  ],
+  // Asistente SIGSO (2026-11-11, logica/asistente.js): una fila por pregunta,
+  // SOLO el consumo (no el texto de la pregunta): tope diario y costo del mes.
+  ASISTENTE_USO: [
+    'uso_id', 'fecha', 'dia', 'cuenta_id', 'email', 'modelo',
+    'tokens_entrada', 'tokens_salida', 'tokens_cache_lectura', 'tokens_cache_escritura',
+    'herramientas', 'costo_usd', 'ms', 'error'
   ]
 };
 

@@ -19,6 +19,7 @@ const http = require('node:http');
 const { ejecutarAccion } = require('./router');
 const { VERSION_BACKEND } = require('../logica/sistema');
 const ArchivosSolicitud = require('../logica/archivosSolicitud');
+const Asistente = require('../logica/asistente');
 
 // Unica fuente de verdad: backend/logica/sistema.js (que tambien la usa
 // para getEstadoSistema, el panel de diagnostico de Administracion).
@@ -105,6 +106,33 @@ async function manejar(req, res, db) {
     const { status, body } = await ejecutarAccion(db, cuerpo.action, cuerpo.data, { ip: ipCliente_(req) });
     const ms = Math.round(Number(process.hrtime.bigint() - inicio) / 1e5) / 10;
     return responderJson(res, status, body, ms);
+  }
+
+  // Asistente SIGSO (2026-11-11): la respuesta llega EN VIVO (text/event-stream,
+  // un evento JSON por línea "data: ..."), así la persona ve el texto mientras
+  // se escribe y qué está consultando. La identidad sale de portal_token, igual
+  // que en /v1/accion (ver asistente.js).
+  if (req.method === 'POST' && ruta === '/v1/asistente') {
+    if (!db) return responderJson(res, 500, { ok: false, error: 'Servidor sin base de datos configurada' });
+    const cuerpo = await leerCuerpo_(req);
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+    });
+    const control = new AbortController();
+    res.on('close', () => { if (!res.writableEnded) control.abort(); });
+    const emitir = (ev) => { if (!res.writableEnded && !res.destroyed) res.write('data: ' + JSON.stringify(ev) + '\n\n'); };
+    try {
+      await Asistente.conversar(db, cuerpo, emitir, { senal: control.signal });
+    } catch (err) {
+      console.error('asistente: error no capturado:', err);
+      emitir({ tipo: 'error', mensaje: 'Error interno del servidor.' });
+    }
+    return res.end();
   }
 
   // Adjuntos de solicitudes (reemplazo de los enlaces de Drive): la URL que
