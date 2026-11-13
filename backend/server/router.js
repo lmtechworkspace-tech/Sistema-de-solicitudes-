@@ -59,6 +59,7 @@ const Personas = require('../logica/personasSgc');
 const NoConformidades = require('../logica/noConformidadesSgc');
 const Auditorias = require('../logica/auditoriasSgc');
 const Quejas = require('../logica/quejasSgc');
+const Preparacion = require('../logica/preparacionSgc');
 const Proveedores = require('../logica/proveedoresSgc');
 const RevisionDireccion = require('../logica/revisionDireccionSgc');
 const Objetivos = require('../logica/objetivosSgc');
@@ -552,6 +553,16 @@ const ACCIONES = {
   // público, Intake) no está portada. Sin archivos: se corta al frontend en
   // el mismo incremento.
   listarQuejasSgc: (db, data, contexto) => Quejas.listar(db, data, contexto),
+  // Plan de control (P6): «¿Estamos preparados para certificar?».
+  listarPreparacionSgc: (db, data, contexto) => Preparacion.listar(db, data, contexto),
+  getPreparacionSgc: (db, data, contexto) => Preparacion.obtener(db, data, contexto),
+  crearPreparacionSgc: (db, data, contexto) => Preparacion.crear(db, data, contexto),
+  actualizarPreparacionSgc: (db, data, contexto) => Preparacion.actualizar(db, data, contexto),
+  guardarEntrevistaPreparacionSgc: (db, data, contexto) => Preparacion.guardarEntrevista(db, data, contexto),
+  guardarMuestraPreparacionSgc: (db, data, contexto) => Preparacion.guardarMuestra(db, data, contexto),
+  sortearMuestrasPreparacionSgc: (db, data, contexto) => Preparacion.sortearDeNuevo(db, data, contexto),
+  crearTareaBrechaPreparacionSgc: (db, data, contexto) => Preparacion.crearTareaBrecha(db, data, contexto),
+  emitirPreparacionSgc: (db, data, contexto) => Preparacion.emitir(db, data, contexto),
   getDetalleQuejaSgc: (db, data, contexto) => Quejas.getDetalle(db, data, contexto),
   registrarRecepcionQuejaSgc: (db, data, contexto) => Quejas.registrarRecepcion(db, data, contexto),
   registrarInvestigacionQuejaSgc: (db, data, contexto) => Quejas.registrarInvestigacion(db, data, contexto),

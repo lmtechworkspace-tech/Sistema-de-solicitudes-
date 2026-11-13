@@ -43,6 +43,7 @@ const CATALOGO = [
   ['getResumenGerencia', 'Gerencia', 'Resumen ejecutivo para Gerencia.', '{}'],
   ['getPanelGerenciaActividades', 'Gerencia', 'Actividades/tareas de toda la empresa vistas por Gerencia.', '{}'],
   ['getCumplimientoResponsables', 'Gerencia', 'Índice de cumplimiento por responsable (% del mes): compromisos con fecha, obligaciones del área, SGC y reportabilidad, más tareas sin fecha y dormidas. alcance: yo | equipo | empresa; periodo YYYY-MM; email para una persona.', '{"alcance":"empresa","periodo":"2026-11"}'],
+  ['getPreparacionSgc', 'Calidad', '«¿Estamos preparados para certificar?»: recomendación global, veredicto por área con sus brechas, entrevistas, muestras y salud del SGC. Sin informe_id trae la última evaluación.', '{}'],
   ['getMiEquipo', 'Jefatura', 'El equipo de la jefatura: tareas abiertas, atrasadas y horas de cada persona.', '{}'],
   ['getPanelJefatura', 'Jefatura', 'Panel de Mi departamento.', '{}'],
 

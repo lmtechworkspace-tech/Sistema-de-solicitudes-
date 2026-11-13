@@ -751,6 +751,25 @@ const COLUMNAS = {
     'creado_por', 'fecha_creacion', 'activa'
   ],
 
+  // Plan de control y certificación, P6 (2026-11-13): «¿Estamos preparados
+  // para certificar?». Una ronda de evaluación (SGC_PREPARACION) con sus
+  // entrevistas guiadas a los responsables (respuestas = arreglo JSON de
+  // { pregunta_id, respuesta, evidencia SI|PARCIAL|NO, puntaje 0-3 }) y las
+  // muestras al azar de las matrices para revisar la trazabilidad. Al emitir,
+  // `snapshot` congela lo que se entregó a gerencia (preparacionSgc.js).
+  SGC_PREPARACION: [
+    'informe_id', 'correlativo', 'titulo', 'fecha_corte', 'estado', 'conclusion', 'recomendacion',
+    'fecha_auditoria', 'snapshot', 'creado_por', 'fecha_creacion', 'emitido_por', 'fecha_emision', 'activa'
+  ],
+  SGC_PREP_ENTREVISTAS: [
+    'entrevista_id', 'informe_id', 'area', 'persona_email', 'persona_nombre', 'cargo', 'entrevistador_email',
+    'fecha', 'respuestas', 'autoevaluacion', 'autoevaluacion_motivo', 'comentario', 'actualizado_en', 'activa'
+  ],
+  SGC_PREP_MUESTRAS: [
+    'muestra_id', 'informe_id', 'area', 'origen', 'ref_id', 'descripcion', 'periodo',
+    'hizo', 'reviso', 'libero', 'resultado', 'observacion', 'revisado_por', 'fecha_revision', 'activa'
+  ],
+
   // Control interno (2026-10-01): las matrices de Contabilidad y RR.HH. que
   // hoy viven en el Drive. Una fila = un registro de cualquier matriz (la
   // definición de cada una está en logica/controlInternoMatrices.js); lo
