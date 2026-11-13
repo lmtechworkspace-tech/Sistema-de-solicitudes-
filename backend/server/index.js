@@ -28,6 +28,7 @@ const CierreAutomatico = require('../logica/cierreAutomaticoSolicitudes');
 const AgendaDepto = require('../logica/agendaDepto');
 const FinanzasRespaldo = require('../logica/finanzasRespaldo');
 const AvisoCumplimiento = require('../logica/avisoCumplimiento');
+const AvisosControl = require('../logica/avisosControl');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -99,6 +100,11 @@ const intervaloTriggersDiarios = setInterval(() => {
   if (enVentanaDiaria_(ahora, 9)) {
     Novedades.recordatorioPendientes(db).catch((err) => {
       console.error('error enviando el recordatorio de novedades:', err);
+    });
+    // Plan de control (P8): avisos de control programados por gerencia (el día
+    // elegido y, si se pidió, al completarse el 100 %). Dedup por período.
+    AvisosControl.revisarDiario(db).catch((err) => {
+      console.error('error enviando los avisos de control:', err);
     });
     // Actividades: digest diario de alertas por persona (§4.6), mismo pase de
     // las 09:00 que el resto (presupuesto de triggers en 0 en el .gs). Dedup

@@ -63,14 +63,15 @@
     tendencia: ['Tendencia y ciclo', '¿Mejoramos o empeoramos? Y dónde se va el tiempo.'],
     recurrencia: ['Recurrencia', 'Qué módulo y tipo se repite: lo que conviene resolver de raíz.'],
     carga: ['Carga', 'Qué empresa, plataforma y área consumen más solicitudes.'],
-    cumplimiento: ['Cumplimiento por responsable', 'El índice del mes de cada persona: compromisos, obligaciones del área, SGC y reportabilidad.']
+    cumplimiento: ['Cumplimiento por responsable', 'El índice del mes de cada persona: compromisos, obligaciones del área, SGC y reportabilidad.'],
+    avisos: ['Avisos de control', 'Cotizaciones, F29, contabilización y convenios: cómo van y qué falta, el día que tú elijas.']
   };
   var DEL_PANEL = ['tablero', 'gantt', 'tendencia', 'recurrencia', 'carga'];
   var ARQUITECTURA = [
     { id: 'resumen', nombre: 'Resumen', icono: 'panel', items: [{ id: 'resumen', nombre: 'Resumen ejecutivo' }] },
     { id: 'seguimiento', nombre: 'Seguimiento', icono: 'lista', items: [
       { id: 'tablero', nombre: 'Tablero de seguimiento' }, { id: 'gantt', nombre: 'Línea de tiempo' },
-      { id: 'cumplimiento', nombre: 'Cumplimiento por responsable' }
+      { id: 'cumplimiento', nombre: 'Cumplimiento por responsable' }, { id: 'avisos', nombre: 'Avisos de control' }
     ] },
     { id: 'operacion', nombre: 'Operación', icono: 'reloj', items: [
       { id: 'actividades', nombre: 'Actividades' }, { id: 'pausas', nombre: 'Pausas activas' }
@@ -925,6 +926,15 @@
       if (window.SigsoCumplimiento) SigsoCumplimiento.montarPendientes(c);
       return;
     }
+    if (vista_ === 'avisos') {
+      // Plan de control (P8): avisos de control programados (avisos-control-v2.js).
+      ++turno_;
+      var ca = contenedor();
+      if (!ca) return;
+      pagina(ca, '<div data-avisos-host></div>');
+      if (window.SigsoAvisosControl) SigsoAvisosControl.montarPendientes(ca);
+      return;
+    }
     if (vista_ === 'actividades') { cargarActividades(!!act_ && hay); return; }
     if (vista_ === 'pausas') { cargarPausas(!!pausas_ && hay); return; }
     if (vista_ === 'reportes') { cargarReportes(!!panelRep_ && hay); return; }
@@ -933,6 +943,7 @@
   }
   function recargar() {
     if (vista_ === 'cumplimiento') { if (window.SigsoCumplimiento) SigsoCumplimiento.recargar(document.getElementById('gerencia-v2')); }
+    else if (vista_ === 'avisos') { if (window.SigsoAvisosControl) SigsoAvisosControl.recargar(document.getElementById('gerencia-v2')); }
     else if (vista_ === 'actividades') cargarActividades(true);
     else if (vista_ === 'pausas') cargarPausas(true);
     else if (vista_ === 'reportes') cargarReportes(true);

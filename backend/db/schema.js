@@ -767,6 +767,13 @@ const COLUMNAS = {
   // compromisos de la reunión anterior que no se cumplieron); cada atraso
   // lleva causa (catálogo) y cómo se cubre; los acuerdos son ACTIVIDADES
   // (actividad_id). `participantes` = [{ email, nombre, asistio }].
+  // Plan de control, P8 (2026-11-13): AVISOS DE CONTROL PROGRAMADOS. Una fila
+  // por aviso del catálogo (avisosControl.CATALOGO: COTIZACIONES, IVA_F29,
+  // CONTABILIZACION, CONVENIOS): si está `encendido`, qué día del mes sale, a
+  // quién (`destinatarios`, arreglo de correos) y si avisa al llegar al 100 %.
+  AVISOS_CONTROL: [
+    'aviso_id', 'clave', 'encendido', 'dia', 'destinatarios', 'avisar_100', 'actualizado_por', 'fecha_actualizacion', 'activa'
+  ],
   // Plan de control, P3 (2026-11-13): JUSTIFICACIÓN de un atraso del índice
   // de cumplimiento. La escribe la persona; la jefatura la acepta o rechaza
   // (con motivo). Se muestra junto al caso, pero NO cambia el índice.

@@ -62,6 +62,7 @@ const Quejas = require('../logica/quejasSgc');
 const Preparacion = require('../logica/preparacionSgc');
 const ReunionCoord = require('../logica/reunionCoordinacion');
 const Responsabilidades = require('../logica/responsabilidades');
+const AvisosControl = require('../logica/avisosControl');
 const Proveedores = require('../logica/proveedoresSgc');
 const RevisionDireccion = require('../logica/revisionDireccionSgc');
 const Objetivos = require('../logica/objetivosSgc');
@@ -584,6 +585,9 @@ const ACCIONES = {
   aprobarResponsabilidades: (db, data, contexto) => Responsabilidades.aprobar(db, data, contexto),
   registrarResponsabilidad: (db, data, contexto) => Responsabilidades.registrar(db, data, contexto),
   deshacerRegistroResponsabilidad: (db, data, contexto) => Responsabilidades.deshacer(db, data, contexto),
+  // Plan de control (P8): avisos de control programados (gerencia).
+  listarAvisosControl: (db, data, contexto) => AvisosControl.listar(db, data, contexto),
+  guardarAvisoControl: (db, data, contexto) => AvisosControl.guardar(db, data, contexto),
   getDetalleQuejaSgc: (db, data, contexto) => Quejas.getDetalle(db, data, contexto),
   registrarRecepcionQuejaSgc: (db, data, contexto) => Quejas.registrarRecepcion(db, data, contexto),
   registrarInvestigacionQuejaSgc: (db, data, contexto) => Quejas.registrarInvestigacion(db, data, contexto),
