@@ -761,6 +761,23 @@ const COLUMNAS = {
     'informe_id', 'correlativo', 'titulo', 'fecha_corte', 'estado', 'conclusion', 'recomendacion',
     'fecha_auditoria', 'snapshot', 'creado_por', 'fecha_creacion', 'emitido_por', 'fecha_emision', 'activa'
   ],
+  // Plan de control, P5 (2026-11-13): reunión semanal de coordinación de
+  // responsables. La agenda se arma sola al abrirla (REUNION_COORD_ITEMS:
+  // atrasos, lo que vence en la semana, tareas dormidas, NC vencidas y
+  // compromisos de la reunión anterior que no se cumplieron); cada atraso
+  // lleva causa (catálogo) y cómo se cubre; los acuerdos son ACTIVIDADES
+  // (actividad_id). `participantes` = [{ email, nombre, asistio }].
+  REUNIONES_COORD: [
+    'reunion_id', 'correlativo', 'fecha', 'titulo', 'estado', 'participantes', 'minuta',
+    'creado_por', 'fecha_creacion', 'cerrada_por', 'fecha_cierre', 'activa'
+  ],
+  REUNION_COORD_ITEMS: [
+    'item_id', 'reunion_id', 'tipo', 'origen', 'ref_id', 'titulo', 'detalle', 'area', 'responsable_email', 'meta', 'dias',
+    'causa', 'como_se_cubre', 'nueva_fecha', 'nuevo_responsable', 'registrado_por', 'fecha_registro', 'activa'
+  ],
+  REUNION_COORD_ACUERDOS: [
+    'acuerdo_id', 'reunion_id', 'texto', 'responsable_email', 'fecha_compromiso', 'actividad_id', 'creado_por', 'fecha_creacion', 'activa'
+  ],
   SGC_PREP_ENTREVISTAS: [
     'entrevista_id', 'informe_id', 'area', 'persona_email', 'persona_nombre', 'cargo', 'entrevistador_email',
     'fecha', 'respuestas', 'autoevaluacion', 'autoevaluacion_motivo', 'comentario', 'actualizado_en', 'activa'

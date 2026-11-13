@@ -278,4 +278,6 @@ async function enviarAhora(db, data, contexto) {
   return enviarAvisoSemanal(db, {});
 }
 
-module.exports = { armarAvisos, enviarAvisoSemanal, previsualizar, enviarAhora, periodos_, lunesDe_, GERENCIA_DESDE, EVENTO };
+module.exports = { armarAvisos, enviarAvisoSemanal, previsualizar, enviarAhora, periodos_, lunesDe_, GERENCIA_DESDE, EVENTO,
+  // Para la reunión semanal (reunionCoordinacion.js): las mismas jefaturas y la misma gerencia.
+  jefaturas_, destinatariosGerencia_ };

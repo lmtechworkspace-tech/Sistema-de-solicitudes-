@@ -21,7 +21,7 @@
 var ACCIONES_REINTENTABLES = {
   ping: true, getCatalogos: true, consultarEstado: true,
   getDashboardData: true, getPanelGerencia: true, getSolicitudDetalle: true,
-  getColaSolicitudes: true, getResumenGerencia: true, getCumplimientoResponsables: true, listarPreparacionSgc: true, getPreparacionSgc: true, getMiEquipo: true, getSaludConfig: true, getCaminoCertificacionSgc: true, getControlDocumentalSgc: true, getPanelPersonasSgc: true,
+  getColaSolicitudes: true, getResumenGerencia: true, getCumplimientoResponsables: true, listarPreparacionSgc: true, getPreparacionSgc: true, listarReunionesCoordinacion: true, getReunionCoordinacion: true, getMiEquipo: true, getSaludConfig: true, getCaminoCertificacionSgc: true, getControlDocumentalSgc: true, getPanelPersonasSgc: true,
   listarCatalogo: true, listarUsuarios: true, listarLogs: true,
   // v7.1 (notificaciones vivas): polling de solo lectura cada 2-3 min --
   // un fallo de transporte no debe silenciar el ciclo hasta el proximo tick.

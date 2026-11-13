@@ -26,6 +26,8 @@
     { id: 'inicio', nombre: 'Inicio', icono: 'estado', plano: true, items: [{ id: 'inicio', nombre: 'Inicio', permiso: 'inicio' }] },
     // Plan de control (P6): la evaluación antes de la auditoría de certificación. Solo quien supervisa el SGC.
     { id: 'preparacion', nombre: '¿Listos para certificar?', icono: 'escudo', plano: true, items: [{ id: 'preparacion', nombre: '¿Listos para certificar?', permiso: 'tablero' }] },
+    // Plan de control (P5): la reunión de coordinación de los lunes.
+    { id: 'reunion', nombre: 'Reunión semanal', icono: 'equipo', plano: true, items: [{ id: 'reunion', nombre: 'Reunión semanal', permiso: 'tablero' }] },
     { id: 'documentos', nombre: 'Documentos', icono: 'documento', plano: true, items: [{ id: 'documentos', nombre: 'Documentos', permiso: 'documentos' }] },
     { id: 'personas', nombre: 'Personas', icono: 'persona', items: [
       { id: 'personas', nombre: 'Personal', permiso: 'personas' }, { id: 'capacitaciones', nombre: 'Capacitaciones' }
@@ -92,7 +94,8 @@
     [function () { return window.SigsoCalidadMedicionV2; }, 'mostrar'],
     [function () { return window.SigsoCalidadSistemaV2; }, 'mostrar'],
     [function () { return window.SigsoCalidadOperacionV2; }, 'mostrar'],
-    [function () { return window.SigsoCalidadPreparacionV2; }, 'mostrar']
+    [function () { return window.SigsoCalidadPreparacionV2; }, 'mostrar'],
+    [function () { return window.SigsoCalidadReunionV2; }, 'mostrar']
   ];
   function render() {
     pintarNav();
