@@ -43,6 +43,7 @@ const Comentarios = require('../logica/comentarios');
 const Novedades = require('../logica/novedades');
 const Pausas = require('../logica/pausas');
 const ResumenGerencia = require('../logica/resumenGerencia');
+const CumplimientoResponsables = require('../logica/cumplimientoResponsables');
 const MiEquipo = require('../logica/miEquipo');
 const SaludConfig = require('../logica/saludConfig');
 const CaminoSgc = require('../logica/caminoSgc');
@@ -259,6 +260,8 @@ const ACCIONES = {
 
   getPanelGerencia: (db, data, contexto) => Gerencia.getPanel(db, data, contexto),
   getResumenGerencia: (db, data, contexto) => ResumenGerencia.getResumen(db, data, contexto),
+  // Plan de control y certificación (P3): índice de cumplimiento por responsable.
+  getCumplimientoResponsables: (db, data, contexto) => CumplimientoResponsables.getCumplimiento(db, data, contexto),
   getMiEquipo: (db, data, contexto) => MiEquipo.getMiEquipo(db, data, contexto),
   getSaludConfig: (db, data, contexto) => SaludConfig.getSalud(db, data, contexto),
   arreglarSaludConfig: (db, data, contexto) => SaludConfig.arreglar(db, data, contexto),

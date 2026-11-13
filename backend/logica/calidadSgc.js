@@ -975,6 +975,9 @@ module.exports = {
   // disponible para los proximos incrementos del SGC (Personas, NC,
   // Auditorias...) y para tests, nunca duplicadas.
   gobiernaSgc_, rolSgc_, esAdminSgc_, veTodoSgc_, areaSgc_, CLAUSULAS_ISO9001,
+  // audienciaDocumentoSgc_: quién debe acusar un documento; la usa el índice
+  // de cumplimiento por responsable (cumplimientoResponsables.js).
+  audienciaDocumentoSgc_,
   // parsearClausulasIso_: la usa MatrizCobertura (Fase 6b) para leer qué
   // documentos respaldan cada cláusula ISO.
   parsearClausulasIso_,

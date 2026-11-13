@@ -1,0 +1,472 @@
+<title>Plan de control y certificación</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: documento de trabajo a una columna (máx. 880px) con índice lateral en pantallas anchas; tablas con scroll propio. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #17212b;
+  --muted: #5b6875;
+  --line: #dde2e8;
+  --accent: #1d5fa8;
+  --accent-soft: #e6eef8;
+  --ok: #1f7a4a; --ok-soft: #e4f3ea;
+  --warn: #9a6400; --warn-soft: #fbf0d9;
+  --crit: #b3261e; --crit-soft: #fbe5e3;
+  --f-head: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11161c; --surface: #18202a; --ink: #e6ebf0; --muted: #9aa8b6; --line: #2a3542;
+  --accent: #7fb1ea; --accent-soft: #1d2b3c;
+  --ok: #6fcf97; --ok-soft: #173024; --warn: #e5b45a; --warn-soft: #33290f; --crit: #f08a82; --crit-soft: #3a1c1a;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #11161c; --surface: #18202a; --ink: #e6ebf0; --muted: #9aa8b6; --line: #2a3542;
+  --accent: #7fb1ea; --accent-soft: #1d2b3c;
+  --ok: #6fcf97; --ok-soft: #173024; --warn: #e5b45a; --warn-soft: #33290f; --crit: #f08a82; --crit-soft: #3a1c1a;
+  color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15.5px; line-height: 1.6; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; }
+@media (max-width: 900px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; } nav.toc { display: none; } }
+nav.toc { position: sticky; top: calc(24px + env(safe-area-inset-top, 0px)); align-self: start; font-size: 13.5px; }
+nav.toc p { font-family: var(--f-head); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+nav.toc a { color: var(--muted); text-decoration: none; display: block; padding: 3px 0 3px 10px; border-left: 2px solid var(--line); }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); border-left-color: var(--accent); outline: none; }
+main { min-width: 0; max-width: 880px; }
+header.doc { border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 32px; }
+.eyebrow { font-family: var(--f-head); text-transform: uppercase; letter-spacing: .1em; font-size: 12.5px; color: var(--accent); font-weight: 700; }
+h1 { font-family: var(--f-head); font-size: clamp(30px, 5vw, 42px); line-height: 1.1; margin: 8px 0 12px; text-wrap: balance; }
+h2 { font-family: var(--f-head); font-size: 26px; line-height: 1.2; margin: 56px 0 12px; text-wrap: balance; scroll-margin-top: 20px; }
+h3 { font-size: 17px; margin: 28px 0 6px; }
+p, li { max-width: 68ch; }
+.lead { font-size: 17.5px; color: var(--ink); }
+.meta { color: var(--muted); font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--f-mono); font-size: .9em; }
+.clause { font-family: var(--f-mono); font-size: 12.5px; background: var(--accent-soft); color: var(--accent); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 20px; margin: 20px 0; }
+.callout.key { border-color: var(--accent); }
+.callout.crit { background: var(--crit-soft); border-color: transparent; }
+.callout h3 { margin-top: 0; }
+.tbl { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--f-head); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--bg); }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.crit { background: var(--crit-soft); color: var(--crit); }
+.pill.info { background: var(--accent-soft); color: var(--accent); }
+.piece { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; margin: 18px 0; }
+.piece-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; }
+.piece-head h3 { margin: 0; font-size: 19px; font-family: var(--f-head); }
+.piece-tag { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.piece dl { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 8px 16px; margin: 14px 0 0; }
+.piece dt { font-weight: 600; color: var(--muted); font-size: 13.5px; }
+.piece dd { margin: 0; min-width: 0; }
+.piece dd ul { margin: 0; padding-left: 18px; }
+@media (max-width: 600px) { .piece dl { grid-template-columns: minmax(0, 1fr); gap: 2px; } .piece dd { margin-bottom: 10px; } }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 20px 0; counter-reset: paso; }
+.flow div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 13.5px; position: relative; }
+.flow div b { display: block; font-family: var(--f-head); font-size: 15px; margin-bottom: 2px; }
+.flow div::before { counter-increment: paso; content: counter(paso); font-family: var(--f-mono); font-size: 12px; color: var(--accent); }
+.formula { font-family: var(--f-mono); font-size: 14px; background: var(--surface); border: 1px dashed var(--accent); border-radius: 8px; padding: 14px 16px; overflow-x: auto; white-space: pre; }
+.weeks { display: grid; gap: 10px; margin: 18px 0; }
+.week { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.week .when { font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+.week .when b { display: block; font-family: var(--f-head); font-size: 16px; color: var(--ink); }
+.week ul { margin: 0; padding-left: 18px; }
+.week.milestone { border-color: var(--accent); }
+@media (max-width: 600px) { .week { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+.decisions { counter-reset: d; list-style: none; padding: 0; display: grid; gap: 12px; }
+.decisions li { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px 14px 52px; position: relative; max-width: none; }
+.decisions li::before { counter-increment: d; content: counter(d); position: absolute; left: 16px; top: 14px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--surface); font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+.rec { color: var(--ok); font-weight: 600; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.grid2 .callout { margin: 0; }
+footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Índice">
+  <p>Contenido</p>
+  <ol>
+    <li><a href="#pedido">1. Lo que pidió gerencia</a></li>
+    <li><a href="#hoy">2. Qué hay hoy</a></li>
+    <li><a href="#idea">3. La idea central</a></li>
+    <li><a href="#piezas">4. Las 9 piezas</a></li>
+    <li><a href="#formula">5. Cómo se calcula el %</a></li>
+    <li><a href="#preparacion">6. Informe de preparación</a></li>
+    <li><a href="#iso">7. Qué cubre de la norma</a></li>
+    <li><a href="#calendario">8. Calendario</a></li>
+    <li><a href="#valor">9. Lo que gana la empresa</a></li>
+    <li><a href="#riesgos">10. Riesgos y cuidados</a></li>
+    <li><a href="#decisiones">11. Decisiones pendientes</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">SIGSO · Sistema de Gestión de Calidad ISO 9001</div>
+  <h1>Plan de control y certificación</h1>
+  <p class="lead">Cómo convertir los acuerdos de la reunión de cierre de año en un sistema de control dentro de SIGSO: que cada responsable sepa qué le toca, que el atraso aparezca solo, que gerencia no tenga que perseguir a nadie y que la empresa llegue a la auditoría de enero sabiendo, con datos, si está lista.</p>
+  <div class="meta"><span>Preparado por: Control de Gestión</span><span>13 de noviembre de 2026</span><span>Estado: propuesta para aprobar</span></div>
+</header>
+
+<section id="pedido">
+<h2>1. Lo que pidió gerencia, convertido en requisitos</h2>
+<p>La reunión dejó un diagnóstico claro: se abren tareas y no se cierran, la gente toma algo nuevo y deja lo anterior, un proceso que no se revisa en dos semanas se olvida, y gerencia termina persiguiendo a cada persona. La auditoría ya se movió una vez porque la empresa no estaba lista. Cada frase de la reunión se puede traducir a algo que SIGSO tiene que hacer:</p>
+<div class="tbl"><table>
+<thead><tr><th>Lo que se dijo</th><th>Requisito para SIGSO</th></tr></thead>
+<tbody>
+<tr><td>«Incorporar el porcentaje de cumplimiento de las responsabilidades de cada uno»</td><td>Un índice de cumplimiento por persona y por área, calculado con lo que ya se registra, que se pueda abrir para ver qué tarea lo baja.</td></tr>
+<tr><td>«Controlar sin tener que perseguir a cada persona»</td><td>Que lo atrasado llegue solo: aviso semanal a cada persona, a su jefatura y un resumen a gerencia.</td></tr>
+<tr><td>«Se abren tareas y no se cierran», «en dos semanas se olvida»</td><td>Detectar tareas dormidas (sin movimiento en 14 días) y tareas sin fecha, para que no se escondan.</td></tr>
+<tr><td>«¿Estamos preparados para certificar?» (lo preguntará don Rogelio)</td><td>Un informe de preparación serio: entrevista a cada responsable, evidencia revisada, datos del sistema y un veredicto por área.</td></tr>
+<tr><td>«Darlo como instrucción y no como sugerencia»</td><td>Instrucciones formales con acuse de lectura: queda registro de quién la recibió y cuándo.</td></tr>
+<tr><td>«Reuniones semanales de coordinación», «saber por qué no se cumplió y cómo se cubre»</td><td>Reunión semanal con agenda automática, causa obligatoria de cada atraso y acuerdos que se convierten en tareas con fecha.</td></tr>
+<tr><td>«Me enteré de reclamos de manera informal»</td><td>Medir el uso real del formulario de reclamos de la intranet y premiar el registro, no castigarlo.</td></tr>
+<tr><td>«Preguntas programadas que me lleguen cuando las necesite» (imposiciones el día 9, IVA, convenios)</td><td>Avisos de control automáticos en fechas clave, con aviso cuando se llega al 100 %.</td></tr>
+<tr><td>«Planificar las vacaciones para que las jefaturas estén en la auditoría»</td><td>Fechas de la auditoría en la agenda de todas las jefaturas y confirmación de disponibilidad.</td></tr>
+<tr><td>«Método de premiación o bonificación»</td><td>Que el índice sea justo y estable para que más adelante sirva de base, con reglas conocidas por todos.</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="hoy">
+<h2>2. Qué hay hoy y qué falta</h2>
+<p>La buena noticia: SIGSO ya registra casi todo lo necesario. El problema no es que falten datos; es que están repartidos en módulos distintos y nadie los junta por persona. Revisé el código del sistema en producción para saber exactamente qué se puede reutilizar.</p>
+<div class="tbl"><table>
+<thead><tr><th>Lo que ya existe</th><th>Qué registra</th><th>Cómo se usa en este plan</th></tr></thead>
+<tbody>
+<tr><td>Tareas (Mi trabajo, Proyectos)</td><td>Responsable, fecha comprometida, fecha de término, cada reprogramación con su motivo y la fecha anterior</td><td>Base del cumplimiento de compromisos. Como cada reprogramación guarda la fecha anterior, se puede medir contra la fecha original.</td></tr>
+<tr><td>Agenda de los departamentos</td><td>Obligaciones del área (IVA, Previred, comité, visitas) y si se marcaron hechas a tiempo</td><td>Ya calcula «fechas del área cumplidas a tiempo» por área. Se baja a nivel de persona.</td></tr>
+<tr><td>Reporte mensual del área y cadena de firmas</td><td>Quién preparó, validó y aprobó, y en qué fecha</td><td>Mide la reportabilidad, que en las evaluaciones de desempeño fue lo peor evaluado (promedio 2,28 contra 3,72 del resto).</td></tr>
+<tr><td>SGC: documentos, no conformidades, competencias, auditorías, revisión por la dirección</td><td>Acuses de lectura, plazos de cada etapa, evaluaciones y capacitaciones, 110 preguntas de verificación ISO</td><td>Responsabilidades del SGC dentro del índice, y la base del informe de preparación.</td></tr>
+<tr><td>Descriptores de cargo (SGC)</td><td>Lista de responsabilidades de cada persona</td><td>Punto de partida del mapa de responsabilidades: lo que cada uno tiene que cumplir ya está escrito.</td></tr>
+<tr><td>Acta de reunión semanal (Actividades)</td><td>Resumen automático de lo que vence en la semana, por persona</td><td>Base de la reunión semanal de coordinación.</td></tr>
+<tr><td>Novedades con acuse</td><td>Quién leyó cada comunicado y cuándo</td><td>Instrucciones formales con evidencia de recepción.</td></tr>
+<tr><td>Tareas automáticas diarias del servidor (9:00 y 18:00)</td><td>Ya envían recordatorios del SGC, de no conformidades vencidas y de tareas</td><td>Los avisos semanales y los avisos de control se suman ahí, sin infraestructura nueva.</td></tr>
+<tr><td>Matrices de control interno</td><td>F29, cotizaciones, convenios y remuneraciones por cliente y período</td><td>Responden las preguntas programadas de gerencia (por ejemplo, cuántas imposiciones faltan el día 9).</td></tr>
+</tbody></table></div>
+
+<div class="callout crit">
+<h3>Lo que falta y explica el problema</h3>
+<ul>
+<li><b>No hay un número por persona.</b> Gerencia ve áreas y solicitudes, pero no «Fulano cumplió 6 de 10 compromisos este mes».</li>
+<li><b>El atraso se puede esconder.</b> Hoy «a tiempo» se compara con la fecha vigente: quien reprograma tres veces aparece al día. Las tareas sin fecha nunca se atrasan.</li>
+<li><b>Nada mide lo olvidado.</b> Una tarea abierta sin movimiento por semanas no genera ninguna señal.</li>
+<li><b>El formulario de reclamos casi no se usa.</b> La intranet de Homepymes muestra <b>1 expediente en toda su historia</b> (REC-20260831, del 31 de agosto, cerrado). Para un auditor, cero o un reclamo en meses no significa «clientes felices»: significa que el canal no funciona.</li>
+<li><b>Las no conformidades de la auditoría de procesos del 30-09</b> (21 mayores, 3 menores) se corrigieron en el Drive, pero no están cargadas en SIGSO, así que el tablero del SGC no las cuenta.</li>
+</ul>
+</div>
+</section>
+
+<section id="idea">
+<h2>3. La idea central: un ciclo de control semanal</h2>
+<p>No se trata de agregar pantallas sueltas, sino de cerrar un ciclo que hoy está abierto. Cada pieza alimenta a la siguiente, y casi todo sale de datos que la gente ya registra al trabajar: no se pide llenar planillas nuevas.</p>
+<div class="flow" role="list">
+  <div role="listitem"><b>Responsabilidades</b>Qué le toca a cada uno, escrito y conocido.</div>
+  <div role="listitem"><b>Compromisos</b>Cada responsabilidad se vuelve tareas y obligaciones con fecha.</div>
+  <div role="listitem"><b>Medición</b>SIGSO calcula el % de cumplimiento solo, todos los días.</div>
+  <div role="listitem"><b>Aviso</b>Lunes: cada persona, su jefatura y gerencia reciben lo atrasado.</div>
+  <div role="listitem"><b>Reunión semanal</b>Cada atraso trae causa y cómo se cubre. Acuerdos = tareas.</div>
+  <div role="listitem"><b>Informe</b>Mensual a gerencia y de preparación antes de la auditoría.</div>
+  <div role="listitem"><b>Decisión</b>Gerencia decide recursos con causas medidas, y el ciclo vuelve a empezar.</div>
+</div>
+<p>Tres reglas guían el diseño, porque la reunión mostró que el problema es también de cultura y miedo:</p>
+<ul>
+<li><b>Cada persona ve su número antes que nadie</b> y puede justificar un atraso. Nadie se entera por su jefe de algo que el sistema no le mostró antes.</li>
+<li><b>Registrar un problema suma, esconderlo resta.</b> Anotar un reclamo de un cliente o una tarea bloqueada cuenta a favor. Lo que baja el índice es que gerencia se entere por fuera.</li>
+<li><b>Cada número se puede abrir.</b> Un 72 % siempre muestra las tareas exactas que lo forman. Un número que no se puede explicar no sirve para exigir.</li>
+</ul>
+</section>
+
+<section id="piezas">
+<h2>4. Las 9 piezas del sistema</h2>
+<p>Ordenadas por cuándo se necesitan, no por tamaño. Las cuatro primeras son lo mínimo para llegar a enero; las demás completan el control.</p>
+
+<div class="piece">
+  <div class="piece-head"><h3>P1 · Fechas de la auditoría e instrucciones formales</h3><span class="pill crit">Urgente</span><span class="piece-tag">Esfuerzo: 1 día</span></div>
+  <dl>
+    <dt>Qué es</dt><dd>Poner al día lo que cambió en la reunión y dejar constancia de las instrucciones de gerencia.</dd>
+    <dt>Cómo funciona</dt><dd><ul>
+      <li>El proyecto ISO-9001-2026 en SIGSO todavía tiene la Etapa I el 16-11 y la Etapa II el 23-11. Se mueven a las fechas de enero que confirme SCI, y se recalcula el plan.</li>
+      <li>Las dos etapas entran como evento en la Agenda de todas las jefaturas, con una tarea «Confirmar disponibilidad en la ventana de auditoría» para cada una.</li>
+      <li>Tres instrucciones publicadas como Novedad con acuse obligatorio: uso del formulario de reclamos, reunión semanal de coordinación y disponibilidad de jefaturas en enero. SIGSO ya muestra quién la leyó y quién no.</li>
+      <li>Las 21 no conformidades mayores y 3 menores de la auditoría del 30-09 se cargan en el módulo de no conformidades con su estado real (corregida, en acción, cerrada), para que cuenten en el tablero y en el informe.</li>
+    </ul></dd>
+    <dt>Qué gana gerencia</dt><dd>Una sola fecha oficial, nadie puede decir que no sabía, y el tablero del SGC deja de mostrar un avance que no incluye los hallazgos de la auditoría.</dd>
+    <dt>Norma</dt><dd><span class="clause">5.1</span> <span class="clause">7.4</span> <span class="clause">10.2</span></dd>
+  </dl>
+</div>
+
+<div class="piece">
+  <div class="piece-head"><h3>P2 · Mapa de responsabilidades</h3><span class="pill warn">Base</span><span class="piece-tag">Esfuerzo: 3–4 días</span></div>
+  <dl>
+    <dt>Qué es</dt><dd>La lista de lo que le toca a cada persona, con cómo se mide. Es la versión formal del checklist que ya se usa hoy con algunas personas.</dd>
+    <dt>Cómo funciona</dt><dd><ul>
+      <li>SIGSO arma una propuesta inicial juntando lo que ya está escrito: las responsabilidades del descriptor de cargo, los procesos donde la persona es responsable, las obligaciones de la Agenda de su área y sus roles en el SGC.</li>
+      <li>Cada responsabilidad dice su frecuencia (diaria, semanal, mensual) y cómo se comprueba: <b>automática</b> (SIGSO lo ve en tareas, agenda o SGC) o <b>con evidencia</b> (la persona la marca hecha y adjunta o enlaza el respaldo).</li>
+      <li>La jefatura revisa y aprueba el mapa de su equipo. Cada persona lo ve en una pantalla nueva, «Mis responsabilidades», como checklist del período.</li>
+    </ul></dd>
+    <dt>Qué gana gerencia</dt><dd>Se acaba el «no sabía que eso me tocaba». Es además la evidencia más directa de roles y responsabilidades que pide el auditor.</dd>
+    <dt>Norma</dt><dd><span class="clause">5.3</span> <span class="clause">7.2</span> <span class="clause">7.3</span></dd>
+  </dl>
+</div>
+
+<div class="piece">
+  <div class="piece-head"><h3>P3 · Índice de cumplimiento por responsable</h3><span class="pill warn">Corazón del plan</span><span class="piece-tag">Esfuerzo: 5–6 días</span></div>
+  <dl>
+    <dt>Qué es</dt><dd>Un porcentaje mensual por persona, por área y de la empresa, que junta los compromisos con fecha, las obligaciones del área, las responsabilidades del SGC y la reportabilidad. La fórmula está en la <a href="#formula">sección 5</a>.</dd>
+    <dt>Cómo funciona</dt><dd><ul>
+      <li>Se calcula solo, todos los días, con lo que ya está registrado. Nadie llena nada extra.</li>
+      <li>Junto al porcentaje se muestran tres señales que no se pueden esconder: <b>tareas dormidas</b> (abiertas y sin movimiento en 14 días), <b>tareas sin fecha</b> y <b>reprogramaciones</b> del mes.</li>
+      <li>Tres vistas: <b>Mi cumplimiento</b> (la persona, con su detalle y la opción de justificar un atraso), <b>Mi equipo</b> (la jefatura) y <b>Control</b> (gerencia: áreas, tendencia de 12 semanas, las 10 deudas más antiguas y las causas).</li>
+      <li>Semáforo con los mismos cortes que ya usa la reportabilidad: verde desde 90 %, amarillo de 75 a 89 %, rojo bajo 75 %.</li>
+    </ul></dd>
+    <dt>Qué gana gerencia</dt><dd>Un número por persona, explicable y comparable mes a mes. Deja evidencia de quién cumple sin que gerencia tenga que preguntar.</dd>
+    <dt>Norma</dt><dd><span class="clause">9.1.1</span> <span class="clause">9.1.3</span> <span class="clause">5.3</span></dd>
+  </dl>
+</div>
+
+<div class="piece">
+  <div class="piece-head"><h3>P4 · Aviso semanal automático</h3><span class="pill warn">Control sin perseguir</span><span class="piece-tag">Esfuerzo: 2 días</span></div>
+  <dl>
+    <dt>Qué es</dt><dd>Un correo y un aviso en SIGSO cada lunes a primera hora, distinto según quién lo recibe.</dd>
+    <dt>Cómo funciona</dt><dd><ul>
+      <li><b>Cada persona:</b> su % de la semana, lo que vence esta semana, lo atrasado y lo dormido.</li>
+      <li><b>Cada jefatura:</b> su equipo en una tabla, con quién bajó y por qué.</li>
+      <li><b>Gerencia:</b> una página con las áreas, las deudas más antiguas y las causas más repetidas.</li>
+      <li>Usa las tareas automáticas que el servidor ya corre cada mañana; no requiere servicios nuevos ni costo.</li>
+    </ul></dd>
+    <dt>Qué gana gerencia</dt><dd>Lo atrasado le llega solo. Deja de depender de su memoria y de preguntar uno por uno.</dd>
+    <dt>Norma</dt><dd><span class="clause">7.4</span> <span class="clause">9.1.3</span></dd>
+  </dl>
+</div>
+
+<div class="piece">
+  <div class="piece-head"><h3>P5 · Reunión semanal de coordinación</h3><span class="pill info">Disciplina</span><span class="piece-tag">Esfuerzo: 3 días</span></div>
+  <dl>
+    <dt>Qué es</dt><dd>Una reunión corta de responsables (30 minutos) con una agenda que SIGSO arma sola, partiendo del acta semanal que ya existe en Actividades.</dd>
+    <dt>Cómo funciona</dt><dd><ul>
+      <li>La agenda trae: hitos vencidos, lo que vence en la semana, tareas dormidas, no conformidades y reclamos abiertos.</li>
+      <li>Cada atraso exige dos respuestas antes de cerrar el acta: <b>por qué no se cumplió</b> (de una lista: falta de personal, falta información del cliente, sobrecarga, depende de otra área, se olvidó, otra) y <b>cómo se cubre</b> (nueva fecha y responsable).</li>
+      <li>Los acuerdos se convierten en tareas con fecha (igual que hoy en la revisión por la dirección) y entran al índice de la semana siguiente.</li>
+      <li>Se registra la asistencia. El acta se envía sola a los participantes y a gerencia.</li>
+    </ul></dd>
+    <dt>Qué gana gerencia</dt><dd>Las causas quedan medidas. Si el 40 % de los atrasos son por falta de personal, la decisión de contratar un practicante o un contador se toma con datos, como se planteó en la reunión.</dd>
+    <dt>Norma</dt><dd><span class="clause">7.4</span> <span class="clause">9.1.3</span> <span class="clause">10.2</span></dd>
+  </dl>
+</div>
+
+<div class="piece">
+  <div class="piece-head"><h3>P6 · Informe «¿Estamos preparados para certificar?»</h3><span class="pill crit">Para enero</span><span class="piece-tag">Esfuerzo: 5 días</span></div>
+  <dl>
+    <dt>Qué es</dt><dd>El informe serio que pidió gerencia: datos del sistema, una entrevista estructurada a cada responsable y un veredicto por área. Detalle completo en la <a href="#preparacion">sección 6</a>.</dd>
+    <dt>Cómo funciona</dt><dd>Se arma en SIGSO, sale en PDF con la marca de SIGSO y se puede repetir: una primera versión antes de las vacaciones y una segunda la primera semana de enero, para ver si las brechas se cerraron.</dd>
+    <dt>Qué gana gerencia</dt><dd>Una respuesta honesta, con evidencia, para dar a don Rogelio. Si la respuesta es «no», se sabe exactamente dónde y qué hacer, en vez de mover la auditoría otra vez.</dd>
+    <dt>Norma</dt><dd><span class="clause">9.2</span> <span class="clause">9.3</span> <span class="clause">7.3</span></dd>
+  </dl>
+</div>
+
+<div class="piece">
+  <div class="piece-head"><h3>P7 · Reclamos: medir el uso del formulario de la intranet</h3><span class="pill info">Cliente</span><span class="piece-tag">Esfuerzo: 2–3 días</span></div>
+  <dl>
+    <dt>Qué es</dt><dd>Los reclamos seguirán gestionándose en la intranet de Homepymes, donde llega el formulario de la página web; no se duplica nada. SIGSO solo trae los números para medir y controlar.</dd>
+    <dt>Cómo funciona</dt><dd><ul>
+      <li><b>Para partir:</b> exportar cada mes el Excel de «Gestión y Seguimiento de Reclamos» (la intranet ya tiene el botón) e importarlo en SIGSO.</li>
+      <li><b>Después, si Jorge puede:</b> que la intranet ofrezca una consulta de solo lectura con llave, para que SIGSO traiga los datos cada día sin intervención.</li>
+      <li>Indicadores: ingresos por mes y tipo, canal (formulario web contra registro manual), % gestionado dentro de los 30 días que exige el procedimiento, comunicación al cliente registrada y casos que generaron no conformidad.</li>
+      <li>Registrar un reclamo informal con «Nuevo registro manual» cuenta a favor de quien lo registra.</li>
+      <li>Al dar de alta un cliente nuevo, un paso obligatorio: «Se entregó el canal de reclamos, felicitaciones y consultas».</li>
+      <li>El módulo de quejas propio de SIGSO se saca del menú para que no existan dos registros oficiales.</li>
+    </ul></dd>
+    <dt>Qué gana gerencia</dt><dd>Se entera por el canal oficial y no de pasillo. El auditor verá un canal que se usa y casos gestionados en plazo.</dd>
+    <dt>Norma</dt><dd><span class="clause">9.1.2</span> <span class="clause">8.2.1</span> <span class="clause">10.2</span></dd>
+  </dl>
+</div>
+
+<div class="piece">
+  <div class="piece-head"><h3>P8 · Avisos de control programados</h3><span class="pill info">Las preguntas de gerencia</span><span class="piece-tag">Esfuerzo: 3–4 días</span></div>
+  <dl>
+    <dt>Qué es</dt><dd>Las «preguntas programadas» de la reunión, respondidas solas en la fecha que importa. No usan inteligencia artificial: salen de las matrices de control interno, así que no tienen costo.</dd>
+    <dt>Cómo funciona</dt><dd><ul>
+      <li>Ejemplos con datos que ya están en SIGSO: el día 9, cotizaciones declaradas y cuántas faltan; el día 20, F29 presentados y pendientes; cuotas de convenio por vencer; y un aviso cuando un tema llega al 100 %.</li>
+      <li>Gerencia elige qué preguntas, qué día y quién las recibe. Cada aviso trae el listado de clientes pendientes y el responsable.</li>
+      <li>Lo que no está en SIGSO (cotizaciones comerciales de la semana, prebalances) necesita primero definir de dónde sale el dato.</li>
+      <li>Para preguntas puntuales del día a día está el Asistente SIGSO, que ya funciona.</li>
+    </ul></dd>
+    <dt>Qué gana gerencia</dt><dd>Deja de tener que preguntar «¿declaraste todo?»: la respuesta le llega el día que corresponde.</dd>
+    <dt>Norma</dt><dd><span class="clause">8.5.1</span> <span class="clause">9.1.1</span></dd>
+  </dl>
+</div>
+
+<div class="piece">
+  <div class="piece-head"><h3>P9 · Base para reconocimientos</h3><span class="pill info">Después</span><span class="piece-tag">Esfuerzo: 2 días, desde febrero</span></div>
+  <dl>
+    <dt>Qué es</dt><dd>Un resumen trimestral por persona (cumplimiento, reportabilidad, reclamos registrados, capacitaciones) para que gerencia decida premios o bonos con reglas conocidas.</dd>
+    <dt>Cómo funciona</dt><dd>Se activa recién con tres meses de datos estables, para que nadie reciba ni pierda un bono por un error de medición del primer mes. Puntualidad y asistencia hoy no se registran en SIGSO: habría que decidir si se incorporan.</dd>
+    <dt>Qué gana gerencia</dt><dd>Premios justos y defendibles, que refuerzan cumplir en vez de solo exigir.</dd>
+    <dt>Norma</dt><dd><span class="clause">7.1.2</span> <span class="clause">7.3</span></dd>
+  </dl>
+</div>
+</section>
+
+<section id="formula">
+<h2>5. Cómo se calcula el porcentaje de cumplimiento</h2>
+<p>El índice es un promedio ponderado de cuatro componentes. Un componente solo cuenta si la persona tuvo al menos 3 casos en el mes; si no, su peso se reparte entre los demás, para que una sola tarea no defina el mes de nadie.</p>
+<div class="formula">Índice del mes = Σ (peso × cumplimiento del componente) ÷ Σ pesos de los componentes con datos
+
+A · Compromisos con fecha .......... 35 %   tareas terminadas a tiempo ÷ tareas que vencieron
+B · Obligaciones del área .......... 25 %   obligaciones de la Agenda hechas a tiempo ÷ las que vencieron
+C · Responsabilidades del SGC ...... 20 %   acuses, etapas de no conformidades, competencias y reclamos en plazo
+D · Reportabilidad ................. 20 %   reporte mensual a tiempo + tareas abiertas actualizadas en 14 días</div>
+
+<h3>Reglas para que el número sea justo y no se pueda maquillar</h3>
+<ul>
+<li><b>Se mide contra la fecha original.</b> Una reprogramación solo mueve la meta si la jefatura la aprobó <i>antes</i> de que venciera. Reprogramar después del vencimiento no borra el atraso.</li>
+<li><b>Tareas sin fecha y dormidas</b> se muestran al lado del índice como señales propias. No se puede escapar de la medición dejando tareas sin fecha.</li>
+<li><b>Bloqueos justificados:</b> si una tarea está bloqueada por otra persona o por el cliente y se registró a tiempo, el atraso se carga a quien bloquea o queda neutro (cliente).</li>
+<li><b>Justificación con validación:</b> la persona puede justificar un atraso; la jefatura acepta o rechaza. Lo aceptado se muestra, pero no se descuenta del índice.</li>
+</ul>
+
+<h3>Ejemplo ilustrativo (datos inventados)</h3>
+<div class="tbl"><table>
+<thead><tr><th>Componente</th><th>Casos del mes</th><th class="num">Cumplimiento</th><th class="num">Peso</th><th class="num">Aporte</th></tr></thead>
+<tbody>
+<tr><td>A · Compromisos con fecha</td><td>8 de 10 a tiempo</td><td class="num">80 %</td><td class="num">35</td><td class="num">28,0</td></tr>
+<tr><td>B · Obligaciones del área</td><td>11 de 12 a tiempo</td><td class="num">92 %</td><td class="num">25</td><td class="num">22,9</td></tr>
+<tr><td>C · Responsabilidades del SGC</td><td>4 de 4 en plazo</td><td class="num">100 %</td><td class="num">20</td><td class="num">20,0</td></tr>
+<tr><td>D · Reportabilidad</td><td>reporte tarde, 2 tareas dormidas de 6</td><td class="num">58 %</td><td class="num">20</td><td class="num">11,7</td></tr>
+<tr><td><b>Índice del mes</b></td><td>Señales: 1 tarea sin fecha, 3 reprogramaciones</td><td class="num"><b>82,6 %</b></td><td class="num">100</td><td class="num"><span class="pill warn">Amarillo</span></td></tr>
+</tbody></table></div>
+<p>Al abrir este 82,6 %, la persona y su jefatura ven las 2 tareas atrasadas, el reporte que llegó tarde y las 2 tareas dormidas, con nombre y fecha. Así se conversa sobre hechos y no sobre impresiones.</p>
+</section>
+
+<section id="preparacion">
+<h2>6. El informe de preparación para la certificación</h2>
+<p>Gerencia lo pidió explícitamente: que cada responsable responda con seriedad si su área está lista. El informe junta tres fuentes para que la respuesta no dependa solo de lo que diga cada persona.</p>
+
+<div class="grid2">
+  <div class="callout"><h3>A · Lo que dice el sistema</h3><p>Avance por capítulo de la norma (la matriz de cobertura que ya existe), no conformidades abiertas incluidas las del 30-09, documentos sin acusar, competencias vencidas, objetivos de calidad sin medir, uso del canal de reclamos e índice de cumplimiento de cada responsable.</p></div>
+  <div class="callout"><h3>B · Lo que dice cada responsable</h3><p>Una entrevista guiada en SIGSO. Por cada pregunta se anota la respuesta, si se vio evidencia (sí, parcial o no) y un puntaje de 0 a 3. Funciona como un ensayo de la Etapa II.</p></div>
+  <div class="callout"><h3>C · Lo que muestra la muestra</h3><p>Un simulacro: SIGSO elige 5 registros al azar de cada proceso y el responsable muestra la trazabilidad completa (quién hizo, quién revisó, quién liberó). Es justo lo que falló en 7 hallazgos de la auditoría de procesos.</p></div>
+</div>
+
+<h3>Preguntas de la entrevista</h3>
+<div class="tbl"><table>
+<thead><tr><th>Bloque</th><th>Pregunta</th><th>Norma</th></tr></thead>
+<tbody>
+<tr><td>Procesos</td><td>¿Cuál es el procedimiento de tu proceso? Muéstrame el último registro y dónde queda quién lo revisó y liberó.</td><td><span class="clause">8.5</span> <span class="clause">8.6</span></td></tr>
+<tr><td>Responsabilidades</td><td>¿Cuáles son tus responsabilidades según tu descriptor? ¿Qué tienes pendiente y desde cuándo?</td><td><span class="clause">5.3</span></td></tr>
+<tr><td>Política y objetivos</td><td>¿Cuál es la política de calidad? ¿Qué objetivo de calidad toca a tu área y cómo va este mes?</td><td><span class="clause">7.3</span> <span class="clause">6.2</span></td></tr>
+<tr><td>Mejora</td><td>¿Qué no conformidades tiene tu área? ¿Qué acción se tomó? ¿Está cerrada y se verificó que funcionó?</td><td><span class="clause">10.2</span></td></tr>
+<tr><td>Cliente</td><td>¿Cómo sabe un cliente dónde reclamar? ¿Recibiste algún reclamo informal este trimestre? ¿Lo registraste?</td><td><span class="clause">9.1.2</span></td></tr>
+<tr><td>Riesgos</td><td>¿Qué podría hacer fallar tu servicio en enero? ¿Quién te reemplaza si sales de vacaciones?</td><td><span class="clause">6.1</span> <span class="clause">7.1.2</span></td></tr>
+<tr><td>Competencia</td><td>¿Tienes tu evaluación de desempeño y tus capacitaciones al día?</td><td><span class="clause">7.2</span></td></tr>
+<tr><td>Autoevaluación</td><td>¿Tu área está lista para la auditoría: sí, con riesgos o no? ¿Por qué?</td><td><span class="clause">9.3</span></td></tr>
+</tbody></table></div>
+
+<h3>Cómo se decide el veredicto de cada área</h3>
+<div class="tbl"><table>
+<thead><tr><th>Veredicto</th><th>Condiciones</th></tr></thead>
+<tbody>
+<tr><td><span class="pill ok">Lista</span></td><td>Entrevista con promedio de 2,5 o más y evidencia vista; ninguna no conformidad mayor abierta sin acción en curso; índice de cumplimiento de 85 % o más; documentos 100 % acusados; competencias al día.</td></tr>
+<tr><td><span class="pill warn">Lista con riesgos</span></td><td>No cumple alguna condición, pero cada brecha tiene tarea, responsable y fecha anterior a la auditoría.</td></tr>
+<tr><td><span class="pill crit">No lista</span></td><td>Una no conformidad mayor sin tratar, entrevista bajo 2, o índice de cumplimiento bajo 75 %.</td></tr>
+</tbody></table></div>
+<p><b>Recomendación global:</b> ir a la auditoría si todas las áreas están «lista» o «lista con riesgos» con plan. Si alguna queda «no lista» en la medición de enero, el informe lo dice con anticipación y propone una fecha, en vez de enterarse con la certificadora en la oficina. Cada brecha del informe se convierte en tarea y entra al índice, así el informe se cierra a sí mismo.</p>
+</section>
+
+<section id="iso">
+<h2>7. Qué cubre de la norma</h2>
+<p>Además de servir a gerencia, cada pieza deja evidencia que el auditor de SCI va a pedir. Esta es la relación entre piezas y cláusulas de ISO 9001:2015:</p>
+<div class="tbl"><table>
+<thead><tr><th>Cláusula</th><th>Qué pide</th><th>Pieza que deja la evidencia</th></tr></thead>
+<tbody>
+<tr><td><span class="clause">5.1</span></td><td>Liderazgo y compromiso de la dirección</td><td>P1 instrucciones formales, P4 resumen a gerencia, P6 informe a la dirección</td></tr>
+<tr><td><span class="clause">5.3</span></td><td>Roles, responsabilidades y autoridades asignados y comunicados</td><td>P2 mapa de responsabilidades aprobado, P3 índice</td></tr>
+<tr><td><span class="clause">6.1</span></td><td>Acciones para abordar riesgos</td><td>P6 pregunta de riesgos y reemplazos, P1 disponibilidad de jefaturas</td></tr>
+<tr><td><span class="clause">7.2</span> <span class="clause">7.3</span></td><td>Competencia y toma de conciencia</td><td>P6 entrevista (política, objetivos, contribución), P2</td></tr>
+<tr><td><span class="clause">7.4</span></td><td>Comunicación interna</td><td>P4 aviso semanal, P5 reunión semanal con acta, P1 acuses</td></tr>
+<tr><td><span class="clause">9.1.2</span></td><td>Satisfacción del cliente</td><td>P7 reclamos, felicitaciones y consultas medidos</td></tr>
+<tr><td><span class="clause">9.1.3</span></td><td>Análisis y evaluación</td><td>P3 índice y tendencia, P5 causas medidas</td></tr>
+<tr><td><span class="clause">9.2</span> <span class="clause">9.3</span></td><td>Auditoría interna y revisión por la dirección</td><td>P6 informe de preparación como entrada de la revisión por la dirección</td></tr>
+<tr><td><span class="clause">10.2</span> <span class="clause">10.3</span></td><td>No conformidad, acción correctiva y mejora continua</td><td>P1 carga de no conformidades del 30-09, P5 acuerdos como tareas, P7 reclamos que generan no conformidad</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="calendario">
+<h2>8. Calendario hasta la auditoría</h2>
+<p>Pensado para tener lo esencial funcionando antes de las vacaciones y una segunda medición en enero. El 8 de diciembre es feriado. Cada entrega pasa por pruebas y se publica por partes, como el resto de SIGSO.</p>
+<div class="weeks">
+  <div class="week"><div class="when"><b>Semana 1</b>16–20 nov</div><ul><li>Decisiones de la sección 11.</li><li>P1: fechas de enero en el proyecto ISO, eventos en la Agenda de jefaturas, 3 instrucciones con acuse, no conformidades del 30-09 cargadas.</li><li>Medición base real: cuántas tareas sin fecha, dormidas y reprogramadas hay hoy por persona (el punto de partida honesto).</li><li>P7: primera importación del Excel de reclamos.</li></ul></div>
+  <div class="week"><div class="when"><b>Semana 2</b>23–27 nov</div><ul><li>P2: mapa de responsabilidades armado desde los descriptores, revisado con cada jefatura.</li><li>P3: cálculo del índice (servidor y pruebas).</li></ul></div>
+  <div class="week"><div class="when"><b>Semana 3</b>30 nov–4 dic</div><ul><li>P3: pantallas Mi cumplimiento, Mi equipo y Control.</li><li>P4: primer aviso semanal el lunes 30.</li><li>P5 básica: primera reunión de coordinación con agenda automática.</li></ul></div>
+  <div class="week"><div class="when"><b>Semana 4</b>9–11 dic</div><ul><li>P5 completa: causas, acuerdos como tareas, asistencia, acta enviada.</li><li>P6: entrevista guiada y simulacro de muestras en SIGSO.</li></ul></div>
+  <div class="week milestone"><div class="when"><b>Semana 5</b>14–18 dic</div><ul><li>Entrevistas a cada responsable.</li><li><b>Informe de preparación, versión 1, entregado a gerencia</b> con su plan de brechas.</li></ul></div>
+  <div class="week"><div class="when"><b>Semana 6</b>21–24 dic</div><ul><li>Cierre de brechas (las tareas del informe).</li><li>P8: primeros avisos programados (cotizaciones el día 9, F29 el día 20).</li></ul></div>
+  <div class="week milestone"><div class="when"><b>Enero</b>5–9 ene</div><ul><li><b>Informe de preparación, versión 2</b>: nueva medición y recomendación de ir o no a la auditoría.</li><li>Etapa I y Etapa II de SCI en las fechas confirmadas.</li></ul></div>
+  <div class="week"><div class="when"><b>Febrero</b>en adelante</div><ul><li>Índice dentro del informe de gestión mensual con su cadena de firmas.</li><li>P9: base para reconocimientos con tres meses de datos.</li><li>P7: conexión automática con la intranet, si Jorge la habilita.</li></ul></div>
+</div>
+</section>
+
+<section id="valor">
+<h2>9. Lo que gana la empresa</h2>
+<div class="grid2">
+  <div class="callout key"><h3>Control sin perseguir</h3><p>Lo atrasado llega solo cada lunes. Gerencia deja de cargar con la memoria de todo lo que está abierto.</p></div>
+  <div class="callout key"><h3>Un número que se puede exigir</h3><p>Cada porcentaje se abre hasta la tarea exacta. Las conversaciones difíciles se apoyan en hechos registrados, no en percepciones.</p></div>
+  <div class="callout key"><h3>El atraso deja de esconderse</h3><p>Fecha original, tareas sin fecha y tareas dormidas a la vista. Se termina el «se me pasó».</p></div>
+  <div class="callout key"><h3>Certificar sabiendo</h3><p>El informe de preparación dice dónde está cada área antes de que llegue la certificadora, y se puede repetir hasta estar listos.</p></div>
+  <div class="callout key"><h3>Decisiones con causas medidas</h3><p>Si los atrasos se deben a falta de personal, se ve en números. Contratar un practicante o un contador deja de ser intuición.</p></div>
+  <div class="callout key"><h3>Listos para crecer</h3><p>La meta de unos 200 clientes en el primer semestre exige que los controles funcionen antes del crecimiento, no después.</p></div>
+  <div class="callout key"><h3>Evidencia ISO como subproducto</h3><p>El mismo trabajo diario deja registros para 5.3, 7.3, 7.4, 9.1, 9.3 y 10.2, sin preparar carpetas a última hora.</p></div>
+  <div class="callout key"><h3>Algo que se puede vender</h3><p>El mismo sistema de control sirve para ofrecérselo a clientes pymes como parte de SIGSO, en línea con la visión comercial de la reunión.</p></div>
+</div>
+</section>
+
+<section id="riesgos">
+<h2>10. Riesgos y cómo se cuidan</h2>
+<div class="tbl"><table>
+<thead><tr><th>Riesgo</th><th>Cuidado</th></tr></thead>
+<tbody>
+<tr><td>Miedo y mal clima: el índice se vive como castigo</td><td>Cada persona ve su número primero y puede justificar. Registrar problemas suma. No hay ranking público entre compañeros. Se presenta como herramienta para ordenar, tal como se planteó en la reunión.</td></tr>
+<tr><td>Datos malos el primer mes (tareas sin fecha, mal cerradas)</td><td>Semana 1 mide el punto de partida. La primera semana con índice es de marcha blanca: solo lo ven la persona y su jefatura.</td></tr>
+<tr><td>Más carga de trabajo para registrar</td><td>Cerca del 80 % del índice sale de datos que ya se registran. Lo único nuevo es marcar con evidencia las responsabilidades que el sistema no ve solo.</td></tr>
+<tr><td>Maquillar el número (cerrar tareas sin hacerlas)</td><td>Las responsabilidades del SGC piden evidencia. La jefatura valida justificaciones. Las muestras al azar del informe de preparación revisan trazabilidad real.</td></tr>
+<tr><td>No alcanzar antes de enero</td><td>El orden pone primero lo que la auditoría necesita (P1, P3, P6). P8 y P9 pueden esperar sin afectar la certificación.</td></tr>
+<tr><td>La intranet de reclamos no permite conexión directa</td><td>Se parte con el Excel mensual, que la intranet ya exporta. La conexión automática es una mejora, no un requisito.</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="decisiones">
+<h2>11. Decisiones que se necesitan para partir</h2>
+<p>Cada una trae una recomendación. Con estas respuestas se puede empezar la semana 1.</p>
+<ol class="decisions">
+<li><b>Fechas de la Etapa I y la Etapa II en enero.</b> Hacen falta las fechas que confirme SCI para mover el proyecto ISO y avisar a las jefaturas.</li>
+<li><b>¿Contra qué fecha se mide?</b> <span class="rec">Recomendado:</span> la fecha original; una reprogramación solo cuenta si la jefatura la aprobó antes del vencimiento.</li>
+<li><b>Pesos y cortes del índice.</b> <span class="rec">Recomendado:</span> 35 / 25 / 20 / 20 y semáforo 90 / 75, revisándolos en febrero con datos reales.</li>
+<li><b>Quién ve qué.</b> <span class="rec">Recomendado:</span> la persona ve lo suyo, la jefatura su equipo y gerencia todo. Sin ranking visible entre compañeros.</li>
+<li><b>Reclamos.</b> <span class="rec">Recomendado:</span> partir con el Excel mensual de la intranet, pedirle a Jorge la consulta de solo lectura y sacar del menú el módulo de quejas propio de SIGSO.</li>
+<li><b>Reunión semanal.</b> <span class="rec">Recomendado:</span> lunes 9:00, 30 minutos, dirigida por Control de Gestión, con todas las jefaturas.</li>
+<li><b>Entrevistas de preparación.</b> ¿Las hace solo Control de Gestión o con la jefatura del área presente? ¿A jefaturas y también a operativos de cada proceso? <span class="rec">Recomendado:</span> Control de Gestión entrevista a jefaturas y a un operativo por proceso.</li>
+<li><b>Preguntas programadas.</b> ¿Qué preguntas quiere recibir gerencia, qué día y quién más las recibe? Las de cotizaciones, F29 y convenios se pueden hacer ya.</li>
+<li><b>Reconocimientos.</b> <span class="rec">Recomendado:</span> esperar tres meses de datos antes de ligar el índice a premios o bonos.</li>
+</ol>
+</section>
+
+<footer>
+<p>Base de este plan: minuta y transcripción de la reunión de cierre de año, revisión del código de SIGSO en producción (tareas, agenda de departamentos, indicadores por área, módulos del SGC, tareas automáticas del servidor) y la pantalla de la intranet de reclamos. No se pudieron consultar los datos de producción para este documento: la medición base real se hace en la semana 1.</p>
+</footer>
+</main>
+</div>

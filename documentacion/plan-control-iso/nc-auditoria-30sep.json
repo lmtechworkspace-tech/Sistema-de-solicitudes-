@@ -1,0 +1,379 @@
+[
+  {
+    "correlativo": "NC-AP-2026-01",
+    "hoja": "NC-01",
+    "tipo": "MENOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 01 (registro DOC-10-02)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "No se mantiene trazabilidad entre la Matriz de Facturación Mensual, el documento base de cada factura (orden de compra o estado de pago del mandante del cliente) y la factura emitida: el documento base solo está en el correo y en el muestreo la matriz registra un N° de factura distinto al emitido.",
+    "referencia_normativa": "ISO 9001:2015, cláusula 8.5.2 (identificación y trazabilidad) - Evidencia objetiva: registro DOC-10-02, Matriz de Facturación Mensual (Construcciones Miranda figura con la factura N° 2; la emitida es la N° 126)",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué no se puede rastrear la factura hasta su documento base? Porque la matriz registra el N° de EP y el N° de contrato, pero no el N° de la orden de compra, y el respaldo no se guarda junto a la factura.\r\n2) ¿Por qué no se registra ni se guarda? Porque la matriz se diseñó para controlar las facturas emitidas en el mes, no para seguirlas hasta su origen, y no se definió dónde guardar el respaldo.\r\n3) ¿Por qué no se definió? Porque al levantar el proceso no se definió qué datos permiten seguir cada factura desde la solicitud del cliente hasta su emisión.\r\nCausa raíz: El registro del proceso de facturación no se diseñó para la trazabilidad solicitud → documento base (OC o EP) → factura.",
+    "correccion": {
+      "descripcion": "Corregir el registro observado (factura N° 126 de Construcciones Miranda). En la Matriz de Facturación Mensual, reutilizar las columnas vacías: «ENVIAR A CLIENTE/OBRA» pasa a «N° OC / DOCUMENTO BASE», «REFERENCIA SI-NO» pasa a «LIBERADO POR» y «CLASIFICACION INTERNA» pasa a «BORRADOR APROBADO».",
+      "plazo": "2026-10-20",
+      "responsable": "Francisca Feliú",
+      "responsable_texto": "Francisca Feliú (Asistente de Contabilidad)"
+    },
+    "accion": {
+      "descripcion": "DOC-10 v02 (proceso 01 Facturas) obliga a verificar la OC o el EP contra el contrato del cliente con su mandante, a registrar su N° en la matriz, a verificar el folio contra el PDF y a guardar el PDF de la factura y su respaldo con el mismo nombre en la carpeta «FACTURAS». La Gerente de Administración y Finanzas verifica cada mes 5 facturas al azar (matriz vs. SII vs. respaldo) en FO-DOC-10-04.",
+      "plazo": "2026-11-17",
+      "responsable": "Francisca Feliú",
+      "responsable_texto": "Francisca Feliú (Asistente de Contabilidad) - con Bárbara Álvarez Sánchez (Gerente de Administración y Finanzas)"
+    },
+    "eficacia": {
+      "descripcion": "Revisar 10 facturas de noviembre y diciembre de 2026: en todas coinciden la matriz, el folio del SII y el respaldo guardado en la carpeta «FACTURAS».",
+      "plazo": "2027-02-12",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-02",
+    "hoja": "NC-02",
+    "tipo": "MAYOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 02 (registro DOC-10-03)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "No se evidencia la revisión de las facturas antes de firmarlas con el certificado digital ni la persona que autoriza su emisión. La aprobación del cliente es por mensaje de texto y el envío del borrador al cliente es opcional.",
+    "referencia_normativa": "ISO 9001:2015, cláusula 8.6 b) - Evidencia objetiva: registro DOC-10-03 «No se visualiza la revisión de las facturas»",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué no hay registro de quién autoriza la factura? Porque el proceso no tiene un paso de revisión y liberación.\r\n2) ¿Por qué no lo tiene? Porque la misma persona prepara, firma y envía la factura.\r\n3) ¿Por qué el levantamiento no lo incluyó? Porque el formato de levantamiento de procesos (Responsable, Input, Actividades, Evidencias, Output) no pide definir quién libera cada salida al cliente.\r\n4) ¿Por qué no se detectó al aprobar el documento? Porque PRO-01 no exigía verificar ese paso antes de aprobar un proceso.\r\nCausa raíz: Los procesos de servicio se documentaron y aprobaron sin exigir un paso de revisión y liberación con registro de quién autoriza.",
+    "correccion": {
+      "descripcion": "DOC-10 v02 agrega el paso «Revisión y liberación de la factura»: la Asistente de Contabilidad revisa cada factura contra la OC o el EP con una lista fija de datos y la libera registrando su nombre en «LIBERADO POR» de la Matriz de Facturación Mensual; la Gerente de Administración y Finanzas verifica 5 facturas al azar cada mes en FO-DOC-10-04. La autoridad para liberar queda en el descriptor de la Asistente (FO-PRO-02-01 v03). El envío del borrador es obligatorio para clientes nuevos y cambios, y su aprobación se registra en la columna «Borrador aprobado».",
+      "plazo": "2026-10-20",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión) - con Bárbara Álvarez Sánchez (Gerente de Administración y Finanzas)"
+    },
+    "accion": {
+      "descripcion": "Aplicar el paso de revisión y liberación a todos los procesos de servicio que entregan algo al cliente (DOC-10 a DOC-13 v02). PRO-01 v02 §6.1: antes de aprobar un proceso de servicio, la Encargada de administración verifica que cada responsable sea un cargo con descriptor vigente y persona asignada, que los servicios no vigentes estén marcados «en implementación», que cada salida al cliente tenga revisión y liberación con registro, y que numeración, títulos, matrices y evidencias sean consistentes. Reunión con el área para explicar el cambio, registrada en FO-PRO-02-05.",
+      "plazo": "2026-11-17",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    },
+    "eficacia": {
+      "descripcion": "Muestreo de 10 facturas de noviembre y diciembre de 2026: todas con «LIBERADO POR», fecha y (cuando corresponde) «Borrador aprobado» registrados, y FO-DOC-10-04 completo en noviembre y diciembre.",
+      "plazo": "2027-02-12",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-03",
+    "hoja": "NC-03",
+    "tipo": "MAYOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 03 (registro DOC-10-04)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "No está controlado el uso del certificado de firma digital de HomePymes: no hay registros de quién lo custodia, quién está autorizado a usarlo ni cuándo vence.",
+    "referencia_normativa": "ISO 9001:2015, cláusulas 7.1.3 y 8.5.3 - Evidencia objetiva: registro DOC-10-04 «No hay registros que respalden quiénes tienen acceso a la firma digital»",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué no hay registro? Porque el certificado no estaba identificado como un recurso que requiere control.\r\n2) ¿Por qué no estaba identificado? Porque no existe un inventario de los recursos críticos del servicio (certificados, claves y plataformas) con su responsable.\r\n3) ¿Por qué no existe? Porque al implementar el SGC los recursos se revisaron solo como infraestructura (equipos y oficina), no como accesos.\r\nCausa raíz: No se identificaron los recursos críticos de acceso (certificados, claves, plataformas) que requieren control de custodia, autorización y vigencia.",
+    "correccion": {
+      "descripcion": "Crear y completar FO-DOC-10-01 «Control de certificado de firma digital» con el custodio, las personas autorizadas por Gerencia y la fecha de vencimiento, y agendar el aviso de renovación 30 días antes.",
+      "plazo": "2026-10-20",
+      "responsable": "Bárbara Álvarez Sánchez",
+      "responsable_texto": "Bárbara Álvarez Sánchez (Gerente de Administración y Finanzas)"
+    },
+    "accion": {
+      "descripcion": "DOC-10 v02 (proceso 01) establece que solo firman las personas autorizadas en FO-DOC-10-01. Levantar por área el inventario de recursos críticos de acceso (certificados, claves y plataformas) con su responsable, y registrar FO-DOC-10-01 en el listado maestro.",
+      "plazo": "2026-11-17",
+      "responsable": "Bárbara Álvarez Sánchez",
+      "responsable_texto": "Bárbara Álvarez Sánchez (Gerente de Administración y Finanzas) - con Luis Mendoza (Encargado del Sistema de Gestión)"
+    },
+    "eficacia": {
+      "descripcion": "Revisión en enero de 2027: quienes firman facturas coinciden con los autorizados en FO-DOC-10-01 y el aviso de renovación está programado.",
+      "plazo": "2027-02-12",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-04",
+    "hoja": "NC-04",
+    "tipo": "MAYOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 04 (registro DOC-10-27, DOC-10-28, DOC-10-29)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "El proceso Pre Renta no tiene responsable definido para su planificación, ejecución y liberación: solo describe el registro de junio, no define frecuencia, no verifica que la hoja RLI cuadre con FacilCont, nadie revisa la pre-renta antes del envío y no hay paso para las observaciones del cliente.",
+    "referencia_normativa": "ISO 9001:2015, cláusulas 8.1, 8.5.1 y 8.6 - Evidencia objetiva: registros DOC-10-27, DOC-10-28 y DOC-10-29 (Pre Renta) «No está el responsable»",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué el proceso no tenía responsable? Porque estaba asignado al cargo «Contador», que hoy no tiene titular.\r\n2) ¿Por qué se asignó a ese cargo? Porque se levantó siguiendo el descriptor del Contador, sin confirmar quién ejecuta el servicio (lo hará la Asistente de Contabilidad).\r\n3) ¿Por qué faltaban frecuencia, cuadratura y revisión? Porque se describió solo la tarea de junio y no las etapas de control del servicio.\r\n4) ¿Por qué no se detectó al aprobarlo? Porque PRO-01 no exigía verificar, antes de aprobar, responsable con titular y etapas de control.\r\nCausa raíz: Procesos aprobados sin verificar que el responsable fuera un cargo con titular ni que el proceso incluyera frecuencia, control y liberación.",
+    "correccion": {
+      "descripcion": "DOC-10 v02 (proceso 07 Pre Renta): responsable Asistente de Contabilidad; frecuencia con cortes al 30 de junio, 30 de septiembre y 30 de noviembre; cuadratura de la hoja RLI con FacilCont registrada; paso de revisión y liberación por la Asistente de Contabilidad, con verificación por muestra de la Gerente de Administración y Finanzas en cada corte (FO-DOC-10-04); respuesta y conformidad del cliente. Descriptor de la Asistente de Contabilidad actualizado (FO-PRO-02-01 v03).",
+      "plazo": "2026-10-20",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión) - con Francisca Feliú (Asistente de Contabilidad)"
+    },
+    "accion": {
+      "descripcion": "PRO-01 v02 §6.1: antes de aprobar un proceso de servicio, la Encargada de administración verifica que cada responsable sea un cargo con descriptor vigente y persona asignada, que los servicios no vigentes estén marcados «en implementación», que cada salida al cliente tenga revisión y liberación con registro, y que numeración, títulos, matrices y evidencias sean consistentes. Capacitar a la Asistente de Contabilidad en el proceso Pre Renta antes del corte del 30-11-2026, con registro en FO-PRO-02-05.",
+      "plazo": "2026-11-17",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    },
+    "eficacia": {
+      "descripcion": "Pre Renta del corte al 30-11-2026: en 3 clientes quedan registradas la cuadratura RLI, la liberación y la conformidad del cliente.",
+      "plazo": "2027-02-12",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-05",
+    "hoja": "NC-05",
+    "tipo": "MAYOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 05 (registro DOC-10-38)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "Nadie revisa los asientos centralizados del mes ni los documentos sin clasificar: no existe un cargo con la función de revisar y controlar las contabilizaciones.",
+    "referencia_normativa": "ISO 9001:2015, cláusula 8.6 - Evidencia objetiva: registro DOC-10-38 (Contabilizaciones) «No existe el perfil para el cargo»",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué nadie revisa los asientos? Porque el proceso no tiene un paso de revisión.\r\n2) ¿Por qué no lo tiene? Porque esa revisión se pensó para el cargo «Contador», que no tiene titular.\r\n3) ¿Por qué no se asignó a otro cargo? Porque al documentar no se definió quién revisa mientras el cargo esté vacante.\r\nCausa raíz: La revisión contable dependía de un cargo sin titular y no se definió un responsable alternativo.",
+    "correccion": {
+      "descripcion": "DOC-10 v02 (proceso 10) agrega el paso «Revisión mensual de centralizaciones» («Revisión y liberación de las centralizaciones»): la Asistente de Contabilidad libera cada cliente y lo registra en la columna nueva «LIBERADO POR» de la MATRIZ CONTABILIZACION MENSUAL; la Gerente de Administración y Finanzas verifica cada mes 5 clientes al azar más los nuevos en FO-DOC-10-04 (si hay un error se revisa el cliente completo). La ejecución sigue a cargo de la Asistente de Contabilidad.",
+      "plazo": "2026-10-20",
+      "responsable": "Bárbara Álvarez Sánchez",
+      "responsable_texto": "Bárbara Álvarez Sánchez (Gerente de Administración y Finanzas)"
+    },
+    "accion": {
+      "descripcion": "Descriptores actualizados (FO-PRO-02-01 v03): la Asistente de Contabilidad libera las centralizaciones y la Gerente de Administración y Finanzas las verifica por muestra; cuando se incorpore el/la Contador(a) (enero-febrero de 2027), la verificación pasa a ese cargo. PRO-01 v02 §6.1: antes de aprobar un proceso de servicio, la Encargada de administración verifica que cada responsable sea un cargo con descriptor vigente y persona asignada, que los servicios no vigentes estén marcados «en implementación», que cada salida al cliente tenga revisión y liberación con registro, y que numeración, títulos, matrices y evidencias sean consistentes.",
+      "plazo": "2026-11-17",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión) - con Bárbara Álvarez Sánchez (Gerente de Administración y Finanzas)"
+    },
+    "eficacia": {
+      "descripcion": "MATRIZ CONTABILIZACION MENSUAL de noviembre y diciembre de 2026 con «LIBERADO POR» en todos los clientes, FO-DOC-10-04 con la muestra de cada mes y los errores encontrados corregidos.",
+      "plazo": "2027-02-12",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-06",
+    "hoja": "NC-06",
+    "tipo": "MAYOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 06 (registro DOC-10-41, DOC-10-42, DOC-10-43, DOC-10-44)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "El servicio de creación de empresas no tiene un responsable con descriptor; no se evidenció el pago ni la validación del formulario; no está definido si incluye el inicio de actividades; no queda registro de la verificación del estatuto ni de la empresa creada.",
+    "referencia_normativa": "ISO 9001:2015, cláusulas 8.2.2, 8.2.3, 8.6 y 7.5.3 - Evidencia objetiva: registros DOC-10-41 a DOC-10-44 (Creación de empresa) «No existe el perfil para la creación»",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué faltan estos registros? Porque el proceso no define dónde se registra cada verificación ni quién la hace.\r\n2) ¿Por qué no lo define? Porque se documentó asignado al cargo «Contador», sin titular, sin consultar a quien ejecuta el servicio (la Administradora de RR.HH. y Plataformas Digitales, que opera «Empresa en un Día»).\r\n3) ¿Por qué no se definió el alcance? Porque se describieron las tareas en la plataforma y no lo comprometido con el cliente.\r\n4) ¿Por qué no se detectó al aprobarlo? Porque PRO-01 no exigía verificar responsable, alcance y registro de salida.\r\nCausa raíz: Servicio documentado sin consultar a quien lo ejecuta, sin alcance escrito ni registros de sus verificaciones y salidas.",
+    "correccion": {
+      "descripcion": "DOC-10 v02 (proceso 11): responsable Administradora de RR.HH. y Plataformas Digitales; alcance según la cotización aceptada; verificación del pago y del formulario; verificación del estatuto por la Asistente de Contabilidad, persona distinta de quien lo prepara; registro FO-DOC-10-03 «Registro de empresas creadas»; entrega al cliente. Descriptor actualizado (FO-PRO-02-01 v03).",
+      "plazo": "2026-10-20",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión) - con Lisseth Vilchez (Administradora de RR.HH. y Plataformas Digitales)"
+    },
+    "accion": {
+      "descripcion": "PRO-01 v02 §6.1: antes de aprobar un proceso de servicio, la Encargada de administración verifica que cada responsable sea un cargo con descriptor vigente y persona asignada, que los servicios no vigentes estén marcados «en implementación», que cada salida al cliente tenga revisión y liberación con registro, y que numeración, títulos, matrices y evidencias sean consistentes. Registrar en FO-DOC-10-03 las empresas creadas en 2026 con los antecedentes disponibles.",
+      "plazo": "2026-11-17",
+      "responsable": "Lisseth Vilchez",
+      "responsable_texto": "Lisseth Vilchez (Administradora de RR.HH. y Plataformas Digitales)"
+    },
+    "eficacia": {
+      "descripcion": "Casos de creación de empresa de octubre a diciembre de 2026 (o el siguiente caso) con pago, validación, verificación del estatuto y registro completos en FO-DOC-10-03.",
+      "plazo": "2027-02-12",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-07",
+    "hoja": "NC-07",
+    "tipo": "MAYOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 07 (registro DOC-10-45, DOC-10-46, DOC-10-47, DOC-10-48)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "El proceso de Declaración de Renta no tiene revisión interna ni aprobación del F22 por el cliente, no define qué declaraciones juradas aplican según el régimen tributario, no hay registro de capacitación en la Operación Renta y falta el paso de entrega al cliente.",
+    "referencia_normativa": "ISO 9001:2015, cláusulas 8.2.1, 8.5.1, 8.5.2, 8.5.6, 8.6 y 7.2 - Evidencia objetiva: registros DOC-10-45 a DOC-10-48 (Declaración de Renta)",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué faltan esos pasos? Porque el proceso se escribió desde las tareas en el SII.\r\n2) ¿Por qué solo desde las tareas? Porque no se consideraron las etapas de control (revisión, aprobación y entrega).\r\n3) ¿Por qué no hay registro de competencia? Porque el proceso está asignado al cargo «Contador», que está vacante; su incorporación está prevista para enero-febrero de 2027.\r\nCausa raíz: Proceso documentado sin etapas de control y asignado a un cargo vacante, sin definir cómo se asegura la competencia antes de prestar el servicio.",
+    "correccion": {
+      "descripcion": "DOC-10 v02 (proceso 12): servicio declarado «en implementación» mientras el cargo esté vacante; se agregan la revisión interna, la aprobación del cliente, la entrega del PDF y FO-DOC-10-02 «Matriz de declaraciones juradas por régimen tributario». Descriptor del Contador actualizado con la capacitación anual.",
+      "plazo": "2026-10-20",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    },
+    "accion": {
+      "descripcion": "Incorporar al/la Contador(a) antes de marzo de 2027 con inducción (FO-PRO-02-02) y capacitación en Operación Renta (FO-PRO-02-05), incluida en el programa FO-PRO-02-03 2027; activar el servicio con nueva versión de DOC-10. PRO-01 v02 §6.1: antes de aprobar un proceso de servicio, la Encargada de administración verifica que cada responsable sea un cargo con descriptor vigente y persona asignada, que los servicios no vigentes estén marcados «en implementación», que cada salida al cliente tenga revisión y liberación con registro, y que numeración, títulos, matrices y evidencias sean consistentes.",
+      "plazo": "2026-11-17",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión) - con Gerencia"
+    },
+    "eficacia": {
+      "descripcion": "Operación Renta AT 2027: muestreo de 5 clientes con revisión, aprobación del cliente, entrega y DDJJ según la matriz. Plazo extendido al 31-05-2027 porque la Operación Renta se realiza en abril (PRO-06 §6.5).",
+      "plazo": "2027-05-31",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-08",
+    "hoja": "NC-08",
+    "tipo": "MENOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 08 (registro DOC-10-56)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "En 2026 se usa el registro «Situación clientes convenios y postergaciones 2025»; no existe la versión del período 2026.",
+    "referencia_normativa": "ISO 9001:2015, cláusula 7.5.2 - Evidencia objetiva: registro DOC-10-56, archivo «Situación clientes convenios y postergaciones 2025» en uso en 2026",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué se usa la matriz de 2025? Porque no se creó la de 2026.\r\n2) ¿Por qué no se creó? Porque no hay una regla de cuándo y cómo se renuevan las matrices anuales.\r\nCausa raíz: Falta una regla para renovar las matrices anuales del área.",
+    "correccion": {
+      "descripcion": "Crear la matriz «Situación clientes convenios y postergaciones 2026» con los convenios vigentes y dejar la de 2025 como historial sin editar.",
+      "plazo": "2026-10-20",
+      "responsable": "Francisca Feliú",
+      "responsable_texto": "Francisca Feliú (Asistente de Contabilidad)"
+    },
+    "accion": {
+      "descripcion": "DOC-10 v02 (proceso 15) indica crear la matriz del año el primer día hábil de enero y dejar la anterior como historial. Revisar las demás matrices del área que llevan el año en el nombre.",
+      "plazo": "2026-11-17",
+      "responsable": "Francisca Feliú",
+      "responsable_texto": "Francisca Feliú (Asistente de Contabilidad)"
+    },
+    "eficacia": {
+      "descripcion": "En enero de 2027 existen las matrices 2027 y las de 2026 quedan como historial.",
+      "plazo": "2027-02-12",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-09",
+    "hoja": "NC-09",
+    "tipo": "MENOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 09 (registro DOC-10-62)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "El Paso 3 del proceso Carpeta tributaria no tiene título y no describe la verificación de la carpeta antes de enviarla, aunque la Asistente de Contabilidad la realiza; no queda registro de esa verificación.",
+    "referencia_normativa": "ISO 9001:2015, cláusula 8.6 - Evidencia objetiva: registro DOC-10-62 (Carpeta tributaria), Paso 3 sin título ni verificación",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué no está escrita la verificación? Porque el documento no se revisó en detalle antes de aprobarlo.\r\n2) ¿Por qué no queda registro? Porque el proceso no define dónde se deja constancia de quién verificó.\r\nCausa raíz: Documento aprobado sin revisión de contenido y sin definir el registro de la liberación.",
+    "correccion": {
+      "descripcion": "DOC-10 v02 titula el Paso 3 «Verificación y envío al cliente», describe la verificación (RUT, razón social, período y contenido) y deja constancia en el correo de envío («Carpeta verificada por [nombre] el [fecha]»).",
+      "plazo": "2026-10-20",
+      "responsable": "Francisca Feliú",
+      "responsable_texto": "Francisca Feliú (Asistente de Contabilidad)"
+    },
+    "accion": {
+      "descripcion": "PRO-01 v02 §6.1: antes de aprobar un proceso de servicio, la Encargada de administración verifica que cada responsable sea un cargo con descriptor vigente y persona asignada, que los servicios no vigentes estén marcados «en implementación», que cada salida al cliente tenga revisión y liberación con registro, y que numeración, títulos, matrices y evidencias sean consistentes.",
+      "plazo": "2026-11-17",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    },
+    "eficacia": {
+      "descripcion": "Muestreo de 5 carpetas tributarias de noviembre y diciembre de 2026 con la constancia de verificación en el correo de envío.",
+      "plazo": "2027-02-12",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-10",
+    "hoja": "NC-10",
+    "tipo": "MAYOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 10 (registro DOC-10-63, DOC-10-64, DOC-10-65)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "No está definido quién prepara y revisa el balance de término de giro; hay dos pasos numerados «Paso 2»; no hay paso para informar al cliente por escrito los giros de impuestos y su plazo de pago.",
+    "referencia_normativa": "ISO 9001:2015, cláusulas 8.5.1, 8.6, 7.5.2 y 8.2.1 - Evidencia objetiva: registros DOC-10-63 a DOC-10-65 (Término de giro)",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué no hay responsable de la revisión? Porque el proceso se asignó al cargo «Contador», que está vacante.\r\n2) ¿Por qué hay errores de numeración? Porque el documento no se revisó antes de aprobarlo.\r\n3) ¿Por qué no se informa por escrito al cliente? Porque se describieron las tareas en el SII y no la comunicación con el cliente.\r\nCausa raíz: Servicio asignado a un cargo vacante y documento aprobado sin revisión de forma ni de las etapas de comunicación con el cliente.",
+    "correccion": {
+      "descripcion": "DOC-10 v02 (proceso 18): servicio «en implementación» mientras el cargo esté vacante; el balance lo prepara el/la Contador(a) y lo revisa la Gerente de Administración y Finanzas con registro; aviso por correo al cliente de cada giro, plazo y forma de pago; numeración corregida.",
+      "plazo": "2026-10-20",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    },
+    "accion": {
+      "descripcion": "Incorporar al/la Contador(a) con inducción y capacitación registradas antes de activar el servicio. PRO-01 v02 §6.1: antes de aprobar un proceso de servicio, la Encargada de administración verifica que cada responsable sea un cargo con descriptor vigente y persona asignada, que los servicios no vigentes estén marcados «en implementación», que cada salida al cliente tenga revisión y liberación con registro, y que numeración, títulos, matrices y evidencias sean consistentes.",
+      "plazo": "2026-11-17",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión) - con Gerencia"
+    },
+    "eficacia": {
+      "descripcion": "Primer término de giro tras la incorporación del/la Contador(a): preparación, revisión y aviso al cliente registrados. Si no hay casos al 31-05-2027, se verifica el proceso documentado y la competencia del cargo.",
+      "plazo": "2027-05-31",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-11",
+    "hoja": "NC-11",
+    "tipo": "MAYOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 11 (registro DOC-11-18, DOC-11-19)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "El monto del finiquito se calcula con el simulador web «Calcular» sin verificar que el resultado sea correcto, y no queda registro de quién valida el cálculo antes de enviarlo al cliente.",
+    "referencia_normativa": "ISO 9001:2015, cláusulas 7.1.5.1 y 8.6 - Evidencia objetiva: registros DOC-11-18 y DOC-11-19 (Desvinculación) «No hay verificación de la fuente externa»",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué no se valida el resultado? Porque se confía en la herramienta web.\r\n2) ¿Por qué se confía sin verificarla? Porque no se evaluó la herramienta al adoptarla.\r\n3) ¿Por qué no hay registro de quién valida? Porque el proceso no tiene un paso de revisión del cálculo por otra persona.\r\nCausa raíz: Se adoptó una herramienta externa sin evaluar su confiabilidad ni definir un control del resultado con registro.",
+    "correccion": {
+      "descripcion": "DOC-11 v02 (proceso 04): contrastar el resultado de «Calcular» con FácilRemu y validación y liberación por la Asistente de RR.HH. con lista de revisión, registrada en «Control de matrices → Hoja Finiquitos» (columna «VALIDADO POR», que reemplaza a la columna vacía «CONTEO VE HORAS DEL REQUERIMIENTO»), y verificación mensual por la Administradora de 5 finiquitos recalculados con FácilRemu (FO-DOC-11-03). Validar hoy la herramienta con 3 finiquitos (FO-DOC-11-01).",
+      "plazo": "2026-10-20",
+      "responsable": "Lisseth Vilchez",
+      "responsable_texto": "Lisseth Vilchez (Administradora de RR.HH. y Plataformas Digitales)"
+    },
+    "accion": {
+      "descripcion": "Validación trimestral de la herramienta «Calcular» en FO-DOC-11-01 (y cada vez que cambie la ley o el sitio). Revisar si otras áreas usan herramientas externas de cálculo y aplicarles el mismo control.",
+      "plazo": "2026-11-17",
+      "responsable": "Lisseth Vilchez",
+      "responsable_texto": "Lisseth Vilchez (Administradora de RR.HH. y Plataformas Digitales) - con Luis Mendoza (Encargado del Sistema de Gestión)"
+    },
+    "eficacia": {
+      "descripcion": "Finiquitos de noviembre y diciembre de 2026 con validación registrada, y validación trimestral de la herramienta realizada.",
+      "plazo": "2027-02-12",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-12",
+    "hoja": "NC-12",
+    "tipo": "MAYOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 12 (registro DOC-11-44)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "No hay trazabilidad de las personas que autorizan la liberación de las cartas de aviso (causal, artículo y hechos) antes de enviarlas al cliente.",
+    "referencia_normativa": "ISO 9001:2015, cláusula 8.6 b) - Evidencia objetiva: registro DOC-11-44 (Cartas de aviso) «No hay trazabilidad de las personas que autorizan la liberación»",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué no hay registro de autorización? Porque el proceso no tiene un paso de revisión antes del envío.\r\n2) ¿Por qué no lo tiene? Porque el formato de levantamiento de procesos no pedía definir quién libera cada salida.\r\nCausa raíz: Los procesos de servicio se documentaron sin exigir un paso de revisión y liberación con registro de quién autoriza.",
+    "correccion": {
+      "descripcion": "DOC-11 v02 (proceso 13) agrega el paso «Revisión y autorización de la carta» por una persona distinta de quien la redactó (la Asistente de RR.HH.; si la redactó ella, la Administradora), registrado en la columna nueva «REVISADO Y AUTORIZADO POR» de «Control de matrices → Hoja CartasDeAviso» («Quien realiza» es quien redactó). Los formatos aprobados se suben a «RRHH OFICIAL › FORMATOS», hoy vacía.",
+      "plazo": "2026-10-20",
+      "responsable": "Lisseth Vilchez",
+      "responsable_texto": "Lisseth Vilchez (Administradora de RR.HH. y Plataformas Digitales)"
+    },
+    "accion": {
+      "descripcion": "Paso de revisión y liberación aplicado a todos los procesos de DOC-11 v02. PRO-01 v02 §6.1: antes de aprobar un proceso de servicio, la Encargada de administración verifica que cada responsable sea un cargo con descriptor vigente y persona asignada, que los servicios no vigentes estén marcados «en implementación», que cada salida al cliente tenga revisión y liberación con registro, y que numeración, títulos, matrices y evidencias sean consistentes.",
+      "plazo": "2026-11-17",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    },
+    "eficacia": {
+      "descripcion": "Cartas de aviso de noviembre y diciembre de 2026 con autorización registrada.",
+      "plazo": "2027-02-12",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  },
+  {
+    "correlativo": "NC-AP-2026-13",
+    "hoja": "NC-13",
+    "tipo": "MAYOR",
+    "fuente": "AUDITORIA",
+    "detectada_por": "José Luis Muñoz - Auditor interno ISO 9001:2015 - Auditoría de procesos 30-09-2026 - NC N.° 13 (registro DOC-12-21)",
+    "fecha_deteccion": "2026-10-05",
+    "descripcion": "No hay trazabilidad de quién revisa técnicamente y quién aprueba la liberación de IPER, PTS, PTP y RIOHS: los documentos quedan con la firma de aprobación del cliente en blanco.",
+    "referencia_normativa": "ISO 9001:2015, cláusula 8.6 - Evidencia objetiva: registro DOC-12-21 (Gestión documental) «No hay trazabilidad de las personas que autorizan la liberación»",
+    "causa_raiz": "Aplicando la técnica de los \"5 por qué\", se concluye que:\r\n\r\n1) ¿Por qué no hay registro? Porque el proceso no exige guardar la aprobación del cliente ni registrar la revisión interna.\r\n2) ¿Por qué no lo exige? Porque las plantillas no tienen cuadro de firmas y no existe un registro de los documentos entregados.\r\n3) ¿Por qué no se definió? Porque el descriptor de la Encargada de Prevención no incluía la aprobación técnica de los documentos.\r\nCausa raíz: Plantillas sin cuadro de firmas, sin registro de documentos entregados y sin la función de aprobación técnica asignada.",
+    "correccion": {
+      "descripcion": "DOC-12 v02 (proceso 07): revisión técnica de la Encargada de Prevención; borrador y versión final enviados al cliente por correo con copia a Administración y Gerencia, con respuesta escrita del cliente («revisado» y «aprobado»), método que la Encargada aplica desde octubre de 2026; fechas registradas en FO-DOC-12-01 «Control de documentos entregados a clientes»; sin «aprobado» el documento no se emite como versión final. Cuadro de firmas en las plantillas de IPER, PTS y PTP.",
+      "plazo": "2026-10-20",
+      "responsable": "Camila Peña",
+      "responsable_texto": "Camila Peña (Encargada de Prevención de Riesgos)"
+    },
+    "accion": {
+      "descripcion": "Descriptor de la Encargada de Prevención con la aprobación técnica (FO-PRO-02-01 v03). Pedir la aprobación de los documentos de 2026 que estén sin firma del cliente y registrarlos en FO-DOC-12-01.",
+      "plazo": "2026-11-17",
+      "responsable": "Camila Peña",
+      "responsable_texto": "Camila Peña (Encargada de Prevención de Riesgos) - con Luis Mendoza (Encargado del Sistema de Gestión)"
+    },
+    "eficacia": {
+      "descripcion": "Documentos emitidos en noviembre y diciembre de 2026 con revisión técnica y aprobación del cliente registradas en FO-DOC-12-01.",
+      "plazo": "2027-02-12",
+      "responsable": "Luis Mendoza",
+      "responsable_texto": "Luis Mendoza (Encargado del Sistema de Gestión)"
+    }
+  }
+]
