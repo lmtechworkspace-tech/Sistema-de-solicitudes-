@@ -114,9 +114,10 @@
 
   /** Tendencia de 6 meses en SVG (escala fija 0-100 con las líneas de 75 y 90). */
   function tendencia(historial) {
-    var W = 260, H = 96, PX = 14, PT = 12, PB = 22;
+    // Las etiquetas 75 y 90 van a la IZQUIERDA (PL): a la derecha chocaban con el último punto.
+    var W = 270, H = 96, PL = 28, PR = 12, PT = 12, PB = 22;
     var n = historial.length;
-    var x = function (i) { return PX + (n === 1 ? (W - 2 * PX) / 2 : i * (W - 2 * PX) / (n - 1)); };
+    var x = function (i) { return PL + (n === 1 ? (W - PL - PR) / 2 : i * (W - PL - PR) / (n - 1)); };
     var y = function (v) { return PT + (100 - v) * (H - PT - PB) / 100; };
     var pts = historial.map(function (h, i) { return h.indice === null ? null : { x: x(i), y: y(h.indice), h: h }; });
     var tramos = [], actual = [];
@@ -136,11 +137,11 @@
       return '<text class="cu2-tend__mes" x="' + x(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(mesCorto(h.periodo)) + '</text>';
     }).join('');
     var guias = [90, 75].map(function (v) {
-      return '<line class="cu2-tend__guia cu2-tend__guia--' + (v === 90 ? 'ok' : 'alerta') + '" x1="' + PX + '" x2="' + (W - PX) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '"/>' +
-        '<text class="cu2-tend__eje" x="' + (W - PX + 2) + '" y="' + (y(v) + 3).toFixed(1) + '">' + v + '</text>';
+      return '<line class="cu2-tend__guia cu2-tend__guia--' + (v === 90 ? 'ok' : 'alerta') + '" x1="' + PL + '" x2="' + (W - PR) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '"/>' +
+        '<text class="cu2-tend__eje" x="' + (PL - 6) + '" y="' + (y(v) + 3).toFixed(1) + '" text-anchor="end">' + v + '</text>';
     }).join('');
     var hay = pts.filter(Boolean).length;
-    return '<svg class="cu2-tend" viewBox="0 0 ' + (W + 14) + ' ' + H + '" role="img" aria-label="Índice de los últimos ' + n + ' meses">' +
+    return '<svg class="cu2-tend" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Índice de los últimos ' + n + ' meses">' +
       guias + area + linea + puntos + etiquetas + '</svg>' +
       (hay < 2 ? '<p class="cu2-tend__nota">La tendencia se completa a medida que haya meses con índice.</p>' : '');
   }
