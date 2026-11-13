@@ -767,6 +767,14 @@ const COLUMNAS = {
   // compromisos de la reunión anterior que no se cumplieron); cada atraso
   // lleva causa (catálogo) y cómo se cubre; los acuerdos son ACTIVIDADES
   // (actividad_id). `participantes` = [{ email, nombre, asistio }].
+  // Plan de control, P3 (2026-11-13): JUSTIFICACIÓN de un atraso del índice
+  // de cumplimiento. La escribe la persona; la jefatura la acepta o rechaza
+  // (con motivo). Se muestra junto al caso, pero NO cambia el índice.
+  // `clave` = clave estable del caso (cumplimientoResponsables.claveCaso_).
+  CUMPL_JUSTIFICACIONES: [
+    'justif_id', 'persona_email', 'periodo', 'clave', 'caso_texto', 'caso_meta', 'texto', 'estado',
+    'revisado_por', 'fecha_revision', 'motivo_revision', 'creado_en', 'activa'
+  ],
   // Plan de control, P2 (2026-11-13): MAPA DE RESPONSABILIDADES de cada
   // persona (ISO 9001 §5.3). Parte como PROPUESTA (desde el descriptor de
   // cargo, los procesos a su cargo y la Agenda de su área) y la jefatura la

@@ -198,7 +198,28 @@
     '</button>';
   }
 
-  function filaCaso(x, hoy) {
+  /** P3: la justificación de un caso que salió mal (no cambia el índice). */
+  var JUST = { PENDIENTE: ['Justificación por revisar', 'info'], ACEPTADA: ['Justificación aceptada', 'ok'], RECHAZADA: ['Justificación rechazada', 'critico'] };
+  function bloqueJustificacion(x, flags) {
+    if (x.ok || !flags) return '';
+    var j = x.justificacion;
+    var html = '';
+    if (j) {
+      html += '<div class="cu2-just sx2-tono-' + JUST[j.estado][1] + '">' + U.badge(JUST[j.estado][0], JUST[j.estado][1]) +
+        '<span class="cu2-just__txt">«' + esc(j.texto) + '»</span>' + (j.motivo_revision ? '<span class="cu2-just__mot">Jefatura: ' + esc(j.motivo_revision) + '</span>' : '');
+      if (flags.puede_revisar && j.estado === 'PENDIENTE') {
+        html += '<span class="cu2-just__acc">' + U.boton({ texto: 'Aceptar', icono: 'check', sm: true, clase: 'js-cu2-aceptar', datos: { id: j.justif_id } }) +
+          U.boton({ texto: 'Rechazar', variante: 'fantasma', sm: true, clase: 'js-cu2-rechazar', datos: { id: j.justif_id } }) + '</span>';
+      }
+      html += '</div>';
+    }
+    if (flags.es_propio && (!j || j.estado === 'RECHAZADA')) {
+      html += '<span class="cu2-just__acc">' + U.boton({ texto: j ? 'Justificar de nuevo' : 'Justificar', icono: 'comentario', variante: 'fantasma', sm: true, clase: 'js-cu2-justificar', datos: { clave: x.clave } }) + '</span>';
+    }
+    return html;
+  }
+
+  function filaCaso(x, hoy, flags) {
     var que = x.titulo || x.tarea || x.tipo || '';
     var subs = [];
     if (x.referencia && x.referencia !== que) subs.push(esc(x.referencia));
@@ -215,19 +236,19 @@
     var at = malo ? atraso(x, hoy) : '';
     return '<li class="cu2-caso sx2-tono-' + tono + '">' +
       '<span class="cu2-caso__estado">' + U.badge(x.estado, tono) + (at ? '<span class="cu2-caso__atraso">' + esc(at) + '</span>' : '') + '</span>' +
-      '<span class="cu2-caso__que"><strong>' + esc(que) + '</strong>' + (subs.length ? '<span class="cu2-caso__sub">' + subs.join(' · ') + '</span>' : '') + avisos + '</span>' +
+      '<span class="cu2-caso__que"><strong>' + esc(que) + '</strong>' + (subs.length ? '<span class="cu2-caso__sub">' + subs.join(' · ') + '</span>' : '') + avisos + bloqueJustificacion(x, flags) + '</span>' +
       '<span class="cu2-caso__fechas"><span><em>Meta</em>' + esc(meta ? fechaCorta(meta) : '—') + orig + '</span><span><em>Hecho</em>' + esc(hecho ? fechaCorta(hecho) : '—') + '</span></span>' +
     '</li>';
   }
 
-  function detalleComponente(c, st, hoy) {
+  function detalleComponente(c, st, hoy, flags) {
     var malos = c.detalle.filter(function (x) { return !x.ok; });
     var buenos = c.detalle.filter(function (x) { return x.ok; });
     var neutras = c.neutras || [];
     if (!c.detalle.length && !neutras.length) return U.card({ titulo: c.nombre, icono: ICONO_COMP[c.clave], i: 6, cuerpo: '<p class="cu2-nada">Nada que medir este mes en este componente.</p>' });
     var html = '';
     html += malos.length
-      ? '<h3 class="cu2-sub cu2-sub--malo">' + U.ico('alerta', 14) + 'Lo que bajó el índice <span>' + malos.length + '</span></h3><ul class="cu2-casos">' + malos.map(function (x) { return filaCaso(x, hoy); }).join('') + '</ul>'
+      ? '<h3 class="cu2-sub cu2-sub--malo">' + U.ico('alerta', 14) + 'Lo que bajó el índice <span>' + malos.length + '</span></h3><ul class="cu2-casos">' + malos.map(function (x) { return filaCaso(x, hoy, flags); }).join('') + '</ul>'
       : '<p class="cu2-felicita">' + U.ico('check', 16) + 'Todo lo de este componente se cumplió a tiempo.</p>';
     if (buenos.length) {
       html += '<details class="cu2-buenos"' + (malos.length ? '' : ' open') + '><summary>' + U.ico('check', 14) + 'Cumplido a tiempo <span>' + buenos.length + '</span></summary>' +
@@ -285,7 +306,7 @@
       return tarjetaComponente(c, i, st, ap.find(function (x) { return x.clave === c.clave; }));
     }).join('') + '</div>';
     var abierto = r.componentes.find(function (c) { return c.clave === st.componente; });
-    var detalle = abierto ? detalleComponente(abierto, st, hoy) : '';
+    var detalle = abierto ? detalleComponente(abierto, st, hoy, { es_propio: !!r.es_propio, puede_revisar: !!r.puede_revisar }) : '';
     var extras = '<div class="cu2-paneles">' +
       listaTareas(r.senales.detalle_dormidas, 'cu2-dormidas', 'Tareas dormidas', 'reloj', 'sin movimiento en ' + r.dias_dormida + ' días', 'Ninguna tarea dormida.', hoy, 'sin_movimiento_desde') +
       listaTareas(r.senales.detalle_sin_fecha, 'cu2-sin-fecha', 'Tareas sin fecha', 'calendario', 'ponles fecha para poder cumplirlas', 'Todas tus tareas abiertas tienen fecha.', hoy) +
@@ -370,7 +391,17 @@
       '<p class="cu2-leyenda">' + comps.map(function (c) { return '<span>' + U.ico(ICONO_COMP[c.clave], 12) + '<b>' + esc(c.clave) + '</b> ' + esc(c.nombre.toLowerCase()) + '</span>'; }).join('') +
         '<span class="cu2-leyenda__no">En gris: menos de 3 casos, no cuenta.</span></p>' +
     '</section>';
-    return barra + '<div class="cu2-resumen">' + promedio + reparto(rs) + alertas + '</div>' + tabla;
+    // P3: lo que la jefatura tiene que revisar, arriba de la tabla.
+    var pend = r.justificaciones_por_revisar || [];
+    var porRevisar = pend.length ? '<section class="sx2-card cu2-revisar sx2-entra" style="--i:3"><div class="sx2-card__cab"><h2 class="sx2-card__titulo">' + U.ico('comentario', 18) +
+      'Justificaciones por revisar <span class="sx2-card__sub">no cambian el índice: quedan escritas junto al atraso</span></h2>' + U.badge(String(pend.length), 'info', true) + '</div>' +
+      '<ul class="cu2-revisar__lista">' + pend.map(function (j) {
+        return '<li><div class="cu2-revisar__txt"><strong>' + esc(j.persona_nombre) + '</strong><span class="cu2-caso__sub">' + esc(j.caso_texto) + (j.caso_meta ? ' · venció el ' + esc(fechaCorta(j.caso_meta)) : '') + '</span>' +
+          '<span class="cu2-just__txt">«' + esc(j.texto) + '»</span></div><span class="cu2-just__acc">' +
+          U.boton({ texto: 'Aceptar', icono: 'check', sm: true, clase: 'js-cu2-aceptar', datos: { id: j.justif_id } }) +
+          U.boton({ texto: 'Rechazar', variante: 'fantasma', sm: true, clase: 'js-cu2-rechazar', datos: { id: j.justif_id } }) + '</span></li>';
+      }).join('') + '</ul></section>' : '';
+    return barra + '<div class="cu2-resumen">' + promedio + reparto(rs) + alertas + '</div>' + porRevisar + tabla;
   }
 
   // --- carga y eventos ------------------------------------------------------------------
@@ -434,7 +465,32 @@
         if ((b = t.closest('.js-cu2-filtro'))) { var f = b.getAttribute('data-f') || ''; st.filtro = st.filtro === f && f ? '' : f; dibujar(el, false); return; }
         if ((b = t.closest('.js-cu2-persona'))) { st.persona = b.getAttribute('data-email'); st.componente = ''; pintar(el); window.scrollTo(0, 0); return; }
         if (t.closest('.js-cu2-volver')) { st.persona = ''; st.componente = ''; pintar(el); return; }
-        if (t.closest('.js-cu2-recargar')) { pintar(el); }
+        if (t.closest('.js-cu2-recargar')) { pintar(el); return; }
+        // P3: justificar (la persona) y revisar (la jefatura).
+        if ((b = t.closest('.js-cu2-justificar'))) {
+          var clave = b.getAttribute('data-clave');
+          U.formulario({ titulo: 'Justificar el atraso', boton: 'Enviar a mi jefatura',
+            subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">Tu jefatura la acepta o la rechaza. El índice no cambia: la justificación queda escrita junto al atraso.</span>',
+            campos: U.campo('Por qué no se cumplió', '<textarea class="sx2-input" name="texto" rows="4" required placeholder="Qué pasó y qué se está haciendo"></textarea>'),
+            enviar: function (v) { return api('justificarAtrasoCumplimiento', { periodo: st.periodo, clave: clave, texto: v.texto }); },
+            aviso: 'Enviada a tu jefatura.', listo: function () { pintar(el); } });
+          return;
+        }
+        if ((b = t.closest('.js-cu2-aceptar'))) {
+          b.disabled = true;
+          api('revisarJustificacionCumplimiento', { justif_id: b.getAttribute('data-id'), aceptar: true }).then(function (r) {
+            if (!r || !r.ok) { b.disabled = false; if (window.Componentes) Componentes.aviso({ texto: (r && r.message) || 'No se pudo guardar.', tipo: 'error' }); return; }
+            pintar(el);
+          });
+          return;
+        }
+        if ((b = t.closest('.js-cu2-rechazar'))) {
+          var id = b.getAttribute('data-id');
+          U.formulario({ titulo: 'Rechazar la justificación', boton: 'Rechazar',
+            campos: U.campo('Por qué', '<textarea class="sx2-input" name="motivo" rows="3" required placeholder="La persona lo verá"></textarea>'),
+            enviar: function (v) { return api('revisarJustificacionCumplimiento', { justif_id: id, aceptar: false, motivo: v.motivo }); },
+            listo: function () { pintar(el); } });
+        }
       });
       el.addEventListener('keydown', function (ev) {
         if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('tr.js-cu2-persona')) { ev.preventDefault(); ev.target.click(); }

@@ -44,7 +44,8 @@
  * lista es alfabético, no por puntaje.
  */
 
-const { leerFilas_ } = require('../db/sqliteRepo');
+const crypto = require('node:crypto');
+const { leerFilas_, agregarFila_, actualizarFilaPorId_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
 const { DEPARTAMENTOS } = require('./controlInternoMatrices');
 
@@ -275,7 +276,7 @@ function reportabilidad_(datos, email, miembro, per, corte, hoy, tareasAbiertas,
   dormidas.forEach((d) => { idsDormidas[d.actividad_id] = true; });
   tareasAbiertas.forEach((a) => {
     const dormida = !!idsDormidas[a.actividad_id];
-    casos.push({ tipo: 'Tarea abierta con movimiento en ' + DIAS_DORMIDA + ' días', referencia: a.titulo, ok: !dormida, estado: dormida ? 'Dormida' : 'Al día' });
+    casos.push({ tipo: 'Tarea abierta con movimiento en ' + DIAS_DORMIDA + ' días', referencia: a.titulo, actividad_id: a.actividad_id, ok: !dormida, estado: dormida ? 'Dormida' : 'Al día' });
   });
   return casos;
 }
@@ -318,8 +319,28 @@ function cargarDatos_(db) {
     nc: leer_(db, 'SGC_NC').filter(activa_),
     reportes: leer_(db, 'DEP_REPORTES'),
     miembros: leer_(db, 'CI_MIEMBROS').filter(activa_),
+    justificaciones: leer_(db, 'CUMPL_JUSTIFICACIONES').filter(activa_),
     diaHabil
   };
+}
+
+/**
+ * Clave estable de un caso (para colgarle su justificación): la tarea si la
+ * hay; si no, qué es, de qué y para cuándo.
+ */
+function claveCaso_(comp, c) {
+  if (c.actividad_id) return comp + ':ACT:' + c.actividad_id;
+  return comp + ':' + [c.area || '', c.tarea || c.tipo || '', c.referencia || '', c.fecha || c.plazo || c.meta || ''].join('|');
+}
+/** Pone la clave a cada caso y le cuelga su justificación (la última) si el caso salió mal. */
+function anotarJustificaciones_(componentes, email, periodo, justificaciones) {
+  const mias = (justificaciones || []).filter((j) => norm_(j.persona_email) === email && j.periodo === periodo);
+  componentes.forEach((comp) => (comp.detalle || []).forEach((c) => {
+    c.clave = claveCaso_(comp.clave, c);
+    if (c.ok) return;
+    const j = mias.filter((x) => x.clave === c.clave).sort((a, b) => String(b.creado_en).localeCompare(String(a.creado_en)))[0];
+    if (j) c.justificacion = { justif_id: j.justif_id, texto: j.texto, estado: j.estado, motivo_revision: j.motivo_revision || '', revisado_por: j.revisado_por || '', creado_en: j.creado_en };
+  }));
 }
 
 /** Cálculo de una persona para un mes. `hoy` se puede fijar (pruebas). */
@@ -337,6 +358,8 @@ function calcularPersona_(db, email, periodo, opciones) {
   const C = sgc_(db, yo, datos, per, corte, hoy);
   const D = reportabilidad_(datos, yo, miembro, per, corte, hoy, A.abiertas, A.senales.dormidas);
   const componentes = [componente_('A', A.casos, { neutras: A.neutras }), componente_('B', B), componente_('C', C), componente_('D', D)];
+  // Las justificaciones se muestran, pero no cambian el número (decisión del plan, sección 5).
+  anotarJustificaciones_(componentes, yo, per.periodo, datos.justificaciones);
   const indice = indice_(componentes);
   return {
     email: yo, periodo: per.periodo, corte, indice, estado: estado_(indice),
@@ -365,6 +388,63 @@ function nombres_(db) {
   const m = {};
   leer_(db, 'USUARIOS').forEach((u) => { if (u.email) m[norm_(u.email)] = u.nombre || u.email; });
   return m;
+}
+/** Revisa una justificación: la jefatura de la persona, administración o el Encargado del SGC. */
+function puedeRevisar_(db, contexto, persona) {
+  if (!contexto) return false;
+  if (contexto.rol === 'ADM') return true;
+  try { if (require('./calidadSgc').gobiernaSgc_(db, contexto)) return true; } catch (e) { /* */ }
+  return equipo_(db, contexto).indexOf(norm_(persona)) !== -1;
+}
+
+// --- justificar un atraso (P3) --------------------------------------------------------------------
+/**
+ * La persona explica un caso que salió mal en su índice. No cambia el número:
+ * queda escrito junto al caso y la jefatura lo acepta o lo rechaza.
+ */
+function justificar(db, data, contexto) {
+  const d = data || {};
+  const yo = norm_(contexto && contexto.email);
+  if (!yo) return { _forbidden: true, message: 'Ingresa de nuevo.' };
+  const texto = String(d.texto || '').trim().slice(0, 1000);
+  if (!texto) return { _validationError: true, campo: 'texto', message: 'Explica por qué no se cumplió.' };
+  const r = calcularPersona_(db, yo, d.periodo);
+  let caso = null;
+  r.componentes.forEach((c) => (c.detalle || []).forEach((x) => { if (x.clave === d.clave) caso = x; }));
+  if (!caso) return { _validationError: true, campo: 'clave', message: 'Ese caso ya no está en tu índice del mes.' };
+  if (caso.ok) return { _validationError: true, campo: 'clave', message: 'Ese caso se cumplió a tiempo: no hay nada que justificar.' };
+  if (caso.justificacion && caso.justificacion.estado !== 'RECHAZADA') return { _validationError: true, campo: 'clave', message: 'Ya está justificado.' };
+  const fila = { justif_id: crypto.randomUUID(), persona_email: yo, periodo: r.periodo, clave: d.clave,
+    caso_texto: String(caso.titulo || caso.tarea || caso.tipo || '') + (caso.referencia && caso.referencia !== caso.titulo ? ' · ' + caso.referencia : ''),
+    caso_meta: caso.meta || caso.plazo || caso.fecha || '', texto, estado: 'PENDIENTE', revisado_por: '', fecha_revision: '', motivo_revision: '',
+    creado_en: new Date().toISOString(), activa: true };
+  agregarFila_(db, 'CUMPL_JUSTIFICACIONES', fila);
+  try {
+    const jefe = require('./jefatura').jefeDeSubordinado_(db, yo);
+    if (jefe) require('./notificacionesApp').encolarLote(db, [{ destinatario: jefe, tipo: 'CUMPLIMIENTO_JUSTIFICACION', titulo: 'Una justificación espera tu revisión',
+      mensaje: (nombres_(db)[yo] || yo) + ' justificó: ' + fila.caso_texto, modulo_id: 'jefatura', texto_accion: 'Revisar', vidaHoras: 168 }]);
+  } catch (e) { /* el aviso nunca bloquea */ }
+  return fila;
+}
+
+function revisarJustificacion(db, data, contexto) {
+  const d = data || {};
+  const j = leer_(db, 'CUMPL_JUSTIFICACIONES').find((x) => x.justif_id === d.justif_id && activa_(x));
+  if (!j) return { _validationError: true, campo: 'justif_id', message: 'La justificación no existe.' };
+  if (norm_(j.persona_email) === norm_(contexto && contexto.email)) return { _forbidden: true, message: 'No puedes revisar tu propia justificación.' };
+  if (!puedeRevisar_(db, contexto, j.persona_email)) return { _forbidden: true, message: 'La revisa la jefatura de la persona.' };
+  if (j.estado !== 'PENDIENTE') return { _validationError: true, campo: 'justif_id', message: 'Ya fue revisada.' };
+  const acepta = d.aceptar === true || d.aceptar === 'true';
+  const motivo = String(d.motivo || '').trim().slice(0, 600);
+  if (!acepta && !motivo) return { _validationError: true, campo: 'motivo', message: 'Si la rechazas, di por qué: la persona lo verá.' };
+  const cambios = { estado: acepta ? 'ACEPTADA' : 'RECHAZADA', revisado_por: norm_(contexto.email), fecha_revision: new Date().toISOString(), motivo_revision: motivo };
+  actualizarFilaPorId_(db, 'CUMPL_JUSTIFICACIONES', 'justif_id', j.justif_id, cambios);
+  try {
+    require('./notificacionesApp').encolarLote(db, [{ destinatario: norm_(j.persona_email), tipo: 'CUMPLIMIENTO_JUSTIFICACION',
+      titulo: acepta ? 'Tu justificación fue aceptada' : 'Tu justificación fue rechazada', mensaje: j.caso_texto + (motivo ? ' — ' + motivo : ''),
+      modulo_id: 'mi_trabajo', texto_accion: 'Ver mi cumplimiento', vidaHoras: 168 }]);
+  } catch (e) { /* */ }
+  return Object.assign({}, j, cambios);
 }
 function personasEmpresa_(db, datos) {
   const set = {};
@@ -406,7 +486,8 @@ function getCumplimiento(db, data, contexto) {
       historial.push({ periodo: p, indice: h.indice, estado: h.estado });
     }
     historial.push({ periodo: r.periodo, indice: r.indice, estado: r.estado });
-    return Object.assign(r, { nombre: nombres[quien] || quien, pesos: PESOS, cortes: CORTES, min_casos: MIN_CASOS, dias_dormida: DIAS_DORMIDA, historial });
+    return Object.assign(r, { nombre: nombres[quien] || quien, pesos: PESOS, cortes: CORTES, min_casos: MIN_CASOS, dias_dormida: DIAS_DORMIDA, historial,
+      es_propio: quien === yo, puede_revisar: quien !== yo && puedeRevisar_(db, contexto, quien) });
   }
   let lista;
   if (d.alcance === 'empresa') {
@@ -432,9 +513,17 @@ function getCumplimiento(db, data, contexto) {
   const promedioAnterior = conAnterior.length ? Math.round((conAnterior.reduce((s, p) => s + p.indice_anterior, 0) / conAnterior.length) * 10) / 10 : null;
   const reparto = { ok: 0, alerta: 0, critico: 0, sin_dato: 0 };
   personas.forEach((p) => { reparto[p.estado] = (reparto[p.estado] || 0) + 1; });
+  // Justificaciones esperando revisión de la gente listada (cualquier mes).
+  const listados = {};
+  personas.forEach((p) => { listados[p.email] = p.nombre; });
+  const porRevisar = datos.justificaciones.filter((j) => j.estado === 'PENDIENTE' && listados[norm_(j.persona_email)] !== undefined && norm_(j.persona_email) !== yo)
+    .filter((j) => puedeRevisar_(db, contexto, j.persona_email))
+    .sort((a, b) => String(a.creado_en).localeCompare(String(b.creado_en)))
+    .map((j) => ({ justif_id: j.justif_id, persona_email: norm_(j.persona_email), persona_nombre: listados[norm_(j.persona_email)], periodo: j.periodo,
+      caso_texto: j.caso_texto, caso_meta: j.caso_meta, texto: j.texto, creado_en: j.creado_en }));
   return {
     periodo: periodo_(d.periodo).periodo, alcance: d.alcance, pesos: PESOS, cortes: CORTES,
-    personas,
+    personas, justificaciones_por_revisar: porRevisar,
     resumen: {
       personas: personas.length, con_indice: conIndice.length, indice_promedio: promedio, estado: estado_(promedio),
       indice_promedio_anterior: promedioAnterior, periodo_anterior: anterior, reparto,
@@ -446,7 +535,7 @@ function getCumplimiento(db, data, contexto) {
 }
 
 module.exports = {
-  getCumplimiento, calcularPersona_, metaDeTarea_, diaEntrega_, periodo_, moverPeriodo_, diaPlan_, diaReal_,
+  getCumplimiento, justificar, revisarJustificacion, calcularPersona_, metaDeTarea_, diaEntrega_, periodo_, moverPeriodo_, diaPlan_, diaReal_,
   // Para el aviso semanal (avisoCumplimiento.js): mismos datos y mismas personas.
   cargarDatos_, personasEmpresa_,
   PESOS, CORTES, MIN_CASOS, DIAS_DORMIDA

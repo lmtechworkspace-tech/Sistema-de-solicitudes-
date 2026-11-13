@@ -210,6 +210,36 @@ test('tendencia: la persona trae 6 meses de índice y la lista el índice del me
   assert.equal(eq.resumen.reparto.alerta + eq.resumen.reparto.ok + eq.resumen.reparto.critico + eq.resumen.reparto.sin_dato, eq.personas.length);
 });
 
+test('justificar un atraso: lo escribe la persona, lo revisa la jefatura, el índice no cambia', () => {
+  const db = crear();
+  ['03', '04', '05'].forEach((d) => tarea(db, { fecha_compromiso: '2026-11-' + d + 'T00:00:00.000Z', estado: 'TERMINADA', fecha_terminada: '2026-11-' + d }));
+  const atrasada = tarea(db, { titulo: 'Contrato de Montajes', fecha_compromiso: '2026-11-06T00:00:00.000Z' });
+  const ctxAna = { email: ANA, rol: 'DEV', modulos: [] };
+  const ctxJefe = { email: JEFE, rol: 'DEV', modulos: [] };
+  const antes = R.getCumplimiento(db, { periodo: '2026-11' }, ctxAna);
+  const caso = antes.componentes.find((c) => c.clave === 'A').detalle.find((x) => x.actividad_id === atrasada);
+  assert.equal(caso.clave, 'A:ACT:' + atrasada);
+  const okCaso = antes.componentes.find((c) => c.clave === 'A').detalle.find((x) => x.ok);
+  assert.ok(R.justificar(db, { periodo: '2026-11', clave: okCaso.clave, texto: 'x' }, ctxAna)._validationError, 'lo cumplido no se justifica');
+  assert.ok(R.justificar(db, { periodo: '2026-11', clave: caso.clave, texto: '' }, ctxAna)._validationError);
+  const j = R.justificar(db, { periodo: '2026-11', clave: caso.clave, texto: 'El cliente no envió el contrato firmado' }, ctxAna);
+  assert.equal(j.estado, 'PENDIENTE');
+  assert.match(j.caso_texto, /Contrato de Montajes/);
+  assert.ok(R.justificar(db, { periodo: '2026-11', clave: caso.clave, texto: 'otra' }, ctxAna)._validationError, 'una a la vez');
+  // La jefatura la ve por revisar.
+  const eq = R.getCumplimiento(db, { alcance: 'equipo', periodo: '2026-11' }, ctxJefe);
+  assert.deepEqual(eq.justificaciones_por_revisar.map((x) => x.justif_id), [j.justif_id]);
+  assert.ok(R.revisarJustificacion(db, { justif_id: j.justif_id, aceptar: true }, ctxAna)._forbidden, 'no se revisa a uno mismo');
+  assert.ok(R.revisarJustificacion(db, { justif_id: j.justif_id, aceptar: false }, ctxJefe)._validationError, 'rechazar pide motivo');
+  const rev = R.revisarJustificacion(db, { justif_id: j.justif_id, aceptar: true }, ctxJefe);
+  assert.equal(rev.estado, 'ACEPTADA');
+  const despues = R.getCumplimiento(db, { periodo: '2026-11' }, ctxAna);
+  const caso2 = despues.componentes.find((c) => c.clave === 'A').detalle.find((x) => x.actividad_id === atrasada);
+  assert.equal(caso2.justificacion.estado, 'ACEPTADA');
+  assert.equal(despues.indice, antes.indice, 'la justificación no cambia el número');
+  assert.equal(R.getCumplimiento(db, { email: ANA, periodo: '2026-11' }, ctxJefe).puede_revisar, true);
+});
+
 test('la acción está registrada en el router', () => {
   const texto = require('node:fs').readFileSync(require.resolve('../server/router'), 'utf8');
   assert.match(texto, /getCumplimientoResponsables: \(db, data, contexto\) => CumplimientoResponsables\.getCumplimiento/);

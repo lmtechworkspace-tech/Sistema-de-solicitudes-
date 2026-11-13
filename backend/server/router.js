@@ -266,6 +266,9 @@ const ACCIONES = {
   getResumenGerencia: (db, data, contexto) => ResumenGerencia.getResumen(db, data, contexto),
   // Plan de control y certificación (P3): índice de cumplimiento por responsable.
   getCumplimientoResponsables: (db, data, contexto) => CumplimientoResponsables.getCumplimiento(db, data, contexto),
+  // P3: justificar un atraso y que la jefatura lo revise (no cambia el índice).
+  justificarAtrasoCumplimiento: (db, data, contexto) => CumplimientoResponsables.justificar(db, data, contexto),
+  revisarJustificacionCumplimiento: (db, data, contexto) => CumplimientoResponsables.revisarJustificacion(db, data, contexto),
   // P4: el aviso de los lunes. Administración puede verlo antes y mandarlo a mano.
   previsualizarAvisoCumplimiento: (db, data, contexto) => AvisoCumplimiento.previsualizar(db, data, contexto),
   enviarAvisoCumplimientoAhora: (db, data, contexto) => AvisoCumplimiento.enviarAhora(db, data, contexto),
