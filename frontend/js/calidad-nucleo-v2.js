@@ -30,7 +30,9 @@
     { id: 'reunion', nombre: 'Reunión semanal', icono: 'equipo', plano: true, items: [{ id: 'reunion', nombre: 'Reunión semanal', permiso: 'tablero' }] },
     { id: 'documentos', nombre: 'Documentos', icono: 'documento', plano: true, items: [{ id: 'documentos', nombre: 'Documentos', permiso: 'documentos' }] },
     { id: 'personas', nombre: 'Personas', icono: 'persona', items: [
-      { id: 'personas', nombre: 'Personal', permiso: 'personas' }, { id: 'capacitaciones', nombre: 'Capacitaciones' }
+      { id: 'personas', nombre: 'Personal', permiso: 'personas' }, { id: 'capacitaciones', nombre: 'Capacitaciones' },
+      // Plan de control (P2): el mapa de responsabilidades de toda la empresa (§5.3).
+      { id: 'responsabilidades', nombre: 'Responsabilidades', permiso: 'tablero' }
     ] },
     { id: 'seguimiento', nombre: 'Seguimiento y mejora', icono: 'alerta', descripcion: 'Lo que hay que corregir', items: [
       { id: 'nc', nombre: 'No conformidades' }, { id: 'quejas', nombre: 'Quejas' },
@@ -95,7 +97,8 @@
     [function () { return window.SigsoCalidadSistemaV2; }, 'mostrar'],
     [function () { return window.SigsoCalidadOperacionV2; }, 'mostrar'],
     [function () { return window.SigsoCalidadPreparacionV2; }, 'mostrar'],
-    [function () { return window.SigsoCalidadReunionV2; }, 'mostrar']
+    [function () { return window.SigsoCalidadReunionV2; }, 'mostrar'],
+    [function () { return window.SigsoCalidadResponsabilidadesV2; }, 'mostrar']
   ];
   function render() {
     pintarNav();

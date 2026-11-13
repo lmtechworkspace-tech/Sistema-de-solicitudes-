@@ -293,7 +293,7 @@
     var como = '<details class="cu2-como sx2-entra" style="--i:9"><summary>' + U.ico('info', 14) + 'Cómo se calcula</summary><div class="cu2-como__grid">' +
       '<div><b>' + U.ico('calendario', 14) + 'Compromisos con fecha · 35 %</b><p>Tareas que vencieron en el mes y se entregaron a tiempo. Se mide contra la fecha original: una reprogramación solo mueve la meta si la hizo tu jefatura o supervisor antes de que venciera.</p></div>' +
       '<div><b>' + U.ico('tareas', 14) + 'Obligaciones del área · 25 %</b><p>Tareas internas de la Agenda de tu área marcadas hechas a tiempo.</p></div>' +
-      '<div><b>' + U.ico('escudo', 14) + 'Responsabilidades del SGC · 20 %</b><p>Acuses de documentos y etapas de no conformidades dentro de su plazo.</p></div>' +
+      '<div><b>' + U.ico('escudo', 14) + 'Responsabilidades del cargo y SGC · 20 %</b><p>Las responsabilidades de tu mapa que se comprueban con evidencia (semanales y mensuales), los acuses de documentos y las etapas de no conformidades, dentro de su plazo.</p></div>' +
       '<div><b>' + U.ico('documento', 14) + 'Reportabilidad · 20 %</b><p>El reporte mensual del área a tiempo y tus tareas abiertas con movimiento en los últimos ' + r.dias_dormida + ' días.</p></div>' +
     '</div><p class="cu2-como__nota">Un componente cuenta desde ' + r.min_casos + ' casos. Verde desde ' + r.cortes.ok + ' %, amarillo desde ' + r.cortes.alerta + ' %. Lo que vence hoy todavía no es atraso; una tarea bloqueada por otra persona queda neutra.</p></details>';
     return cab + titular + comps + detalle + extras + como;

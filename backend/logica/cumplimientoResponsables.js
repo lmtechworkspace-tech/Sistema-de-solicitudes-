@@ -56,7 +56,7 @@ const PESOS = { A: 35, B: 25, C: 20, D: 20 };
 const NOMBRES = {
   A: 'Compromisos con fecha',
   B: 'Obligaciones del área',
-  C: 'Responsabilidades del SGC',
+  C: 'Responsabilidades del cargo y SGC',
   D: 'Reportabilidad'
 };
 const CORTES = { ok: 90, alerta: 75 };
@@ -245,6 +245,11 @@ function sgc_(db, email, datos, per, corte, hoy) {
       casos.push({ tipo: 'No conformidad · ' + e.etapa, referencia: n.correlativo || n.nc_id, plazo, hecho: cierre, ok: !!cierre && cierre <= plazo });
     });
   });
+  // P2: las responsabilidades del mapa aprobado que se comprueban con evidencia (semanales y mensuales).
+  try {
+    datos.respCache = datos.respCache || {};
+    require('./responsabilidades').casosIndice_(db, email, per.desde, corte, datos.respCache, hoy).forEach((c) => casos.push(c));
+  } catch (e) { /* sin mapa de responsabilidades */ }
   return casos.map((c) => Object.assign(c, { estado: c.ok ? 'A tiempo' : (c.hecho ? 'Tarde' : 'Sin hacer') }));
 }
 

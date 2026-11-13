@@ -32,13 +32,14 @@
     actividades: ['Actividades del equipo', 'Tareas de tu equipo, con las que necesitan atención primero.'],
     reportes: ['Reportes del departamento', 'Desempeño de tu equipo con la misma regla que usa Gerencia.'],
     carga: ['Carga por módulo y tipo', 'Qué se repite en el trabajo de tu equipo.'],
-    cumplimiento: ['Cumplimiento del equipo', 'El índice del mes de cada persona: qué cumplió a tiempo y qué quedó pendiente.']
+    cumplimiento: ['Cumplimiento del equipo', 'El índice del mes de cada persona: qué cumplió a tiempo y qué quedó pendiente.'],
+    responsabilidades: ['Responsabilidades del equipo', 'Qué le toca a cada persona y cómo se comprueba. Genera la propuesta desde el descriptor de cargo y apruébala.']
   };
   var ARQUITECTURA = [
     { id: 'hoy', nombre: 'Personas', icono: 'equipo', items: [{ id: 'resumen', nombre: 'Mi equipo hoy' }] },
     { id: 'equipo', nombre: 'Mi equipo', icono: 'persona', items: [
       { id: 'tablero', nombre: 'Solicitudes del equipo' }, { id: 'persona', nombre: 'Por persona' }, { id: 'actividades', nombre: 'Actividades del equipo' },
-      { id: 'cumplimiento', nombre: 'Cumplimiento del equipo' }
+      { id: 'cumplimiento', nombre: 'Cumplimiento del equipo' }, { id: 'responsabilidades', nombre: 'Responsabilidades del equipo' }
     ] },
     { id: 'reportes', nombre: 'Reportes', icono: 'grafico', descripcion: 'Desempeño de tu equipo', items: [
       { id: 'reportes', nombre: 'Centro de reportes' }, { id: 'carga', nombre: 'Carga por módulo y tipo' }
@@ -433,6 +434,11 @@
     if (vista_ === 'resumen') { if (window.SigsoJefaturaV2) SigsoJefaturaV2.mostrar(); return; }
     var hay = !!document.getElementById('jefatura-v2');
     if (vista_ === 'cumplimiento') { montarCumplimiento(); return; }
+    if (vista_ === 'responsabilidades') {
+      var cr = contenedor();
+      if (cr) { pagina(cr, '<div data-resp-host data-alcance="equipo"></div>'); if (window.SigsoResponsabilidades) SigsoResponsabilidades.montarPendientes(cr); }
+      return;
+    }
     if (vista_ === 'actividades') { cargarActividades(!!actividades_ && hay); return; }
     if (vista_ === 'reportes') { cargarReportes(!!panelRep_ && hay); return; }
     cargarPanel(!!panel_ && hay);
@@ -444,6 +450,7 @@
     var t = ev.target, b;
     if (t.closest('.js-jv2-recargar')) {
       if (vista_ === 'cumplimiento') { if (window.SigsoCumplimiento) SigsoCumplimiento.recargar(raiz); }
+      else if (vista_ === 'responsabilidades') { if (window.SigsoResponsabilidades) SigsoResponsabilidades.recargar(raiz); }
       else if (vista_ === 'actividades') cargarActividades(true);
       else if (vista_ === 'reportes') cargarReportes(true);
       else cargarPanel(true);

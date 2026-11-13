@@ -767,6 +767,19 @@ const COLUMNAS = {
   // compromisos de la reunión anterior que no se cumplieron); cada atraso
   // lleva causa (catálogo) y cómo se cubre; los acuerdos son ACTIVIDADES
   // (actividad_id). `participantes` = [{ email, nombre, asistio }].
+  // Plan de control, P2 (2026-11-13): MAPA DE RESPONSABILIDADES de cada
+  // persona (ISO 9001 §5.3). Parte como PROPUESTA (desde el descriptor de
+  // cargo, los procesos a su cargo y la Agenda de su área) y la jefatura la
+  // APRUEBA. `medicion`: AUTOMATICA (SIGSO ya lo ve) o EVIDENCIA (la persona
+  // marca hecho en cada período con su respaldo, RESP_REGISTROS).
+  // `periodo` del registro: D:AAAA-MM-DD, S:<lunes>, M:AAAA-MM, T:AAAA-n, A:AAAA, E (eventual).
+  RESP_MAPA: [
+    'resp_id', 'persona_email', 'texto', 'origen', 'origen_ref', 'frecuencia', 'medicion', 'fuente_auto',
+    'estado', 'creado_por', 'fecha_creacion', 'aprobado_por', 'fecha_aprobacion', 'activa'
+  ],
+  RESP_REGISTROS: [
+    'registro_id', 'resp_id', 'persona_email', 'periodo', 'hecho_en', 'evidencia', 'nota', 'activa'
+  ],
   REUNIONES_COORD: [
     'reunion_id', 'correlativo', 'fecha', 'titulo', 'estado', 'participantes', 'minuta',
     'creado_por', 'fecha_creacion', 'cerrada_por', 'fecha_cierre', 'activa'

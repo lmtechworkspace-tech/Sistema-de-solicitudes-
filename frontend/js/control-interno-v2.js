@@ -231,7 +231,8 @@
     if (esJefaturaDelArea()) subs.push({ id: 'equipo', nombre: 'Equipo', icono: 'equipo', descripcion: 'Solo jefatura', items: [
       { id: 'equipo:resumen', nombre: 'Mi equipo hoy' }, { id: 'equipo:tablero', nombre: 'Solicitudes del equipo' },
       { id: 'equipo:persona', nombre: 'Por persona' }, { id: 'equipo:actividades', nombre: 'Actividades del equipo' },
-      { id: 'equipo:reportes', nombre: 'Reportes del equipo' }, { id: 'equipo:cumplimiento', nombre: 'Cumplimiento del equipo' }
+      { id: 'equipo:reportes', nombre: 'Reportes del equipo' }, { id: 'equipo:cumplimiento', nombre: 'Cumplimiento del equipo' },
+      { id: 'equipo:responsabilidades', nombre: 'Responsabilidades del equipo' }
     ] });
     // Todos ven sus recordatorios y fechas; los edita la jefatura o el superusuario.
     var aj = [{ id: 'ajustes', nombre: 'Recordatorios y fechas' }].concat(cfg_ && cfg_.puede_administrar ? [{ id: 'accesos', nombre: 'Accesos' }] : []);
