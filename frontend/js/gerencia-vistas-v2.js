@@ -62,13 +62,15 @@
     reportes: ['Centro de reportes', 'Analiza el desempeño del área.'],
     tendencia: ['Tendencia y ciclo', '¿Mejoramos o empeoramos? Y dónde se va el tiempo.'],
     recurrencia: ['Recurrencia', 'Qué módulo y tipo se repite: lo que conviene resolver de raíz.'],
-    carga: ['Carga', 'Qué empresa, plataforma y área consumen más solicitudes.']
+    carga: ['Carga', 'Qué empresa, plataforma y área consumen más solicitudes.'],
+    cumplimiento: ['Cumplimiento por responsable', 'El índice del mes de cada persona: compromisos, obligaciones del área, SGC y reportabilidad.']
   };
   var DEL_PANEL = ['tablero', 'gantt', 'tendencia', 'recurrencia', 'carga'];
   var ARQUITECTURA = [
     { id: 'resumen', nombre: 'Resumen', icono: 'panel', items: [{ id: 'resumen', nombre: 'Resumen ejecutivo' }] },
     { id: 'seguimiento', nombre: 'Seguimiento', icono: 'lista', items: [
-      { id: 'tablero', nombre: 'Tablero de seguimiento' }, { id: 'gantt', nombre: 'Línea de tiempo' }
+      { id: 'tablero', nombre: 'Tablero de seguimiento' }, { id: 'gantt', nombre: 'Línea de tiempo' },
+      { id: 'cumplimiento', nombre: 'Cumplimiento por responsable' }
     ] },
     { id: 'operacion', nombre: 'Operación', icono: 'reloj', items: [
       { id: 'actividades', nombre: 'Actividades' }, { id: 'pausas', nombre: 'Pausas activas' }
@@ -913,6 +915,16 @@
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(vista_);
     if (vista_ === 'resumen') { if (window.SigsoGerenciaV2) SigsoGerenciaV2.mostrar(); return; }
     var hay = !!document.getElementById('gerencia-v2');
+    if (vista_ === 'cumplimiento') {
+      // Plan de control (P3): lo pinta cumplimiento-v2.js. ++turno_ para que una
+      // carga del tablero que llegue tarde no pinte encima.
+      ++turno_;
+      var c = contenedor();
+      if (!c) return;
+      pagina(c, '<div data-cumpl-host data-alcance="empresa"></div>');
+      if (window.SigsoCumplimiento) SigsoCumplimiento.montarPendientes(c);
+      return;
+    }
     if (vista_ === 'actividades') { cargarActividades(!!act_ && hay); return; }
     if (vista_ === 'pausas') { cargarPausas(!!pausas_ && hay); return; }
     if (vista_ === 'reportes') { cargarReportes(!!panelRep_ && hay); return; }
@@ -920,7 +932,8 @@
     cargarPanel(false);
   }
   function recargar() {
-    if (vista_ === 'actividades') cargarActividades(true);
+    if (vista_ === 'cumplimiento') { if (window.SigsoCumplimiento) SigsoCumplimiento.recargar(document.getElementById('gerencia-v2')); }
+    else if (vista_ === 'actividades') cargarActividades(true);
     else if (vista_ === 'pausas') cargarPausas(true);
     else if (vista_ === 'reportes') cargarReportes(true);
     else cargarPanel(true);

@@ -31,12 +31,14 @@
     persona: ['Por persona', 'Qué reportó y qué tiene asignado cada integrante.'],
     actividades: ['Actividades del equipo', 'Tareas de tu equipo, con las que necesitan atención primero.'],
     reportes: ['Reportes del departamento', 'Desempeño de tu equipo con la misma regla que usa Gerencia.'],
-    carga: ['Carga por módulo y tipo', 'Qué se repite en el trabajo de tu equipo.']
+    carga: ['Carga por módulo y tipo', 'Qué se repite en el trabajo de tu equipo.'],
+    cumplimiento: ['Cumplimiento del equipo', 'El índice del mes de cada persona: qué cumplió a tiempo y qué quedó pendiente.']
   };
   var ARQUITECTURA = [
     { id: 'hoy', nombre: 'Personas', icono: 'equipo', items: [{ id: 'resumen', nombre: 'Mi equipo hoy' }] },
     { id: 'equipo', nombre: 'Mi equipo', icono: 'persona', items: [
-      { id: 'tablero', nombre: 'Solicitudes del equipo' }, { id: 'persona', nombre: 'Por persona' }, { id: 'actividades', nombre: 'Actividades del equipo' }
+      { id: 'tablero', nombre: 'Solicitudes del equipo' }, { id: 'persona', nombre: 'Por persona' }, { id: 'actividades', nombre: 'Actividades del equipo' },
+      { id: 'cumplimiento', nombre: 'Cumplimiento del equipo' }
     ] },
     { id: 'reportes', nombre: 'Reportes', icono: 'grafico', descripcion: 'Desempeño de tu equipo', items: [
       { id: 'reportes', nombre: 'Centro de reportes' }, { id: 'carga', nombre: 'Carga por módulo y tipo' }
@@ -416,6 +418,13 @@
   }
 
   // --- Navegación -----------------------------------------------------------------------------
+  // Plan de control (P3): el índice de cumplimiento del equipo, pintado por cumplimiento-v2.js.
+  function montarCumplimiento() {
+    var c = contenedor();
+    if (!c) return;
+    pagina(c, '<div data-cumpl-host data-alcance="equipo"></div>');
+    if (window.SigsoCumplimiento) SigsoCumplimiento.montarPendientes(c);
+  }
   function irA(v) {
     vista_ = v === 'resumen' || VISTAS[v] ? v : 'resumen';
     if (vista_ !== 'reportes') { reporteAbierto_ = null; filtrosRep_ = {}; }
@@ -423,6 +432,7 @@
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem((host_ ? host_.prefijo : '') + vista_);
     if (vista_ === 'resumen') { if (window.SigsoJefaturaV2) SigsoJefaturaV2.mostrar(); return; }
     var hay = !!document.getElementById('jefatura-v2');
+    if (vista_ === 'cumplimiento') { montarCumplimiento(); return; }
     if (vista_ === 'actividades') { cargarActividades(!!actividades_ && hay); return; }
     if (vista_ === 'reportes') { cargarReportes(!!panelRep_ && hay); return; }
     cargarPanel(!!panel_ && hay);
@@ -433,7 +443,8 @@
     if (!raiz || !raiz.contains(ev.target) || vista_ === 'resumen') return;
     var t = ev.target, b;
     if (t.closest('.js-jv2-recargar')) {
-      if (vista_ === 'actividades') cargarActividades(true);
+      if (vista_ === 'cumplimiento') { if (window.SigsoCumplimiento) SigsoCumplimiento.recargar(raiz); }
+      else if (vista_ === 'actividades') cargarActividades(true);
       else if (vista_ === 'reportes') cargarReportes(true);
       else cargarPanel(true);
       return;

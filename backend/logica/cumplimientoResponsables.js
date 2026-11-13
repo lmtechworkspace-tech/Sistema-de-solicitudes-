@@ -178,7 +178,8 @@ function compromisos_(tareas, eventosPor, per, corte, hoy) {
     }
     if (a.estado === 'CANCELADA' || !m.meta || m.meta < per.desde || m.meta > corte) return;
     if (!entrega && m.meta >= hoy) return; // vence hoy y sigue abierta: todavía no es atraso
-    const base = { actividad_id: a.actividad_id, titulo: a.titulo, fecha_original: m.original, meta: m.meta, entregada: entrega || '' };
+    const base = { actividad_id: a.actividad_id, titulo: a.titulo, fecha_original: m.original, meta: m.meta, entregada: entrega || '',
+      reprogramaciones: m.reprogramaciones };
     const bloqueadaPorOtro = a.estado === 'BLOQUEADA' && norm_(a.bloqueo_responsable_email) && norm_(a.bloqueo_responsable_email) !== norm_(a.responsable_email) &&
       diaReal_(a.bloqueo_desde) && diaReal_(a.bloqueo_desde) <= m.meta;
     if (bloqueadaPorOtro) { neutras.push(Object.assign(base, { motivo: 'Bloqueada por ' + a.bloqueo_responsable_email })); return; }

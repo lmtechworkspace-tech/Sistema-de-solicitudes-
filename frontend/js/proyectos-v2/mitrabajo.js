@@ -456,7 +456,8 @@
           '<span class="sx2-tenue" style="font-size:.875rem">' + U.esc(resumen) + '</span>' +
         '</div></div>' +
       '<div class="sx2-cabecera__acciones">' +
-        U.segmento([{ id: 'lista', texto: 'Mis tareas', icono: 'tareas' }, { id: 'horas', texto: 'Mis horas', icono: 'reloj' }], f.modo, 'js-py2m-modo') +
+        U.segmento([{ id: 'lista', texto: 'Mis tareas', icono: 'tareas' }, { id: 'horas', texto: 'Mis horas', icono: 'reloj' },
+          { id: 'cumplimiento', texto: 'Mi cumplimiento', icono: 'grafico' }], f.modo, 'js-py2m-modo') +
         U.boton({ texto: 'No planificado', icono: 'rayo', variante: 'fantasma', clase: 'js-py2m-emergente', titulo: 'Anotar algo que surgió y te tomó tiempo' }) +
         U.boton({ texto: 'Nueva tarea', icono: 'nueva', variante: 'primario', clase: 'js-py2m-nueva' }) +
       '</div>' +
@@ -464,6 +465,9 @@
 
     if (d.error) return cabecera + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: d.error }) });
     if (f.modo === 'horas') return cabecera + vistaHoras(d, hoy);
+    // Plan de control (P3): el índice de cumplimiento propio. Lo pinta
+    // cumplimiento-v2.js en el marcador, al montar (alMontar).
+    if (f.modo === 'cumplimiento') return cabecera + '<div data-cumpl-host data-alcance="yo"></div>';
 
     // Cuatro indicadores como mucho; cada uno filtra la lista (otro clic lo quita).
     // Franja delgada de indicadores (antes, tarjetas grandes que empujaban la
@@ -686,6 +690,7 @@
   function alMontar(raiz, d, host) {
     host_ = host || hostProyectos;
     dibujar(raiz, d);
+    if (window.SigsoCumplimiento) SigsoCumplimiento.montarPendientes(raiz);
     raiz.addEventListener('click', function (ev) {
       var t = ev.target, b;
       if ((b = t.closest('.js-py2m-rapida'))) { ev.stopPropagation(); accionRapida(tarea(d, b.getAttribute('data-id')), b.getAttribute('data-accion'), b); return; }
