@@ -110,6 +110,18 @@ function periodo_(periodo) {
   const ultimo = new Date(Date.UTC(base.a, base.m, 0)).getUTCDate();
   return { periodo: base.a + '-' + mm, desde: base.a + '-' + mm + '-01', hasta: base.a + '-' + mm + '-' + String(ultimo).padStart(2, '0'), ci: base.a + '-M' + mm };
 }
+const MESES_HISTORIA = 6;
+// Desde cuándo existen las herramientas que se miden (no se puede exigir
+// antes): la Agenda de los departamentos y el reporte mensual del área
+// partieron en octubre de 2026 (el primer reporte, el de septiembre).
+const INICIO_AGENDA = '2026-M10';
+const INICIO_REPORTES = '2026-10-01';
+/** '2026-11' ± k meses → 'YYYY-MM'. */
+function moverPeriodo_(periodo, k) {
+  const a = Number(periodo.slice(0, 4)), m = Number(periodo.slice(5, 7)) - 1 + k;
+  const aa = a + Math.floor(m / 12), mm = ((m % 12) + 12) % 12;
+  return aa + '-' + String(mm + 1).padStart(2, '0');
+}
 function periodoCiAnterior_(ci) {
   const a = Number(ci.slice(0, 4)), m = Number(ci.slice(6));
   return m === 1 ? (a - 1) + '-M12' : a + '-M' + String(m - 1).padStart(2, '0');
@@ -191,7 +203,9 @@ function compromisos_(tareas, eventosPor, per, corte, hoy) {
 
 // --- B · obligaciones del área (Agenda) ---------------------------------------------------
 function obligacionesArea_(db, deptos, per, corte, hoy) {
-  if (!deptos.length) return [];
+  // Antes de que existiera la Agenda (octubre de 2026) nadie podía marcar
+  // nada: medirlo sería contar como «sin hacer» lo que no tenía dónde anotarse.
+  if (!deptos.length || per.ci < INICIO_AGENDA) return [];
   let Agenda;
   try { Agenda = require('./agendaDepto'); } catch (e) { return []; }
   const casos = [];
@@ -247,7 +261,7 @@ function reportabilidad_(datos, email, miembro, per, corte, hoy, tareasAbiertas,
       : [{ que: 'Enviar el reporte mensual', dia: 3, hecho: rep ? diaReal_(rep.fecha_envio) : '' }];
     pasos.forEach((p) => {
       const plazo = datos.diaHabil(informado, p.dia);
-      if (!plazo || plazo < per.desde || plazo > corte) return;
+      if (!plazo || plazo < per.desde || plazo > corte || plazo < INICIO_REPORTES) return;
       if (!p.hecho && plazo >= hoy) return;
       casos.push({ tipo: p.que + ' · ' + dep.nombre, plazo, hecho: p.hecho, ok: !!p.hecho && p.hecho <= plazo, estado: p.hecho ? (p.hecho <= plazo ? 'A tiempo' : 'Tarde') : 'Sin hacer' });
     });
@@ -378,7 +392,16 @@ function getCumplimiento(db, data, contexto) {
     const quien = norm_(d.email || yo);
     if (quien !== yo && !empresa && equipo.indexOf(quien) === -1) return { _forbidden: true, message: 'Solo puedes ver el cumplimiento de tu equipo.' };
     const r = calcularPersona_(db, quien, d.periodo, opciones);
-    return Object.assign(r, { nombre: nombres[quien] || quien, pesos: PESOS, cortes: CORTES, min_casos: MIN_CASOS, dias_dormida: DIAS_DORMIDA });
+    // Tendencia: el índice de los meses anteriores con la misma regla (los
+    // datos ya están leídos: solo se recalcula).
+    const historial = [];
+    for (let k = MESES_HISTORIA - 1; k >= 1; k--) {
+      const p = moverPeriodo_(r.periodo, -k);
+      const h = calcularPersona_(db, quien, p, opciones);
+      historial.push({ periodo: p, indice: h.indice, estado: h.estado });
+    }
+    historial.push({ periodo: r.periodo, indice: r.indice, estado: r.estado });
+    return Object.assign(r, { nombre: nombres[quien] || quien, pesos: PESOS, cortes: CORTES, min_casos: MIN_CASOS, dias_dormida: DIAS_DORMIDA, historial });
   }
   let lista;
   if (d.alcance === 'empresa') {
@@ -390,16 +413,26 @@ function getCumplimiento(db, data, contexto) {
   }
   // En la empresa se omite a quien no tiene nada que medir (cuentas sin
   // trabajo asignado); la jefatura, en cambio, ve a todo su equipo.
-  const personas = lista.map((e) => resumenPersona_(calcularPersona_(db, e, d.periodo, opciones), nombres[e] || e))
+  const anterior = moverPeriodo_(periodo_(d.periodo).periodo, -1);
+  const personas = lista.map((e) => {
+    const p = resumenPersona_(calcularPersona_(db, e, d.periodo, opciones), nombres[e] || e);
+    p.indice_anterior = calcularPersona_(db, e, anterior, opciones).indice;
+    return p;
+  })
     .filter((p) => d.alcance !== 'empresa' || p.indice !== null || p.senales.sin_fecha || p.senales.dormidas)
     .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
   const conIndice = personas.filter((p) => p.indice !== null);
   const promedio = conIndice.length ? Math.round((conIndice.reduce((s, p) => s + p.indice, 0) / conIndice.length) * 10) / 10 : null;
+  const conAnterior = personas.filter((p) => p.indice_anterior !== null && p.indice_anterior !== undefined);
+  const promedioAnterior = conAnterior.length ? Math.round((conAnterior.reduce((s, p) => s + p.indice_anterior, 0) / conAnterior.length) * 10) / 10 : null;
+  const reparto = { ok: 0, alerta: 0, critico: 0, sin_dato: 0 };
+  personas.forEach((p) => { reparto[p.estado] = (reparto[p.estado] || 0) + 1; });
   return {
     periodo: periodo_(d.periodo).periodo, alcance: d.alcance, pesos: PESOS, cortes: CORTES,
     personas,
     resumen: {
       personas: personas.length, con_indice: conIndice.length, indice_promedio: promedio, estado: estado_(promedio),
+      indice_promedio_anterior: promedioAnterior, periodo_anterior: anterior, reparto,
       en_rojo: conIndice.filter((p) => p.estado === 'critico').length,
       sin_fecha: personas.reduce((s, p) => s + p.senales.sin_fecha, 0),
       dormidas: personas.reduce((s, p) => s + p.senales.dormidas, 0)
@@ -408,6 +441,6 @@ function getCumplimiento(db, data, contexto) {
 }
 
 module.exports = {
-  getCumplimiento, calcularPersona_, metaDeTarea_, diaEntrega_, periodo_, diaPlan_, diaReal_,
+  getCumplimiento, calcularPersona_, metaDeTarea_, diaEntrega_, periodo_, moverPeriodo_, diaPlan_, diaReal_,
   PESOS, CORTES, MIN_CASOS, DIAS_DORMIDA
 };

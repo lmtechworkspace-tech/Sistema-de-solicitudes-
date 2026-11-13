@@ -165,6 +165,7 @@ test('obligaciones del área: las tareas internas de la Agenda vencidas sin marc
   assert.ok(B.detalle.every((x) => x.area === 'Contabilidad' && x.fecha < HOY));
   assert.ok(B.detalle.some((x) => x.estado === 'Sin hacer'));
   assert.equal(comp(R.calcularPersona_(db, OTRO, '2026-11', { hoy: HOY }), 'B').casos, 0, 'quien solo lee el área no responde por ella');
+  assert.equal(comp(R.calcularPersona_(db, ANA, '2026-07', { hoy: HOY }), 'B').casos, 0, 'antes de octubre de 2026 no había Agenda: no se mide');
 });
 
 test('quién ve qué: lo propio, el equipo de la jefatura y la empresa solo gerencia', () => {
@@ -188,6 +189,25 @@ test('quién ve qué: lo propio, el equipo de la jefatura y la empresa solo gere
   // El encargado del SGC también ve la empresa.
   agregarFila_(db, 'SGC_ROLES', { rol_id: 'R1', usuario_email: OTRO, rol_sgc: 'ENCARGADO_SGC', activo: true });
   assert.ok(!R.getCumplimiento(db, { alcance: 'empresa' }, ctxOtro)._forbidden);
+});
+
+test('tendencia: la persona trae 6 meses de índice y la lista el índice del mes anterior', () => {
+  const db = crear();
+  ['03', '04', '05'].forEach((d) => tarea(db, { fecha_compromiso: '2026-10-' + d + 'T00:00:00.000Z', estado: 'TERMINADA', fecha_terminada: '2026-10-' + d }));
+  // Las de noviembre nacen en noviembre: en octubre no existían (si no, octubre las vería abiertas y dormidas).
+  ['03', '04', '05', '06'].forEach((d, i) => tarea(db, { fecha_creacion: '2026-11-01T12:00:00.000Z', fecha_compromiso: '2026-11-' + d + 'T00:00:00.000Z', estado: 'TERMINADA', fecha_terminada: i ? '2026-11-' + d : '2026-11-10' }));
+  assert.equal(R.moverPeriodo_('2026-01', -1), '2025-12');
+  assert.equal(R.moverPeriodo_('2026-11', 2), '2027-01');
+  const ctxAna = { email: ANA, rol: 'DEV', modulos: [] };
+  const r = R.getCumplimiento(db, { periodo: '2026-11' }, ctxAna);
+  assert.equal(r.historial.length, 6);
+  assert.equal(r.historial[0].periodo, '2026-06');
+  assert.equal(r.historial[5].periodo, '2026-11');
+  assert.equal(r.historial[4].indice, 100, 'octubre: 3 de 3 a tiempo');
+  const eq = R.getCumplimiento(db, { alcance: 'equipo', periodo: '2026-11' }, { email: JEFE, rol: 'DEV', modulos: [] });
+  assert.equal(eq.personas[0].indice_anterior, 100);
+  assert.equal(eq.resumen.periodo_anterior, '2026-10');
+  assert.equal(eq.resumen.reparto.alerta + eq.resumen.reparto.ok + eq.resumen.reparto.critico + eq.resumen.reparto.sin_dato, eq.personas.length);
 });
 
 test('la acción está registrada en el router', () => {
