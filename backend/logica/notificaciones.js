@@ -83,6 +83,9 @@ const CANALES_ALERTA = [
   { clave: 'SLA', nombre: 'SLA y vencimientos (equipo)', tiene_en_vivo: false,
     descripcion: 'SLA próximo o vencido, fecha comprometida en riesgo y alertas de patrón. Hoy solo por correo.',
     prefijos: ['SLA_PROXIMO', 'SLA_VENCIDO', 'FECHA_EN_RIESGO', 'ALERTA_PATRON'] },
+  { clave: 'CUMPLIMIENTO', nombre: 'Índice de cumplimiento', tiene_en_vivo: true,
+    descripcion: 'Aviso de los lunes: tu índice, lo que vence y lo atrasado; el resumen del equipo para jefaturas y el de la empresa para gerencia.',
+    prefijos: ['CUMPLIMIENTO_'] },
   { clave: 'REPORTES', nombre: 'Reportes', tiene_en_vivo: false,
     descripcion: 'Reporte ejecutivo, resumen semanal/mensual y digest de jefatura. Hoy solo por correo.',
     prefijos: ['RESUMEN_SEMANAL', 'REPORTE_MENSUAL', 'REPORTE_EJECUTIVO', 'DIGEST_JEFATURA'] }

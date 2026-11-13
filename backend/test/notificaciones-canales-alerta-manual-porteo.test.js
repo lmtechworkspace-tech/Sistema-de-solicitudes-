@@ -65,12 +65,12 @@ test('los avisos al SOLICITANTE EXTERNO nunca se bloquean (no tienen categoría)
   assert.equal(filas(db, 'LOG_NOTIFICACIONES').length, 1);
 });
 
-test('listarCanalesAlerta es ADM-only y trae las 6 categorías con tiene_en_vivo', () => {
+test('listarCanalesAlerta es ADM-only y trae las 7 categorías con tiene_en_vivo', () => {
   const db = dbConSchema();
   assert.equal(Notificaciones.listarCanalesAlerta(db, {}, NO_ADMIN)._forbidden, true);
 
   const r = Notificaciones.listarCanalesAlerta(db, {}, ADMIN);
-  assert.equal(r.canales.length, 6);
+  assert.equal(r.canales.length, 7); // 7.ª: CUMPLIMIENTO (aviso de los lunes, plan de control P4)
   const pausas = r.canales.find((c) => c.clave === 'PAUSAS');
   assert.equal(pausas.tiene_en_vivo, true);
   assert.equal(pausas.correo_activo, true);

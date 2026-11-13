@@ -1,0 +1,85 @@
+==================================================
+Para: paula.soto@demo.cl
+Asunto: SIGSO — Tu cumplimiento: 75,2 % · 1 pendiente
+
+Hola Paula:
+
+Tu índice de cumplimiento de noviembre 2026, hasta hoy: 75,2 % — 🟡 en observación (▲ +16,9 pts vs oct).
+
+Vence esta semana:
+  • Actualizar matriz de facturación — 20 nov
+
+Tareas dormidas (sin movimiento en 14 días): anota un avance o ciérralas.
+  • Ordenar carpeta FACTURAS del Drive — último movimiento 20 oct
+
+Tareas sin fecha: ponles una para poder cumplirlas.
+  • Ordenar carpeta FACTURAS del Drive
+
+Ver el detalle: https://lmtechworkspace-tech.github.io/Sistema-de-solicitudes-/plataforma.html#/mi_trabajo (pestaña «Mi cumplimiento»).
+
+--------------------------------------------------
+Aviso semanal automático de SIGSO (índice de cumplimiento, lunes 8:00).
+
+==================================================
+Para: matias.lagos@demo.cl
+Asunto: SIGSO — Tu cumplimiento: 15,9 % · 6 pendientes
+
+Hola Matías:
+
+Tu índice de cumplimiento de noviembre 2026, hasta hoy: 15,9 % — 🔴 bajo lo esperado (▼ −46,2 pts vs oct).
+
+Atrasado (resta en tu índice hasta que lo cierres):
+  • Contratos de Montajes Bío Bío — venció el 6 nov (hace 10 días)
+  • Anexos de Hormigones del Sur — venció el 10 nov (hace 6 días)
+
+Tareas dormidas (sin movimiento en 14 días): anota un avance o ciérralas.
+  • Contratos de Montajes Bío Bío — último movimiento 20 oct
+  • Anexos de Hormigones del Sur — último movimiento 20 oct
+  • Revisar cartas de aviso pendientes — último movimiento 20 oct
+  • Plan de capacitación RR.HH. — último movimiento 15 sep
+
+Ver el detalle: https://lmtechworkspace-tech.github.io/Sistema-de-solicitudes-/plataforma.html#/mi_trabajo (pestaña «Mi cumplimiento»).
+
+--------------------------------------------------
+Aviso semanal automático de SIGSO (índice de cumplimiento, lunes 8:00).
+
+==================================================
+Para: carla.mena@demo.cl
+Asunto: SIGSO — Tu cumplimiento: 0 % · 6 pendientes
+
+Hola Carla:
+
+Tu índice de cumplimiento de noviembre 2026, hasta hoy: 0 % — 🔴 bajo lo esperado (igual que oct).
+
+Atrasado (resta en tu índice hasta que lo cierres):
+  • Preparar informe · Informe de plataformas externas a Facturación y Cobranzas — venció el 3 nov (hace 13 días)
+  • Enviar el reporte mensual · Recursos Humanos — venció el 4 nov (hace 12 días)
+  • Enviar informe · Informe de plataformas externas a Facturación y Cobranzas — venció el 5 nov (hace 11 días)
+  • Primer informe (día 5-7) · Informe de impuesto único a Contabilidad — venció el 6 nov (hace 10 días)
+  • Cargar LRE · Libro de remuneraciones electrónico (LRE) — venció el 12 nov (hace 4 días)
+  • Informe final (día 13) · Informe de impuesto único a Contabilidad — venció el 13 nov (hace 3 días)
+
+Ver el detalle: https://lmtechworkspace-tech.github.io/Sistema-de-solicitudes-/plataforma.html#/mi_trabajo (pestaña «Mi cumplimiento»).
+
+--------------------------------------------------
+Aviso semanal automático de SIGSO (índice de cumplimiento, lunes 8:00).
+
+==================================================
+Para: jefa@demo.cl
+Asunto: SIGSO — Cumplimiento de tu equipo (3 personas)
+
+Hola:
+
+Así va tu equipo en noviembre 2026, hasta hoy (orden alfabético):
+
+  🔴 Carla Mena: 0 % (igual que oct) · 6 atrasadas
+  🔴 Matías Lagos: 15,9 % (▼ −46,2 pts vs oct) · 2 atrasadas, 4 dormidas
+  🟡 Paula Soto: 75,2 % (▲ +16,9 pts vs oct) · 1 dormida, 1 sin fecha
+
+En total: 8 compromisos atrasados y 5 tareas dormidas.
+Si un atraso no depende de la persona (falta información del cliente, otra área), reprográmalo tú antes de que venza: así no resta.
+
+Ver el detalle: https://lmtechworkspace-tech.github.io/Sistema-de-solicitudes-/plataforma.html → tu departamento → Equipo → «Cumplimiento del equipo».
+
+--------------------------------------------------
+Aviso semanal automático de SIGSO para jefaturas (lunes 8:00).

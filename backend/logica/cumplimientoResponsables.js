@@ -442,5 +442,7 @@ function getCumplimiento(db, data, contexto) {
 
 module.exports = {
   getCumplimiento, calcularPersona_, metaDeTarea_, diaEntrega_, periodo_, moverPeriodo_, diaPlan_, diaReal_,
+  // Para el aviso semanal (avisoCumplimiento.js): mismos datos y mismas personas.
+  cargarDatos_, personasEmpresa_,
   PESOS, CORTES, MIN_CASOS, DIAS_DORMIDA
 };

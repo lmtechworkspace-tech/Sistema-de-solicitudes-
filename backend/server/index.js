@@ -27,6 +27,7 @@ const MatrizCobertura = require('../logica/matrizCoberturaSgc');
 const CierreAutomatico = require('../logica/cierreAutomaticoSolicitudes');
 const AgendaDepto = require('../logica/agendaDepto');
 const FinanzasRespaldo = require('../logica/finanzasRespaldo');
+const AvisoCumplimiento = require('../logica/avisoCumplimiento');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -73,6 +74,14 @@ const intervaloTriggersDiarios = setInterval(() => {
   if (enVentanaDiaria_(ahora, 9)) {
     Notificaciones.detectarPatrones(db).catch((err) => {
       console.error('error detectando patrones:', err);
+    });
+  }
+  // Plan de control (P4): aviso semanal del índice de cumplimiento, los lunes a
+  // las 08:00. Dedup por semana (clave CUMPLIMIENTO:<lunes>): revisarlo de más
+  // dentro de la ventana no repite correos.
+  if (ahora.getDay() === 1 && enVentanaDiaria_(ahora, 8)) {
+    AvisoCumplimiento.enviarAvisoSemanal(db).catch((err) => {
+      console.error('error enviando el aviso semanal de cumplimiento:', err);
     });
   }
   // Finanzas v5.9: respaldo cifrado de la bóveda, los lunes a las 08:00 (una vez por semana; sin clave configurada no hace nada).

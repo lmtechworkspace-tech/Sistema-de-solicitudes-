@@ -44,6 +44,7 @@ const Novedades = require('../logica/novedades');
 const Pausas = require('../logica/pausas');
 const ResumenGerencia = require('../logica/resumenGerencia');
 const CumplimientoResponsables = require('../logica/cumplimientoResponsables');
+const AvisoCumplimiento = require('../logica/avisoCumplimiento');
 const MiEquipo = require('../logica/miEquipo');
 const SaludConfig = require('../logica/saludConfig');
 const CaminoSgc = require('../logica/caminoSgc');
@@ -262,6 +263,9 @@ const ACCIONES = {
   getResumenGerencia: (db, data, contexto) => ResumenGerencia.getResumen(db, data, contexto),
   // Plan de control y certificación (P3): índice de cumplimiento por responsable.
   getCumplimientoResponsables: (db, data, contexto) => CumplimientoResponsables.getCumplimiento(db, data, contexto),
+  // P4: el aviso de los lunes. Administración puede verlo antes y mandarlo a mano.
+  previsualizarAvisoCumplimiento: (db, data, contexto) => AvisoCumplimiento.previsualizar(db, data, contexto),
+  enviarAvisoCumplimientoAhora: (db, data, contexto) => AvisoCumplimiento.enviarAhora(db, data, contexto),
   getMiEquipo: (db, data, contexto) => MiEquipo.getMiEquipo(db, data, contexto),
   getSaludConfig: (db, data, contexto) => SaludConfig.getSalud(db, data, contexto),
   arreglarSaludConfig: (db, data, contexto) => SaludConfig.arreglar(db, data, contexto),
