@@ -49,7 +49,8 @@ test('login con cuenta creada por el Admin: clave temporal funciona y exige camb
   assert.ok(res.token, 'debe emitir token');
   assert.equal(res.cuenta.nombre, 'Camila Pena');
   assert.equal(res.cuenta.debe_cambiar_password, true);
-  assert.deepEqual(res.cuenta.modulos, ['nueva_solicitud', 'mis_solicitudes', 'mi_trabajo']);
+  // 'oficina' (Oficina virtual) viene en la plantilla de todos los roles desde 2026-11-26
+  assert.deepEqual(res.cuenta.modulos, ['nueva_solicitud', 'mis_solicitudes', 'mi_trabajo', 'oficina']);
   assert.deepEqual(res.cuenta.emails, ['camila@gde.cl', 'camila.pena@gmail.com']);
   assert.equal(res.cuenta.hash_password, undefined);
   assert.equal(res.cuenta.salt, undefined);
