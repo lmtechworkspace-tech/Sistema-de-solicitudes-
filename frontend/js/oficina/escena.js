@@ -9,7 +9,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import * as K from './modelos.js';
+const K = await import('./modelos.js' + new URL(import.meta.url).search); // misma versión que la página
 const { MAT, malla, rbox, pon } = K;
 
 const D = window.OFICINA;

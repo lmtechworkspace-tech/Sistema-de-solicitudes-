@@ -71,4 +71,4 @@ async function cargar() {
 
 const aviso = await cargar();
 D.aviso = aviso;
-await import('./escena.js');
+await import('./escena.js' + new URL(import.meta.url).search); // misma versión que esta página

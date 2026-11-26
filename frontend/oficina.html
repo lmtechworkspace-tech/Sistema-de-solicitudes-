@@ -185,7 +185,10 @@
 <canvas class="minimapa" id="minimapa" title="Plano: haz clic en una sala"></canvas>
 
 <script type="module">
-  import './js/oficina/cargar.js';
+  // Versión de la publicación (Pages agrega ?v=… a datos.js): los módulos 3D se
+  // piden con la misma, para que nunca se mezcle esta página con módulos viejos en caché.
+  const V = (document.querySelector('script[src*="oficina/datos.js"]').src.split('?')[1] || '');
+  await import('./js/oficina/cargar.js' + (V ? '?' + V : ''));
   if (window.top === window) document.getElementById('volverSigso').hidden = false;
   const c = document.getElementById('cargando'); c.style.opacity = 0; setTimeout(() => c.remove(), 700);
 </script>
