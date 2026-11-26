@@ -308,6 +308,52 @@ function decir(pid, texto, ms = 4500) {
 const gente = id => D.personas.filter(p => p.sala === id).map(p => p.id);
 const enPared = (obj, x, y, z, nx, nz) => add(obj, x, y, z, mirar(nx, nz));
 
+// ---------- pizarras vivas: lo pendiente de cada área, sacado de SIGSO ----------
+// Cada oficina con departamento tiene una pizarra que se redibuja con los conteos
+// reales (solicitudes abiertas/atrasadas y la Agenda de hoy). Clic = ver y pedir.
+const NOMBRE_DEPTO = { COBRANZAS: 'Facturación y Cobranzas', RRHH: 'Recursos Humanos', CONTABILIDAD: 'Contabilidad', ADMINISTRACION: 'Administración',
+  PREVENCION: 'Prevención de riesgos', MARKETING: 'Marketing', TECNICO: 'Soporte de plataformas' };
+const MODULO_DEPTO = { COBRANZAS: 'dep_cobranzas', RRHH: 'dep_rrhh', CONTABILIDAD: 'dep_contabilidad', ADMINISTRACION: 'dep_administracion',
+  PREVENCION: 'dep_prevencion', MARKETING: 'dep_marketing', TECNICO: 'bandeja' };
+const PIZARRAS = {};
+function pizarraViva(sala, x, y, z, nx, nz, w, h, demo, bandera = false) {
+  const c = document.createElement('canvas'); c.width = 640; c.height = Math.round(640 * h / w);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const g = new THREE.Group();
+  g.add(malla(rbox(w + 0.04, h + 0.04, 0.025, 0.006), MAT.cromo, 0, 0, 0));
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.25, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.12 }));
+  p.position.z = 0.014; p.userData.pizarra = sala; g.add(p);
+  g.add(malla(rbox(w * 0.6, 0.025, 0.06, 0.005), MAT.cromo, 0, -h / 2 - 0.02, 0.03));
+  enPared(g, x, y, z, nx, nz);
+  PIZARRAS[sala] = { c, tex, malla: p, demo, bandera };
+  dibujarPizarra(sala, null);
+}
+function dibujarPizarra(sala, datos) {
+  const pz = PIZARRAS[sala]; if (!pz) return;
+  const g = pz.c.getContext('2d'), W = pz.c.width, A = pz.c.height, color = (salaPorId[sala] || {}).color || '#1d4ed8';
+  g.fillStyle = '#fbfcfd'; g.fillRect(0, 0, W, A);
+  g.fillStyle = color; g.fillRect(0, 0, W, 8);
+  if (pz.bandera) { g.fillStyle = '#fff'; g.fillRect(W - 104, 18, 80, 52); g.fillStyle = '#d52b1e'; g.fillRect(W - 104, 44, 80, 26); g.fillStyle = '#0039a6'; g.fillRect(W - 104, 18, 27, 26); g.strokeStyle = '#999'; g.strokeRect(W - 104, 18, 80, 52); }
+  if (!datos) { // sin datos de SIGSO: la pizarra «escrita a mano» de siempre
+    (pz.demo || []).forEach((t, i) => { g.fillStyle = i ? '#334155' : '#1d4ed8'; g.font = (i ? '26px' : 'bold 32px') + ' "Comic Sans MS", cursive'; g.fillText(t, 22, 50 + i * 42); });
+  } else {
+    g.fillStyle = '#1b1f24'; g.font = 'bold 30px system-ui, sans-serif'; g.fillText('Pendiente hoy', 22, 48);
+    let yy = 88;
+    const fila = (txt, col = '#1b1f24', tam = 24) => { g.fillStyle = col; g.font = tam + 'px system-ui, sans-serif'; g.fillText(txt, 30, yy); yy += tam + 12; };
+    for (const d of datos) {
+      if (datos.length > 1) { g.fillStyle = '#64748b'; g.font = 'bold 19px system-ui, sans-serif'; g.fillText((NOMBRE_DEPTO[d.depto] || d.depto).toUpperCase(), 22, yy); yy += 30; }
+      fila(`📥 ${d.abiertas} ${d.abiertas === 1 ? 'solicitud abierta' : 'solicitudes abiertas'}${d.nuevas ? ` · ${d.nuevas} nuevas` : ''}`);
+      if (d.atrasadas) fila(`⏰ ${d.atrasadas} ${d.atrasadas === 1 ? 'atrasada' : 'atrasadas'}`, '#dc2626');
+      if (d.agenda_hoy !== undefined) fila(`📅 Agenda: ${d.agenda_hoy} para hoy${d.agenda_atrasados ? ` · ${d.agenda_atrasados} atrasados` : ''}`, d.agenda_atrasados ? '#b45309' : '#1b1f24');
+      if (d.proximo) fila(`→ ${d.proximo.titulo} en ${d.proximo.dias_habiles} ${d.proximo.dias_habiles === 1 ? 'día hábil' : 'días hábiles'}`, '#475569', 20);
+      yy += 6;
+    }
+    g.fillStyle = '#94a3b8'; g.font = '18px system-ui, sans-serif'; g.textAlign = 'right'; g.fillText('clic para ver y pedir', W - 18, A - 14); g.textAlign = 'left';
+  }
+  pz.tex.needsUpdate = true;
+}
+function pintarPizarras() { for (const sala of Object.keys(PIZARRAS)) dibujarPizarra(sala, D.pizarras ? D.pizarras[sala] : null); }
+
 const camaras = [];
 function std2(c) { return new THREE.MeshStandardMaterial({ color: c, roughness: 0.5 }); }
 // 9 Recepción: mesón en L de caoba con vidrio y arbolito, mirando a la salida (11)
@@ -325,6 +371,7 @@ function std2(c) { return new THREE.MeshStandardMaterial({ color: c, roughness: 
   add(K.planta(1.4), 5.2, 0, -0.1); add(K.planta(1.2, 2), -1.7, 0, 5.0);
   add(K.dispensadorAgua(), -1.7, 0, -0.15);
   enPared(K.extintor(), 3.4, 0, -0.45, 0, 1);
+  pizarraViva('recepcion', 4.75, 1.5, -0.48, 0, 1, 1.3, 0.8, ['Facturación', '• Emitir facturas del mes', '• Seguir cobranza']);
   enPared(K.letreroSalida(), 5.56, 1.95, 4.6, -1, 0);
   const logo = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.45), new THREE.MeshStandardMaterial({ map: K.lienzo(512, 144, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.font = 'bold 76px system-ui, sans-serif'; g.fillStyle = '#1f2328'; g.fillText('Home', 40, 100); g.fillStyle = '#e9a23b'; g.fillText('Pymes', 238, 100); }), roughness: 0.4 }));
   enPared(logo, 4.6, 1.65, 5.37, 0, -1);
@@ -348,7 +395,7 @@ function std2(c) { return new THREE.MeshStandardMaterial({ color: c, roughness: 
   puesto(-4.2, -5.55, 0, { persona: ids[1], salaId: 'operativo' });
   puesto(-2.0, -2.1, -Math.PI / 2, { persona: ids[2], salaId: 'operativo' });
   add(malla(rbox(1.3, 0.38, 0.03, 0.01), MAT.blancoMate), -4.2, 0.97, -4.575);
-  enPared(K.pizarra(K.texPizarra(['Remuneraciones nov.', '• Liquidaciones: día 28', '• F29: día 20'])), -3.3, 1.5, -7.82, 0, 1);
+  pizarraViva('operativo', -3.3, 1.45, -7.82, 0, 1, 1.7, 1.1, ['Remuneraciones nov.', '• Liquidaciones: día 28', '• F29: día 20']);
   enPared(K.aireAcondicionado(), -5.55, 2.0, -6.6, 1, 0);
   enPared(new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.9), new THREE.MeshStandardMaterial({ map: K.texDiarioMural(), roughness: 0.9 })), -4.3, 1.45, -0.68, 0, -1);
   enPared(K.estante({ ancho: 1.2, alto: 1.8 }), -5.45, 0, -1.6, 1, 0);
@@ -364,7 +411,8 @@ function std2(c) { return new THREE.MeshStandardMaterial({ color: c, roughness: 
   add(malla(rbox(1.3, 0.38, 0.03, 0.01), MAT.blancoMate), -3.4, 0.97, -9.625);
   enPared(K.estante({ ancho: 1.4, alto: 1.9 }), -1.9, 0, -11.62, 0, 1);
   add(K.sillaVisita(), -1.6, 0, -9.8, -Math.PI / 2);
-  enPared(K.pizarra(K.texPizarra(['Pendientes', '• Aprobar pagos', '• Grabación jueves']), 1.0, 0.6), -4.8, 1.5, -7.98, 0, -1);
+  // en el muro del fondo (mira hacia la cámara, que observa desde el sureste)
+  pizarraViva('jefaturas', -4.3, 1.45, -11.72, 0, 1, 1.3, 0.8, ['Pendientes', '• Aprobar pagos', '• Grabación jueves']);
   add(K.planta(1.0), -5.2, 0, -8.3);
 }
 // 1 Administración de Plataformas: dos escritorios juntos con impresora (oficina del final del video)
@@ -373,6 +421,7 @@ function std2(c) { return new THREE.MeshStandardMaterial({ color: c, roughness: 
   add(K.escritorio({ ancho: 1.4 }), -4.02, 0, -13.9, -Math.PI / 2); add(K.impresora(), -4.0, 0.77, -14.2, -Math.PI / 2);
   add(K.sillaOficina(), -4.0, 0, -12.6, 2.6);
   enPared(K.aireAcondicionado(), -4.2, 2.0, -11.92, 0, -1);
+  pizarraViva('plataformas', -1.75, 1.4, -15.36, 0, 1, 1.0, 0.62, ['Plataformas', '• Altas de clientes', '• Carga de documentos']);
   enPared(K.estante({ ancho: 1.2, alto: 1.7 }), -2.2, 0, -12.0, 0, -1);
 }
 // 5 Podcast «Vida de Contratistas», como el set real: muro de listones de madera,
@@ -420,7 +469,7 @@ function std2(c) { return new THREE.MeshStandardMaterial({ color: c, roughness: 
   const ids = gente('prevencion');
   puesto(4.0, -5.6, Math.PI / 2, { persona: ids[0], salaId: 'prevencion' });
   puesto(4.0, -7.6, Math.PI / 2, { persona: ids[1], salaId: 'prevencion', notebook: true });
-  enPared(K.pizarra(K.texPizarra(['Charlas diciembre', '• Uso de EPP', '• Inducciones: 3'], true), 1.5, 0.85), 2.6, 1.5, -4.58, 0, -1);
+  pizarraViva('prevencion', 3.65, 1.5, -9.12, 0, 1, 1.5, 0.85, ['Charlas diciembre', '• Uso de EPP', '• Inducciones: 3'], true);
   enPared(K.estante({ ancho: 1.4, alto: 1.8 }), 2.0, 0, -9.02, 0, 1);
   add(K.planta(1.0), 1.4, 0, -5.0);
 }
@@ -668,6 +717,8 @@ function abrirSala(id, { volar = true } = {}) {
       <button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
     <div class="cuerpo">
       <h3>Qué hace</h3><p>${esc(s.que_hace)}</p>
+      ${bloquePedir(id)}
+      ${PIZARRAS[id] && D.pizarras ? `<button class="enlace-pizarra" data-pendientes="${id}">📋 Ver lo pendiente del área</button>` : ''}
       ${s.procesos.length ? `<h3>Procesos</h3><div class="etiquetas">${s.procesos.map(x => `<span>${esc(x)}</span>`).join('')}</div>` : ''}
       ${s.comunica.length ? `<h3>Cómo se comunica</h3><ul class="flujo">${s.comunica.map(c => filaFlujo(c, s)).join('')}</ul>` : ''}
       ${ids.length ? `<h3>Quiénes trabajan aquí</h3><div class="gente">${ids.map(pid => { const p = personaPorId[pid]; return `
@@ -705,6 +756,96 @@ function bloqueDescriptor(d, lista, cargo) {
         <dl class="dato"><dt>Educación</dt><dd>${esc(d.nivel_educacional) || '—'}</dd>${d.formacion_tecnica ? `<dt>Formación</dt><dd>${esc(d.formacion_tecnica)}</dd>` : ''}<dt>Experiencia</dt><dd>${esc(d.experiencia) || '—'}</dd></dl>
       </div>`;
 }
+// ---------- 2: pedirle algo a un área (abre «Nueva solicitud» con su departamento) ----------
+const deptosDe = sala => (D.deptos_de_sala || {})[sala] || [];
+function bloquePedir(sala) {
+  const ds = deptosDe(sala); if (!ds.length) return '';
+  return `<div class="pedir">${ds.map(d => `<button class="btn-pedir" data-pedir="${d}">📨 Pedirle algo a ${esc(NOMBRE_DEPTO[d] || d)}</button>`).join('')}</div>`;
+}
+const enSigso = window.top !== window; // la oficina dentro del marco de SIGSO
+function abrirEnSigso(modulo) {
+  if (enSigso) window.parent.postMessage({ tipo: 'oficina-abrir', modulo }, location.origin);
+  else window.open('plataforma.html#/' + modulo, '_blank');
+}
+function pedirA(depto) {
+  // El formulario de SIGSO lo lee al abrirse y parte con ese departamento (o Soporte de plataformas).
+  try { localStorage.setItem('sigso_ns2_filtro', JSON.stringify({ depto, ts: Date.now() })); } catch (e) { /* sin almacenamiento */ }
+  abrirEnSigso('nueva_solicitud');
+  toast(`Pedido a ${NOMBRE_DEPTO[depto] || depto}`, enSigso ? 'Se abrió «Nueva solicitud» con ese departamento' : 'Se abrió «Nueva solicitud» en otra pestaña');
+}
+addEventListener('message', ev => {
+  if (ev.origin !== location.origin || !ev.data || ev.data.tipo !== 'oficina-sin-permiso') return;
+  toast('No tienes ese módulo', ev.data.modulo === 'nueva_solicitud' ? 'Pide a Administración el módulo «Nueva solicitud».' : 'Pide acceso a Administración.');
+});
+
+// ---------- 1: lo pendiente de un área (clic en su pizarra) ----------
+function abrirPendientes(sala, { volar = true } = {}) {
+  const s = salaPorId[sala], datos = D.pizarras ? D.pizarras[sala] : null;
+  salaActual = sala; personaActual = null;
+  const bloque = d => `<div class="pend">
+      <div class="pend-cab">${esc(NOMBRE_DEPTO[d.depto] || d.depto)}</div>
+      <div class="pend-nums">
+        <div><b>${d.abiertas}</b><span>abiertas</span></div>
+        <div class="${d.atrasadas ? 'rojo' : ''}"><b>${d.atrasadas}</b><span>atrasadas</span></div>
+        <div><b>${d.nuevas}</b><span>nuevas</span></div>
+        ${d.agenda_hoy !== undefined ? `<div class="${d.agenda_atrasados ? 'ambar' : ''}"><b>${d.agenda_hoy}</b><span>agenda hoy${d.agenda_atrasados ? ` · ${d.agenda_atrasados} atras.` : ''}</span></div>` : ''}
+      </div>
+      ${d.proximo ? `<p class="pend-prox">Próximo vencimiento: <b>${esc(d.proximo.titulo)}</b> en ${d.proximo.dias_habiles} ${d.proximo.dias_habiles === 1 ? 'día hábil' : 'días hábiles'}</p>` : ''}
+      <div class="pend-acc"><button data-abrir-modulo="${MODULO_DEPTO[d.depto]}">Abrir en SIGSO ›</button><button class="btn-pedir" data-pedir="${d.depto}">📨 Pedirle algo</button></div>
+    </div>`;
+  panel.innerHTML = `
+    <div class="cab"><span class="chip" style="background:${s.color}"></span>
+      <div><h2>Pizarra de ${esc(s.nombre)}</h2><small>Lo pendiente del área, desde SIGSO</small></div>
+      <button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
+    <div class="cuerpo">
+      ${datos ? datos.map(bloque).join('') : '<p class="sin-desc">Ingresa a SIGSO para ver lo pendiente de cada área.</p>'}
+      <p class="pend-nota">Son solo números: el detalle se abre en el módulo del área, con los permisos de siempre.</p>
+    </div>`;
+  panel.classList.add('abierto');
+  panel._texto = datos ? `${s.nombre}. ` + datos.map(d => `${NOMBRE_DEPTO[d.depto] || d.depto}: ${d.abiertas} solicitudes abiertas${d.atrasadas ? `, ${d.atrasadas} atrasadas` : ''}.`).join(' ') : '';
+  resaltar(); mostrarFlujos();
+  if (volar) { const v = vistaSala(sala); volarA(v.t, v.dist); }
+  hablar(panel._texto);
+}
+async function refrescarPizarras() {
+  if (D.modo !== 'real' || document.hidden || !innerWidth) return;
+  try { const r = await window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'getPizarrasOficina', {}); if (r && r.ok) { D.pizarras = r.data.pizarras; pintarPizarras(); } } catch (e) { /* se reintenta luego */ }
+}
+
+// ---------- 3: inducción ----------
+const fechaCorta = f => { const d = new Date(f); return isNaN(d) ? '' : d.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' }); };
+function bloqueInduccion(p) {
+  if (!p.real) return '';
+  if (p.puede_registrar_induccion) {
+    const pend = (p.inducciones || []).filter(i => i.estado !== 'COMPLETADA');
+    if (!p.recorrido) return `<div class="induccion"><b>🎓 Inducción</b><p>Todavía no hace el recorrido de inducción en la oficina.</p></div>`;
+    return `<div class="induccion ok"><b>🎓 Hizo el recorrido de inducción</b><p>El ${fechaCorta(p.recorrido.fecha)} · ${p.recorrido.areas} áreas recorridas y confirmó haber leído su descriptor.</p>
+      ${pend.length ? `<button data-registrar-induccion="${p.id}">Registrar ${pend.map(i => '«' + esc(i.item) + '»').join(' y ')} en Calidad</button>`
+        : ((p.inducciones || []).length ? '<p>✅ «Organigrama» y «Descriptor de cargo» ya están registrados en Calidad.</p>' : '<p class="sin-desc">Su ficha no tiene esos ítems de inducción.</p>')}</div>`;
+  }
+  return p.recorrido ? `<div class="induccion ok"><b>🎓 Hizo el recorrido de inducción</b><p>El ${fechaCorta(p.recorrido.fecha)}.</p></div>` : '';
+}
+let induccion = null;
+function iniciarInduccion() {
+  if (control) terminarControl();
+  cerrarPanel();
+  induccion = { salas: new Set(), inicio: Date.now() };
+  toast('🎓 Recorrido de inducción', 'Te mostramos cada área: qué hace, quién trabaja ahí y cómo se comunica. Al final, tu puesto y tu descriptor.', 6000);
+  iniciarTour();
+}
+function finalizarInduccion() {
+  const ind = induccion; induccion = null; detenerTour();
+  const yo = D.yo && personaPorId[D.yo.persona_id];
+  if (yo && yo.real && !yo.fantasma) abrirPersona(yo.id); else cerrarPanel();
+  const cuerpo = panel.querySelector('.cuerpo') || (panel.classList.add('abierto'), panel.innerHTML = '<div class="cuerpo"></div>', panel.querySelector('.cuerpo'));
+  const puede = D.modo === 'real' && yo && yo.real;
+  cuerpo.insertAdjacentHTML('afterbegin', `<div class="induccion fin">
+    <b>🎓 Terminaste el recorrido (${ind.salas.size} áreas).</b>
+    ${puede ? `<p>Revisa tu descriptor de cargo aquí abajo. Cuando lo hayas leído, confirma: quedará registrado y le llegará un aviso a tu jefatura.</p>
+      <button data-confirmar-induccion>✅ Confirmo que hice el recorrido y leí mi descriptor</button>`
+      : '<p>Para que quede registrado necesitas tu ficha en Calidad → Personas (y entrar con tu cuenta de SIGSO).</p>'}</div>`);
+  panel._induccion = ind;
+}
 const SALA_FANTASMA = { id: '', nombre: 'Recorre la oficina', color: '#8fb6ff', comunica: [] };
 function textoPersona(p) { // lo que se lee en voz alta
   const d = p.descriptor || {}, f = (d.funciones || []).slice(0, 3);
@@ -728,6 +869,8 @@ function abrirPersona(pid, { volar = true } = {}) {
         <dt>Reporta a</dt><dd>${jefe ? `<span class="enlace" data-persona="${jefe.id}">${esc(jefe.nombre)}</span><br><small>${esc(jefe.cargo)}</small>` : 'Directorio'}</dd>
         <dt>A su cargo</dt><dd>${aCargo.length ? aCargo.map(x => `<span class="enlace" data-persona="${x.id}">${esc(x.nombre)}</span>`).join(', ') : '—'}</dd>
       </dl>
+      ${bloquePedir(p.sala)}
+      ${bloqueInduccion(p)}
       ${bloqueOrdenar(p)}
       ${bloqueDescriptores(p, lista)}
       ${s.comunica.length ? `<h3>Con quién se comunica su área</h3><ul class="flujo">${s.comunica.map(c => filaFlujo(c, s)).join('')}</ul>` : ''}
@@ -744,6 +887,36 @@ function abrirPersona(pid, { volar = true } = {}) {
 }
 panel.addEventListener('click', e => {
   if (e.target.closest('[data-escuchar]')) { hablar(panel._texto || '', { forzar: true }); return; }
+  const pedir = e.target.closest('[data-pedir]'); if (pedir) { pedirA(pedir.dataset.pedir); return; }
+  const mod = e.target.closest('[data-abrir-modulo]'); if (mod) { abrirEnSigso(mod.dataset.abrirModulo); return; }
+  const pend = e.target.closest('[data-pendientes]'); if (pend) { abrirPendientes(pend.dataset.pendientes, { volar: false }); return; }
+  const conf = e.target.closest('[data-confirmar-induccion]');
+  if (conf) { // la persona confirma su recorrido: queda la evidencia y se avisa a su jefatura
+    const ind = panel._induccion; if (!ind) return;
+    conf.disabled = true; conf.textContent = 'Guardando…';
+    window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'registrarRecorridoOficina', { salas: [...ind.salas], duracion_seg: Math.round((Date.now() - ind.inicio) / 1000) })
+      .then(r => {
+        if (r && r.ok) { conf.textContent = '✅ Registrado'; toast('Inducción registrada', r.data.aviso_jefatura ? 'Le llegó un aviso a tu jefatura para registrar los ítems en Calidad.' : 'Quedó registrada (tu ficha no tiene jefatura asignada).'); }
+        else { conf.disabled = false; conf.textContent = 'Reintentar'; toast('No se pudo registrar', (r && r.message) || ''); }
+      }).catch(() => { conf.disabled = false; conf.textContent = 'Reintentar'; toast('No se pudo conectar con SIGSO'); });
+    return;
+  }
+  const reg = e.target.closest('[data-registrar-induccion]');
+  if (reg) { // la jefatura registra los ítems con la acción de siempre de Calidad
+    const p = personaPorId[reg.dataset.registrarInduccion]; if (!p) return;
+    reg.disabled = true; reg.textContent = 'Registrando…';
+    (async () => {
+      for (const i of (p.inducciones || []).filter(x => x.estado !== 'COMPLETADA')) {
+        const r = await window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'registrarInduccionSgc', {
+          persona_id: p.id, induccion_id: i.induccion_id, estado: 'COMPLETADA',
+          observaciones: 'Recorrido de inducción en la oficina virtual, completado el ' + fechaCorta(p.recorrido.fecha) + '.'
+        }).catch(() => null);
+        if (!r || !r.ok) { reg.disabled = false; reg.textContent = 'Reintentar'; toast('No se pudo registrar', (r && r.message) || ''); return; }
+      }
+      toast('Inducción registrada en Calidad', p.nombre); location.reload();
+    })();
+    return;
+  }
   const t = e.target.closest('[data-persona],[data-ir],[data-cerrar]'); if (!t) return;
   detenerTour();
   if (t.dataset.cerrar !== undefined) { cerrarPanel(); volarGeneral(); }
@@ -849,21 +1022,32 @@ pintarVoz();
 const tourEl = document.getElementById('tour'), DUR = 12000;
 let tour = null;
 function irPaso(i) {
+  if (induccion && i >= D.recorrido.length) { finalizarInduccion(); return; } // la inducción no da la vuelta: termina en tu puesto
   tour.i = (i + D.recorrido.length) % D.recorrido.length; tour.ini = performance.now();
   abrirSala(D.recorrido[tour.i]);
-  document.getElementById('tPaso').innerHTML = `<b>${tour.i + 1}/${D.recorrido.length}</b> ${esc(salaPorId[D.recorrido[tour.i]].nombre)}`;
+  if (induccion) induccion.salas.add(D.recorrido[tour.i]);
+  document.getElementById('tPaso').innerHTML = `<b>${induccion ? '🎓 ' : ''}${tour.i + 1}/${D.recorrido.length}</b> ${esc(salaPorId[D.recorrido[tour.i]].nombre)}`;
 }
 function iniciarTour() { tour = { i: 0, ini: 0, pausa: false }; tourEl.classList.add('activo'); document.getElementById('tPausa').textContent = '❚❚'; irPaso(0); }
-function detenerTour() { if (!tour) return; tour = null; tourEl.classList.remove('activo'); }
+function detenerTour(forzar = false) {
+  if (!tour) return;
+  if (induccion && !forzar) { // en la inducción, abrir algo para leer solo pausa el recorrido
+    if (!tour.pausa) { tour.pausa = true; tour.resto = performance.now() - tour.ini; document.getElementById('tPausa').textContent = '▶'; }
+    return;
+  }
+  if (induccion) { induccion = null; toast('Recorrido de inducción cancelado', 'Puedes volver a empezarlo con «🎓 Inducción».'); }
+  tour = null; tourEl.classList.remove('activo');
+}
 document.getElementById('bTour').onclick = iniciarTour;
 document.getElementById('tSig').onclick = () => irPaso(tour.i + 1);
 document.getElementById('tAnt').onclick = () => irPaso(tour.i - 1);
-document.getElementById('tSalir').onclick = () => { detenerTour(); cerrarPanel(); volarGeneral(); };
+document.getElementById('tSalir').onclick = () => { detenerTour(true); cerrarPanel(); volarGeneral(); };
 document.getElementById('tPausa').onclick = e => {
   tour.pausa = !tour.pausa; e.currentTarget.textContent = tour.pausa ? '▶' : '❚❚';
   if (tour.pausa) tour.resto = performance.now() - tour.ini; else tour.ini = performance.now() - (tour.resto || 0);
 };
-document.getElementById('bGeneral').onclick = () => { terminarControl(); detenerTour(); cerrarPanel(); volarGeneral(); };
+document.getElementById('bGeneral').onclick = () => { terminarControl(); detenerTour(true); cerrarPanel(); volarGeneral(); };
+document.getElementById('bInduccion').onclick = iniciarInduccion;
 document.getElementById('bComu').onclick = e => { verTodas = !verTodas; e.currentTarget.classList.toggle('on', verTodas); mostrarFlujos(); };
 
 // ---------- avisos breves ----------
@@ -1335,18 +1519,19 @@ function actualizarEstado() {
 
 // ---------- mouse ----------
 const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(), tip = document.getElementById('tip');
-const clicables = [...pisos]; for (const pj of Object.values(personas3D)) pj.traverse(o => { if (o.isMesh) clicables.push(o); });
+const clicables = [...pisos, ...Object.values(PIZARRAS).map(p => p.malla)]; for (const pj of Object.values(personas3D)) pj.traverse(o => { if (o.isMesh) clicables.push(o); });
 let abajo = null, hover = null;
 function tocado(e) {
   mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   ray.setFromCamera(mouse, camera);
-  const h = ray.intersectObjects(clicables, false).find(x => x.object.userData.persona || x.object.userData.sala);
+  const h = ray.intersectObjects(clicables, false).find(x => x.object.userData.persona || x.object.userData.sala || x.object.userData.pizarra);
   return h ? h.object.userData : null;
 }
 renderer.domElement.addEventListener('pointerdown', e => { abajo = [e.clientX, e.clientY]; });
 renderer.domElement.addEventListener('pointerup', e => {
   if (!abajo || Math.hypot(e.clientX - abajo[0], e.clientY - abajo[1]) > 5) return;
   const u = tocado(e);
+  if (u?.pizarra) { detenerTour(); abrirPendientes(u.pizarra, { volar: !control }); return; }
   if (control) { // controlando: clic en el piso = caminar hasta ahí; clic en alguien = ir hacia esa persona
     if (u?.persona && personas3D[u.persona] !== control.pj) { abrirPersona(u.persona, { volar: false }); irHaciaPersona(u.persona); return; }
     const pt = new THREE.Vector3();
@@ -1363,10 +1548,11 @@ renderer.domElement.addEventListener('pointermove', e => {
   const u = tocado(e);
   renderer.domElement.style.cursor = u ? 'pointer' : 'grab';
   if (u?.persona) { const p = personaPorId[u.persona]; tip.innerHTML = `<b>${esc(p.nombre)}</b> · ${esc(p.cargo)}`; }
+  else if (u?.pizarra) tip.innerHTML = `<b>Pizarra de ${esc(salaPorId[u.pizarra].nombre)}</b> · lo pendiente del área`;
   else if (u?.sala) tip.innerHTML = `<b>${esc(salaPorId[u.sala].nombre)}</b> · clic para entrar`;
   tip.style.display = u ? 'block' : 'none';
   tip.style.left = e.clientX + 14 + 'px'; tip.style.top = e.clientY + 14 + 'px';
-  const hs = u?.sala || (u?.persona && personaPorId[u.persona].sala) || null;
+  const hs = u?.sala || u?.pizarra || (u?.persona && personaPorId[u.persona].sala) || null;
   if (hs !== hover) { hover = hs; for (const m of pisos) m.material.opacity = m.userData.sala === salaActual ? 0.16 : (m.userData.sala === hover ? 0.09 : 0); }
 });
 addEventListener('resize', () => {
@@ -1385,6 +1571,8 @@ if (D.puede_ordenar && (D.sin_oficina || []).length) {
   b.onclick = abrirSinOficina;
 }
 if (D.puede_ordenar) { const b = document.getElementById('bFantasmas'); b.hidden = false; b.onclick = abrirFantasmas; }
+pintarPizarras();                              // pizarras con lo pendiente real de cada área
+setInterval(refrescarPizarras, 5 * 60 * 1000); // y se actualizan solas cada 5 minutos
 mostrarFlujos();
 const reloj = new THREE.Clock();
 // Calidad automática: en un computador lento se apaga la sombra ambiental (lo más pesado)
@@ -1408,7 +1596,7 @@ renderer.setAnimationLoop(() => {
     if (k >= 1) anim = null;
   }
   if (tour && !tour.pausa) {
-    const k = (ahora - tour.ini) / DUR;
+    const k = (ahora - tour.ini) / (induccion ? 18000 : DUR); // la inducción va más pausada
     document.getElementById('tBarra').style.width = Math.min(100, k * 100) + '%';
     if (k >= 1) irPaso(tour.i + 1);
   }

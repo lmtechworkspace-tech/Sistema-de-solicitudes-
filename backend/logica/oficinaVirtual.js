@@ -109,6 +109,10 @@ function getOficina(db, data, contexto) {
   });
   const misCorreos = [].concat(contexto.emails || [], contexto.email || []).map(normalizarEmail_).filter(Boolean);
   let yoId = '';
+  // Inducción: los recorridos confirmados y, para quien puede registrarlos, los ítems.
+  const recorridos = leerSeguro_(db, 'OFICINA_RECORRIDOS').filter((r) => esVerdadero_(r.confirmado));
+  const inducciones = leerSeguro_(db, 'SGC_INDUCCIONES');
+  const gobierna = Calidad.gobiernaSgc_(db, contexto);
 
   const personas = [];
   const sinOficina = [];
@@ -130,6 +134,16 @@ function getOficina(db, data, contexto) {
       descriptor: descs.length ? descs[0].d : null,
       descriptores: descs.map((x) => Object.assign({ cargo: x.cargo }, x.d))
     };
+    // Recorrido de inducción: la fecha la ve cualquiera; los ítems por registrar,
+    // solo su jefatura directa o quien gobierna Calidad (la misma regla de siempre).
+    const rec = recorridos.filter((r) => grupo.some((p) => p.persona_id === r.persona_id))
+      .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))[0];
+    if (rec) fila.recorrido = { fecha: rec.fecha, areas: listaJson_(rec.salas).length };
+    if (gobierna || misCorreos.indexOf(normalizarEmail_(principal.jefatura_email)) !== -1) {
+      fila.puede_registrar_induccion = true;
+      fila.inducciones = inducciones.filter((i) => i.persona_id === principal.persona_id && ITEMS_RECORRIDO.indexOf(i.item) !== -1)
+        .map((i) => ({ induccion_id: i.induccion_id, item: i.item, estado: i.estado, fecha: i.fecha }));
+    }
     grupo.forEach((p) => idPrincipal.set(p.persona_id, principal.persona_id));
     if (grupo.some((p) => misCorreos.indexOf(normalizarEmail_(p.usuario_email)) !== -1)) yoId = principal.persona_id;
     if (grupo.some((p) => fichaFantasma.has(p.persona_id))) { fila.fantasma = true; personas.push(fila); continue; }
@@ -157,8 +171,84 @@ function getOficina(db, data, contexto) {
   return {
     personas, puede_ordenar: ordenar, sin_oficina: ordenar ? sinOficina : [], salas: SALAS_OFICINA,
     yo: { persona_id: yoId, nombre: (miCuenta && miCuenta.nombre) || '' },
-    candidatos_fantasma: candidatos
+    candidatos_fantasma: candidatos,
+    pizarras: pizarras_(db), deptos_de_sala: DEPTOS_DE_SALA
   };
+}
+function listaJson_(v) { if (Array.isArray(v)) return v; try { const p = JSON.parse(v || '[]'); return Array.isArray(p) ? p : []; } catch (err) { return []; } }
+
+// ===========================================================================
+// Pizarras con lo pendiente de cada área (2026-11-26). Solo CONTEOS (nada de
+// detalle): solicitudes abiertas y atrasadas del departamento y su Agenda de
+// hoy. Cada oficina del plano es de uno o más departamentos de Solicitudes.
+// TECNICO = Soporte de plataformas (ítems sin departamento).
+// ===========================================================================
+const DEPTOS_DE_SALA = {
+  recepcion: ['COBRANZAS'], operativo: ['RRHH', 'CONTABILIDAD'], jefaturas: ['ADMINISTRACION'],
+  prevencion: ['PREVENCION'], plataformas: ['TECNICO'], podcast: ['MARKETING']
+};
+const ITEMS_RECORRIDO = ['Organigrama', 'Descriptor de cargo']; // lo que cubre el recorrido virtual
+const CERRADOS = ['S08', 'S09', 'S10', 'S11']; // Resuelta, Cerrada, Rechazada, Cancelada
+let cachePizarras_ = { ts: 0, db: null, v: null };
+function pizarras_(db, ahora = Date.now()) {
+  if (cachePizarras_.v && cachePizarras_.db === db && ahora - cachePizarras_.ts < 60000) return cachePizarras_.v;
+  const items = leerSeguro_(db, 'SUBSOLICITUDES');
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date(ahora));
+  let Agenda = null;
+  try { Agenda = require('./agendaDepto'); } catch (err) { Agenda = null; } // perezoso: evita ciclos al cargar
+  const porDepto = (clave) => {
+    const suyos = items.filter((i) => (clave === 'TECNICO' ? !i.depto : i.depto === clave) && CERRADOS.indexOf(i.estado) === -1);
+    const vence = (i) => {
+      if (i.fecha_comprometida) return new Date(i.fecha_comprometida).getTime();
+      const h = Number(i.sla_objetivo_horas);
+      return i.fecha_creacion && h > 0 ? new Date(i.fecha_creacion).getTime() + h * 3600000 : NaN;
+    };
+    const r = { abiertas: suyos.length, atrasadas: suyos.filter((i) => vence(i) < ahora).length, nuevas: suyos.filter((i) => i.estado === 'S01').length };
+    if (clave !== 'TECNICO' && Agenda && Agenda.calcularHoy_) {
+      try {
+        const h = Agenda.calcularHoy_(db, clave, hoy);
+        r.agenda_hoy = (h.resumen && h.resumen.por_enviar) || 0;
+        r.agenda_atrasados = (h.resumen && h.resumen.atrasados) || 0;
+        if (h.proximo) r.proximo = { titulo: h.proximo.titulo, dias_habiles: h.proximo.dias_habiles };
+      } catch (err) { /* área sin agenda configurada */ }
+    }
+    return r;
+  };
+  const v = {};
+  for (const [sala, deptos] of Object.entries(DEPTOS_DE_SALA)) v[sala] = deptos.map((d) => Object.assign({ depto: d }, porDepto(d)));
+  cachePizarras_ = { ts: ahora, db, v };
+  return v;
+}
+function getPizarras(db, data, contexto) {
+  if (!contexto) return { _validationError: true, message: 'Ingresa a SIGSO para ver la oficina.' };
+  return { pizarras: pizarras_(db) };
+}
+
+/** La persona confirma que terminó el recorrido de inducción; se avisa a su jefatura. */
+function registrarRecorrido(db, data, contexto) {
+  if (!contexto) return { _validationError: true, message: 'Ingresa a SIGSO para ver la oficina.' };
+  const misCorreos = [].concat(contexto.emails || [], contexto.email || []).map(normalizarEmail_).filter(Boolean);
+  const ficha = leerSeguro_(db, 'SGC_PERSONAS').find((p) => esVerdadero_(p.activa) && misCorreos.indexOf(normalizarEmail_(p.usuario_email)) !== -1);
+  if (!ficha) return { _validationError: true, message: 'Para registrar tu inducción necesitas tu ficha en Calidad → Personas. Pídesela al Encargado SGC.' };
+  const salas = [...new Set(listaJson_(data && data.salas).map(String))].filter((s) => SALAS_OFICINA.indexOf(s) !== -1);
+  if (salas.length < 6) return { _validationError: true, campo: 'salas', message: 'Te faltan áreas por recorrer: haz el recorrido de inducción completo.' };
+  const fecha = new Date().toISOString();
+  agregarFila_(db, 'OFICINA_RECORRIDOS', {
+    recorrido_id: crypto.randomUUID(), persona_id: ficha.persona_id, usuario_email: normalizarEmail_(ficha.usuario_email), fecha,
+    salas: JSON.stringify(salas), duracion_seg: Math.max(0, Math.min(36000, Math.round(Number(data && data.duracion_seg) || 0))), confirmado: true,
+    observaciones: 'Recorrido de inducción en la oficina virtual; confirma haber leído su descriptor de cargo.'
+  });
+  const jefe = normalizarEmail_(ficha.jefatura_email);
+  if (jefe) {
+    try {
+      require('./notificacionesApp').encolarLote(db, [{
+        destinatario: jefe, tipo: 'OFICINA_RECORRIDO', titulo: (ficha.nombre || 'Una persona de tu equipo') + ' completó el recorrido de inducción',
+        mensaje: 'Recorrió las ' + salas.length + ' áreas de la oficina virtual y confirmó haber leído su descriptor de cargo. Ábrela para registrar los ítems «Organigrama» y «Descriptor de cargo».',
+        modulo_id: 'oficina', texto_accion: 'Abrir la oficina', vidaHoras: 24 * 7
+      }]);
+    } catch (err) { /* el registro vale aunque el aviso falle */ }
+  }
+  return { fecha, areas: salas.length, aviso_jefatura: !!jefe };
 }
 function listaCorreos_(valor) {
   let l = valor;
@@ -327,4 +417,4 @@ function presencia(db, data, contexto, ahora = Date.now()) {
 }
 function reiniciarPresencia_() { PRESENCIA.clear(); BUZON.clear(); YO_CACHE.clear(); SUSCRIPTORES.clear(); } // pruebas
 
-module.exports = { getOficina, asignarPuesto, marcarFantasma, presencia, suscribir, reiniciarPresencia_, activarModuloEnCuentas_, salaSugerida_, SALAS_OFICINA };
+module.exports = { getOficina, getPizarras, registrarRecorrido, asignarPuesto, marcarFantasma, presencia, suscribir, reiniciarPresencia_, activarModuloEnCuentas_, salaSugerida_, SALAS_OFICINA };

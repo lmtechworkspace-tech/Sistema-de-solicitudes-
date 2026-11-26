@@ -141,6 +141,12 @@ window.OFICINA = {
   // El recorrido sigue el video: se entra por la salida (11) y se termina en la oficina 1.
   recorrido: ['recepcion', 'reuniones', 'comedor', 'operativo', 'prevencion', 'jefaturas', 'bano', 'podcast', 'almacen', 'plataformas']
 };
+// Qué departamento de Solicitudes atiende cada oficina (mismo mapa que el servidor;
+// TECNICO = Soporte de plataformas). Sirve para «Pedirle algo» y las pizarras.
+window.OFICINA.deptos_de_sala = {
+  recepcion: ['COBRANZAS'], operativo: ['RRHH', 'CONTABILIDAD'], jefaturas: ['ADMINISTRACION'],
+  prevencion: ['PREVENCION'], plataformas: ['TECNICO'], podcast: ['MARKETING']
+};
 // Rótulo corto sobre la cabeza (mientras no haya nombres reales).
 {
   const corto = { p9: 'Facturación y Cobranzas', p2a: 'Gerenta Adm. y Finanzas', p2b: 'Encargada de Adm.', p3a: 'Asist. Contabilidad', p3b: 'Asist. RR.HH.', p3c: 'Asist. RR.HH.',

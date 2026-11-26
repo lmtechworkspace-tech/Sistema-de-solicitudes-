@@ -281,6 +281,49 @@ test('canal en vivo por HTTP: pide sesión válida y entrega eventos', async () 
   }
 });
 
+test('pizarras: cuentan lo abierto y lo atrasado de cada área (solo números)', () => {
+  const db = db_();
+  sembrarTabla_(db, 'SUBSOLICITUDES', COLUMNAS.SUBSOLICITUDES, []);
+  const ayer = new Date(Date.now() - 86400000).toISOString(), manana = new Date(Date.now() + 86400000).toISOString();
+  const item = (id, depto, estado, fc) => agregarFila_(db, 'SUBSOLICITUDES', { subsolicitud_id: id, solicitud_id: 's' + id, depto, estado, fecha_comprometida: fc || '', fecha_creacion: ayer });
+  item('1', 'RRHH', 'S01', manana); item('2', 'RRHH', 'S05', ayer); item('3', 'CONTABILIDAD', 'S05', ayer);
+  item('4', 'RRHH', 'S09', ayer);           // cerrada: no cuenta
+  item('5', '', 'S02', manana);             // sin departamento = Soporte de plataformas
+  item('6', 'COBRANZAS', 'S08', ayer);      // resuelta: no cuenta
+  const p = Oficina.getOficina(db, {}, CTX_OPERATIVA).pizarras;
+  const rrhh = p.operativo.find((x) => x.depto === 'RRHH'), cont = p.operativo.find((x) => x.depto === 'CONTABILIDAD');
+  assert.equal(rrhh.abiertas, 2); assert.equal(rrhh.atrasadas, 1); assert.equal(rrhh.nuevas, 1);
+  assert.equal(cont.abiertas, 1); assert.equal(cont.atrasadas, 1);
+  assert.equal(p.plataformas[0].abiertas, 1); assert.equal(p.recepcion[0].abiertas, 0);
+  assert.ok(!JSON.stringify(p).includes('s1'), 'sin detalle de las solicitudes');
+});
+
+test('recorrido de inducción: lo confirma la persona, se avisa a su jefatura y solo ella ve los ítems por registrar', () => {
+  const db = db_();
+  ['OFICINA_RECORRIDOS', 'NOTIFICACIONES_APP', 'CUENTAS_PORTAL', 'SGC_INDUCCIONES'].forEach((h) => sembrarTabla_(db, h, COLUMNAS[h], []));
+  ['Organigrama', 'Descriptor de cargo', 'Política de Calidad'].forEach((item, i) =>
+    agregarFila_(db, 'SGC_INDUCCIONES', { induccion_id: 'i' + i, persona_id: 'con', item, estado: 'PENDIENTE' }));
+  const carla = { email: 'con@homepymes.cl', emails: ['con@homepymes.cl'], cuenta_id: 'c-carla', rol: 'DEV' };
+  const jefa = { email: 'gaf@homepymes.cl', emails: ['gaf@homepymes.cl'], cuenta_id: 'c-gaf', rol: 'DEV' };
+  const SALAS = ['recepcion', 'reuniones', 'comedor', 'operativo', 'prevencion', 'jefaturas', 'podcast', 'plataformas'];
+
+  assert.ok(Oficina.registrarRecorrido(db, { salas: ['recepcion', 'operativo'] }, carla)._validationError, 'recorrido incompleto');
+  assert.ok(Oficina.registrarRecorrido(db, { salas: SALAS }, { email: 'x@otro.cl', emails: ['x@otro.cl'] })._validationError, 'sin ficha');
+  const r = Oficina.registrarRecorrido(db, { salas: SALAS.concat('azotea'), duracion_seg: 240 }, carla);
+  assert.equal(r.areas, 8); assert.equal(r.aviso_jefatura, true);
+  const aviso = leerFilas_(db, 'NOTIFICACIONES_APP', COLUMNAS.NOTIFICACIONES_APP)[0];
+  assert.equal(aviso.destinatario_email, 'gaf@homepymes.cl');
+  assert.match(aviso.titulo, /Carla Contable completó el recorrido/);
+
+  const deJefa = Oficina.getOficina(db, {}, jefa).personas.find((p) => p.persona_id === 'con');
+  assert.equal(deJefa.recorrido.areas, 8);
+  assert.equal(deJefa.puede_registrar_induccion, true);
+  assert.deepEqual(deJefa.inducciones.map((i) => i.item).sort(), ['Descriptor de cargo', 'Organigrama']);
+  const deOtra = Oficina.getOficina(db, {}, CTX_OPERATIVA).personas.find((p) => p.persona_id === 'con');
+  assert.ok(deOtra.recorrido, 'la fecha del recorrido la ve cualquiera');
+  assert.ok(!deOtra.puede_registrar_induccion && !deOtra.inducciones, 'los ítems solo su jefatura o Calidad');
+});
+
 test('las acciones están en el router y piden sesión', async () => {
   assert.equal(typeof ACCIONES.getOficinaVirtual, 'function');
   assert.equal(typeof ACCIONES.asignarPuestoOficina, 'function');

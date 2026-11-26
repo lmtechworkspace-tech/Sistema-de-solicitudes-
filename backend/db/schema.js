@@ -470,6 +470,12 @@ const COLUMNAS = {
   OFICINA_FANTASMAS: [
     'fantasma_id', 'persona_id', 'cuenta_id', 'creado_por', 'fecha', 'activa'
   ],
+  // Recorrido de inducción en la oficina virtual: la persona lo confirma al
+  // terminar (evidencia ISO 7.2/7.3); los ítems de SGC_INDUCCIONES los sigue
+  // registrando su jefatura o el Encargado SGC.
+  OFICINA_RECORRIDOS: [
+    'recorrido_id', 'persona_id', 'usuario_email', 'fecha', 'salas', 'duracion_seg', 'confirmado', 'observaciones'
+  ],
   // Carpeta digital de la persona (CV, titulo, contrato, certificados...).
   SGC_PERSONA_DOCUMENTOS: [
     'doc_id', 'persona_id', 'tipo', 'nombre',

@@ -1565,6 +1565,14 @@
   // solicitudes) se leen mejor angostos y centrados -- por eso el ancho del
   // <main> se adapta al modulo en vez de ser fijo.
   var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad', 'hompy', 'finanzas', 'portal_clientes', 'oficina'].concat(IDS_DEPARTAMENTO);
+  // Oficina virtual (2026-11-26): desde su marco pide abrir un módulo (p. ej. «Pedirle
+  // algo» abre Nueva solicitud). Solo del mismo origen, y solo si la cuenta lo tiene.
+  window.addEventListener('message', function (ev) {
+    if (ev.origin !== location.origin || !ev.data || ev.data.tipo !== 'oficina-abrir') return;
+    var m = String(ev.data.modulo || '');
+    if (puedeAbrirModulo_(m)) mostrarModulo_(m);
+    else if (ev.source) ev.source.postMessage({ tipo: 'oficina-sin-permiso', modulo: m }, location.origin);
+  });
   // 2026-10-19: módulos que no son v2 pero igual van a pantalla completa
   // (Credenciales: la tabla de claves de clientes aprovecha todo el ancho; Finanzas: la planilla
   // del banco y sus reportes usan toda la pantalla, 2026-10-22).

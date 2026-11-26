@@ -55,7 +55,8 @@ async function cargar() {
       jefatura: p.jefatura_persona_id || null, corto: corto(p.nombre),
       genero: t.genero || null, audifonos: !!t.audifonos,
       tarea: t.tarea || (d && d.funciones && d.funciones[0]) || p.cargo,
-      descriptor: d, descriptores: p.descriptores || []
+      descriptor: d, descriptores: p.descriptores || [],
+      recorrido: p.recorrido || null, puede_registrar_induccion: !!p.puede_registrar_induccion, inducciones: p.inducciones || null
     };
   });
   // El podcast recibe invitados que no son personal: si nadie del equipo está
@@ -67,6 +68,8 @@ async function cargar() {
   D.sin_oficina = r.data.sin_oficina || [];
   D.yo = r.data.yo || { persona_id: '', nombre: '' };          // a quién controla «Moverme»
   D.candidatos_fantasma = r.data.candidatos_fantasma || [];
+  D.pizarras = r.data.pizarras || null;            // pendientes de cada área (conteos)
+  if (r.data.deptos_de_sala) D.deptos_de_sala = r.data.deptos_de_sala;
   return 'Datos de SIGSO · Calidad → Personas';
 }
 

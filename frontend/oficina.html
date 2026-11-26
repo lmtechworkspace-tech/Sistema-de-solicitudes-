@@ -102,6 +102,25 @@
   [hidden] { display:none !important; }
   /* fantasmas, control del mono, voz, búsqueda, minimapa */
   .nombre.fantasma { background:rgba(120,160,230,.75); }
+  .pedir { display:flex; flex-wrap:wrap; gap:6px; margin:14px 0 4px; }
+  .btn-pedir { font:inherit; font-size:13px; font-weight:600; border:0; border-radius:10px; padding:8px 12px; cursor:pointer; background:#eef4ff; color:#1e40af; }
+  .btn-pedir:hover { background:#dbe7ff; }
+  .enlace-pizarra { font:inherit; font-size:13px; border:1px solid var(--borde); background:#fff; border-radius:10px; padding:8px 12px; cursor:pointer; margin-top:6px; }
+  .pend { border:1px solid var(--borde); border-radius:14px; padding:12px 14px; margin-top:12px; background:#fff; }
+  .pend-cab { font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--suave); }
+  .pend-nums { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-top:8px; }
+  .pend-nums div { background:#f6f8fa; border-radius:10px; padding:8px 4px; text-align:center; }
+  .pend-nums b { display:block; font-size:22px; } .pend-nums span { font-size:11px; color:var(--suave); }
+  .pend-nums .rojo { background:#fef2f2; color:#b91c1c; } .pend-nums .ambar { background:#fffbeb; color:#b45309; }
+  .pend-prox { font-size:13px; margin:10px 0 0 !important; }
+  .pend-acc { display:flex; gap:6px; margin-top:10px; }
+  .pend-acc button:first-child { font:inherit; font-size:13px; border:1px solid var(--borde); background:#fff; border-radius:10px; padding:8px 12px; cursor:pointer; }
+  .pend-nota { font-size:12px !important; color:var(--suave); margin-top:14px !important; }
+  .induccion { margin-top:14px; border-radius:12px; padding:10px 12px; background:#f6f8fa; font-size:13px; }
+  .induccion p { font-size:13px !important; margin:4px 0 0 !important; }
+  .induccion.ok { background:#f0fdf4; } .induccion.fin { background:#eef4ff; border:1px solid #c9dafc; margin-top:8px; }
+  .induccion button { font:inherit; font-size:13px; font-weight:600; border:0; border-radius:10px; padding:9px 12px; margin-top:8px; cursor:pointer; background:#2563eb; color:#fff; }
+  .induccion button:disabled { opacity:.7; cursor:default; }
   .nombre.envivo { background:#16a34a; color:#fff; font-size:12px; padding:4px 10px; box-shadow:0 0 0 3px rgba(22,163,74,.25); }
   .envivo-txt { color:#15803d; font-weight:650; }
   .interaccion .envivo-txt { color:#bbf7d0; font-size:11px; margin-left:4px; }
@@ -149,6 +168,7 @@
   <div class="marca"><div class="logo">H</div><div><b>Oficina virtual</b><span id="empresa"></span></div></div>
   <div class="grupo">
     <button class="btn prim" id="bTour">▶ Recorrido guiado</button>
+    <button class="btn" id="bInduccion" title="Recorrido de inducción para quien llega: queda registrado en Calidad">🎓 Inducción</button>
     <button class="btn" id="bGeneral">⌂ Vista general</button>
     <button class="btn" id="bComu">⇄ Ver comunicaciones</button>
     <button class="btn" id="bMover" title="Tomar el control de tu mono (tecla M)">🎮 <span>Moverme</span></button>

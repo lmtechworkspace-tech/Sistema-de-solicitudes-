@@ -392,10 +392,20 @@
     if (!e.enviando) enviar(ev.target);
   });
 
+  // Oficina virtual: «Pedirle algo a X» deja el departamento elegido (dura 2 min) y
+  // el formulario parte filtrado en él (o en Soporte de plataformas: TECNICO).
+  function prefiltroOficina_() {
+    try {
+      var v = JSON.parse(localStorage.getItem('sigso_ns2_filtro') || 'null');
+      localStorage.removeItem('sigso_ns2_filtro');
+      if (v && v.depto && Date.now() - v.ts < 120000) { e.paso = 'destino'; e.depto = null; e.servicio = null; e.q = ''; e.filtro = String(v.depto); }
+    } catch (x) { /* sin almacenamiento */ }
+  }
   function montar() {
     var s = seccion();
     if (!s) return;
     s.classList.add('sx2', 'ns2');
+    prefiltroOficina_();
     pintar();
     cargarCatalogo().then(pintar);
   }
