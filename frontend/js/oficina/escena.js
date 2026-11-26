@@ -638,10 +638,14 @@ function bloqueOrdenar(p) { // solo quien administra Calidad: cambiar a la perso
   return `<div class="ordenar"><label>Se sienta en <select data-asignar="${p.id}">${OPCIONES_SALA.replace(`value="${p.sala}"`, `value="${p.sala}" selected`)}</select></label>
     <small>${p.sala_asignada ? 'Asignada a mano' : 'Sugerida por su cargo'}</small></div>`;
 }
-function bloqueDescriptor(d, lista) {
+function bloqueDescriptores(p, lista) { // con dos cargos, un descriptor por cargo
+  const varios = (p.descriptores || []).length > 1 ? p.descriptores : null;
+  return varios ? varios.map(d => bloqueDescriptor(d, lista, d.cargo)).join('') : bloqueDescriptor(p.descriptor, lista);
+}
+function bloqueDescriptor(d, lista, cargo) {
   if (!d) return `<div class="descriptor"><div class="desc-cab">Descriptor de cargo</div><p class="sin-desc">Todavía no tiene un descriptor de cargo vigente en Calidad → Personas.</p></div>`;
   return `<div class="descriptor">
-        <div class="desc-cab">Descriptor de cargo${d.version ? ` · versión ${esc(d.version)}` : ''}</div>
+        <div class="desc-cab">Descriptor de cargo${cargo ? ` · ${esc(cargo)}` : ''}${d.version ? ` · versión ${esc(d.version)}` : ''}</div>
         <h3>Objetivo del cargo</h3><p>${esc(d.objetivo) || '—'}</p>
         <h3>Funciones</h3>${lista(d.funciones)}
         <h3>Responsabilidades</h3>${lista(d.responsabilidades)}
@@ -668,7 +672,7 @@ function abrirPersona(pid) {
         <dt>A su cargo</dt><dd>${aCargo.length ? aCargo.map(x => `<span class="enlace" data-persona="${x.id}">${esc(x.nombre)}</span>`).join(', ') : '—'}</dd>
       </dl>
       ${bloqueOrdenar(p)}
-      ${bloqueDescriptor(p.descriptor, lista)}
+      ${bloqueDescriptores(p, lista)}
       ${s.comunica.length ? `<h3>Con quién se comunica su área</h3><ul class="flujo">${s.comunica.map(c => filaFlujo(c, s)).join('')}</ul>` : ''}
     </div>`;
   panel.classList.add('abierto');

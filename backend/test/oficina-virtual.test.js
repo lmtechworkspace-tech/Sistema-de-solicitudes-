@@ -99,6 +99,32 @@ test('una persona operativa no puede ordenar la oficina, y no se aceptan oficina
   assert.ok(Oficina.getOficina(db, {}, null)._validationError);
 });
 
+test('una persona con dos cargos (dos fichas, mismo correo) aparece UNA vez, con ambos cargos y descriptores', () => {
+  const db = db_();
+  // Camila: dos fichas con el mismo correo; la prevencionista le reporta a la ficha "secundaria"
+  persona(db, 'cam1', 'Camila Pérez', 'Encargada de Prevención', { usuario_email: 'camila@homepymes.cl' });
+  persona(db, 'cam2', 'Camila Pérez', 'Coordinadora de Pausas Activas', { usuario_email: 'camila@homepymes.cl' });
+  persona(db, 'pre2', 'Ana Riesgos', 'Prevencionista de Riesgos', { jefatura_email: 'camila@homepymes.cl' });
+  agregarFila_(db, 'SGC_DESCRIPTORES', { descriptor_id: 'dc1', persona_id: 'cam1', version: '1', objetivo: 'Prevenir accidentes.', vigente: true });
+  agregarFila_(db, 'SGC_DESCRIPTORES', { descriptor_id: 'dc2', persona_id: 'cam2', version: '1', objetivo: 'Coordinar pausas.', vigente: true });
+  const r = Oficina.getOficina(db, {}, CTX_OPERATIVA);
+  const camilas = r.personas.filter((p) => p.nombre === 'Camila Pérez');
+  assert.equal(camilas.length, 1);
+  assert.equal(camilas[0].sala_id, 'prevencion');
+  assert.equal(camilas[0].cargo, 'Encargada de Prevención · Coordinadora de Pausas Activas');
+  assert.deepEqual(camilas[0].descriptores.map((d) => d.objetivo), ['Prevenir accidentes.', 'Coordinar pausas.']);
+  assert.equal(r.personas.find((p) => p.persona_id === 'pre2').jefatura_persona_id, camilas[0].persona_id);
+  assert.equal(Oficina.salaSugerida_('Practicante de Prevención de Riesgos'), 'prevencion');
+  assert.equal(Oficina.salaSugerida_('Practicante Administración de Plataformas'), 'plataformas');
+
+  // asignarla por una ficha la mueve entera, y no queda otro puesto viejo de la otra ficha
+  Oficina.asignarPuesto(db, { persona_id: 'cam2', sala_id: 'jefaturas' }, CTX_ADM);
+  Oficina.asignarPuesto(db, { persona_id: 'cam1', sala_id: 'operativo' }, CTX_ADM);
+  const despues = Oficina.getOficina(db, {}, CTX_OPERATIVA).personas.filter((p) => p.nombre === 'Camila Pérez');
+  assert.equal(despues.length, 1);
+  assert.equal(despues[0].sala_id, 'operativo');
+});
+
 test('las acciones están en el router y piden sesión', async () => {
   assert.equal(typeof ACCIONES.getOficinaVirtual, 'function');
   assert.equal(typeof ACCIONES.asignarPuestoOficina, 'function');

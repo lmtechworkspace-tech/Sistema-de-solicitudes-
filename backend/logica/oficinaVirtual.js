@@ -31,9 +31,9 @@ const SALAS_OFICINA = ['recepcion', 'reuniones', 'operativo', 'jefaturas', 'plat
 
 // Sugerencia por cargo, en orden: la primera que calza gana.
 const REGLAS_CARGO = [
+  [/prevenci|riesgo/i, 'prevencion'], // antes que «practicante»: la practicante de Prevención va a Prevención
   [/practicante|plataforma/i, 'plataformas'],
   [/podcast|entrevist/i, 'podcast'],
-  [/prevenci/i, 'prevencion'],
   [/gerent[ea].*(administraci|finanz)|encargad[ao]\s+de\s+administraci|jef[ea]\s+de\s+administraci/i, 'jefaturas'],
   [/factura|cobranza|recepci/i, 'recepcion'],
   [/contab|contador|rr\.?\s*hh|recursos\s+humanos|remuneraci|personal/i, 'operativo']
@@ -72,27 +72,50 @@ function getOficina(db, data, contexto) {
   const fichaPorEmail = new Map();
   fichas.forEach((p) => { const e = normalizarEmail_(p.usuario_email); if (e && !fichaPorEmail.has(e)) fichaPorEmail.set(e, p.persona_id); });
 
+  const formato = (d) => (d ? {
+    version: d.version || '', objetivo: d.objetivo || '',
+    funciones: lista_(null, d.funciones),
+    responsabilidades: lista_(d.items_responsabilidades, d.responsabilidades),
+    habilidades: lista_(d.items_habilidades, d.habilidades),
+    nivel_educacional: d.nivel_educacional || '', formacion_tecnica: d.formacion_tecnica || '', experiencia: d.experiencia || ''
+  } : null);
+
+  // Una persona con dos cargos tiene DOS fichas con el mismo correo (v14.0): en
+  // la oficina es UNA sola persona, con todos sus cargos y descriptores.
+  const grupos = new Map();
+  for (const p of fichas) {
+    const clave = normalizarEmail_(p.usuario_email) || ('id:' + p.persona_id);
+    if (!grupos.has(clave)) grupos.set(clave, []);
+    grupos.get(clave).push(p);
+  }
   const personas = [];
   const sinOficina = [];
-  for (const p of fichas) {
-    const asignada = puestoDe.get(p.persona_id) || '';
-    const sugerida = p.tipo === 'EXT' ? '' : salaSugerida_(p.cargo);
-    const sala = SALAS_OFICINA.indexOf(asignada) !== -1 ? asignada : sugerida;
-    const d = descriptores.find((x) => x.persona_id === p.persona_id);
+  const idPrincipal = new Map();
+  for (const grupo of grupos.values()) {
+    const conPuesto = grupo.find((p) => SALAS_OFICINA.indexOf(puestoDe.get(p.persona_id)) !== -1);
+    const conSugerida = grupo.find((p) => p.tipo !== 'EXT' && salaSugerida_(p.cargo));
+    const principal = conPuesto || conSugerida || grupo[0];
+    const asignada = conPuesto ? puestoDe.get(conPuesto.persona_id) : '';
+    const sala = asignada || (conSugerida ? salaSugerida_(conSugerida.cargo) : '');
+    // primero el cargo de la ficha principal, después los demás
+    const orden = [principal].concat(grupo.filter((p) => p !== principal));
+    const cargos = orden.map((p) => String(p.cargo || '').trim()).filter((c, i, a) => c && a.indexOf(c) === i);
+    const descs = orden.map((p) => ({ cargo: p.cargo || '', d: formato(descriptores.find((x) => x.persona_id === p.persona_id)) })).filter((x) => x.d);
     const fila = {
-      persona_id: p.persona_id, nombre: p.nombre || '', cargo: p.cargo || '',
+      persona_id: principal.persona_id, nombre: principal.nombre || '', cargo: cargos.join(' · '),
       sala_id: sala, sala_asignada: !!asignada,
-      jefatura_persona_id: fichaPorEmail.get(normalizarEmail_(p.jefatura_email)) || '',
-      descriptor: d ? {
-        version: d.version || '', objetivo: d.objetivo || '',
-        funciones: lista_(null, d.funciones),
-        responsabilidades: lista_(d.items_responsabilidades, d.responsabilidades),
-        habilidades: lista_(d.items_habilidades, d.habilidades),
-        nivel_educacional: d.nivel_educacional || '', formacion_tecnica: d.formacion_tecnica || '', experiencia: d.experiencia || ''
-      } : null
+      jefatura_persona_id: fichaPorEmail.get(normalizarEmail_(principal.jefatura_email)) || '',
+      descriptor: descs.length ? descs[0].d : null,
+      descriptores: descs.map((x) => Object.assign({ cargo: x.cargo }, x.d))
     };
-    if (sala) personas.push(fila); else sinOficina.push({ persona_id: p.persona_id, nombre: fila.nombre, cargo: fila.cargo });
+    grupo.forEach((p) => idPrincipal.set(p.persona_id, principal.persona_id));
+    if (sala) personas.push(fila); else sinOficina.push({ persona_id: principal.persona_id, nombre: fila.nombre, cargo: fila.cargo });
   }
+  // la jefatura apunta a la persona (su ficha principal), y nadie se reporta a sí mismo
+  personas.forEach((f) => {
+    const jefe = idPrincipal.get(f.jefatura_persona_id) || '';
+    f.jefatura_persona_id = jefe === f.persona_id ? '' : jefe;
+  });
   personas.sort((a, b) => a.nombre.localeCompare(b.nombre));
   const ordenar = puedeOrdenar_(db, contexto);
   return { personas, puede_ordenar: ordenar, sin_oficina: ordenar ? sinOficina : [], salas: SALAS_OFICINA };
@@ -107,7 +130,10 @@ function asignarPuesto(db, data, contexto) {
   if (!ficha) return { _validationError: true, campo: 'persona_id', message: 'No encontré a esa persona en Calidad → Personas.' };
   if (salaId && SALAS_OFICINA.indexOf(salaId) === -1) return { _validationError: true, campo: 'sala_id', message: 'Esa oficina no está en el plano.' };
   const ahora = new Date().toISOString();
-  leerSeguro_(db, 'OFICINA_PUESTOS').filter((p) => p.persona_id === personaId && esVerdadero_(p.activa))
+  // la persona puede tener más de una ficha (dos cargos): se limpia el puesto de todas
+  const email = normalizarEmail_(ficha.usuario_email);
+  const suyas = new Set(leerSeguro_(db, 'SGC_PERSONAS').filter((p) => p.persona_id === personaId || (email && normalizarEmail_(p.usuario_email) === email)).map((p) => p.persona_id));
+  leerSeguro_(db, 'OFICINA_PUESTOS').filter((p) => suyas.has(p.persona_id) && esVerdadero_(p.activa))
     .forEach((p) => actualizarFilaPorId_(db, 'OFICINA_PUESTOS', 'puesto_id', p.puesto_id, { activa: false }));
   if (salaId) {
     agregarFila_(db, 'OFICINA_PUESTOS', {

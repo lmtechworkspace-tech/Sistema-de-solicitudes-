@@ -52,7 +52,7 @@ async function cargar() {
       jefatura: p.jefatura_persona_id || null, corto: corto(p.nombre),
       genero: t.genero || null, audifonos: !!t.audifonos,
       tarea: t.tarea || (d && d.funciones && d.funciones[0]) || p.cargo,
-      descriptor: d
+      descriptor: d, descriptores: p.descriptores || []
     };
   });
   // El podcast recibe invitados que no son personal: si nadie del equipo está
