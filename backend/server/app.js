@@ -16,7 +16,8 @@
  */
 
 const http = require('node:http');
-const { ejecutarAccion } = require('./router');
+const { ejecutarAccion, resolverContextoPortal_ } = require('./router');
+const OficinaVirtual = require('../logica/oficinaVirtual');
 const { VERSION_BACKEND } = require('../logica/sistema');
 const ArchivosSolicitud = require('../logica/archivosSolicitud');
 const Asistente = require('../logica/asistente');
@@ -106,6 +107,30 @@ async function manejar(req, res, db) {
     const { status, body } = await ejecutarAccion(db, cuerpo.action, cuerpo.data, { ip: ipCliente_(req) });
     const ms = Math.round(Number(process.hrtime.bigint() - inicio) / 1e5) / 10;
     return responderJson(res, status, body, ms);
+  }
+
+  // Oficina virtual en vivo (2026-11-26): canal abierto por el que el servidor
+  // empuja a cada oficina la posición de quienes mueven su mono, apenas llega.
+  // Mismo modelo que el Asistente: POST con portal_token en el cuerpo (nunca en
+  // la URL) y respuesta text/event-stream. Un comentario cada 15 s lo mantiene vivo.
+  if (req.method === 'POST' && ruta === '/v1/oficina/vivo') {
+    if (!db) return responderJson(res, 500, { ok: false, error: 'Servidor sin base de datos configurada' });
+    const cuerpo = await leerCuerpo_(req);
+    const contexto = resolverContextoPortal_(db, cuerpo.portal_token);
+    if (!contexto) return responderJson(res, 403, { ok: false, error: 'forbidden', message: 'Sesión inválida o expirada. Ingresa de nuevo.' });
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+    });
+    const emitir = (ev) => { if (!res.writableEnded && !res.destroyed) res.write('data: ' + JSON.stringify(ev) + '\n\n'); };
+    const cerrar = OficinaVirtual.suscribir(db, contexto, emitir);
+    const latido = setInterval(() => { if (!res.writableEnded && !res.destroyed) res.write(': ping\n\n'); }, 15000);
+    res.on('close', () => { clearInterval(latido); cerrar(); });
+    return;
   }
 
   // Asistente SIGSO (2026-11-11): la respuesta llega EN VIVO (text/event-stream,

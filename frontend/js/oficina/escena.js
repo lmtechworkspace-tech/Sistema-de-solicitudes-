@@ -918,6 +918,7 @@ function iniciarControl() {
   const et = new CSS2DObject(el); et.position.set(0, origen === 'fantasma' ? 2.75 : 2.05, 0); pj.add(et);
   control = { pj, origen, sentadoPj, f, et, destino: null, ruta: null, salaPisada: undefined, previo: pj.position.clone(), cerca: null };
   document.body.classList.add('controlando');
+  ultEnviado = null; ultimaPresencia = 0; // que los demás te vean de inmediato
   bMover.classList.add('on'); bMover.querySelector('span').textContent = 'Dejar de moverme';
   ayudaEl.innerHTML = '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> o flechas para caminar · <kbd>Shift</kbd> correr · clic en el piso para ir · <kbd>E</kbd> saludar · <kbd>Esc</kbd> salir';
   volarA(pj.position.clone().setY(1), 9, 1.2);
@@ -1103,47 +1104,124 @@ function decirRemoto(r, texto) {
   r.gl.textContent = texto; r.gl.classList.add('visible', 'hablando'); clearTimeout(r.gl._t);
   r.gl._t = setTimeout(() => r.gl.classList.remove('visible', 'hablando'), 4500);
 }
-function aplicarPresencia(d) {
-  const vistos = new Set();
-  for (const o of d.otros || []) {
-    if (o.persona_id && D.yo && o.persona_id === D.yo.persona_id) continue; // yo mismo en otra pestaña
-    let r = remotos.get(o.clave);
-    if (!r) { r = crearRemoto(o); if (!r) continue; remotos.set(o.clave, r); toast(`🟢 ${o.nombre} entró a la oficina`, 'Se está moviendo ahora mismo', 2500); }
-    vistos.add(o.clave);
-    r.obj = { x: o.x, z: o.z, ry: o.ry }; r.mov = o.mov;
+// Cada remoto guarda su última posición conocida y su velocidad: entre un dato
+// y el siguiente se PREDICE dónde va (sigue caminando), así se ve continuo.
+function registrarPos(r, o, ahora) {
+  const ult = r.ult;
+  if (ult) {
+    const dts = (ahora - ult.t) / 1000;
+    if (dts > 0.04 && dts < 2.5 && o.mov) {
+      let vx = (o.x - ult.x) / dts, vz = (o.z - ult.z) / dts; const v = Math.hypot(vx, vz);
+      if (v > 4.5) { vx *= 4.5 / v; vz *= 4.5 / v; }
+      r.vel = { x: vx, z: vz };
+    } else r.vel = { x: 0, z: 0 };
+  } else r.vel = { x: 0, z: 0 };
+  r.ult = { x: o.x, z: o.z, ry: o.ry, t: ahora }; r.mov = o.mov;
+}
+function ponerRemoto(o) {
+  if (o.persona_id && D.yo && o.persona_id === D.yo.persona_id) return; // yo mismo en otra pestaña
+  let r = remotos.get(o.clave);
+  if (!r) {
+    r = crearRemoto(o); if (!r) return;
+    remotos.set(o.clave, r);
+    toast(`🟢 ${o.nombre} entró a la oficina`, 'Se está moviendo ahora mismo', 2500);
   }
-  for (const [k, r] of remotos) if (!vistos.has(k)) { quitarRemoto(r); remotos.delete(k); }
-  for (const s of d.saludos || []) {
-    toast(`👋 ${s.nombre} te saluda`, control ? 'Acércate y apreta E para responderle' : 'Apreta «Moverme» para ir a saludar');
-    hablar(`${s.nombre} te saluda`, { forzar: true });
-    const r = remotos.get(s.de); if (r) { K.saludar(r.pj, reloj.elapsedTime); decirRemoto(r, '¡Hola! 👋'); }
-  }
+  registrarPos(r, o, performance.now());
   actualizarEstado();
 }
+function sacarRemoto(clave) { const r = remotos.get(clave); if (!r) return; quitarRemoto(r); remotos.delete(clave); actualizarEstado(); }
+function recibirSaludo(s) {
+  toast(`👋 ${s.nombre} te saluda`, control ? 'Acércate y apreta E para responderle' : 'Apreta «Moverme» para ir a saludar');
+  hablar(`${s.nombre} te saluda`, { forzar: true });
+  const r = remotos.get(s.de); if (r) { K.saludar(r.pj, reloj.elapsedTime); decirRemoto(r, '¡Hola! 👋'); }
+}
+function aplicarPresencia(d) { // lista completa (al abrir el canal, o sin canal)
+  const vistos = new Set((d.otros || []).map(o => o.clave));
+  for (const o of d.otros || []) ponerRemoto(o);
+  for (const k of [...remotos.keys()]) if (!vistos.has(k)) sacarRemoto(k);
+  for (const s of d.saludos || []) recibirSaludo(s);
+  actualizarEstado();
+}
+
+// --- canal en vivo: el servidor empuja cada cambio apenas llega ---
+const canal = { abierto: false, abriendo: false, fallas: 0, control: null, ocultoDesde: 0 };
+async function abrirCanal() {
+  if (canal.abierto || canal.abriendo || D.modo !== 'real') return;
+  let token = null; try { token = localStorage.getItem('sigso_portal_token'); } catch (e) { /* sin almacenamiento */ }
+  if (!token) return;
+  canal.abriendo = true; canal.control = new AbortController();
+  const url = window.SIGSO_CONFIG.NODE_API_URL.replace(/\/v1\/accion$/, '/v1/oficina/vivo');
+  try {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ portal_token: token }), signal: canal.control.signal });
+    if (!r.ok || !r.body) throw new Error('canal ' + r.status);
+    canal.abierto = true; canal.abriendo = false; canal.fallas = 0;
+    const lector = r.body.getReader(), dec = new TextDecoder(); let resto = '';
+    for (;;) {
+      const { value, done } = await lector.read(); if (done) break;
+      resto += dec.decode(value, { stream: true });
+      let i;
+      while ((i = resto.indexOf('\n\n')) !== -1) {
+        const bloque = resto.slice(0, i); resto = resto.slice(i + 2);
+        const linea = bloque.split('\n').find(l => l.startsWith('data: ')); if (!linea) continue;
+        let ev; try { ev = JSON.parse(linea.slice(6)); } catch (e) { continue; }
+        if (ev.tipo === 'estado') aplicarPresencia(ev);
+        else if (ev.tipo === 'pos') ponerRemoto(ev);
+        else if (ev.tipo === 'sale') sacarRemoto(ev.clave);
+        else if (ev.tipo === 'saludo') recibirSaludo(ev);
+      }
+    }
+  } catch (e) { canal.fallas++; }
+  canal.abierto = false; canal.abriendo = false;
+}
+function cerrarCanal() { if (canal.control) canal.control.abort(); canal.abierto = false; }
+// Vigila el canal: lo reabre si se corta, y lo cierra si la oficina está oculta un rato.
+setInterval(() => {
+  if (D.modo !== 'real') return;
+  const oculta = (document.hidden && !control) || !innerWidth;
+  if (oculta) { canal.ocultoDesde = canal.ocultoDesde || Date.now(); if (Date.now() - canal.ocultoDesde > 30000 && canal.abierto) cerrarCanal(); return; }
+  canal.ocultoDesde = 0;
+  if (!canal.abierto && !canal.abriendo && canal.fallas < 4) setTimeout(abrirCanal, Math.min(10000, 500 * 2 ** canal.fallas));
+}, 2000);
+
+// --- mandar mi posición: al moverme (hasta ~6 veces por segundo) y un latido cada 1,5 s ---
+let ultEnviado = null;
 async function latidoPresencia() {
-  // !innerWidth: dentro de SIGSO, el marco queda oculto al cambiar de módulo; ahí no pregunta.
-  if (D.modo !== 'real' || presenciaOcupada || document.hidden || !innerWidth) return;
-  const ahora = performance.now();
-  if (ahora - ultimaPresencia < (control ? 700 : 3000)) return;
-  ultimaPresencia = ahora; presenciaOcupada = true;
+  if (D.modo !== 'real' || presenciaOcupada) return;
+  const ahora = performance.now(), sinCanal = !canal.abierto && canal.fallas >= 4;
   const datos = {};
-  if (control) { const p = control.pj.position; datos.estado = { x: +p.x.toFixed(2), z: +p.z.toFixed(2), ry: +control.pj.rotation.y.toFixed(2), mov: !!control.moviendo }; }
+  if (control) {
+    const p = control.pj.position, ry = control.pj.rotation.y;
+    const cambio = !ultEnviado || Math.hypot(p.x - ultEnviado.x, p.z - ultEnviado.z) > 0.03 || Math.abs(ry - ultEnviado.ry) > 0.08 || ultEnviado.mov !== !!control.moviendo;
+    const espera = cambio ? 160 : 1500;
+    if (ahora - ultimaPresencia < espera && !pendienteSaludo) return;
+    datos.estado = { x: +p.x.toFixed(2), z: +p.z.toFixed(2), ry: +ry.toFixed(2), mov: !!control.moviendo };
+    ultEnviado = { x: p.x, z: p.z, ry, mov: !!control.moviendo };
+  } else if (pendienteSaludo) { /* manda solo el saludo */ }
+  else if (sinCanal && !document.hidden && innerWidth && ahora - ultimaPresencia > 1200) { /* sin canal: pregunta */ }
+  else return;
   if (pendienteSaludo) { datos.saludar_a = pendienteSaludo; pendienteSaludo = ''; }
-  try { const r = await window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'presenciaOficina', datos); if (r && r.ok) aplicarPresencia(r.data); }
+  if (canal.abierto) datos.ligero = true;
+  ultimaPresencia = ahora; presenciaOcupada = true;
+  try { const r = await window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'presenciaOficina', datos); if (r && r.ok && !datos.ligero) aplicarPresencia(r.data); }
   catch (e) { /* sin red: se reintenta en el próximo latido */ }
   finally { presenciaOcupada = false; }
 }
 function actualizarRemotos(dt, t) {
-  const k = 1 - Math.exp(-dt * 6); // suaviza entre un reporte y el siguiente
+  const ahora = performance.now(), k = 1 - Math.exp(-dt * 12);
   for (const r of remotos.values()) {
-    const pj = r.pj, dx = r.obj.x - pj.position.x, dz = r.obj.z - pj.position.z, dist = Math.hypot(dx, dz);
-    if (dist > 6) { pj.position.x = r.obj.x; pj.position.z = r.obj.z; } else { pj.position.x += dx * k; pj.position.z += dz * k; }
-    let dif = r.obj.ry - pj.rotation.y; dif = Math.atan2(Math.sin(dif), Math.cos(dif)); pj.rotation.y += dif * k;
-    if (r.base !== 'fantasma') { if (r.mov || dist > 0.08) K.animarPersonaje(pj, t, { caminando: true }); else K.quieto(pj); }
+    if (!r.ult) continue;
+    const pj = r.pj, adelanto = Math.min(ahora - r.ult.t, 350) / 1000; // predice hasta 0,35 s
+    const px = r.ult.x + r.vel.x * adelanto, pz = r.ult.z + r.vel.z * adelanto;
+    const dx = px - pj.position.x, dz = pz - pj.position.z, dist = Math.hypot(dx, dz);
+    if (dist > 5) { pj.position.x = px; pj.position.z = pz; } else { pj.position.x += dx * k; pj.position.z += dz * k; }
+    let dif = r.ult.ry - pj.rotation.y; dif = Math.atan2(Math.sin(dif), Math.cos(dif)); pj.rotation.y += dif * k;
+    const anda = r.mov || Math.hypot(r.vel.x, r.vel.z) > 0.2 || dist > 0.1;
+    if (r.base !== 'fantasma') { if (anda) K.animarPersonaje(pj, t, { caminando: true }); else K.quieto(pj); }
     K.animarSaludo(pj, t);
   }
 }
-setInterval(latidoPresencia, 250);
+setInterval(latidoPresencia, 80);
+if (D.modo === 'real') abrirCanal();
 
 // ---------- buscar y hablarle a la oficina ----------
 const normal = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');

@@ -269,6 +269,33 @@ function yoCacheado_(db, contexto) { // quién es (su ficha o su fantasma), reco
   YO_CACHE.set(k, { v, ts: Date.now() });
   return v;
 }
+// Canal en vivo (2026-11-26, v2): cada oficina abierta mantiene una conexión
+// (POST /v1/oficina/vivo, text/event-stream) y el servidor le EMPUJA cada
+// posición apenas llega, en vez de que cada uno pregunte cada tantos segundos.
+const SUSCRIPTORES = new Set();   // { clave, emitir }
+const publico_ = (v, ahora) => ({ clave: v.clave, persona_id: v.persona_id, nombre: v.nombre, x: v.x, z: v.z, ry: v.ry, mov: v.mov, edad: ahora - v.ts });
+function difundir_(ev, excepto) {
+  for (const s of SUSCRIPTORES) if (s.clave !== excepto) { try { s.emitir(ev); } catch (err) { SUSCRIPTORES.delete(s); } }
+}
+function barrer_(ahora) { // quien no reporta en 8 s se va, y se avisa a todos
+  for (const [k, v] of PRESENCIA) if (ahora - v.ts > VIDA_MS) { PRESENCIA.delete(k); difundir_({ tipo: 'sale', clave: k }); }
+}
+const barrendero = setInterval(() => barrer_(Date.now()), 2000);
+if (barrendero.unref) barrendero.unref(); // no impide que el proceso (o las pruebas) terminen
+function otrosDe_(clave, ahora) { return [...PRESENCIA.values()].filter((v) => v.clave !== clave).map((v) => publico_(v, ahora)); }
+/** Abre el canal en vivo de una oficina: le manda quiénes están y luego cada cambio. Devuelve cómo cerrarlo. */
+function suscribir(db, contexto, emitir, ahora = Date.now()) {
+  const clave = claveDe_(contexto);
+  const s = { clave, emitir };
+  SUSCRIPTORES.add(s);
+  barrer_(ahora);
+  emitir({ tipo: 'estado', yo: clave, otros: otrosDe_(clave, ahora) });
+  const pendientes = (BUZON.get(clave) || []).filter((x) => ahora - x.ts < 30000);
+  BUZON.delete(clave);
+  pendientes.forEach((x) => emitir({ tipo: 'saludo', de: x.de, nombre: x.nombre }));
+  return () => SUSCRIPTORES.delete(s);
+}
+
 function presencia(db, data, contexto, ahora = Date.now()) {
   if (!contexto) return { _validationError: true, message: 'Ingresa a SIGSO para ver la oficina.' };
   data = data || {};
@@ -276,24 +303,28 @@ function presencia(db, data, contexto, ahora = Date.now()) {
   const e = data.estado;
   if (e && Number.isFinite(Number(e.x)) && Number.isFinite(Number(e.z)) && (PRESENCIA.has(clave) || PRESENCIA.size < MAX_PRESENTES)) {
     const yo = yoCacheado_(db, contexto);
-    PRESENCIA.set(clave, {
+    const v = {
       clave, persona_id: yo.persona_id, nombre: String(yo.nombre || 'Visita').trim().split(/\s+/)[0],
       x: recortar(e.x, -12, 12), z: recortar(e.z, -25, 12), ry: recortar(e.ry, -100, 100), mov: !!e.mov, ts: ahora
-    });
-  } else if (data.fin) PRESENCIA.delete(clave);
+    };
+    PRESENCIA.set(clave, v);
+    difundir_(Object.assign({ tipo: 'pos' }, publico_(v, ahora)), clave);
+  } else if (data.fin) { if (PRESENCIA.delete(clave)) difundir_({ tipo: 'sale', clave }, clave); }
   const destino = String(data.saludar_a || '');
   if (destino && destino !== clave && PRESENCIA.has(destino)) {
     const yo = yoCacheado_(db, contexto);
-    const l = (BUZON.get(destino) || []).concat({ de: clave, nombre: String(yo.nombre || 'Alguien').trim().split(/\s+/)[0], ts: ahora });
-    BUZON.set(destino, l.slice(-5));
+    const saludo = { de: clave, nombre: String(yo.nombre || 'Alguien').trim().split(/\s+/)[0], ts: ahora };
+    const conectados = [...SUSCRIPTORES].filter((s) => s.clave === destino);
+    if (conectados.length) conectados.forEach((s) => { try { s.emitir({ tipo: 'saludo', de: saludo.de, nombre: saludo.nombre }); } catch (err) { SUSCRIPTORES.delete(s); } });
+    else BUZON.set(destino, (BUZON.get(destino) || []).concat(saludo).slice(-5));
   }
-  for (const [k, v] of PRESENCIA) if (ahora - v.ts > VIDA_MS) PRESENCIA.delete(k);
-  const otros = [...PRESENCIA.values()].filter((v) => v.clave !== clave)
-    .map((v) => ({ clave: v.clave, persona_id: v.persona_id, nombre: v.nombre, x: v.x, z: v.z, ry: v.ry, mov: v.mov, edad: ahora - v.ts }));
+  barrer_(ahora);
+  if (data.ligero) return { yo: clave }; // con el canal en vivo abierto, no hace falta devolver la lista
+  const otros = otrosDe_(clave, ahora);
   const saludos = (BUZON.get(clave) || []).filter((s) => ahora - s.ts < 30000).map((s) => ({ de: s.de, nombre: s.nombre }));
   BUZON.delete(clave);
   return { yo: clave, otros, saludos };
 }
-function reiniciarPresencia_() { PRESENCIA.clear(); BUZON.clear(); YO_CACHE.clear(); } // pruebas
+function reiniciarPresencia_() { PRESENCIA.clear(); BUZON.clear(); YO_CACHE.clear(); SUSCRIPTORES.clear(); } // pruebas
 
-module.exports = { getOficina, asignarPuesto, marcarFantasma, presencia, reiniciarPresencia_, activarModuloEnCuentas_, salaSugerida_, SALAS_OFICINA };
+module.exports = { getOficina, asignarPuesto, marcarFantasma, presencia, suscribir, reiniciarPresencia_, activarModuloEnCuentas_, salaSugerida_, SALAS_OFICINA };

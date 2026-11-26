@@ -219,6 +219,68 @@ test('presencia en vivo: se ven entre todos, los saludos llegan y quien se va de
   Oficina.reiniciarPresencia_();
 });
 
+test('canal en vivo: cada posición se empuja al instante a los demás, no a uno mismo', () => {
+  Oficina.reiniciarPresencia_();
+  const db = db_();
+  const carla = { email: 'con@homepymes.cl', emails: ['con@homepymes.cl'], cuenta_id: 'c-carla', rol: 'DEV' };
+  const vale = { email: 'pre@homepymes.cl', emails: ['pre@homepymes.cl'], cuenta_id: 'c-vale', rol: 'DEV' };
+  const t0 = 2_000_000;
+  const aCarla = [], aVale = [];
+  const cerrarCarla = Oficina.suscribir(db, carla, (e) => aCarla.push(e), t0);
+  Oficina.suscribir(db, vale, (e) => aVale.push(e), t0);
+  assert.equal(aVale[0].tipo, 'estado'); assert.deepEqual(aVale[0].otros, []);
+
+  Oficina.presencia(db, { estado: { x: 1, z: -3, mov: true }, ligero: true }, carla, t0 + 50);
+  const pos = aVale.find((e) => e.tipo === 'pos');
+  assert.equal(pos.persona_id, 'con'); assert.equal(pos.x, 1); assert.equal(pos.mov, true);
+  assert.ok(!aCarla.some((e) => e.tipo === 'pos'), 'a una misma no le llega su propia posición');
+  // «ligero» no devuelve listas (con el canal abierto no hacen falta)
+  assert.deepEqual(Object.keys(Oficina.presencia(db, { estado: { x: 1.2, z: -3 }, ligero: true }, carla, t0 + 100)), ['yo']);
+
+  // saludo en vivo: llega por el canal, no queda en el buzón
+  Oficina.presencia(db, { estado: { x: 2, z: -6 }, ligero: true }, vale, t0 + 150);
+  Oficina.presencia(db, { saludar_a: aCarla[0].yo, ligero: true }, vale, t0 + 200); // aCarla[0] = su «estado» inicial, trae su clave
+  assert.deepEqual(aCarla.filter((e) => e.tipo === 'saludo').map((e) => e.nombre), ['Valeria']);
+
+  // «fin» avisa a todos; quien cierra el canal deja de recibir
+  Oficina.presencia(db, { fin: true }, carla, t0 + 300);
+  assert.ok(aVale.some((e) => e.tipo === 'sale' && e.clave === pos.clave));
+  cerrarCarla();
+  const antes = aCarla.length;
+  Oficina.presencia(db, { estado: { x: 3, z: -6 }, ligero: true }, vale, t0 + 400);
+  assert.equal(aCarla.length, antes);
+  Oficina.reiniciarPresencia_();
+});
+
+test('canal en vivo por HTTP: pide sesión válida y entrega eventos', async () => {
+  Oficina.reiniciarPresencia_();
+  const { crearServidor } = require('../server/app');
+  const Sesiones = require('../logica/sesiones');
+  const db = db_();
+  ['SESIONES_PORTAL', 'CUENTAS_PORTAL'].forEach((h) => sembrarTabla_(db, h, COLUMNAS[h], []));
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'c1', usuario: 'c1', nombre: 'Carla', emails: JSON.stringify(['con@homepymes.cl']), rol: 'DEV', modulos: '[]', activo: true });
+  const token = Sesiones.crearSesion(db, 'c1', 1);
+  const servidor = crearServidor(db);
+  await new Promise((r) => servidor.listen(0, '127.0.0.1', r));
+  const url = 'http://127.0.0.1:' + servidor.address().port + '/v1/oficina/vivo';
+  try {
+    const malo = await fetch(url, { method: 'POST', body: JSON.stringify({ portal_token: 'no' }) });
+    assert.equal(malo.status, 403);
+    const control = new AbortController();
+    const r = await fetch(url, { method: 'POST', body: JSON.stringify({ portal_token: token }), signal: control.signal });
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /text\/event-stream/);
+    const lector = r.body.getReader();
+    const { value } = await lector.read();
+    const primero = JSON.parse(new TextDecoder().decode(value).replace(/^data: /, '').trim());
+    assert.equal(primero.tipo, 'estado');
+    control.abort();
+  } finally {
+    await new Promise((r) => { servidor.closeAllConnections && servidor.closeAllConnections(); servidor.close(r); });
+    Oficina.reiniciarPresencia_();
+  }
+});
+
 test('las acciones están en el router y piden sesión', async () => {
   assert.equal(typeof ACCIONES.getOficinaVirtual, 'function');
   assert.equal(typeof ACCIONES.asignarPuestoOficina, 'function');
