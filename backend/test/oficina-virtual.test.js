@@ -160,6 +160,30 @@ test('fantasmas: por ficha o por cuenta sin ficha, sin duplicar, y cada uno se r
   assert.ok(admin.sin_oficina.some((p) => p.persona_id === 'val'));
 });
 
+test('el módulo «oficina» se activa una sola vez en todas las cuentas y después manda el Admin', () => {
+  const CuentasPortal = require('../logica/cuentasPortal');
+  const db = abrirDb_();
+  ['CUENTAS_PORTAL', 'LOG_SISTEMA'].forEach((h) => sembrarTabla_(db, h, COLUMNAS[h], []));
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'a', nombre: 'A', modulos: JSON.stringify(['bandeja']), activo: true });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'b', nombre: 'B', modulos: JSON.stringify(['bandeja', 'oficina']), activo: true });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'c', nombre: 'C', modulos: '', activo: false });
+  const mods = (id) => JSON.parse(leerFilas_(db, 'CUENTAS_PORTAL', COLUMNAS.CUENTAS_PORTAL).find((c) => c.cuenta_id === id).modulos);
+
+  assert.deepEqual(Oficina.activarModuloEnCuentas_(db), { ya_hecha: false, cuentas: 2 });
+  assert.deepEqual(mods('a'), ['bandeja', 'oficina']);
+  assert.deepEqual(mods('b'), ['bandeja', 'oficina']);
+  assert.deepEqual(mods('c'), ['oficina']);
+
+  // el Admin se la quita a «a»: al reiniciar el servidor NO se le vuelve a poner
+  require('../db/sqliteRepo').actualizarFilaPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', 'a', { modulos: JSON.stringify(['bandeja']) });
+  assert.equal(Oficina.activarModuloEnCuentas_(db).ya_hecha, true);
+  assert.deepEqual(mods('a'), ['bandeja']);
+
+  // y se puede asignar a mano desde Administración
+  assert.ok(CuentasPortal.MODULOS_VALIDOS.includes('oficina'));
+  Object.values(CuentasPortal.MODULOS_POR_ROL).forEach((l) => assert.ok(l.includes('oficina')));
+});
+
 test('las acciones están en el router y piden sesión', async () => {
   assert.equal(typeof ACCIONES.getOficinaVirtual, 'function');
   assert.equal(typeof ACCIONES.asignarPuestoOficina, 'function');

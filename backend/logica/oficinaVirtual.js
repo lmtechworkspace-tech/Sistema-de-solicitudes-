@@ -218,4 +218,29 @@ function asignarPuesto(db, data, contexto) {
   return { persona_id: personaId, sala_id: salaId || salaSugerida_(ficha.cargo), sala_asignada: !!salaId };
 }
 
-module.exports = { getOficina, asignarPuesto, marcarFantasma, salaSugerida_, SALAS_OFICINA };
+/**
+ * Una sola vez (al arrancar el servidor): pone el módulo «oficina» en TODAS las
+ * cuentas, para que la Oficina virtual quede activa en todas. Después manda el
+ * Admin: si se la quita a alguien, no se la vuelve a poner. La marca de «ya se
+ * hizo» queda en LOG_SISTEMA.
+ */
+const MARCA_MIGRACION = 'MIGRACION_MODULO_OFICINA';
+function activarModuloEnCuentas_(db) {
+  const log = leerSeguro_(db, 'LOG_SISTEMA');
+  if (log.some((l) => l.contexto === MARCA_MIGRACION)) return { ya_hecha: true, cuentas: 0 };
+  let cuentas = 0;
+  for (const c of leerSeguro_(db, 'CUENTAS_PORTAL')) {
+    let lista;
+    try { lista = JSON.parse(c.modulos || '[]'); } catch (err) { lista = String(c.modulos || '').split(/[,;\s]+/).filter(Boolean); }
+    if (!Array.isArray(lista) || lista.indexOf('oficina') !== -1) continue;
+    actualizarFilaPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', c.cuenta_id, { modulos: JSON.stringify(lista.concat('oficina')) });
+    cuentas++;
+  }
+  agregarFila_(db, 'LOG_SISTEMA', {
+    log_id: crypto.randomUUID(), timestamp: new Date().toISOString(), contexto: MARCA_MIGRACION,
+    mensaje: 'Módulo Oficina virtual activado en ' + cuentas + ' cuentas', ref: 'OFICINA'
+  });
+  return { ya_hecha: false, cuentas };
+}
+
+module.exports = { getOficina, asignarPuesto, marcarFantasma, activarModuloEnCuentas_, salaSugerida_, SALAS_OFICINA };

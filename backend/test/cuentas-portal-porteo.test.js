@@ -47,7 +47,8 @@ test('crear cuenta aplica la plantilla de modulos del rol y no repite usuarios',
   assert.equal(dev.password_temporal.length, 10);
 
   const lista = CuentasPortal.listar(db, {}, ADMIN).cuentas;
-  assert.deepEqual(lista[0].modulos, ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo']);
+  // 'oficina' (Oficina virtual) viene por defecto en todos los roles desde 2026-11-26
+  assert.deepEqual(lista[0].modulos, ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo', 'oficina']);
 
   const repetido = CuentasPortal.gestionar(db, {
     operacion: 'crear', usuario: 'LEO', nombre: 'Otro', emails: 'otro@rld.cl'

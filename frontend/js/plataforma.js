@@ -50,8 +50,8 @@
     // cualquiera con sesion, sin que un Admin tenga que activarlo cuenta por
     // cuenta.
     novedades: { icono: 'periodico', nombre: 'Novedades', descripcion: 'Leyes, avisos y novedades de todas las áreas' },
-    // 2026-11-26: recorrido 3D de la oficina (oficina.html). CORE como novedades:
-    // lo ve cualquier cuenta; los datos salen de Calidad → Personas.
+    // 2026-11-26: recorrido 3D de la oficina (oficina.html). Módulo de la cuenta
+    // (activo en todas por defecto); los datos salen de Calidad → Personas.
     oficina: { icono: 'empresa', nombre: 'Oficina virtual', descripcion: 'Recorre la oficina: qué hace cada área y quién trabaja ahí' },
     // v7.0 (Fase 2, modulo de Gestion Operacional): compromisos con
     // check-in de 1 clic (documentacion/SIGSO-v7.0-propuesta-modulo-
@@ -1329,8 +1329,8 @@
     // tenga en su lista asignada. Justo despues de home (primera posicion
     // entre los internos) porque es lo que se quiere que se vea primero.
     if (propios.indexOf('novedades') === -1) propios = ['novedades'].concat(propios);
-    // Oficina virtual: también core, para todas las cuentas del personal.
-    if (propios.indexOf('oficina') === -1) propios.push('oficina');
+    // Oficina virtual: ya no se fuerza; es un módulo de la cuenta (activo en
+    // todas desde el 26-11 y el Admin lo pone o lo quita en Administración).
     return propios;
   }
 

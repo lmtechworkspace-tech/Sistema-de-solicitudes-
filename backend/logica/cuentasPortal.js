@@ -29,18 +29,20 @@ const { parsearListaPortal, normalizarUsuario } = require('./portal');
 // pausa: crear su cuenta con el rol que corresponda (DEV/ANA/...) y
 // agregarla al roster de Pausas por separado, que es el paso que de
 // verdad importa.
+// 'oficina' (2026-11-26): la Oficina virtual va en todos los roles por defecto;
+// el Admin la puede quitar o poner a mano por cuenta.
 const MODULOS_POR_ROL = {
-  SOLICITANTE: ['nueva_solicitud', 'mis_solicitudes', 'mi_trabajo'],
-  DEV: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo'],
-  ANA: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo'],
-  GERENCIA: ['nueva_solicitud', 'mis_solicitudes', 'gerencia', 'mi_trabajo'],
-  JEFATURA: ['nueva_solicitud', 'mis_solicitudes', 'jefatura', 'mi_trabajo'],
-  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad', 'control_interno']
+  SOLICITANTE: ['nueva_solicitud', 'mis_solicitudes', 'mi_trabajo', 'oficina'],
+  DEV: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo', 'oficina'],
+  ANA: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo', 'oficina'],
+  GERENCIA: ['nueva_solicitud', 'mis_solicitudes', 'gerencia', 'mi_trabajo', 'oficina'],
+  JEFATURA: ['nueva_solicitud', 'mis_solicitudes', 'jefatura', 'mi_trabajo', 'oficina'],
+  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad', 'control_interno', 'oficina']
 };
 
 // 'hompy' (2026-10-06): no va en ningún rol por defecto; se asigna a mano a quien lleva a la mascota.
 // 'asistente' (2026-11-11): el Asistente SIGSO con IA; ADM y super admin lo tienen siempre (asistente.js).
-const MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad', 'control_interno', 'hompy', 'asistente'];
+const MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad', 'control_interno', 'hompy', 'asistente', 'oficina'];
 
 function leerCuentas(db) {
   return leerFilas_(db, 'CUENTAS_PORTAL', COLUMNAS.CUENTAS_PORTAL);
