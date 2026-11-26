@@ -244,4 +244,56 @@ function activarModuloEnCuentas_(db) {
   return { ya_hecha: false, cuentas };
 }
 
-module.exports = { getOficina, asignarPuesto, marcarFantasma, activarModuloEnCuentas_, salaSugerida_, SALAS_OFICINA };
+// ===========================================================================
+// Presencia en vivo (2026-11-26): quienes están moviendo su mono se ven entre
+// todos. Vive SOLO en memoria del proceso (nada se escribe en la base): cada
+// oficina abierta manda su posición cada ~0,7 s y recibe la de los demás. Quien
+// deja de reportar 8 s desaparece. La clave es un hash de la cuenta (no su id).
+// ===========================================================================
+const PRESENCIA = new Map();   // clave -> { clave, persona_id, nombre, x, z, ry, mov, ts }
+const BUZON = new Map();       // clave -> [{ de, nombre, ts }]   saludos por entregar
+const YO_CACHE = new Map();    // cuenta -> { v: {persona_id, nombre}, ts }
+const VIDA_MS = 8000, MAX_PRESENTES = 200;
+const recortar = (n, a, b) => Math.max(a, Math.min(b, Number(n) || 0));
+function claveDe_(contexto) {
+  return crypto.createHash('sha1').update('oficina:' + String(contexto.cuenta_id || contexto.email || '')).digest('hex').slice(0, 12);
+}
+function yoCacheado_(db, contexto) { // quién es (su ficha o su fantasma), recordado 5 min
+  const k = String(contexto.cuenta_id || contexto.email || '');
+  const c = YO_CACHE.get(k);
+  if (c && Date.now() - c.ts < 5 * 60 * 1000) return c.v;
+  const r = getOficina(db, {}, contexto);
+  const pid = (r.yo && r.yo.persona_id) || '';
+  const ficha = pid && (r.personas || []).find((p) => p.persona_id === pid);
+  const v = { persona_id: pid, nombre: (ficha && ficha.nombre) || (r.yo && r.yo.nombre) || '' };
+  YO_CACHE.set(k, { v, ts: Date.now() });
+  return v;
+}
+function presencia(db, data, contexto, ahora = Date.now()) {
+  if (!contexto) return { _validationError: true, message: 'Ingresa a SIGSO para ver la oficina.' };
+  data = data || {};
+  const clave = claveDe_(contexto);
+  const e = data.estado;
+  if (e && Number.isFinite(Number(e.x)) && Number.isFinite(Number(e.z)) && (PRESENCIA.has(clave) || PRESENCIA.size < MAX_PRESENTES)) {
+    const yo = yoCacheado_(db, contexto);
+    PRESENCIA.set(clave, {
+      clave, persona_id: yo.persona_id, nombre: String(yo.nombre || 'Visita').trim().split(/\s+/)[0],
+      x: recortar(e.x, -12, 12), z: recortar(e.z, -25, 12), ry: recortar(e.ry, -100, 100), mov: !!e.mov, ts: ahora
+    });
+  } else if (data.fin) PRESENCIA.delete(clave);
+  const destino = String(data.saludar_a || '');
+  if (destino && destino !== clave && PRESENCIA.has(destino)) {
+    const yo = yoCacheado_(db, contexto);
+    const l = (BUZON.get(destino) || []).concat({ de: clave, nombre: String(yo.nombre || 'Alguien').trim().split(/\s+/)[0], ts: ahora });
+    BUZON.set(destino, l.slice(-5));
+  }
+  for (const [k, v] of PRESENCIA) if (ahora - v.ts > VIDA_MS) PRESENCIA.delete(k);
+  const otros = [...PRESENCIA.values()].filter((v) => v.clave !== clave)
+    .map((v) => ({ clave: v.clave, persona_id: v.persona_id, nombre: v.nombre, x: v.x, z: v.z, ry: v.ry, mov: v.mov, edad: ahora - v.ts }));
+  const saludos = (BUZON.get(clave) || []).filter((s) => ahora - s.ts < 30000).map((s) => ({ de: s.de, nombre: s.nombre }));
+  BUZON.delete(clave);
+  return { yo: clave, otros, saludos };
+}
+function reiniciarPresencia_() { PRESENCIA.clear(); BUZON.clear(); YO_CACHE.clear(); } // pruebas
+
+module.exports = { getOficina, asignarPuesto, marcarFantasma, presencia, reiniciarPresencia_, activarModuloEnCuentas_, salaSugerida_, SALAS_OFICINA };

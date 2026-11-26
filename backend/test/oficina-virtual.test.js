@@ -184,6 +184,41 @@ test('el módulo «oficina» se activa una sola vez en todas las cuentas y despu
   Object.values(CuentasPortal.MODULOS_POR_ROL).forEach((l) => assert.ok(l.includes('oficina')));
 });
 
+test('presencia en vivo: se ven entre todos, los saludos llegan y quien se va desaparece', () => {
+  Oficina.reiniciarPresencia_();
+  const db = db_();
+  const carla = { email: 'con@homepymes.cl', emails: ['con@homepymes.cl'], cuenta_id: 'c-carla', rol: 'DEV' };
+  const vale = { email: 'pre@homepymes.cl', emails: ['pre@homepymes.cl'], cuenta_id: 'c-vale', rol: 'DEV' };
+  const mira = { email: 'x@otro.cl', emails: ['x@otro.cl'], cuenta_id: 'c-mira', rol: 'DEV' };
+  const t0 = 1_000_000;
+
+  const r1 = Oficina.presencia(db, { estado: { x: 1, z: -3, ry: 0.5, mov: true } }, carla, t0);
+  assert.deepEqual(r1.otros, []);
+  Oficina.presencia(db, { estado: { x: 2, z: -6, ry: 0, mov: false } }, vale, t0 + 100);
+  // quien solo mira (sin estado) ve a las dos, pero no aparece
+  const r3 = Oficina.presencia(db, {}, mira, t0 + 200);
+  assert.deepEqual(r3.otros.map((o) => o.persona_id).sort(), ['con', 'pre']);
+  const c = r3.otros.find((o) => o.persona_id === 'con');
+  assert.equal(c.x, 1); assert.equal(c.z, -3); assert.equal(c.mov, true);
+  assert.equal(c.nombre, 'Carla'); // solo el primer nombre
+  assert.ok(!JSON.stringify(r3).includes('@') && !JSON.stringify(r3).includes('c-carla'), 'ni correos ni ids de cuenta');
+
+  // Carla saluda a Valentina → le llega una sola vez
+  Oficina.presencia(db, { estado: { x: 1.5, z: -4 }, saludar_a: r3.otros.find((o) => o.persona_id === 'pre').clave }, carla, t0 + 300);
+  const v1 = Oficina.presencia(db, { estado: { x: 2, z: -6 } }, vale, t0 + 400);
+  assert.deepEqual(v1.saludos.map((s) => s.nombre), ['Carla']);
+  assert.deepEqual(Oficina.presencia(db, { estado: { x: 2, z: -6 } }, vale, t0 + 500).saludos, []);
+
+  // las posiciones absurdas se recortan; «fin» la saca; y sin reportar 8 s, desaparece
+  Oficina.presencia(db, { estado: { x: 9999, z: -9999 } }, carla, t0 + 600);
+  assert.deepEqual(Oficina.presencia(db, {}, mira, t0 + 650).otros.find((o) => o.persona_id === 'con').x, 12);
+  Oficina.presencia(db, { fin: true }, carla, t0 + 700);
+  assert.deepEqual(Oficina.presencia(db, {}, mira, t0 + 800).otros.map((o) => o.persona_id), ['pre']);
+  assert.deepEqual(Oficina.presencia(db, {}, mira, t0 + 500 + 8001).otros, []);
+  assert.ok(Oficina.presencia(db, {}, null)._validationError);
+  Oficina.reiniciarPresencia_();
+});
+
 test('las acciones están en el router y piden sesión', async () => {
   assert.equal(typeof ACCIONES.getOficinaVirtual, 'function');
   assert.equal(typeof ACCIONES.asignarPuestoOficina, 'function');

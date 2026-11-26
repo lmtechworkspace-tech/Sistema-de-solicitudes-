@@ -931,6 +931,7 @@ function terminarControl() {
   else scene.remove(pj);
   if (sentadoPj) { sentadoPj.visible = true; sentadoPj.traverse(o => { if (o.isCSS2DObject) o.visible = true; }); } // vuelve a su silla
   control = null; teclas.clear(); marcaDestino.material.opacity = 0;
+  if (D.modo === 'real') window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'presenciaOficina', { fin: true }).catch(() => {}); // los demás dejan de verte
   document.body.classList.remove('controlando');
   bMover.classList.remove('on'); bMover.querySelector('span').textContent = 'Moverme';
   ayudaEl.textContent = AYUDA_NORMAL; document.getElementById('interaccion').hidden = true;
@@ -981,6 +982,7 @@ function actualizarControl(dt, t) {
     }
   }
   const largo = Math.hypot(mx, mz), moviendo = largo > 0.01;
+  control.moviendo = moviendo; // lo ven los demás (presencia en vivo)
   if (moviendo) {
     mx /= largo; mz /= largo;
     const paso = (teclas.has('shift') ? 3.6 : 2.1) * dt, libre = fantasma || !!control.ruta;
@@ -1003,20 +1005,35 @@ function actualizarControl(dt, t) {
   if (s !== control.salaPisada) { const primera = control.salaPisada === undefined; control.salaPisada = s; if (!primera) entrasteA(s); }
   // ¿hay alguien cerca para saludar?
   let cerca = null, mejor = 1.9;
+  const pjRemotos = new Set([...remotos.values()].map(r => r.pj));
   for (const [id, o] of Object.entries(personas3D)) {
-    if (o === pj || !o.visible) continue;
+    if (o === pj || !o.visible || pjRemotos.has(o)) continue;
     o.getWorldPosition(wTmp); const d = Math.hypot(wTmp.x - pj.position.x, wTmp.z - pj.position.z);
     if (d < mejor) { mejor = d; cerca = id; }
+  }
+  for (const r of remotos.values()) { // quienes se están moviendo de verdad, ahora mismo
+    const d = Math.hypot(r.pj.position.x - pj.position.x, r.pj.position.z - pj.position.z);
+    if (d < mejor) { mejor = d; cerca = 'r:' + r.clave; }
   }
   if (cerca !== control.cerca) {
     control.cerca = cerca;
     const box = document.getElementById('interaccion');
     box.hidden = !cerca;
-    if (cerca) box.innerHTML = `<button data-saludar><kbd>E</kbd> Saludar a <b>${esc(personaPorId[cerca].nombre.split(' ')[0])}</b></button><button data-ficha>Ver ficha</button>`;
+    const remoto = cerca && cerca.startsWith('r:') ? remotos.get(cerca.slice(2)) : null;
+    const nombre = remoto ? remoto.nombre : cerca ? personaPorId[cerca].nombre.split(' ')[0] : '';
+    const conFicha = remoto ? !!personaPorId[remoto.persona_id] : true;
+    if (cerca) box.innerHTML = `<button data-saludar><kbd>E</kbd> Saludar a <b>${esc(nombre)}</b>${remoto ? ' <span class="envivo-txt">en vivo</span>' : ''}</button>${conFicha ? '<button data-ficha>Ver ficha</button>' : ''}`;
   }
 }
 function saludarCercano() {
   if (!control || !control.cerca) return;
+  if (control.cerca.startsWith('r:')) { // una persona real que se está moviendo: el saludo le llega a ella
+    const r = remotos.get(control.cerca.slice(2)); if (!r) return;
+    K.saludar(control.pj, reloj.elapsedTime);
+    pendienteSaludo = r.clave; ultimaPresencia = 0;
+    toast(`Saludaste a ${r.nombre}`, 'Le llegó tu saludo en su pantalla');
+    return;
+  }
   const pid = control.cerca, p = personaPorId[pid], o = personas3D[pid], t = reloj.elapsedTime;
   K.saludar(control.pj, t); K.saludar(o, t);
   // te mira: giro de la cabeza relativo a hacia dónde mira su cuerpo
@@ -1031,7 +1048,11 @@ function saludarCercano() {
 }
 document.getElementById('interaccion').addEventListener('click', e => {
   if (e.target.closest('[data-saludar]')) saludarCercano();
-  else if (e.target.closest('[data-ficha]') && control?.cerca) abrirPersona(control.cerca, { volar: false });
+  else if (e.target.closest('[data-ficha]') && control?.cerca) {
+    const r = control.cerca.startsWith('r:') ? remotos.get(control.cerca.slice(2)) : null;
+    const pid = r ? r.persona_id : control.cerca;
+    if (personaPorId[pid]) abrirPersona(pid, { volar: false });
+  }
 });
 bMover.onclick = iniciarControl;
 const esCampo = el => el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName);
@@ -1045,6 +1066,84 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => teclas.delete(e.key.toLowerCase()));
 addEventListener('blur', () => teclas.clear());
+
+// ---------- presencia en vivo: verse entre todos al moverse ----------
+// Cada oficina abierta le cuenta al servidor dónde está su mono (cada ~0,7 s
+// mientras se mueve; si solo mira, pregunta cada 2 s) y recibe a los demás.
+// El mono de cada persona en línea se levanta de su silla (o su fantasma deja
+// de pasear) y camina donde esa persona lo lleve. Saludos: llegan en vivo.
+const remotos = new Map();
+let pendienteSaludo = '', ultimaPresencia = 0, presenciaOcupada = false;
+function ocultarRotulos(obj, oculto) { obj.traverse(c => { if (c.isCSS2DObject && !c.userData.remoto) c.visible = !oculto; }); }
+function crearRemoto(o) {
+  const p = personaPorId[o.persona_id], f = fantasmas.find(x => x.p.id === o.persona_id);
+  let pj, sentadoPj = null, base = 'visita';
+  if (f) {
+    if (control && control.f === f) return null;
+    f.controlado = true; pj = f.pj; base = 'fantasma'; ocultarRotulos(pj, true);
+  } else if (p && personas3D[p.id]) {
+    sentadoPj = personas3D[p.id]; sentadoPj.visible = false; ocultarRotulos(sentadoPj, true);
+    pj = K.personaje({ semilla: K.hash(p.id + p.nombre), camisa: (salaPorId[p.sala] || {}).color || '#64748b', sentado: false, genero: p.genero, audifonos: p.audifonos });
+    base = 'sentado';
+  } else pj = K.personaje({ semilla: K.hash(o.clave), camisa: '#0ea5e9', sentado: false });
+  if (base !== 'fantasma') { pj.position.set(o.x, 0, o.z); pj.rotation.y = o.ry; scene.add(pj); }
+  const el = document.createElement('div'); el.className = 'nombre envivo'; el.textContent = '🟢 ' + o.nombre;
+  const et = new CSS2DObject(el); et.position.set(0, base === 'fantasma' ? 2.75 : 2.05, 0); et.userData.remoto = true; pj.add(et);
+  const gl = document.createElement('div'); gl.className = 'globo';
+  const og = new CSS2DObject(gl); og.position.set(0, base === 'fantasma' ? 3.2 : 2.5, 0); og.userData.remoto = true; pj.add(og);
+  return { pj, base, f, sentadoPj, et, og, gl, obj: { x: o.x, z: o.z, ry: o.ry }, mov: o.mov, nombre: o.nombre, persona_id: o.persona_id, clave: o.clave };
+}
+function quitarRemoto(r) {
+  r.pj.remove(r.et); r.pj.remove(r.og);
+  if (r.base === 'fantasma') { ocultarRotulos(r.pj, false); r.f.controlado = false; r.f.pausa = 1; r.f.sala = salaEn(r.pj.position.x, r.pj.position.z) || r.f.sala || 'recepcion'; }
+  else scene.remove(r.pj);
+  if (r.sentadoPj) { r.sentadoPj.visible = true; ocultarRotulos(r.sentadoPj, false); }
+}
+function decirRemoto(r, texto) {
+  r.gl.textContent = texto; r.gl.classList.add('visible', 'hablando'); clearTimeout(r.gl._t);
+  r.gl._t = setTimeout(() => r.gl.classList.remove('visible', 'hablando'), 4500);
+}
+function aplicarPresencia(d) {
+  const vistos = new Set();
+  for (const o of d.otros || []) {
+    if (o.persona_id && D.yo && o.persona_id === D.yo.persona_id) continue; // yo mismo en otra pestaña
+    let r = remotos.get(o.clave);
+    if (!r) { r = crearRemoto(o); if (!r) continue; remotos.set(o.clave, r); toast(`🟢 ${o.nombre} entró a la oficina`, 'Se está moviendo ahora mismo', 2500); }
+    vistos.add(o.clave);
+    r.obj = { x: o.x, z: o.z, ry: o.ry }; r.mov = o.mov;
+  }
+  for (const [k, r] of remotos) if (!vistos.has(k)) { quitarRemoto(r); remotos.delete(k); }
+  for (const s of d.saludos || []) {
+    toast(`👋 ${s.nombre} te saluda`, control ? 'Acércate y apreta E para responderle' : 'Apreta «Moverme» para ir a saludar');
+    hablar(`${s.nombre} te saluda`, { forzar: true });
+    const r = remotos.get(s.de); if (r) { K.saludar(r.pj, reloj.elapsedTime); decirRemoto(r, '¡Hola! 👋'); }
+  }
+  actualizarEstado();
+}
+async function latidoPresencia() {
+  // !innerWidth: dentro de SIGSO, el marco queda oculto al cambiar de módulo; ahí no pregunta.
+  if (D.modo !== 'real' || presenciaOcupada || document.hidden || !innerWidth) return;
+  const ahora = performance.now();
+  if (ahora - ultimaPresencia < (control ? 700 : 3000)) return;
+  ultimaPresencia = ahora; presenciaOcupada = true;
+  const datos = {};
+  if (control) { const p = control.pj.position; datos.estado = { x: +p.x.toFixed(2), z: +p.z.toFixed(2), ry: +control.pj.rotation.y.toFixed(2), mov: !!control.moviendo }; }
+  if (pendienteSaludo) { datos.saludar_a = pendienteSaludo; pendienteSaludo = ''; }
+  try { const r = await window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'presenciaOficina', datos); if (r && r.ok) aplicarPresencia(r.data); }
+  catch (e) { /* sin red: se reintenta en el próximo latido */ }
+  finally { presenciaOcupada = false; }
+}
+function actualizarRemotos(dt, t) {
+  const k = 1 - Math.exp(-dt * 6); // suaviza entre un reporte y el siguiente
+  for (const r of remotos.values()) {
+    const pj = r.pj, dx = r.obj.x - pj.position.x, dz = r.obj.z - pj.position.z, dist = Math.hypot(dx, dz);
+    if (dist > 6) { pj.position.x = r.obj.x; pj.position.z = r.obj.z; } else { pj.position.x += dx * k; pj.position.z += dz * k; }
+    let dif = r.obj.ry - pj.rotation.y; dif = Math.atan2(Math.sin(dif), Math.cos(dif)); pj.rotation.y += dif * k;
+    if (r.base !== 'fantasma') { if (r.mov || dist > 0.08) K.animarPersonaje(pj, t, { caminando: true }); else K.quieto(pj); }
+    K.animarSaludo(pj, t);
+  }
+}
+setInterval(latidoPresencia, 250);
 
 // ---------- buscar y hablarle a la oficina ----------
 const normal = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -1131,6 +1230,7 @@ function dibujarMini(t) {
     punto(wTmp.x, wTmp.z, p.fantasma ? 7 : 6, p.fantasma ? 'rgba(143,182,255,.75)' : ((salaPorId[p.sala] || {}).color || '#555'), '#fff');
   }
   for (const m of mensajeros) punto(m.pj.position.x, m.pj.position.z, 4, '#64748b');
+  for (const r of remotos.values()) { punto(r.pj.position.x, r.pj.position.z, 11, 'rgba(22,163,74,.25)'); punto(r.pj.position.x, r.pj.position.z, 7, '#16a34a', '#fff'); }
   if (control) {
     const { x, z } = control.pj.position, [a, b] = aMini(x, z), r = 10 + Math.sin(t * 5) * 3;
     g.beginPath(); g.arc(a, b, r, 0, Math.PI * 2); g.fillStyle = 'rgba(37,99,235,.25)'; g.fill();
@@ -1149,6 +1249,7 @@ mini.addEventListener('click', e => {
 function actualizarEstado() {
   document.getElementById('estado').innerHTML =
     `<span><i style="background:#16a34a"></i>${D.personas.filter(p => !p.fantasma).length} trabajando</span>` +
+    (remotos.size ? `<span class="envivo-txt"><i style="background:#16a34a"></i>${remotos.size} en línea ahora</span>` : '') +
     (fantasmas.length ? `<span><i style="background:#8fb6ff"></i>${fantasmas.length} ${fantasmas.length === 1 ? 'fantasma' : 'fantasmas'}</span>` : '') +
     `<span><i style="background:#0284c7"></i>${mensajeros.length} llevando documentos</span>` +
     `<span><i style="background:#e9a23b"></i>${D.salas.filter(s => PLANO[s.id]).length} espacios</span>`;
@@ -1236,6 +1337,7 @@ renderer.setAnimationLoop(() => {
   for (const pj of Object.values(personas3D)) { if (pj.userData.fantasma) continue; K.animarPersonaje(pj, t); K.animarSaludo(pj, t); }
   for (const f of fantasmas) moverFantasma(f, dt, t);
   actualizarControl(dt, t);
+  actualizarRemotos(dt, t);
   if (ahora - ultimoMini > 110) { dibujarMini(t); ultimoMini = ahora; }
   for (const m of mensajeros) moverMensajero(m, dt, t);
   for (const v of viajeros) { v.t = (v.t + dt * 0.25) % 1; v.b.position.copy(v.curva.getPoint(v.t)); }

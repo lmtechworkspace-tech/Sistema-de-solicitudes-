@@ -512,6 +512,8 @@ const ACCIONES = {
   getOficinaVirtual: (db, data, contexto) => OficinaVirtual.getOficina(db, data, contexto),
   asignarPuestoOficina: (db, data, contexto) => OficinaVirtual.asignarPuesto(db, data, contexto),
   marcarFantasmaOficina: (db, data, contexto) => OficinaVirtual.marcarFantasma(db, data, contexto),
+  // Presencia en vivo: posición de quienes mueven su mono (solo en memoria).
+  presenciaOficina: (db, data, contexto) => OficinaVirtual.presencia(db, data, contexto),
   getFichaPersonaSgc: (db, data, contexto) => Personas.getFicha(db, data, contexto),
   guardarPersonaSgc: (db, data, contexto) => Personas.guardarPersona(db, data, contexto),
   desvincularPersonaSgc: (db, data, contexto) => Personas.desvincular(db, data, contexto),
