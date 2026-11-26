@@ -5,7 +5,8 @@
 // Cada persona real hereda de la "plantilla" de su oficina (datos.js) cómo se
 // ve (genero, audífonos) y su globo de tarea: se empareja por oficina y por
 // las palabras del cargo. El nombre, el cargo, la jefatura y el descriptor
-// vienen siempre de Calidad → Personas.
+// vienen siempre de Calidad → Personas. La presencia en vivo (verse entre todos
+// al moverse) la maneja escena.js con la acción presenciaOficina.
 const D = window.OFICINA;
 const plantilla = D.personas.slice();
 D.modo = 'ejemplo';
