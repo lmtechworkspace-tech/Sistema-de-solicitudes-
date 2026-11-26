@@ -222,7 +222,8 @@ function asignarPuesto(db, data, contexto) {
  * Una sola vez (al arrancar el servidor): pone el módulo «oficina» en TODAS las
  * cuentas, para que la Oficina virtual quede activa en todas. Después manda el
  * Admin: si se la quita a alguien, no se la vuelve a poner. La marca de «ya se
- * hizo» queda en LOG_SISTEMA.
+ * hizo» queda en LOG_SISTEMA. Corre desde server/index.js en cada arranque
+ * (la marca hace que solo actúe la primera vez).
  */
 const MARCA_MIGRACION = 'MIGRACION_MODULO_OFICINA';
 function activarModuloEnCuentas_(db) {
