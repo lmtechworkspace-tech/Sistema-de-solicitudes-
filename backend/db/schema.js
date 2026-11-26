@@ -459,6 +459,11 @@ const COLUMNAS = {
     'archivo_id', 'archivo_nombre', 'archivo_mime',
     'vigente', 'creado_por', 'fecha'
   ],
+  // Oficina virtual (2026-11-26): en qué oficina del plano se sienta cada
+  // ficha de SGC_PERSONAS. Sin fila, la oficina se sugiere por el cargo.
+  OFICINA_PUESTOS: [
+    'puesto_id', 'persona_id', 'sala_id', 'actualizado_por', 'fecha', 'activa'
+  ],
   // Carpeta digital de la persona (CV, titulo, contrato, certificados...).
   SGC_PERSONA_DOCUMENTOS: [
     'doc_id', 'persona_id', 'tipo', 'nombre',

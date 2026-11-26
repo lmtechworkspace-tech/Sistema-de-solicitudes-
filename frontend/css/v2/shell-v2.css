@@ -170,3 +170,6 @@ body.sx2, body.sx2 .plataforma-shell { background: var(--sx-fondo); }
   .sx2-paleta__caja { max-height: calc(100dvh - 2 * var(--sx-e-4)); }
   .sx2-paleta__pie { display: none; }
 }
+
+/* Oficina virtual (2026-11-26): la escena 3D en un marco que llena el módulo. */
+.oficina-marco { display: block; width: 100%; height: calc(100dvh - 190px); min-height: 520px; border: 0; border-radius: 16px; background: #e9eef2; box-shadow: 0 6px 24px rgba(20, 33, 61, .10); }

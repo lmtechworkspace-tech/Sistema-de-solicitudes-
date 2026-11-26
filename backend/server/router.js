@@ -56,6 +56,7 @@ const Calidad = require('../logica/calidadSgc');
 const DocumentosVivos = require('../logica/documentosVivosSgc');
 const CargaDriveSgc = require('../logica/cargaDriveSgc');
 const Personas = require('../logica/personasSgc');
+const OficinaVirtual = require('../logica/oficinaVirtual');
 const NoConformidades = require('../logica/noConformidadesSgc');
 const Auditorias = require('../logica/auditoriasSgc');
 const Quejas = require('../logica/quejasSgc');
@@ -506,6 +507,10 @@ const ACCIONES = {
   // competencias (evaluaciones + capacitaciones). Archivos gateados dentro
   // de la propia logica (R2), mismo criterio que el incremento 1.
   listarPersonasSgc: (db, data, contexto) => Personas.listar(db, data, contexto),
+  // Oficina virtual (2026-11-26): cualquier sesión ve nombre, cargo, oficina y
+  // descriptor; ordenar quién se sienta dónde, solo quien gobierna Calidad.
+  getOficinaVirtual: (db, data, contexto) => OficinaVirtual.getOficina(db, data, contexto),
+  asignarPuestoOficina: (db, data, contexto) => OficinaVirtual.asignarPuesto(db, data, contexto),
   getFichaPersonaSgc: (db, data, contexto) => Personas.getFicha(db, data, contexto),
   guardarPersonaSgc: (db, data, contexto) => Personas.guardarPersona(db, data, contexto),
   desvincularPersonaSgc: (db, data, contexto) => Personas.desvincular(db, data, contexto),

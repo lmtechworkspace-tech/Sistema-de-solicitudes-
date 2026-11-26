@@ -50,6 +50,9 @@
     // cualquiera con sesion, sin que un Admin tenga que activarlo cuenta por
     // cuenta.
     novedades: { icono: 'periodico', nombre: 'Novedades', descripcion: 'Leyes, avisos y novedades de todas las áreas' },
+    // 2026-11-26: recorrido 3D de la oficina (oficina.html). CORE como novedades:
+    // lo ve cualquier cuenta; los datos salen de Calidad → Personas.
+    oficina: { icono: 'empresa', nombre: 'Oficina virtual', descripcion: 'Recorre la oficina: qué hace cada área y quién trabaja ahí' },
     // v7.0 (Fase 2, modulo de Gestion Operacional): compromisos con
     // check-in de 1 clic (documentacion/SIGSO-v7.0-propuesta-modulo-
     // gestion-operacional.md §4.4/§5.1). No es core como 'novedades' --
@@ -136,7 +139,8 @@
     finanzas: { acento: 'var(--mod-finanzas)', suave: 'var(--mod-finanzas-suave)' },
     credenciales: { acento: 'var(--mod-credenciales)', suave: 'var(--mod-credenciales-suave)' },
     portal_clientes: { acento: 'var(--mod-portal)', suave: 'var(--mod-portal-suave)' },
-    hompy: { acento: 'var(--mod-hompy)', suave: 'var(--mod-hompy-suave)' }
+    hompy: { acento: 'var(--mod-hompy)', suave: 'var(--mod-hompy-suave)' },
+    oficina: { acento: '#E9A23B', suave: 'rgba(233,162,59,.14)' }
   };
   // Barra lateral, segunda versión (2026-10-05): cada área con su color, para reconocerla de lejos.
   var COLOR_AREA = { dep_contabilidad: 'contab', dep_rrhh: 'rrhh', dep_prevencion: 'prev', dep_marketing: 'mkt', dep_cobranzas: 'fact', dep_administracion: 'admarea' };
@@ -1325,6 +1329,8 @@
     // tenga en su lista asignada. Justo despues de home (primera posicion
     // entre los internos) porque es lo que se quiere que se vea primero.
     if (propios.indexOf('novedades') === -1) propios = ['novedades'].concat(propios);
+    // Oficina virtual: también core, para todas las cuentas del personal.
+    if (propios.indexOf('oficina') === -1) propios.push('oficina');
     return propios;
   }
 
@@ -1350,7 +1356,7 @@
   // 2026-10-06 (barra «Bloques»): tres grupos. «Mis solicitudes» y «Pausas
   // activas» salen del riel y viven en el panel de Inicio (FUERA_DEL_RIEL).
   var GRUPOS_SIDEBAR = [
-    { titulo: 'Mi espacio', modulos: ['home', 'novedades', 'mi_trabajo', 'bandeja'] },
+    { titulo: 'Mi espacio', modulos: ['home', 'novedades', 'mi_trabajo', 'bandeja', 'oficina'] },
     // Cada persona ve solo su(s) área(s); el orden es el del organigrama.
     { titulo: 'Áreas', modulos: IDS_DEPARTAMENTO.concat(['hompy', 'proyectos', 'jefatura', 'gerencia', 'pausas_coordinacion', 'calidad']) },
     { titulo: 'Sistema', modulos: ['administracion', 'portal_clientes'] }
@@ -1558,7 +1564,7 @@
   // el contenedor ancho, como app.html. Los demas (formulario, mis
   // solicitudes) se leen mejor angostos y centrados -- por eso el ancho del
   // <main> se adapta al modulo en vez de ser fijo.
-  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad', 'hompy', 'finanzas', 'portal_clientes'].concat(IDS_DEPARTAMENTO);
+  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad', 'hompy', 'finanzas', 'portal_clientes', 'oficina'].concat(IDS_DEPARTAMENTO);
   // 2026-10-19: módulos que no son v2 pero igual van a pantalla completa
   // (Credenciales: la tabla de claves de clientes aprovecha todo el ancho; Finanzas: la planilla
   // del banco y sus reportes usan toda la pantalla, 2026-10-22).
@@ -1735,6 +1741,11 @@
     }
     if (id === 'pausas_coordinacion' && window.SigsoCoordinacion) {
       window.SigsoCoordinacion.cargar();
+    }
+    if (id === 'oficina') {
+      // La escena 3D pesa: se carga recién la primera vez que se abre el módulo.
+      var marco = document.getElementById('oficina-marco');
+      if (marco && !marco.getAttribute('src')) marco.setAttribute('src', 'oficina.html');
     }
     if (id === 'novedades' && window.SigsoNovedades) {
       window.SigsoNovedades.cargar();
