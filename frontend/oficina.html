@@ -100,7 +100,35 @@
   .ordenar small { color:var(--suave); }
   .sin-desc { color:var(--suave); font-size:13.5px; margin-top:10px !important; }
   [hidden] { display:none !important; }
-  @media (max-width: 760px) { .aviso, .ayuda, .estado { display:none; } .panel { top:auto; height:56vh; } }
+  /* fantasmas, control del mono, voz, búsqueda, minimapa */
+  .nombre.fantasma { background:rgba(120,160,230,.75); }
+  .nombre.tu { background:#2563eb; color:#fff; font-size:12px; padding:4px 10px; box-shadow:0 0 0 3px rgba(37,99,235,.25); }
+  .globo.hablando { background:#1b1f24; color:#fff; } .globo.hablando::after { border-top-color:#1b1f24; }
+  .btn.mini { padding:8px 6px; margin-left:-4px; }
+  #bMic.escuchando { background:#fee2e2; color:#b91c1c; animation:latido 1s infinite; }
+  #bMover.on { background:#2563eb; color:#fff; }
+  .fant { background:#eef4ff; border:1px solid #c9dafc; color:#1e40af; box-shadow:var(--sombra); }
+  .buscador input { font:inherit; font-size:13px; width:220px; border:1px solid var(--borde); border-radius:12px; padding:9px 12px; background:var(--panel); box-shadow:var(--sombra); outline:none; }
+  .buscador input:focus { border-color:#7fb3ec; box-shadow:0 0 0 3px rgba(37,99,235,.15); }
+  .escuchar { border:0; background:rgba(0,0,0,.05); width:30px; height:30px; border-radius:50%; cursor:pointer; flex:none; margin-left:auto; }
+  .escuchar + .cerrar { margin-left:0; }
+  .chk { display:flex; align-items:center; gap:6px; font-size:13px; margin-top:6px; cursor:pointer; }
+  .selector { font:inherit; font-size:13px; width:100%; border:1px solid var(--borde); border-radius:10px; padding:8px; background:#fff; }
+  .ahora.fantasma { background:#eef4ff; color:#1e40af; } .ahora.fantasma span { background:#8fb6ff; }
+  .ajustes-voz { position:fixed; top:66px; left:330px; z-index:9; background:#fff; border:1px solid var(--borde); border-radius:14px; box-shadow:var(--sombra); padding:12px; display:grid; gap:8px; width:290px; font-size:13px; }
+  .ajustes-voz select, .ajustes-voz input { width:100%; font:inherit; }
+  .ajustes-voz small { color:var(--suave); }
+  .toast { position:fixed; left:50%; top:84px; transform:translate(-50%,-10px); opacity:0; pointer-events:none; z-index:8; background:rgba(27,31,36,.92); color:#fff; border-radius:14px; padding:10px 16px; max-width:min(520px,80vw); box-shadow:var(--sombra); transition:all .3s; text-align:center; }
+  .toast.visible { opacity:1; transform:translate(-50%,0); }
+  .toast b { display:block; font-size:14.5px; } .toast span { display:block; font-size:12.5px; opacity:.85; margin-top:2px; }
+  .interaccion { position:fixed; left:50%; bottom:64px; transform:translateX(-50%); z-index:7; display:flex; gap:6px; }
+  .interaccion button { font:inherit; font-size:13.5px; border:0; border-radius:12px; padding:9px 14px; cursor:pointer; background:#fff; box-shadow:var(--sombra); }
+  .interaccion button[data-saludar] { background:#2563eb; color:#fff; }
+  kbd { display:inline-block; font:600 11px/1 system-ui, sans-serif; border:1px solid rgba(0,0,0,.2); border-bottom-width:2px; border-radius:5px; padding:2px 5px; margin:0 2px; background:rgba(255,255,255,.85); color:#1b1f24; }
+  .minimapa { position:fixed; left:14px; bottom:52px; z-index:5; background:rgba(255,255,255,.9); border:1px solid var(--borde); border-radius:12px; box-shadow:var(--sombra); padding:6px; cursor:pointer; }
+  body.controlando .tour { display:none; }
+  @media (max-width: 760px) { .aviso, .ayuda, .estado, .minimapa { display:none; } .panel { top:auto; height:56vh; } .buscador input { width:150px; } }
+  @media (max-height: 640px) { .minimapa { display:none; } }
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -120,11 +148,15 @@
     <button class="btn prim" id="bTour">▶ Recorrido guiado</button>
     <button class="btn" id="bGeneral">⌂ Vista general</button>
     <button class="btn" id="bComu">⇄ Ver comunicaciones</button>
-    <button class="btn" id="bVoz">🔈 <span>Voz</span></button>
+    <button class="btn" id="bMover" title="Tomar el control de tu mono (tecla M)">🎮 <span>Moverme</span></button>
+    <button class="btn" id="bVoz">🔈 <span>Voz</span></button><button class="btn mini" id="bVozAjustes" title="Elegir voz y velocidad">▾</button>
+    <button class="btn" id="bMic" title="Háblale a la oficina: «llévame a Prevención»">🎤</button>
   </div>
   <div class="estado" id="estado"></div>
   <div class="espacio"></div>
+  <div class="buscador"><input id="buscar" list="sugerencias" placeholder="🔎 Buscar persona o área…" autocomplete="off"><datalist id="sugerencias"></datalist></div>
   <button class="btn sinof" id="bSinOficina" hidden>Personas sin oficina <span></span></button>
+  <button class="btn fant" id="bFantasmas" hidden>👻 Fantasmas</button>
   <div class="aviso" id="aviso"></div>
   <a class="btn volver-sigso" id="volverSigso" href="plataforma.html" hidden>← Volver a SIGSO</a>
 </div>
@@ -141,7 +173,16 @@
 </div>
 
 <div class="tip" id="tip"></div>
-<div class="ayuda">Arrastra para girar · rueda para acercar · clic en una oficina o en una persona</div>
+<div class="ayuda" id="ayuda">Arrastra para girar · rueda para acercar · clic en una oficina o en una persona · <kbd>M</kbd> para moverte</div>
+<div class="ajustes-voz" id="ajustesVoz" hidden>
+  <label>Voz <select id="vozNombre"></select></label>
+  <label>Velocidad <input id="vozVel" type="range" min="0.75" max="1.35" step="0.05"></label>
+  <button class="btn prim" id="vozProbar">▶ Probar</button>
+  <small>Las voces «Natural» o «Online» (Edge, Chrome) suenan más humanas.</small>
+</div>
+<div class="toast" id="toast"></div>
+<div class="interaccion" id="interaccion" hidden></div>
+<canvas class="minimapa" id="minimapa" title="Plano: haz clic en una sala"></canvas>
 
 <script type="module">
   import './js/oficina/cargar.js';

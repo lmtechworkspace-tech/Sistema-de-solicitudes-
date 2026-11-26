@@ -464,6 +464,12 @@ const COLUMNAS = {
   OFICINA_PUESTOS: [
     'puesto_id', 'persona_id', 'sala_id', 'actualizado_por', 'fecha', 'activa'
   ],
+  // Fantasmas de la oficina virtual: personas que no tienen puesto fijo y se
+  // ven translúcidas recorriendo la oficina. Por ficha (persona_id) o, si no
+  // tienen ficha en Calidad, por su cuenta de SIGSO (cuenta_id).
+  OFICINA_FANTASMAS: [
+    'fantasma_id', 'persona_id', 'cuenta_id', 'creado_por', 'fecha', 'activa'
+  ],
   // Carpeta digital de la persona (CV, titulo, contrato, certificados...).
   SGC_PERSONA_DOCUMENTOS: [
     'doc_id', 'persona_id', 'tipo', 'nombre',

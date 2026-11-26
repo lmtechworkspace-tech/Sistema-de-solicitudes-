@@ -125,6 +125,41 @@ test('una persona con dos cargos (dos fichas, mismo correo) aparece UNA vez, con
   assert.equal(despues[0].sala_id, 'operativo');
 });
 
+test('fantasmas: por ficha o por cuenta sin ficha, sin duplicar, y cada uno se reconoce a sí mismo', () => {
+  const db = db_();
+  sembrarTabla_(db, 'CUENTAS_PORTAL', COLUMNAS.CUENTAS_PORTAL, []);
+  sembrarTabla_(db, 'OFICINA_FANTASMAS', COLUMNAS.OFICINA_FANTASMAS, []);
+  const cuenta = (id, nombre, cargo, correo) => agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: id, nombre, cargo, emails: JSON.stringify([correo]), activo: true });
+  cuenta('c-luis', 'Luis Desarrollo', 'Desarrollo SIGSO', 'luis@otro.cl');           // sin ficha
+  cuenta('c-con', 'Carla Contable', 'Asistente', 'con@homepymes.cl');                // tiene ficha
+  persona(db, 'val', 'Valentina Equis', 'Jefa de Proyectos');                         // ficha sin oficina por cargo
+
+  // candidatos: solo cuentas SIN ficha, sin correos
+  const cand = Oficina.getOficina(db, {}, CTX_ADM).candidatos_fantasma;
+  assert.deepEqual(cand.map((c) => c.persona_id), ['cuenta:c-luis']);
+  assert.ok(!JSON.stringify(cand).includes('@'));
+
+  assert.ok(Oficina.marcarFantasma(db, { persona_id: 'cuenta:c-luis', fantasma: true }, CTX_OPERATIVA)._validationError);
+  Oficina.marcarFantasma(db, { persona_id: 'cuenta:c-luis', fantasma: true }, CTX_ADM);
+  Oficina.marcarFantasma(db, { persona_id: 'val', fantasma: true }, CTX_ADM);
+  Oficina.marcarFantasma(db, { persona_id: 'cuenta:c-con', fantasma: true }, CTX_ADM); // cuenta con ficha → la ficha
+
+  const r = Oficina.getOficina(db, {}, { email: 'luis@otro.cl', emails: ['luis@otro.cl'], cuenta_id: 'c-luis', rol: 'DEV' });
+  const fantas = r.personas.filter((p) => p.fantasma).map((p) => p.persona_id).sort();
+  assert.deepEqual(fantas, ['con', 'cuenta:c-luis', 'val']);
+  assert.equal(r.personas.filter((p) => p.nombre === 'Carla Contable').length, 1);
+  assert.equal(r.yo.persona_id, 'cuenta:c-luis');
+  assert.equal(r.yo.nombre, 'Luis Desarrollo');
+  // quien tiene ficha se reconoce por su correo
+  assert.equal(Oficina.getOficina(db, {}, { email: 'pre@homepymes.cl', emails: ['pre@homepymes.cl'], rol: 'DEV' }).yo.persona_id, 'pre');
+
+  // desmarcar: Valentina vuelve a "sin oficina" (su cargo no indica dónde)
+  Oficina.marcarFantasma(db, { persona_id: 'val', fantasma: false }, CTX_ADM);
+  const admin = Oficina.getOficina(db, {}, CTX_ADM);
+  assert.ok(!admin.personas.some((p) => p.persona_id === 'val'));
+  assert.ok(admin.sin_oficina.some((p) => p.persona_id === 'val'));
+});
+
 test('las acciones están en el router y piden sesión', async () => {
   assert.equal(typeof ACCIONES.getOficinaVirtual, 'function');
   assert.equal(typeof ACCIONES.asignarPuestoOficina, 'function');

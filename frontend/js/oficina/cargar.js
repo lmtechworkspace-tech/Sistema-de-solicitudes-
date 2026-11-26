@@ -21,7 +21,7 @@ function corto(nombre) {
 function emparejar(reales) {
   const pares = [];
   reales.forEach((r, i) => plantilla.forEach(t => {
-    if (t.sala !== r.sala_id) return;
+    if (r.fantasma || t.sala !== r.sala_id) return;
     pares.push({ i, t, puntos: palabras(t.cargo).filter(w => palabras(r.cargo).includes(w)).length });
   }));
   pares.sort((a, b) => b.puntos - a.puntos);
@@ -48,7 +48,9 @@ async function cargar() {
     const t = tipos[i] || {};
     const d = p.descriptor;
     return {
-      id: p.persona_id, real: true, nombre: p.nombre, cargo: p.cargo, sala: p.sala_id, sala_asignada: p.sala_asignada,
+      id: p.persona_id, real: true, nombre: p.nombre, cargo: p.cargo, sala_asignada: p.sala_asignada,
+      // los fantasmas no tienen puesto: recorren la oficina
+      sala: p.fantasma ? '' : p.sala_id, fantasma: !!p.fantasma,
       jefatura: p.jefatura_persona_id || null, corto: corto(p.nombre),
       genero: t.genero || null, audifonos: !!t.audifonos,
       tarea: t.tarea || (d && d.funciones && d.funciones[0]) || p.cargo,
@@ -62,6 +64,8 @@ async function cargar() {
   D.modo = 'real';
   D.puede_ordenar = !!r.data.puede_ordenar;
   D.sin_oficina = r.data.sin_oficina || [];
+  D.yo = r.data.yo || { persona_id: '', nombre: '' };          // a quién controla «Moverme»
+  D.candidatos_fantasma = r.data.candidatos_fantasma || [];
   return 'Datos de SIGSO · Calidad → Personas';
 }
 

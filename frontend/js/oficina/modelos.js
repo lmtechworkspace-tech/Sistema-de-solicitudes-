@@ -477,6 +477,43 @@ export function personaje({ semilla = 1, camisa = '#3b82f6', sentado = true, gen
   g.userData = { partes, sentado, fase: r() * 10, mira: 0 };
   return g;
 }
+// Fantasma: el mismo personaje, translúcido y brillante, sin piernas y con una
+// "cola" de sábana; flota. Se usa para quien no tiene puesto fijo en la oficina.
+export function hacerFantasma(pj) {
+  pj.traverse(o => {
+    if (!o.isMesh) return;
+    o.material = o.material.clone();
+    Object.assign(o.material, { transparent: true, opacity: 0.55, depthWrite: false });
+    if (o.material.emissive) { o.material.emissive.set('#a9c8ff'); o.material.emissiveIntensity = 0.45; }
+    o.castShadow = false;
+  });
+  pj.userData.partes.piernas.forEach(l => { l.visible = false; });
+  const sabana = new THREE.MeshStandardMaterial({ color: '#e4eeff', emissive: '#a9c8ff', emissiveIntensity: 0.5, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+  const cola = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.62, 20, 1, true), sabana);
+  cola.rotation.x = Math.PI; cola.position.y = 0.55; pj.add(cola);
+  const aura = new THREE.Mesh(new THREE.SphereGeometry(0.75, 20, 14), new THREE.MeshBasicMaterial({ color: '#bcd6ff', transparent: true, opacity: 0.08, depthWrite: false }));
+  aura.position.y = 1.2; pj.add(aura);
+  pj.userData.fantasma = true;
+  return pj;
+}
+// Saludo con la mano (al hacerle clic o al acercarse y apretar E).
+export function saludar(p, t, duracion = 1.8) {
+  const b = p.userData.partes.brazos[1];
+  if (!p.userData.saludo) p.userData.saludo = { z0: b.rotation.z, x0: b.rotation.x };
+  p.userData.saludo.hasta = t + duracion;
+}
+export function animarSaludo(p, t) {
+  const s = p.userData.saludo; if (!s) return;
+  const b = p.userData.partes.brazos[1];
+  if (t > s.hasta) { b.rotation.z = s.z0; b.rotation.x = s.x0; p.userData.saludo = null; return; }
+  b.rotation.x = -2.75; b.rotation.z = 0.35 + Math.sin(t * 13) * 0.4;
+}
+// De pie y quieto (el mono que uno controla, cuando no camina).
+export function quieto(p) {
+  const { partes } = p.userData;
+  for (const l of partes.piernas) l.rotation.x *= 0.8;
+  for (const b of partes.brazos) b.rotation.x += (0.05 - b.rotation.x) * 0.2;
+}
 export function animarPersonaje(p, t, { caminando = false } = {}) {
   const { partes, fase } = p.userData;
   if (caminando) {

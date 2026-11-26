@@ -511,6 +511,7 @@ const ACCIONES = {
   // descriptor; ordenar quién se sienta dónde, solo quien gobierna Calidad.
   getOficinaVirtual: (db, data, contexto) => OficinaVirtual.getOficina(db, data, contexto),
   asignarPuestoOficina: (db, data, contexto) => OficinaVirtual.asignarPuesto(db, data, contexto),
+  marcarFantasmaOficina: (db, data, contexto) => OficinaVirtual.marcarFantasma(db, data, contexto),
   getFichaPersonaSgc: (db, data, contexto) => Personas.getFicha(db, data, contexto),
   guardarPersonaSgc: (db, data, contexto) => Personas.guardarPersona(db, data, contexto),
   desvincularPersonaSgc: (db, data, contexto) => Personas.desvincular(db, data, contexto),

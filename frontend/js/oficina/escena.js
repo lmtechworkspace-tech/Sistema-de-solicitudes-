@@ -290,13 +290,20 @@ function sentado(pid, x, z, ang, asiento) {
   if (asiento) g.add(asiento);
   const pj = crearPersona(p, salaPorId[p.sala].color); pj.position.z = 0.05; g.add(pj);
 }
-function etiquetaPersona(pj, p, color) {
+function etiquetaPersona(pj, p, color, alto = 1.98) {
   const el = document.createElement('div'); el.className = 'nombre';
-  el.innerHTML = `<i style="background:${color}"></i>${p.corto || p.nombre.split(' ')[0]}`;
+  el.innerHTML = `<i style="background:${color}"></i>`;
+  el.append((p.fantasma ? '👻 ' : '') + (p.corto || p.nombre.split(' ')[0]));
   el.addEventListener('click', e => { e.stopPropagation(); detenerTour(); abrirPersona(p.id); });
-  const o = new CSS2DObject(el); o.position.set(0, 1.98, 0); pj.add(o); etiquetas[p.id] = el;
+  const o = new CSS2DObject(el); o.position.set(0, alto, 0); pj.add(o); etiquetas[p.id] = el;
   const gl = document.createElement('div'); gl.className = 'globo'; gl.textContent = p.tarea || p.cargo;
-  const og = new CSS2DObject(gl); og.position.set(0, 2.45, 0); pj.add(og); globos[p.id] = gl;
+  const og = new CSS2DObject(gl); og.position.set(0, alto + 0.47, 0); pj.add(og); globos[p.id] = gl;
+}
+// Globo temporal (saludos, avisos del mono): se muestra unos segundos y vuelve a la tarea.
+function decir(pid, texto, ms = 4500) {
+  const gl = globos[pid]; if (!gl) return;
+  clearTimeout(gl._t); gl.textContent = texto; gl.classList.add('visible', 'hablando');
+  gl._t = setTimeout(() => { const p = personaPorId[pid]; gl.textContent = (p && (p.tarea || p.cargo)) || ''; gl.classList.remove('hablando'); resaltar(); }, ms);
 }
 const gente = id => D.personas.filter(p => p.sala === id).map(p => p.id);
 const enPared = (obj, x, y, z, nx, nz) => add(obj, x, y, z, mirar(nx, nz));
@@ -477,6 +484,42 @@ function std2(c) { return new THREE.MeshStandardMaterial({ color: c, roughness: 
   }
 }
 
+// ---------- fantasmas: sin puesto fijo, flotan de una sala a otra ----------
+const fantasmas = [];
+const SALAS_PASEO = Object.keys(PLANO).filter(id => !['bano', 'banom', 'basura'].includes(id));
+function rumboFantasma(f) { // elige otra sala y arma el camino por el pasillo
+  const desde = f.sala || 'recepcion';
+  let hacia = desde; while (hacia === desde) hacia = SALAS_PASEO[Math.floor(Math.random() * SALAS_PASEO.length)];
+  const c = centro(hacia);
+  f.ruta = [f.pj.position.clone().setY(0), ...rutaEntre(desde, hacia), new THREE.Vector3(c.x + (Math.random() - 0.5) * 1.5, 0, c.z + (Math.random() - 0.5) * 1.2)];
+  f.tramo = 0; f.sala = hacia; f.pausa = 4 + Math.random() * 6;
+}
+for (const p of D.personas.filter(x => x.fantasma)) {
+  const pj = K.hacerFantasma(K.personaje({ semilla: K.hash(p.id + p.nombre), camisa: '#c7dbff', sentado: false, genero: p.genero }));
+  pj.traverse(o => { if (o.isMesh) o.userData.persona = p.id; });
+  const inicio = centro(SALAS_PASEO[Math.floor(Math.random() * SALAS_PASEO.length)]);
+  pj.position.copy(inicio); scene.add(pj);
+  personas3D[p.id] = pj;
+  etiquetaPersona(pj, p, '#8fb6ff', 2.35);
+  etiquetas[p.id].classList.add('fantasma');
+  const f = { p, pj, sala: null, ruta: [], tramo: 0, pausa: Math.random() * 3, fase: Math.random() * 6 };
+  fantasmas.push(f);
+}
+function moverFantasma(f, dt, t) {
+  const pj = f.pj;
+  pj.position.y = 0.28 + Math.sin(t * 1.6 + f.fase) * 0.08; // flota
+  if (f.controlado) return;
+  K.animarSaludo(pj, t);
+  if (f.pausa > 0) { f.pausa -= dt; if (f.pausa <= 0) rumboFantasma(f); return; }
+  const meta = f.ruta[f.tramo + 1];
+  if (!meta) { f.pausa = 5 + Math.random() * 8; return; }
+  const dx = meta.x - pj.position.x, dz = meta.z - pj.position.z, dist = Math.hypot(dx, dz), paso = dt * 0.9;
+  if (dist <= paso) { pj.position.x = meta.x; pj.position.z = meta.z; f.tramo++; return; }
+  pj.position.x += dx / dist * paso; pj.position.z += dz / dist * paso;
+  let dif = Math.atan2(dx, dz) - pj.rotation.y; dif = Math.atan2(Math.sin(dif), Math.cos(dif));
+  pj.rotation.y += dif * Math.min(1, dt * 4);
+}
+
 // ---------- salas clicables (piso de color + rótulo) ----------
 const pisos = [];
 for (const s of D.salas) {
@@ -569,7 +612,10 @@ const easing = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const rayo = new THREE.Ray(), tmp = new THREE.Vector3();
 function actualizarMuros() {
   const objetivos = [];
-  if (salaActual && !anim) {
+  if (control) { // que los muros no tapen al mono que uno mueve
+    const p = control.pj.position;
+    objetivos.push(new THREE.Vector3(p.x, 0.9, p.z), new THREE.Vector3(p.x, 0.2, p.z));
+  } else if (salaActual && !anim) {
     const p = PLANO[salaActual];
     for (const [fx, fz] of [[0.5, 0.5], [0.2, 0.2], [0.8, 0.2], [0.2, 0.8], [0.8, 0.8]]) objetivos.push(new THREE.Vector3(p.x0 + (p.x1 - p.x0) * fx, 0.7, p.z0 + (p.z1 - p.z0) * fz));
   }
@@ -618,6 +664,7 @@ function abrirSala(id, { volar = true } = {}) {
   panel.innerHTML = `
     <div class="cab"><span class="chip" style="background:${s.color}"></span>
       <div><h2>${esc(s.nombre)}</h2><small>${ids.length ? ids.length + (ids.length === 1 ? ' persona' : ' personas') : 'Espacio común'}</small></div>
+      <button class="escuchar" data-escuchar title="Escuchar">🔊</button>
       <button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
     <div class="cuerpo">
       <h3>Qué hace</h3><p>${esc(s.que_hace)}</p>
@@ -630,13 +677,17 @@ function abrirSala(id, { volar = true } = {}) {
   panel.classList.add('abierto');
   resaltar(); mostrarFlujos();
   if (volar) { const v = vistaSala(id); volarA(v.t, v.dist); }
-  hablar(`${s.nombre}. ${s.que_hace}`);
+  const nombres = ids.map(pid => personaPorId[pid]).filter(p => p && !p.fantasma).map(p => p.nombre.split(' ')[0]);
+  panel._texto = `${s.nombre}. ${s.que_hace} ${nombres.length ? 'Aquí trabaja' + (nombres.length > 1 ? 'n ' : ' ') + nombres.join(', ').replace(/, ([^,]*)$/, ' y $1') + '.' : ''}`;
+  hablar(panel._texto);
 }
 const OPCIONES_SALA = D.salas.filter(s => PLANO[s.id]).map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
 function bloqueOrdenar(p) { // solo quien administra Calidad: cambiar a la persona de oficina
   if (!D.puede_ordenar || !p.real) return '';
+  const fant = `<label class="chk"><input type="checkbox" data-fantasma="${p.id}" ${p.fantasma ? 'checked' : ''}> 👻 Fantasma: sin puesto fijo, recorre la oficina</label>`;
+  if (p.fantasma) return `<div class="ordenar">${fant}</div>`;
   return `<div class="ordenar"><label>Se sienta en <select data-asignar="${p.id}">${OPCIONES_SALA.replace(`value="${p.sala}"`, `value="${p.sala}" selected`)}</select></label>
-    <small>${p.sala_asignada ? 'Asignada a mano' : 'Sugerida por su cargo'}</small></div>`;
+    <small>${p.sala_asignada ? 'Asignada a mano' : 'Sugerida por su cargo'}</small>${fant}</div>`;
 }
 function bloqueDescriptores(p, lista) { // con dos cargos, un descriptor por cargo
   const varios = (p.descriptores || []).length > 1 ? p.descriptores : null;
@@ -654,19 +705,25 @@ function bloqueDescriptor(d, lista, cargo) {
         <dl class="dato"><dt>Educación</dt><dd>${esc(d.nivel_educacional) || '—'}</dd>${d.formacion_tecnica ? `<dt>Formación</dt><dd>${esc(d.formacion_tecnica)}</dd>` : ''}<dt>Experiencia</dt><dd>${esc(d.experiencia) || '—'}</dd></dl>
       </div>`;
 }
-function abrirPersona(pid) {
-  const p = personaPorId[pid], s = salaPorId[p.sala], d = p.descriptor || {};
+const SALA_FANTASMA = { id: '', nombre: 'Recorre la oficina', color: '#8fb6ff', comunica: [] };
+function textoPersona(p) { // lo que se lee en voz alta
+  const d = p.descriptor || {}, f = (d.funciones || []).slice(0, 3);
+  return `${p.nombre}, ${p.cargo}. ${d.objetivo || ''} ${f.length ? 'Sus funciones: ' + f.join('; ') + '.' : ''}`;
+}
+function abrirPersona(pid, { volar = true } = {}) {
+  const p = personaPorId[pid], s = salaPorId[p.sala] || SALA_FANTASMA, d = p.descriptor || {};
   const cambioSala = salaActual !== p.sala;
   personaActual = pid; salaActual = p.sala;
   const jefe = p.jefatura ? personaPorId[p.jefatura] : null, aCargo = D.personas.filter(x => x.jefatura === pid);
   const lista = arr => arr?.length ? `<ul class="lista">${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p>—</p>';
   panel.innerHTML = `
     <div class="cab"><span class="avatar grande" style="background:${s.color}">${iniciales(p.nombre)}</span>
-      <div><h2>${esc(p.nombre)}</h2><small>${esc(p.cargo)} · ${esc(s.nombre)}</small></div>
+      <div><h2>${p.fantasma ? '👻 ' : ''}${esc(p.nombre)}</h2><small>${esc(p.cargo)} · ${esc(s.nombre)}</small></div>
+      <button class="escuchar" data-escuchar title="Escuchar">🔊</button>
       <button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
     <div class="cuerpo">
-      <button class="volver" data-ir="${s.id}">← Volver a ${esc(s.nombre)}</button>
-      <div class="ahora"><span></span>${esc(p.tarea || '')}</div>
+      ${s.id ? `<button class="volver" data-ir="${s.id}">← Volver a ${esc(s.nombre)}</button>` : ''}
+      ${p.fantasma ? `<div class="ahora fantasma"><span></span>Fantasma: no tiene puesto fijo, recorre la oficina</div>` : `<div class="ahora"><span></span>${esc(p.tarea || '')}</div>`}
       <dl class="dato">
         <dt>Reporta a</dt><dd>${jefe ? `<span class="enlace" data-persona="${jefe.id}">${esc(jefe.nombre)}</span><br><small>${esc(jefe.cargo)}</small>` : 'Directorio'}</dd>
         <dt>A su cargo</dt><dd>${aCargo.length ? aCargo.map(x => `<span class="enlace" data-persona="${x.id}">${esc(x.nombre)}</span>`).join(', ') : '—'}</dd>
@@ -677,11 +734,16 @@ function abrirPersona(pid) {
     </div>`;
   panel.classList.add('abierto');
   resaltar(); if (cambioSala) mostrarFlujos();
-  const pj = personas3D[pid], w = new THREE.Vector3(); pj.getWorldPosition(w); w.y = 1.0;
-  volarA(w.addScaledVector(derechaPantalla, conPanel() ? 1.1 : 0), 6.5, 1.3);
-  hablar(`${p.nombre}, ${p.cargo}. ${d.objetivo || ''}`);
+  panel._texto = textoPersona(p);
+  const pj = personas3D[pid];
+  if (pj) {
+    K.saludar(pj, reloj.elapsedTime); // te saluda con la mano y te mira
+    if (volar && !control) { const w = new THREE.Vector3(); pj.getWorldPosition(w); w.y = 1.0; volarA(w.addScaledVector(derechaPantalla, conPanel() ? 1.1 : 0), 6.5, 1.3); }
+  }
+  hablar(panel._texto);
 }
 panel.addEventListener('click', e => {
+  if (e.target.closest('[data-escuchar]')) { hablar(panel._texto || '', { forzar: true }); return; }
   const t = e.target.closest('[data-persona],[data-ir],[data-cerrar]'); if (!t) return;
   detenerTour();
   if (t.dataset.cerrar !== undefined) { cerrarPanel(); volarGeneral(); }
@@ -689,7 +751,19 @@ panel.addEventListener('click', e => {
   else if (t.dataset.ir) abrirSala(t.dataset.ir);
 });
 // Ordenar la oficina (solo quien administra Calidad): se guarda y se vuelve a armar.
+async function guardarYRecargar(accion, datos, control) {
+  control.disabled = true;
+  try {
+    const r = await window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, accion, datos);
+    if (!r || !r.ok) { alert((r && r.message) || 'No se pudo guardar.'); control.disabled = false; return; }
+    location.reload();
+  } catch (err) { alert('No se pudo conectar con SIGSO.'); control.disabled = false; }
+}
 panel.addEventListener('change', async e => {
+  const chk = e.target.closest('[data-fantasma]');
+  if (chk) return guardarYRecargar('marcarFantasmaOficina', { persona_id: chk.dataset.fantasma, fantasma: chk.checked }, chk);
+  const nuevo = e.target.closest('[data-nuevo-fantasma]');
+  if (nuevo) return nuevo.value && guardarYRecargar('marcarFantasmaOficina', { persona_id: nuevo.value, fantasma: true }, nuevo);
   const sel = e.target.closest('[data-asignar]'); if (!sel) return;
   sel.disabled = true;
   try {
@@ -710,20 +784,66 @@ function abrirSinOficina() {
         <select data-asignar="${p.persona_id}"><option value="">Elegir…</option>${OPCIONES_SALA}</select></div>`).join('')}</div></div>`;
   panel.classList.add('abierto');
 }
+function abrirFantasmas() { // solo quien administra Calidad
+  detenerTour(); salaActual = personaActual = null; resaltar();
+  const actuales = D.personas.filter(p => p.fantasma);
+  const opciones = [...D.personas.filter(p => p.real && !p.fantasma).map(p => ({ id: p.id, txt: `${p.nombre} · ${p.cargo}` })),
+    ...(D.candidatos_fantasma || []).map(c => ({ id: c.persona_id, txt: `${c.nombre}${c.cargo ? ' · ' + c.cargo : ''} (cuenta sin ficha)` }))]
+    .sort((a, b) => a.txt.localeCompare(b.txt));
+  panel.innerHTML = `
+    <div class="cab"><span class="chip" style="background:#8fb6ff"></span>
+      <div><h2>👻 Fantasmas</h2><small>Personas sin puesto fijo que recorren la oficina</small></div>
+      <button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
+    <div class="cuerpo"><p>Se ven translúcidas y flotando, y van de una sala a otra. Sirve para quien trabaja con todas las áreas o viene de vez en cuando. Puede ser alguien de Calidad → Personas o una cuenta de SIGSO sin ficha.</p>
+      <h3>Agregar</h3>
+      <select class="selector" data-nuevo-fantasma><option value="">Elegir persona…</option>${opciones.map(o => `<option value="${esc(o.id)}">${esc(o.txt)}</option>`).join('')}</select>
+      <h3>Ahora (${actuales.length})</h3>
+      <div class="gente">${actuales.length ? actuales.map(p => `<div class="persona"><span class="avatar" style="background:#8fb6ff">👻</span>
+        <span><b>${esc(p.nombre)}</b><small>${esc(p.cargo || 'Sin cargo')}</small></span>
+        <label class="chk"><input type="checkbox" checked data-fantasma="${esc(p.id)}"> Fantasma</label></div>`).join('') : '<p>Nadie todavía.</p>'}</div></div>`;
+  panel.classList.add('abierto');
+}
 function cerrarPanel() { panel.classList.remove('abierto'); salaActual = personaActual = null; resaltar(); mostrarFlujos(); callar(); }
 function volarGeneral() { volarA(GENERAL.target.clone(), GENERAL.dist); }
 
 // ---------- voz ----------
-let voz = false;
-function hablar(texto) {
-  if (!voz || !('speechSynthesis' in window)) return;
+// Se elige la mejor voz en español disponible (las «naturales» de Edge/Chrome
+// suenan mucho mejor); la persona puede cambiarla y ajustar la velocidad.
+const prefVoz = (() => { try { return JSON.parse(localStorage.getItem('oficina_voz') || '{}'); } catch (e) { return {}; } })();
+let voz = !!prefVoz.activa;
+function puntajeVoz(v) {
+  let p = 0;
+  if (/es[-_]CL/i.test(v.lang)) p += 40; else if (/es[-_](419|MX|US|AR|CO)/i.test(v.lang)) p += 25; else if (/^es/i.test(v.lang)) p += 15; else return -1;
+  if (/natural|neural|online/i.test(v.name)) p += 30;
+  if (/google/i.test(v.name)) p += 12;
+  return p;
+}
+function vocesEs() { return ('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(v => puntajeVoz(v) >= 0).sort((a, b) => puntajeVoz(b) - puntajeVoz(a)); }
+function vozElegida() { const vs = vocesEs(); return vs.find(v => v.name === prefVoz.nombre) || vs[0] || null; }
+function hablar(texto, { forzar = false } = {}) {
+  if ((!voz && !forzar) || !('speechSynthesis' in window) || !texto) return;
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(texto), vs = speechSynthesis.getVoices();
-  u.voice = vs.find(v => /es[-_]CL/i.test(v.lang)) || vs.find(v => /es[-_](419|MX|US)/i.test(v.lang)) || vs.find(v => /^es/i.test(v.lang)) || null;
-  u.lang = u.voice?.lang || 'es-CL'; u.rate = 1.02; speechSynthesis.speak(u);
+  const u = new SpeechSynthesisUtterance(texto.replace(/\s+/g, ' ').trim()), v = vozElegida();
+  u.voice = v; u.lang = v?.lang || 'es-CL'; u.rate = prefVoz.velocidad || 1.02;
+  speechSynthesis.speak(u);
 }
 function callar() { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
-document.getElementById('bVoz').onclick = e => { voz = !voz; e.currentTarget.classList.toggle('on', voz); e.currentTarget.querySelector('span').textContent = voz ? 'Voz activada' : 'Voz'; if (!voz) callar(); };
+function guardarVoz() { try { localStorage.setItem('oficina_voz', JSON.stringify(Object.assign(prefVoz, { activa: voz }))); } catch (e) { /* sin almacenamiento */ } }
+const bVoz = document.getElementById('bVoz'), ajustesVoz = document.getElementById('ajustesVoz');
+function pintarVoz() { bVoz.classList.toggle('on', voz); bVoz.querySelector('span').textContent = voz ? 'Voz activada' : 'Voz'; }
+bVoz.onclick = () => { voz = !voz; pintarVoz(); guardarVoz(); if (!voz) callar(); else hablar('Hola. Te voy a contar qué hace cada oficina.'); };
+document.getElementById('bVozAjustes').onclick = e => {
+  e.stopPropagation();
+  const sel = document.getElementById('vozNombre'), vs = vocesEs(), elegida = vozElegida();
+  sel.innerHTML = vs.length ? vs.map(v => `<option ${v === elegida ? 'selected' : ''}>${esc(v.name)}</option>`).join('') : '<option>Sin voces en español en este navegador</option>';
+  document.getElementById('vozVel').value = prefVoz.velocidad || 1.02;
+  ajustesVoz.hidden = !ajustesVoz.hidden;
+};
+document.getElementById('vozNombre').onchange = e => { prefVoz.nombre = e.target.value; guardarVoz(); hablar('Así sueno yo.', { forzar: true }); };
+document.getElementById('vozVel').oninput = e => { prefVoz.velocidad = Number(e.target.value); guardarVoz(); };
+document.getElementById('vozProbar').onclick = () => hablar('Hola, soy la voz de la oficina virtual de HomePymes.', { forzar: true });
+addEventListener('click', e => { if (!ajustesVoz.hidden && !e.target.closest('#ajustesVoz')) ajustesVoz.hidden = true; });
+pintarVoz();
 
 // ---------- recorrido guiado ----------
 const tourEl = document.getElementById('tour'), DUR = 12000;
@@ -743,13 +863,293 @@ document.getElementById('tPausa').onclick = e => {
   tour.pausa = !tour.pausa; e.currentTarget.textContent = tour.pausa ? '▶' : '❚❚';
   if (tour.pausa) tour.resto = performance.now() - tour.ini; else tour.ini = performance.now() - (tour.resto || 0);
 };
-document.getElementById('bGeneral').onclick = () => { detenerTour(); cerrarPanel(); volarGeneral(); };
+document.getElementById('bGeneral').onclick = () => { terminarControl(); detenerTour(); cerrarPanel(); volarGeneral(); };
 document.getElementById('bComu').onclick = e => { verTodas = !verTodas; e.currentTarget.classList.toggle('on', verTodas); mostrarFlujos(); };
+
+// ---------- avisos breves ----------
+const toastEl = document.getElementById('toast');
+function toast(titulo, texto = '', ms = 3800) {
+  toastEl.innerHTML = `<b>${esc(titulo)}</b>${texto ? `<span>${esc(texto)}</span>` : ''}`;
+  toastEl.classList.add('visible'); clearTimeout(toastEl._t);
+  toastEl._t = setTimeout(() => toastEl.classList.remove('visible'), ms);
+}
+
+// ---------- tomar el control del propio mono ----------
+// Cada persona reconoce su mono (D.yo, por su correo). Se levanta de la silla y
+// camina: W A S D / flechas, o clic en el piso. Los muros chocan (los fantasmas
+// los atraviesan). Al acercarse a alguien: E para saludar.
+let control = null;
+const teclas = new Set();
+const bMover = document.getElementById('bMover');
+const ayudaEl = document.getElementById('ayuda'), AYUDA_NORMAL = ayudaEl.textContent;
+let CAJAS = null;
+function choca(x, z) {
+  CAJAS = CAJAS || piezas.filter(pz => pz.caja.min.y < 1.2).map(pz => pz.caja); // solo lo que toca el piso
+  const r = 0.22;
+  for (const c of CAJAS) if (x > c.min.x - r && x < c.max.x + r && z > c.min.z - r && z < c.max.z + r) return true;
+  return false;
+}
+function salaEn(x, z) { for (const [id, p] of Object.entries(PLANO)) if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) return id; return null; }
+const marcaDestino = add(new THREE.Mesh(new THREE.RingGeometry(0.18, 0.28, 28), new THREE.MeshBasicMaterial({ color: '#2563eb', transparent: true, opacity: 0, depthWrite: false })), 0, 0.02, 0);
+marcaDestino.rotation.x = -Math.PI / 2;
+
+function iniciarControl() {
+  if (control) return terminarControl();
+  detenerTour(); cerrarPanel();
+  const yo = D.yo || {}, p = personaPorId[yo.persona_id], f = fantasmas.find(x => x.p.id === yo.persona_id);
+  let pj, origen, sentadoPj = null;
+  if (f) { f.controlado = true; pj = f.pj; origen = 'fantasma'; pj.traverse(o => { if (o.isCSS2DObject) o.visible = false; }); }
+  else if (p && personas3D[p.id]) {
+    sentadoPj = personas3D[p.id];
+    const w = new THREE.Vector3(); sentadoPj.getWorldPosition(w); w.y = 0;
+    sentadoPj.visible = false; // se levanta de su silla (los rótulos 2D no heredan la visibilidad: se ocultan aparte)
+    sentadoPj.traverse(o => { if (o.isCSS2DObject) o.visible = false; });
+    pj = K.personaje({ semilla: K.hash(p.id + p.nombre), camisa: (salaPorId[p.sala] || {}).color || '#64748b', sentado: false, genero: p.genero, audifonos: p.audifonos });
+    const c = PLANO[p.sala] ? centro(p.sala) : w.clone(), dir = c.sub(w).setY(0);
+    if (dir.length() > 0.01) dir.normalize();
+    pj.position.copy(w).addScaledVector(dir, 0.75); pj.rotation.y = Math.atan2(dir.x, dir.z);
+    scene.add(pj); origen = 'sentado';
+  } else { // sin ficha: entra como visita por la salida
+    pj = K.personaje({ semilla: 7, camisa: '#2563eb', sentado: false });
+    pj.position.set(4.6, 0, 3.2); pj.rotation.y = -Math.PI / 2; scene.add(pj); origen = 'visita';
+  }
+  const el = document.createElement('div'); el.className = 'nombre tu';
+  el.textContent = '🎮 ' + (yo.nombre ? yo.nombre.split(' ')[0] : 'Tú');
+  const et = new CSS2DObject(el); et.position.set(0, origen === 'fantasma' ? 2.75 : 2.05, 0); pj.add(et);
+  control = { pj, origen, sentadoPj, f, et, destino: null, ruta: null, salaPisada: undefined, previo: pj.position.clone(), cerca: null };
+  document.body.classList.add('controlando');
+  bMover.classList.add('on'); bMover.querySelector('span').textContent = 'Dejar de moverme';
+  ayudaEl.innerHTML = '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> o flechas para caminar · <kbd>Shift</kbd> correr · clic en el piso para ir · <kbd>E</kbd> saludar · <kbd>Esc</kbd> salir';
+  volarA(pj.position.clone().setY(1), 9, 1.2);
+  toast(origen === 'visita' ? 'Entraste como visita' : 'Ahora controlas tu mono', origen === 'visita' ? 'No encontré tu ficha en Calidad → Personas, así que entras por la puerta.' : 'Camina por la oficina y saluda a tus compañeros.');
+}
+function terminarControl() {
+  if (!control) return;
+  const { pj, origen, sentadoPj, f, et } = control;
+  pj.remove(et);
+  if (origen === 'fantasma') { pj.traverse(o => { if (o.isCSS2DObject) o.visible = true; }); f.controlado = false; f.pausa = 1.5; f.sala = salaEn(pj.position.x, pj.position.z) || f.sala || 'recepcion'; }
+  else scene.remove(pj);
+  if (sentadoPj) { sentadoPj.visible = true; sentadoPj.traverse(o => { if (o.isCSS2DObject) o.visible = true; }); } // vuelve a su silla
+  control = null; teclas.clear(); marcaDestino.material.opacity = 0;
+  document.body.classList.remove('controlando');
+  bMover.classList.remove('on'); bMover.querySelector('span').textContent = 'Moverme';
+  ayudaEl.textContent = AYUDA_NORMAL; document.getElementById('interaccion').hidden = true;
+  for (const m of pisos) m.material.opacity = m.userData.sala === salaActual ? 0.16 : 0;
+}
+function entrasteA(id) {
+  for (const m of pisos) m.material.opacity = m.userData.sala === id ? 0.12 : (m.userData.sala === salaActual ? 0.16 : 0);
+  const s = id && salaPorId[id]; if (!s) return;
+  const n = gente(id).filter(pid => !personaPorId[pid]?.fantasma).length;
+  toast(s.nombre, s.que_hace.split('. ')[0].replace(/\.$/, '') + '.' + (n ? `  ·  ${n} ${n === 1 ? 'persona' : 'personas'}` : ''));
+  hablar(s.nombre);
+}
+function rutaHacia(id, final = null) { // camino por las puertas y el pasillo
+  const pos = control.pj.position, actual = salaEn(pos.x, pos.z), pts = [];
+  if (actual !== id) {
+    if (actual) pts.push(...PLANO[actual].ruta.map(([x, z]) => new THREE.Vector3(x, 0, z)));
+    else pts.push(new THREE.Vector3(0, 0, pos.z));
+    pts.push(...PLANO[id].ruta.map(([x, z]) => new THREE.Vector3(x, 0, z)).reverse());
+  }
+  pts.push(final || centro(id));
+  control.ruta = pts; control.destino = null; marcaDestino.position.set(pts[pts.length - 1].x, 0.02, pts[pts.length - 1].z); marcaDestino.material.opacity = 0.9;
+}
+function irHaciaPersona(pid) {
+  const o = personas3D[pid]; if (!o) return;
+  const w = new THREE.Vector3(); o.getWorldPosition(w); w.y = 0;
+  const p = personaPorId[pid];
+  if (p.sala && PLANO[p.sala]) { const c = centro(p.sala), dir = c.clone().sub(w).setY(0).normalize(); rutaHacia(p.sala, w.clone().addScaledVector(dir, 1.0)); }
+  else { control.destino = w; control.ruta = null; }
+}
+const vAdelante = new THREE.Vector3(), vDerecha = new THREE.Vector3(), wTmp = new THREE.Vector3();
+function actualizarControl(dt, t) {
+  if (!control) return;
+  const { pj } = control, fantasma = control.origen === 'fantasma';
+  let mx = 0, mz = 0;
+  const ad = (teclas.has('w') || teclas.has('arrowup')) - (teclas.has('s') || teclas.has('arrowdown'));
+  const de = (teclas.has('d') || teclas.has('arrowright')) - (teclas.has('a') || teclas.has('arrowleft'));
+  if (ad || de) {
+    control.destino = null; control.ruta = null; marcaDestino.material.opacity = 0;
+    camera.getWorldDirection(vAdelante); vAdelante.y = 0; vAdelante.normalize();
+    vDerecha.set(-vAdelante.z, 0, vAdelante.x);
+    mx = vAdelante.x * ad + vDerecha.x * de; mz = vAdelante.z * ad + vDerecha.z * de;
+  } else {
+    const meta = (control.ruta && control.ruta[0]) || control.destino;
+    if (meta) {
+      const dx = meta.x - pj.position.x, dz = meta.z - pj.position.z, d = Math.hypot(dx, dz);
+      if (d < 0.15) { if (control.ruta && control.ruta.length) control.ruta.shift(); else control.destino = null; if (!control.ruta?.length && !control.destino) { control.ruta = null; marcaDestino.material.opacity = 0; } }
+      else { mx = dx / d; mz = dz / d; }
+    }
+  }
+  const largo = Math.hypot(mx, mz), moviendo = largo > 0.01;
+  if (moviendo) {
+    mx /= largo; mz /= largo;
+    const paso = (teclas.has('shift') ? 3.6 : 2.1) * dt, libre = fantasma || !!control.ruta;
+    const nx = pj.position.x + mx * paso, nz = pj.position.z + mz * paso;
+    let ok = 0;
+    if (libre || !choca(nx, pj.position.z)) { pj.position.x = nx; ok++; }
+    if (libre || !choca(pj.position.x, nz)) { pj.position.z = nz; ok++; }
+    if (!ok && control.destino) { control.destino = null; marcaDestino.material.opacity = 0; }
+    let dif = Math.atan2(mx, mz) - pj.rotation.y; dif = Math.atan2(Math.sin(dif), Math.cos(dif));
+    pj.rotation.y += dif * Math.min(1, dt * 12);
+  }
+  if (!fantasma) { if (moviendo) K.animarPersonaje(pj, t, { caminando: true }); else K.quieto(pj); }
+  K.animarSaludo(pj, t);
+  marcaDestino.scale.setScalar(1 + Math.sin(t * 6) * 0.12);
+  // la cámara lo sigue (y se puede seguir girando con el mouse)
+  wTmp.copy(pj.position).sub(control.previo); wTmp.y = 0;
+  if (anim) { anim.p1.add(wTmp); anim.t1.add(wTmp); } else { camera.position.add(wTmp); controls.target.add(wTmp); }
+  control.previo.copy(pj.position);
+  const s = salaEn(pj.position.x, pj.position.z);
+  if (s !== control.salaPisada) { const primera = control.salaPisada === undefined; control.salaPisada = s; if (!primera) entrasteA(s); }
+  // ¿hay alguien cerca para saludar?
+  let cerca = null, mejor = 1.9;
+  for (const [id, o] of Object.entries(personas3D)) {
+    if (o === pj || !o.visible) continue;
+    o.getWorldPosition(wTmp); const d = Math.hypot(wTmp.x - pj.position.x, wTmp.z - pj.position.z);
+    if (d < mejor) { mejor = d; cerca = id; }
+  }
+  if (cerca !== control.cerca) {
+    control.cerca = cerca;
+    const box = document.getElementById('interaccion');
+    box.hidden = !cerca;
+    if (cerca) box.innerHTML = `<button data-saludar><kbd>E</kbd> Saludar a <b>${esc(personaPorId[cerca].nombre.split(' ')[0])}</b></button><button data-ficha>Ver ficha</button>`;
+  }
+}
+function saludarCercano() {
+  if (!control || !control.cerca) return;
+  const pid = control.cerca, p = personaPorId[pid], o = personas3D[pid], t = reloj.elapsedTime;
+  K.saludar(control.pj, t); K.saludar(o, t);
+  // te mira: giro de la cabeza relativo a hacia dónde mira su cuerpo
+  o.getWorldPosition(wTmp);
+  const q = new THREE.Quaternion(); o.getWorldQuaternion(q);
+  let rel = Math.atan2(control.pj.position.x - wTmp.x, control.pj.position.z - wTmp.z) - new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
+  rel = Math.atan2(Math.sin(rel), Math.cos(rel)); o.userData.mira = Math.max(-1.2, Math.min(1.2, rel));
+  const tuNombre = (D.yo && D.yo.nombre) ? ', ' + D.yo.nombre.split(' ')[0] : '';
+  const frase = `¡Hola${tuNombre}! Soy ${p.nombre.split(' ')[0]}${p.cargo ? ', ' + p.cargo.split(' · ')[0] : ''}.`;
+  decir(pid, frase, 5000);
+  hablar(`${frase} ${(p.descriptor && p.descriptor.objetivo) || ''}`, { forzar: true });
+}
+document.getElementById('interaccion').addEventListener('click', e => {
+  if (e.target.closest('[data-saludar]')) saludarCercano();
+  else if (e.target.closest('[data-ficha]') && control?.cerca) abrirPersona(control.cerca, { volar: false });
+});
+bMover.onclick = iniciarControl;
+const esCampo = el => el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName);
+addEventListener('keydown', e => {
+  if (esCampo(document.activeElement)) return;
+  const k = e.key.toLowerCase();
+  if (!control) { if (k === 'm') iniciarControl(); return; }
+  if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(k)) { teclas.add(k); e.preventDefault(); }
+  if (k === 'e') saludarCercano();
+  if (k === 'escape') terminarControl();
+});
+addEventListener('keyup', e => teclas.delete(e.key.toLowerCase()));
+addEventListener('blur', () => teclas.clear());
+
+// ---------- buscar y hablarle a la oficina ----------
+const normal = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const SINONIMOS = {
+  operativo: ['rrhh', 'rr hh', 'recursos humanos', 'contabilidad', 'remuneraciones', 'operativo'],
+  jefaturas: ['jefatura', 'gerencia', 'administracion y finanzas'], plataformas: ['plataforma'],
+  recepcion: ['recepcion', 'facturacion', 'cobranza', 'entrada'], podcast: ['podcast', 'vida de contratistas', 'estudio'],
+  prevencion: ['prevencion', 'seguridad', 'riesgos'], comedor: ['comedor', 'cocina', 'almuerzo'],
+  bano: ['bano de hombres'], banom: ['bano de mujeres'], basura: ['basurero', 'basura'], almacen: ['almacen', 'bodega'], reuniones: ['reunion']
+};
+function buscar(t) {
+  let persona = null, pp = 0;
+  for (const p of D.personas) {
+    const n = normal(p.nombre).split(/\s+/).filter(w => w.length > 2 && new RegExp('\\b' + w + '\\b').test(t)).length;
+    if (n > pp) { pp = n; persona = p; }
+  }
+  let sala = null, ps = 0;
+  for (const s of D.salas) {
+    if (!PLANO[s.id]) continue;
+    for (const k of [normal(s.nombre), ...(SINONIMOS[s.id] || [])]) if (t.includes(k) && k.length > ps) { ps = k.length; sala = s; }
+  }
+  return { persona, sala };
+}
+function resolverConsulta(q) {
+  const t = normal(q).trim(); if (!t) return;
+  if (/recorrido|\btour\b/.test(t)) { if (control) terminarControl(); iniciarTour(); return; }
+  if (/vista general|ver todo|desde arriba/.test(t)) { if (control) terminarControl(); detenerTour(); cerrarPanel(); volarGeneral(); return; }
+  if (control && /dejar de mover|soltar|\bsalir\b/.test(t)) return terminarControl();
+  if (/comunica/.test(t)) { document.getElementById('bComu').click(); return; }
+  const { persona, sala } = buscar(t);
+  if (!persona && !sala && /moverme|caminar|controlar|mi mono|mi personaje/.test(t)) { if (!control) iniciarControl(); return; }
+  if (persona) {
+    if (control) { irHaciaPersona(persona.id); toast(`Vamos donde ${persona.nombre.split(' ')[0]}`, persona.cargo); }
+    else abrirPersona(persona.id);
+    return;
+  }
+  if (sala) {
+    if (control) { rutaHacia(sala.id); toast(`Te llevo a ${sala.nombre}`); hablar(`Vamos a ${sala.nombre}`); }
+    else abrirSala(sala.id);
+    return;
+  }
+  toast('No encontré eso', `«${q}» · prueba con el nombre de una persona o de un área`);
+}
+const inputBuscar = document.getElementById('buscar');
+document.getElementById('sugerencias').innerHTML = [...D.personas.map(p => p.nombre), ...D.salas.filter(s => PLANO[s.id]).map(s => s.nombre)]
+  .map(n => `<option value="${esc(n)}">`).join('');
+inputBuscar.addEventListener('keydown', e => { if (e.key === 'Enter') { resolverConsulta(inputBuscar.value); inputBuscar.value = ''; inputBuscar.blur(); } });
+inputBuscar.addEventListener('change', () => { if (D.personas.some(p => p.nombre === inputBuscar.value) || D.salas.some(s => s.nombre === inputBuscar.value)) { resolverConsulta(inputBuscar.value); inputBuscar.value = ''; inputBuscar.blur(); } });
+// Micrófono: «llévame a prevención», «¿dónde está Camila?», «recorrido», «moverme»…
+{
+  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition, bMic = document.getElementById('bMic');
+  if (!Rec) bMic.hidden = true;
+  else bMic.onclick = () => {
+    const rec = new Rec(); rec.lang = 'es-CL'; rec.interimResults = false; rec.maxAlternatives = 1;
+    bMic.classList.add('escuchando'); toast('Te escucho…', 'Di por ejemplo «llévame a Prevención» o «¿dónde está Camila?»', 6000);
+    rec.onresult = e => { const txt = e.results[0][0].transcript; toast(`«${txt}»`); resolverConsulta(txt); };
+    rec.onerror = e => toast('No te escuché', e.error === 'not-allowed' ? 'El navegador no dio permiso al micrófono.' : 'Intenta de nuevo.');
+    rec.onend = () => bMic.classList.remove('escuchando');
+    rec.start();
+  };
+}
+
+// ---------- minimapa (el plano del croquis, con todos moviéndose) ----------
+const mini = document.getElementById('minimapa'), mctx = mini.getContext('2d');
+const MX0 = -6.1, MX1 = 6.1, MZ0 = -18.4, MZ1 = 5.9, MESC = 9;
+mini.width = (MX1 - MX0) * MESC * 2; mini.height = (MZ1 - MZ0) * MESC * 2;
+mini.style.width = (MX1 - MX0) * MESC + 'px'; mini.style.height = (MZ1 - MZ0) * MESC + 'px';
+const aMini = (x, z) => [(x - MX0) * MESC * 2, (z - MZ0) * MESC * 2];
+let ultimoMini = 0;
+function dibujarMini(t) {
+  const g = mctx; g.clearRect(0, 0, mini.width, mini.height);
+  g.fillStyle = '#efe8da'; { const [a, b] = aMini(-5.7, -15.5), [c, d] = aMini(5.7, 5.5); g.fillRect(a, b, c - a, d - b); const [e, f] = aMini(-1.5, -18); g.fillRect(e, f, 6 * MESC, 2.5 * MESC * 2); }
+  for (const [id, p] of Object.entries(PLANO)) {
+    const s = salaPorId[id]; const [a, b] = aMini(p.x0, p.z0), [c, d] = aMini(p.x1, p.z1);
+    const activa = id === salaActual || (control && id === control.salaPisada);
+    g.globalAlpha = activa ? 0.75 : 0.32; g.fillStyle = s ? s.color : '#999'; g.fillRect(a + 1, b + 1, c - a - 2, d - b - 2);
+    g.globalAlpha = 1; g.strokeStyle = '#8a7f6e'; g.lineWidth = 2; g.strokeRect(a, b, c - a, d - b);
+    if (s && s.n !== undefined) { g.fillStyle = '#1b1f24'; g.font = 'bold 20px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(s.n), (a + c) / 2, (b + d) / 2); }
+  }
+  const punto = (x, z, r, color, borde) => { const [a, b] = aMini(x, z); g.beginPath(); g.arc(a, b, r, 0, Math.PI * 2); g.fillStyle = color; g.fill(); if (borde) { g.lineWidth = 2; g.strokeStyle = borde; g.stroke(); } };
+  for (const [id, o] of Object.entries(personas3D)) {
+    if (!o.visible) continue; o.getWorldPosition(wTmp);
+    const p = personaPorId[id];
+    punto(wTmp.x, wTmp.z, p.fantasma ? 7 : 6, p.fantasma ? 'rgba(143,182,255,.75)' : ((salaPorId[p.sala] || {}).color || '#555'), '#fff');
+  }
+  for (const m of mensajeros) punto(m.pj.position.x, m.pj.position.z, 4, '#64748b');
+  if (control) {
+    const { x, z } = control.pj.position, [a, b] = aMini(x, z), r = 10 + Math.sin(t * 5) * 3;
+    g.beginPath(); g.arc(a, b, r, 0, Math.PI * 2); g.fillStyle = 'rgba(37,99,235,.25)'; g.fill();
+    g.save(); g.translate(a, b); g.rotate(-control.pj.rotation.y + Math.PI);
+    g.beginPath(); g.moveTo(0, -11); g.lineTo(7, 7); g.lineTo(-7, 7); g.closePath(); g.fillStyle = '#2563eb'; g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke(); g.restore();
+  }
+}
+mini.addEventListener('click', e => {
+  const r = mini.getBoundingClientRect(), x = MX0 + (e.clientX - r.left) / MESC, z = MZ0 + (e.clientY - r.top) / MESC;
+  const id = salaEn(x, z);
+  if (control) { if (id) rutaHacia(id); else { control.destino = new THREE.Vector3(x, 0, z); control.ruta = null; } return; }
+  if (id) { detenerTour(); abrirSala(id); }
+});
 
 // ---------- estado (arriba, como los TikTok) ----------
 function actualizarEstado() {
   document.getElementById('estado').innerHTML =
-    `<span><i style="background:#16a34a"></i>${D.personas.length} trabajando</span>` +
+    `<span><i style="background:#16a34a"></i>${D.personas.filter(p => !p.fantasma).length} trabajando</span>` +
+    (fantasmas.length ? `<span><i style="background:#8fb6ff"></i>${fantasmas.length} ${fantasmas.length === 1 ? 'fantasma' : 'fantasmas'}</span>` : '') +
     `<span><i style="background:#0284c7"></i>${mensajeros.length} llevando documentos</span>` +
     `<span><i style="background:#e9a23b"></i>${D.salas.filter(s => PLANO[s.id]).length} espacios</span>`;
 }
@@ -767,7 +1167,17 @@ function tocado(e) {
 renderer.domElement.addEventListener('pointerdown', e => { abajo = [e.clientX, e.clientY]; });
 renderer.domElement.addEventListener('pointerup', e => {
   if (!abajo || Math.hypot(e.clientX - abajo[0], e.clientY - abajo[1]) > 5) return;
-  const u = tocado(e); if (!u) return; detenerTour();
+  const u = tocado(e);
+  if (control) { // controlando: clic en el piso = caminar hasta ahí; clic en alguien = ir hacia esa persona
+    if (u?.persona && personas3D[u.persona] !== control.pj) { abrirPersona(u.persona, { volar: false }); irHaciaPersona(u.persona); return; }
+    const pt = new THREE.Vector3();
+    if (ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), pt)) {
+      control.destino = pt.setY(0); control.ruta = null;
+      marcaDestino.position.set(pt.x, 0.02, pt.z); marcaDestino.material.opacity = 0.9;
+    }
+    return;
+  }
+  if (!u) return; detenerTour();
   if (u.persona) abrirPersona(u.persona); else if (u.sala) abrirSala(u.sala);
 });
 renderer.domElement.addEventListener('pointermove', e => {
@@ -781,6 +1191,7 @@ renderer.domElement.addEventListener('pointermove', e => {
   if (hs !== hover) { hover = hs; for (const m of pisos) m.material.opacity = m.userData.sala === salaActual ? 0.16 : (m.userData.sala === hover ? 0.09 : 0); }
 });
 addEventListener('resize', () => {
+  if (!innerWidth || !innerHeight) return; // pestaña o marco oculto: no achicar a cero (rompe el render)
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); css2d.setSize(innerWidth, innerHeight);
 });
@@ -794,10 +1205,24 @@ if (D.puede_ordenar && (D.sin_oficina || []).length) {
   b.hidden = false; b.querySelector('span').textContent = D.sin_oficina.length;
   b.onclick = abrirSinOficina;
 }
+if (D.puede_ordenar) { const b = document.getElementById('bFantasmas'); b.hidden = false; b.onclick = abrirFantasmas; }
 mostrarFlujos();
 const reloj = new THREE.Clock();
+// Calidad automática: en un computador lento se apaga la sombra ambiental (lo más pesado)
+// y se baja un poco la resolución, para que caminar se sienta fluido.
+const medidor = { cuadros: 0, desde: 0, listo: false };
+function ajustarCalidad(ahora) {
+  if (medidor.listo || document.hidden) return;
+  if (!medidor.desde) { medidor.desde = ahora; return; }
+  medidor.cuadros++;
+  if (ahora - medidor.desde < 3000) return;
+  const fps = medidor.cuadros / ((ahora - medidor.desde) / 1000);
+  medidor.listo = true;
+  if (fps < 28) { ao.enabled = false; renderer.setPixelRatio(1); composer.setPixelRatio(1); sol.shadow.mapSize.set(2048, 2048); sol.shadow.map?.dispose(); sol.shadow.map = null; }
+}
 renderer.setAnimationLoop(() => {
   const dt = Math.min(0.05, reloj.getDelta()), t = reloj.elapsedTime, ahora = performance.now();
+  ajustarCalidad(ahora);
   if (anim) {
     const k = Math.min(1, (ahora - anim.ini) / anim.dur), e = easing(k);
     camera.position.lerpVectors(anim.p0, anim.p1, e); controls.target.lerpVectors(anim.t0, anim.t1, e);
@@ -808,7 +1233,10 @@ renderer.setAnimationLoop(() => {
     document.getElementById('tBarra').style.width = Math.min(100, k * 100) + '%';
     if (k >= 1) irPaso(tour.i + 1);
   }
-  for (const pj of Object.values(personas3D)) K.animarPersonaje(pj, t);
+  for (const pj of Object.values(personas3D)) { if (pj.userData.fantasma) continue; K.animarPersonaje(pj, t); K.animarSaludo(pj, t); }
+  for (const f of fantasmas) moverFantasma(f, dt, t);
+  actualizarControl(dt, t);
+  if (ahora - ultimoMini > 110) { dibujarMini(t); ultimoMini = ahora; }
   for (const m of mensajeros) moverMensajero(m, dt, t);
   for (const v of viajeros) { v.t = (v.t + dt * 0.25) % 1; v.b.position.copy(v.curva.getPoint(v.t)); }
   for (const v of ventiladores) v.userData.aspas.rotation.z += dt * 18;
