@@ -173,7 +173,9 @@ function getOficina(db, data, contexto) {
     yo: { persona_id: yoId, nombre: (miCuenta && miCuenta.nombre) || '' },
     candidatos_fantasma: candidatos,
     pizarras: pizarras_(db), deptos_de_sala: DEPTOS_DE_SALA,
-    vivo: estadoOficina(db, {}, contexto) // estados de las personas y reservas de las salas
+    vivo: estadoOficina(db, {}, contexto), // estados de las personas y reservas de las salas
+    flujos: flujos_(db),                   // quién le pide a quién (últimos 30 días, conteos)
+    puede_auditar: puedeAuditar_(db, contexto)
   };
 }
 function listaJson_(v) { if (Array.isArray(v)) return v; try { const p = JSON.parse(v || '[]'); return Array.isArray(p) ? p : []; } catch (err) { return []; } }
@@ -525,5 +527,127 @@ function cancelarReserva(db, data, contexto) {
   return { reserva_id: r.reserva_id, cancelada: true };
 }
 
-module.exports = { estadoOficina, ponerEstado, crearReserva, cancelarReserva, ESTADOS_PERSONA, SALAS_RESERVABLES,
+// ===========================================================================
+// 6 · Modo auditor ISO 9001 (2026-11-26): la evidencia del SGC puesta en cada
+// oficina (procesos, indicadores con su última lectura, documentos vigentes,
+// NC abiertas y la competencia de las personas). Solo para quien ve todo
+// Calidad: quien la gobierna, Gerencia y el auditor externo vigente.
+// 7 · Comunicaciones reales: quién le pide a quién, con las solicitudes de los
+// últimos 30 días (solo conteos entre oficinas).
+// ===========================================================================
+// Los procesos del mapa (DOC-03) en su oficina. Dirección, SGC, revisión por la
+// dirección, documentos y mejora van a la sala de reuniones (ahí se revisan).
+const PROCESO_A_SALA = {
+  'PA-03': 'recepcion', 'PO-03': 'operativo', 'PO-04': 'operativo', 'PA-01': 'operativo',
+  'PO-01': 'jefaturas', 'PO-02': 'jefaturas', 'PO-05': 'prevencion', 'PA-04': 'plataformas',
+  'PE-01': 'reuniones', 'PE-02': 'reuniones', 'PE-03': 'reuniones', 'PA-02': 'reuniones', 'PA-05': 'reuniones'
+};
+const REGLAS_PROCESO = [
+  [/factura|cobranz/i, 'recepcion'], [/rr\.?\s*hh|recursos humanos|contab|remuner/i, 'operativo'], [/prevenci|riesgo/i, 'prevencion'],
+  [/plataforma|proveedor/i, 'plataformas'], [/administraci|comercial|venta/i, 'jefaturas'], [/direcci|calidad|sgc|document|mejora|medici|revisi/i, 'reuniones']
+];
+const SALAS_AUDITOR = ['recepcion', 'operativo', 'jefaturas', 'prevencion', 'plataformas', 'reuniones'];
+const ESTADOS_NC_ABIERTOS = ['ABIERTA', 'EN_CORRECCION', 'EN_ACCION', 'EN_VERIFICACION'];
+function salaDeProceso_(p) {
+  if (PROCESO_A_SALA[p.codigo]) return PROCESO_A_SALA[p.codigo];
+  const t = [p.nombre, p.area].join(' ');
+  const r = REGLAS_PROCESO.find(([re]) => re.test(t));
+  return r ? r[1] : '';
+}
+// Oficina y nombre de cada persona por su correo (para NC, indicadores y solicitudes).
+function porCorreo_(db) {
+  const puestos = new Map(leerSeguro_(db, 'OFICINA_PUESTOS').filter((p) => esVerdadero_(p.activa)).map((p) => [p.persona_id, p.sala_id]));
+  const sala = new Map(), nombre = new Map(), ficha = new Map();
+  for (const p of leerSeguro_(db, 'SGC_PERSONAS').filter((x) => esVerdadero_(x.activa) && x.estado !== 'DESVINCULADO')) {
+    const e = normalizarEmail_(p.usuario_email); if (!e) continue;
+    if (!nombre.has(e)) { nombre.set(e, p.nombre || ''); ficha.set(e, p); }
+    const s = puestos.get(p.persona_id) || (p.tipo !== 'EXT' ? salaSugerida_(p.cargo) : '');
+    if (s && !sala.has(e)) sala.set(e, s);
+  }
+  return { sala, nombre, ficha };
+}
+function puedeAuditar_(db, contexto) {
+  if (!contexto) return false;
+  return Calidad.veTodoSgc_(db, contexto, Calidad.rolSgc_(db, contexto), Calidad.gobiernaSgc_(db, contexto));
+}
+
+function getAuditoria(db, data, contexto, ahora = Date.now()) {
+  if (!puedeAuditar_(db, contexto)) return { _validationError: true, message: 'El modo auditor es para quien administra Calidad, Gerencia o el auditor externo.' };
+  const { sala: salaDe, nombre: nombreDe } = porCorreo_(db);
+  const quien = (e) => nombreDe.get(normalizarEmail_(e)) || '';
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date(ahora));
+  const out = {};
+  SALAS_AUDITOR.forEach((s) => { out[s] = { procesos: [], indicadores: [], documentos: [], nc: [], personas: [] }; });
+  const procesos = leerSeguro_(db, 'SGC_PROCESOS').filter((p) => esVerdadero_(p.activa) && (p.nivel || 'MAPA') === 'MAPA');
+  const salaProc = new Map();
+  for (const p of procesos) {
+    const s = salaDeProceso_(p); if (!out[s]) continue;
+    salaProc.set(p.proceso_id, s);
+    out[s].procesos.push({ codigo: p.codigo, nombre: p.nombre, responsable: quien(p.responsable_email), documentos: p.documentos || '' });
+  }
+  // indicadores (del proceso o de quien responde por ellos), con su última lectura
+  const lecturas = leerSeguro_(db, 'SGC_INDICADOR_LECTURAS').filter((l) => esVerdadero_(l.activa) && l.indicador_id)
+    .sort((a, b) => String(b.anio + b.periodo + b.fecha_registro).localeCompare(String(a.anio + a.periodo + a.fecha_registro)));
+  for (const i of leerSeguro_(db, 'SGC_INDICADORES').filter((x) => esVerdadero_(x.activa))) {
+    const s = salaProc.get(i.proceso_id) || salaDe.get(normalizarEmail_(i.responsable_email)); if (!out[s]) continue;
+    const l = lecturas.find((x) => x.indicador_id === i.indicador_id);
+    out[s].indicadores.push({ codigo: i.codigo, nombre: i.nombre, meta: i.meta_texto || [i.meta_operador, i.meta_valor].filter(Boolean).join(' '),
+      ultimo: l ? { valor: l.valor, periodo: [l.periodo, l.anio].filter(Boolean).join(' '), cumple: esVerdadero_(l.cumple) } : null });
+  }
+  // documentos vigentes: los que nombra el proceso (por código) o los del área de la oficina
+  const docs = leerSeguro_(db, 'SGC_DOCUMENTOS').filter((d) => esVerdadero_(d.activa) && d.estado === 'VIGENTE');
+  for (const s of SALAS_AUDITOR) {
+    const textoProc = out[s].procesos.map((p) => p.documentos).join(' ').toUpperCase();
+    out[s].documentos = docs.filter((d) => (d.codigo && textoProc.indexOf(String(d.codigo).toUpperCase()) !== -1) || salaDeArea_(d.area_id) === s)
+      .map((d) => ({ codigo: d.codigo, nombre: d.nombre, version: d.version_vigente, proxima_revision: d.proxima_revision || '',
+        revision_vencida: !!(d.proxima_revision && String(d.proxima_revision).slice(0, 10) < hoy) }));
+    out[s].procesos.forEach((p) => { delete p.documentos; });
+  }
+  // NC abiertas: en la oficina de quien responde por ellas (o de su área)
+  for (const n of leerSeguro_(db, 'SGC_NC').filter((x) => esVerdadero_(x.activa) && ESTADOS_NC_ABIERTOS.indexOf(x.estado) !== -1)) {
+    const s = salaDe.get(normalizarEmail_(n.responsable_email)) || salaDeArea_(n.area_id); if (!out[s]) continue;
+    const plazo = n.accion_plazo || n.correccion_plazo || '';
+    out[s].nc.push({ correlativo: n.correlativo, descripcion: String(n.descripcion || '').slice(0, 160), estado: n.estado,
+      responsable: quien(n.responsable_email), plazo, vencida: !!(plazo && String(plazo).slice(0, 10) < hoy) });
+  }
+  // competencia (7.2): descriptor vigente e inducción de cada persona de la oficina
+  const descriptores = leerSeguro_(db, 'SGC_DESCRIPTORES').filter((d) => esVerdadero_(d.vigente));
+  const inducciones = leerSeguro_(db, 'SGC_INDUCCIONES');
+  const vistos = new Set();
+  for (const p of leerSeguro_(db, 'SGC_PERSONAS').filter((x) => esVerdadero_(x.activa) && x.estado !== 'DESVINCULADO')) {
+    const e = normalizarEmail_(p.usuario_email), s = salaDe.get(e);
+    if (!out[s] || vistos.has(e || p.persona_id)) continue;
+    vistos.add(e || p.persona_id);
+    const ind = inducciones.filter((i) => i.persona_id === p.persona_id);
+    out[s].personas.push({ nombre: p.nombre, cargo: p.cargo, descriptor: descriptores.some((d) => d.persona_id === p.persona_id),
+      induccion: ind.length ? ind.filter((i) => i.estado === 'COMPLETADA').length + '/' + ind.length : '' });
+  }
+  return { salas: out, generado: new Date(ahora).toISOString() };
+}
+const AREA_A_SALA = [[/^(RRHH|RECURSOS|CONTAB)/i, 'operativo'], [/^PREVEN/i, 'prevencion'], [/^(COBRANZ|FACTUR)/i, 'recepcion'],
+  [/^ADMIN/i, 'jefaturas'], [/^(PLATAFORM|DESARROL|SOPORTE)/i, 'plataformas']];
+function salaDeArea_(areaId) { const a = String(areaId || ''); const r = a && AREA_A_SALA.find(([re]) => re.test(a)); return r ? r[1] : ''; }
+
+let cacheFlujos_ = { ts: 0, db: null, v: null };
+function flujos_(db, ahora = Date.now(), dias = 30) {
+  if (cacheFlujos_.v && cacheFlujos_.db === db && ahora - cacheFlujos_.ts < 5 * 60000) return cacheFlujos_.v;
+  const { sala: salaDe } = porCorreo_(db);
+  const solicitudes = new Map(leerSeguro_(db, 'SOLICITUDES').map((s) => [s.solicitud_id, s]));
+  const salaDeDepto = (d) => { if (!d) return 'plataformas'; const e = Object.entries(DEPTOS_DE_SALA).find(([, ds]) => ds.indexOf(d) !== -1); return e ? e[0] : ''; };
+  const desde = ahora - dias * DIA_MS, pares = new Map();
+  let total = 0;
+  for (const it of leerSeguro_(db, 'SUBSOLICITUDES')) {
+    const t = new Date(it.fecha_creacion).getTime(); if (!(t >= desde && t <= ahora)) continue;
+    const s = solicitudes.get(it.solicitud_id); if (!s) continue;
+    const a = salaDeDepto(it.depto); if (!a) continue;
+    const de = (s.cliente_id || /portal|cliente/i.test(String(s.origen || ''))) ? 'clientes' : (salaDe.get(normalizarEmail_(s.solicitante_email)) || '');
+    if (!de || de === a) continue;
+    const k = de + '|' + a; pares.set(k, (pares.get(k) || 0) + 1); total++;
+  }
+  const v = { dias, total, pares: [...pares].map(([k, n]) => ({ de: k.split('|')[0], a: k.split('|')[1], n })).sort((x, y) => y.n - x.n) };
+  cacheFlujos_ = { ts: ahora, db, v };
+  return v;
+}
+
+module.exports = { getAuditoria, flujos_, puedeAuditar_, estadoOficina, ponerEstado, crearReserva, cancelarReserva, ESTADOS_PERSONA, SALAS_RESERVABLES,
   getOficina, getPizarras, registrarRecorrido, asignarPuesto, marcarFantasma, presencia, suscribir, reiniciarPresencia_, activarModuloEnCuentas_, salaSugerida_, SALAS_OFICINA };

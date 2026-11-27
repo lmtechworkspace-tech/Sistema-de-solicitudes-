@@ -380,6 +380,57 @@ test('reservas: sin topes, cancela quien reservó, y quien está en la reserva a
   assert.equal(Oficina.estadoOficina(db, {}, vale).reservas.length, 1);
 });
 
+test('modo auditor: cada oficina con sus procesos, indicadores, documentos, NC y personas; solo para quien ve todo Calidad', () => {
+  const db = db_();
+  ['SGC_PROCESOS', 'SGC_INDICADORES', 'SGC_INDICADOR_LECTURAS', 'SGC_DOCUMENTOS', 'SGC_NC', 'SGC_INDUCCIONES', 'CUENTAS_PORTAL'].forEach((h) => sembrarTabla_(db, h, COLUMNAS[h], []));
+  agregarFila_(db, 'SGC_PROCESOS', { proceso_id: 'po4', codigo: 'PO-04', nombre: 'Gestión de Contabilidad', nivel: 'MAPA', responsable_email: 'con@homepymes.cl', documentos: 'PRO-07, FO-07-01', activa: true });
+  agregarFila_(db, 'SGC_PROCESOS', { proceso_id: 'pe3', codigo: 'PE-03', nombre: 'Revisión por la Dirección', nivel: 'MAPA', activa: true });
+  agregarFila_(db, 'SGC_PROCESOS', { proceso_id: 's1', codigo: 'SRV-01', nombre: 'Servicio X', nivel: 'SERVICIO', activa: true }); // los de servicio no van
+  agregarFila_(db, 'SGC_INDICADORES', { indicador_id: 'i1', codigo: 'IND-04', nombre: 'F29 a tiempo', proceso_id: 'po4', meta_texto: '100 %', activa: true });
+  agregarFila_(db, 'SGC_INDICADOR_LECTURAS', { lectura_id: 'l1', indicador_id: 'i1', anio: '2026', periodo: 'M10', valor: '90', cumple: false, fecha_registro: '2026-11-02', activa: true });
+  agregarFila_(db, 'SGC_INDICADOR_LECTURAS', { lectura_id: 'l0', indicador_id: 'i1', anio: '2026', periodo: 'M09', valor: '100', cumple: true, fecha_registro: '2026-10-02', activa: true });
+  agregarFila_(db, 'SGC_DOCUMENTOS', { documento_id: 'd1', codigo: 'PRO-07', nombre: 'Procedimiento contable', estado: 'VIGENTE', version_vigente: '2', proxima_revision: '2020-01-01', activa: true });
+  agregarFila_(db, 'SGC_DOCUMENTOS', { documento_id: 'd2', codigo: 'PRO-99', nombre: 'Obsoleto', estado: 'OBSOLETO', activa: true });
+  agregarFila_(db, 'SGC_NC', { nc_id: 'n1', correlativo: 'NC-2026-004', descripcion: 'F29 de octubre fuera de plazo', estado: 'EN_ACCION', responsable_email: 'con@homepymes.cl', accion_plazo: '2020-01-01', activa: true });
+  agregarFila_(db, 'SGC_NC', { nc_id: 'n2', correlativo: 'NC-2026-001', descripcion: 'Cerrada', estado: 'CERRADA', responsable_email: 'con@homepymes.cl', activa: true });
+
+  assert.ok(Oficina.getAuditoria(db, {}, CTX_OPERATIVA)._validationError, 'una persona operativa no audita');
+  assert.equal(Oficina.getOficina(db, {}, CTX_OPERATIVA).puede_auditar, false);
+  const a = Oficina.getAuditoria(db, {}, CTX_ADM);
+  const op = a.salas.operativo;
+  assert.deepEqual(op.procesos.map((p) => p.codigo), ['PO-04']);
+  assert.equal(op.procesos[0].responsable, 'Carla Contable');
+  assert.equal(op.indicadores[0].ultimo.periodo, 'M10 2026'); assert.equal(op.indicadores[0].ultimo.cumple, false);
+  assert.deepEqual(op.documentos.map((d) => d.codigo), ['PRO-07']); assert.equal(op.documentos[0].revision_vencida, true);
+  assert.deepEqual(op.nc.map((n) => n.correlativo), ['NC-2026-004']); assert.equal(op.nc[0].vencida, true);
+  assert.ok(op.personas.some((p) => p.nombre === 'Carla Contable' && p.descriptor === true));
+  assert.deepEqual(a.salas.reuniones.procesos.map((p) => p.codigo), ['PE-03']);
+  assert.ok(!JSON.stringify(a).includes('@'), 'sin correos');
+});
+
+test('comunicaciones reales: quién le pide a quién en los últimos 30 días', () => {
+  const db = db_();
+  ['SOLICITUDES', 'SUBSOLICITUDES'].forEach((h) => sembrarTabla_(db, h, COLUMNAS[h], []));
+  const hace = (d) => new Date(Date.now() - d * 86400000).toISOString();
+  const pedido = (id, quien, depto, dias, extra = {}) => {
+    agregarFila_(db, 'SOLICITUDES', Object.assign({ solicitud_id: id, solicitante_email: quien, fecha_creacion: hace(dias) }, extra));
+    agregarFila_(db, 'SUBSOLICITUDES', { subsolicitud_id: id + 'a', solicitud_id: id, depto, estado: 'S02', fecha_creacion: hace(dias) });
+  };
+  pedido('a', 'fac@homepymes.cl', 'CONTABILIDAD', 3);   // recepción → operativo
+  pedido('b', 'fac@homepymes.cl', 'RRHH', 10);          // recepción → operativo
+  pedido('c', 'con@homepymes.cl', 'ADMINISTRACION', 5); // operativo → jefaturas
+  pedido('d', 'gaf@homepymes.cl', 'ADMINISTRACION', 2); // misma oficina: no es comunicación entre áreas
+  pedido('e', 'x@cliente.cl', 'PREVENCION', 1, { cliente_id: 'cli-9' }); // desde el portal de clientes
+  pedido('f', 'fac@homepymes.cl', 'CONTABILIDAD', 45);  // fuera de los 30 días
+  const f = Oficina.flujos_(db, Date.now() + 1); // +1: evita la caché de otra prueba
+  const de = (a, b) => (f.pares.find((p) => p.de === a && p.a === b) || {}).n || 0;
+  assert.equal(de('recepcion', 'operativo'), 2);
+  assert.equal(de('operativo', 'jefaturas'), 1);
+  assert.equal(de('clientes', 'prevencion'), 1);
+  assert.equal(de('jefaturas', 'jefaturas'), 0);
+  assert.equal(f.total, 4);
+});
+
 test('las acciones están en el router y piden sesión', async () => {
   assert.equal(typeof ACCIONES.getOficinaVirtual, 'function');
   assert.equal(typeof ACCIONES.asignarPuestoOficina, 'function');

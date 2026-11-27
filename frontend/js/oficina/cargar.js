@@ -70,6 +70,8 @@ async function cargar() {
   D.candidatos_fantasma = r.data.candidatos_fantasma || [];
   D.pizarras = r.data.pizarras || null;            // pendientes de cada área (conteos)
   D.vivo = r.data.vivo || { estados: {}, reservas: [] }; // estado de cada persona y reservas de salas
+  D.flujos = r.data.flujos || null;                // pedidos reales entre oficinas (30 días)
+  D.puede_auditar = !!r.data.puede_auditar;        // modo auditor ISO (Calidad, Gerencia, auditor)
   if (r.data.deptos_de_sala) D.deptos_de_sala = r.data.deptos_de_sala;
   return 'Datos de SIGSO · Calidad → Personas';
 }

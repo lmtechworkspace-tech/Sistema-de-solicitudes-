@@ -138,6 +138,17 @@
   .pend-prox { font-size:13px; margin:10px 0 0 !important; }
   .pend-acc { display:flex; gap:6px; margin-top:10px; }
   .pend-acc button:first-child { font:inherit; font-size:13px; border:1px solid var(--borde); background:#fff; border-radius:10px; padding:8px 12px; cursor:pointer; }
+  .aud-resumen { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 6px; }
+  .aud-chip { font-size:12px; font-weight:600; background:#f0fdf4; color:#166534; border-radius:999px; padding:4px 10px; }
+  .aud-chip.mal { background:#fef2f2; color:#b91c1c; }
+  .aud-lista { list-style:none; padding:0; margin:6px 0 0; display:grid; gap:6px; }
+  .aud-lista li { font-size:13px; background:#f6f8fa; border-radius:10px; padding:7px 10px; }
+  .aud-lista li.mal { background:#fef2f2; }
+  .aud-lista small { display:block; color:var(--suave); margin-top:2px; }
+  .aud-nav { display:flex; justify-content:space-between; gap:8px; margin-top:16px; }
+  .reales { list-style:none; padding:0; margin:6px 0 0; display:grid; gap:4px; }
+  .reales li { display:flex; justify-content:space-between; font-size:13px; background:#f6f8fa; border-radius:10px; padding:7px 10px; }
+  .reales li[data-ir] { cursor:pointer; } .reales b { font-variant-numeric:tabular-nums; }
   .pend-nota { font-size:12px !important; color:var(--suave); margin-top:14px !important; }
   .induccion { margin-top:14px; border-radius:12px; padding:10px 12px; background:#f6f8fa; font-size:13px; }
   .induccion p { font-size:13px !important; margin:4px 0 0 !important; }
@@ -194,6 +205,7 @@
     <button class="btn" id="bInduccion" title="Recorrido de inducción para quien llega: queda registrado en Calidad">🎓 Inducción</button>
     <button class="btn" id="bGeneral">⌂ Vista general</button>
     <button class="btn" id="bComu">⇄ Ver comunicaciones</button>
+    <button class="btn" id="bAuditor" title="Recorrer cada oficina con su evidencia ISO 9001: procesos, indicadores, documentos, NC y competencia" hidden>🔍 Modo auditor</button>
     <button class="btn" id="bMover" title="Tomar el control de tu mono (tecla M)">🎮 <span>Moverme</span></button>
     <button class="btn" id="bMiEstado" title="Tu estado: disponible, en reunión, en terreno…" hidden><span>🟢 Disponible</span></button>
     <button class="btn" id="bVoz">🔈 <span>Voz</span></button><button class="btn mini" id="bVozAjustes" title="Elegir voz y velocidad">▾</button>

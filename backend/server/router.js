@@ -519,6 +519,8 @@ const ACCIONES = {
   registrarRecorridoOficina: (db, data, contexto) => OficinaVirtual.registrarRecorrido(db, data, contexto),
   // Estado de cada persona y reservas de la sala de reuniones y del podcast.
   getEstadoOficina: (db, data, contexto) => OficinaVirtual.estadoOficina(db, data, contexto),
+  // Modo auditor ISO 9001: evidencia del SGC por oficina (solo quien ve todo Calidad).
+  getAuditoriaOficina: (db, data, contexto) => OficinaVirtual.getAuditoria(db, data, contexto),
   ponerEstadoOficina: (db, data, contexto) => OficinaVirtual.ponerEstado(db, data, contexto),
   crearReservaOficina: (db, data, contexto) => OficinaVirtual.crearReserva(db, data, contexto),
   cancelarReservaOficina: (db, data, contexto) => OficinaVirtual.cancelarReserva(db, data, contexto),

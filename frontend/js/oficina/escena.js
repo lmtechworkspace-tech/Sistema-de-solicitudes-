@@ -621,25 +621,53 @@ function moverMensajero(m, dt, t) {
 const arcos = new THREE.Group(); scene.add(arcos);
 const viajeros = [];
 function limpiarArcos() { while (arcos.children.length) { const c = arcos.children.pop(); c.geometry?.dispose(); } viajeros.length = 0; }
-function arco(de, a, color, op = 0.9) {
-  const p = centro(de).setY(H + 0.4), q = centro(a).setY(H + 0.4);
+// Los pedidos que llegan del portal de clientes salen de afuera, frente a la salida.
+const PUNTO_CLIENTES = new THREE.Vector3(9, 0, 3.2);
+const puntoDe = id => id === 'clientes' ? PUNTO_CLIENTES.clone() : centro(id);
+const colorDe = id => id === 'clientes' ? '#0ea5e9' : ((salaPorId[id] || {}).color || '#64748b');
+const nombreSala = id => id === 'clientes' ? 'Clientes (portal)' : ((salaPorId[id] || {}).nombre || id);
+function arco(de, a, color, op = 0.9, n = 0) {
+  const p = puntoDe(de).setY(H + 0.4), q = puntoDe(a).setY(H + 0.4);
   const m = p.clone().add(q).multiplyScalar(0.5); m.y = H + 1.6 + p.distanceTo(q) * 0.25;
   const curva = new THREE.QuadraticBezierCurve3(p, m, q);
-  arcos.add(new THREE.Mesh(new THREE.TubeGeometry(curva, 60, 0.035, 6), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op * 0.55 })));
+  const grosor = n ? 0.025 + Math.min(0.07, 0.014 * Math.log2(1 + n)) : 0.035; // más pedidos, línea más gruesa
+  arcos.add(new THREE.Mesh(new THREE.TubeGeometry(curva, 60, grosor, 6), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op * 0.55 })));
   for (let k = 0; k < 3; k++) {
     const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), new THREE.MeshBasicMaterial({ color })); arcos.add(b);
     viajeros.push({ b, curva, t: k / 3 });
   }
 }
-function relaciones(id) { return salaPorId[id].comunica.filter(c => PLANO[c.con]).map(c => c.dir === 'sale' ? [id, c.con] : [c.con, id]); }
-function todasRelaciones() { const r = []; for (const s of D.salas) for (const c of s.comunica) if (c.dir === 'sale' && PLANO[c.con]) r.push([s.id, c.con]); return r; }
+// 7: si SIGSO trae pedidos reales (últimos 30 días), las comunicaciones salen de ahí; si no, las de ejemplo.
+const hayReales = () => !!(D.flujos && D.flujos.total > 0);
+// 6: oficinas que recorre el modo auditor ISO (mismo orden que el backend)
+const SALAS_AUDITOR = ['recepcion', 'operativo', 'jefaturas', 'prevencion', 'plataformas', 'reuniones'];
+function relaciones(id) {
+  if (hayReales()) return D.flujos.pares.filter(p => p.de === id || p.a === id).map(p => [p.de, p.a, p.n]);
+  return salaPorId[id].comunica.filter(c => PLANO[c.con]).map(c => c.dir === 'sale' ? [id, c.con] : [c.con, id]);
+}
+function todasRelaciones() {
+  if (hayReales()) return D.flujos.pares.map(p => [p.de, p.a, p.n]);
+  const r = []; for (const s of D.salas) for (const c of s.comunica) if (c.dir === 'sale' && PLANO[c.con]) r.push([s.id, c.con]); return r;
+}
 function mostrarFlujos() {
   limpiarArcos(); limpiarMensajeros();
   const pares = verTodas ? todasRelaciones() : salaActual ? relaciones(salaActual) : ambiente;
-  for (const [de, a] of pares) { if (verTodas || salaActual) arco(de, a, salaPorId[de].color, verTodas ? 0.6 : 0.9); crearMensajero(de, a, salaPorId[de].color); }
+  for (const [de, a, n] of pares) {
+    if (verTodas || salaActual) arco(de, a, colorDe(de), verTodas ? 0.6 : 0.9, n || 0);
+    if (PLANO[de] && PLANO[a]) crearMensajero(de, a, colorDe(de));
+  }
   actualizarEstado();
 }
-const ambiente = (() => { const t = todasRelaciones(); return [t[0], t[5], t[9]].filter(Boolean); })();
+function bloqueFlujosReales(id) {
+  if (!hayReales()) return '';
+  const llegan = D.flujos.pares.filter(p => p.a === id), salen = D.flujos.pares.filter(p => p.de === id);
+  const fila = (p, otro, flecha) => `<li${PLANO[otro] ? ` data-ir="${otro}"` : ''}><span style="color:${colorDe(otro)}">${flecha} ${esc(nombreSala(otro))}</span><b>${p.n}</b></li>`;
+  return `<h3>📊 Pedidos reales (últimos ${D.flujos.dias} días)</h3>
+    ${llegan.length || salen.length ? `<ul class="reales">${llegan.map(p => fila(p, p.de, '← Le piden desde')).join('')}${salen.map(p => fila(p, p.a, 'Pide a →')).join('')}</ul>
+      <p class="pend-nota">Solicitudes registradas en SIGSO entre oficinas. Las flechas de «Ver comunicaciones» usan estos números.</p>`
+      : '<p class="sin-desc">Sin pedidos entre áreas en los últimos 30 días.</p>'}`;
+}
+const ambiente = (() => { const t = todasRelaciones().filter(([de, a]) => PLANO[de] && PLANO[a]); return (hayReales() ? t.slice(0, 3) : [t[0], t[5], t[9]]).filter(Boolean); })();
 
 // ---------- cámara ----------
 let anim = null;
@@ -721,7 +749,9 @@ function abrirSala(id, { volar = true } = {}) {
       ${PIZARRAS[id] && D.pizarras ? `<button class="enlace-pizarra" data-pendientes="${id}">📋 Ver lo pendiente del área</button>` : ''}
       ${bloqueReservas(id)}
       ${s.procesos.length ? `<h3>Procesos</h3><div class="etiquetas">${s.procesos.map(x => `<span>${esc(x)}</span>`).join('')}</div>` : ''}
-      ${s.comunica.length ? `<h3>Cómo se comunica</h3><ul class="flujo">${s.comunica.map(c => filaFlujo(c, s)).join('')}</ul>` : ''}
+      ${D.puede_auditar && SALAS_AUDITOR.includes(id) ? `<button class="enlace-pizarra" data-evidencia="${id}">🔍 Evidencia ISO de esta oficina</button>` : ''}
+      ${bloqueFlujosReales(id)}
+      ${s.comunica.length ? `<h3>${hayReales() ? 'Cómo se comunica (según el proceso)' : 'Cómo se comunica'}</h3><ul class="flujo">${s.comunica.map(c => filaFlujo(c, s)).join('')}</ul>` : ''}
       ${ids.length ? `<h3>Quiénes trabajan aquí</h3><div class="gente">${ids.map(pid => { const p = personaPorId[pid]; return `
         <button class="persona" data-persona="${p.id}"><span class="avatar" style="background:${s.color}">${iniciales(p.nombre)}</span>
           <span><b>${esc(p.nombre)}</b><small>${esc(p.cargo)}</small></span><em>Ver descriptor ›</em></button>`; }).join('')}</div>` : ''}
@@ -814,7 +844,8 @@ async function refrescarPizarras() {
 }
 
 // ---------- 3: inducción ----------
-const fechaCorta = f => { const d = new Date(f); return isNaN(d) ? '' : d.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' }); };
+// «2026-01-01» sin hora se lee como día local (si no, en Chile saldría el día anterior)
+const fechaCorta = f => { const d = /^\d{4}-\d{2}-\d{2}$/.test(String(f)) ? new Date(f + 'T12:00:00') : new Date(f); return isNaN(d) ? '' : d.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' }); };
 function bloqueInduccion(p) {
   if (!p.real) return '';
   if (p.puede_registrar_induccion) {
@@ -1058,6 +1089,9 @@ panel.addEventListener('click', e => {
       });
     return;
   }
+  const audIr = e.target.closest('[data-aud-ir]'); if (audIr) { abrirAuditoria(Number(audIr.dataset.audIr)); return; }
+  if (e.target.closest('[data-aud-fin]')) { terminarAuditoria(); return; }
+  const evid = e.target.closest('[data-evidencia]'); if (evid) { abrirAuditoria(SALAS_AUDITOR.indexOf(evid.dataset.evidencia)); return; }
   const pedir = e.target.closest('[data-pedir]'); if (pedir) { pedirA(pedir.dataset.pedir); return; }
   const mod = e.target.closest('[data-abrir-modulo]'); if (mod) { abrirEnSigso(mod.dataset.abrirModulo); return; }
   const pend = e.target.closest('[data-pendientes]'); if (pend) { abrirPendientes(pend.dataset.pendientes, { volar: false }); return; }
@@ -1220,7 +1254,79 @@ document.getElementById('tPausa').onclick = e => {
 };
 document.getElementById('bGeneral').onclick = () => { terminarControl(); detenerTour(true); cerrarPanel(); volarGeneral(); };
 document.getElementById('bInduccion').onclick = iniciarInduccion;
-document.getElementById('bComu').onclick = e => { verTodas = !verTodas; e.currentTarget.classList.toggle('on', verTodas); mostrarFlujos(); };
+document.getElementById('bComu').onclick = e => {
+  verTodas = !verTodas; e.currentTarget.classList.toggle('on', verTodas); mostrarFlujos();
+  if (verTodas) toast('Comunicaciones', hayReales() ? `Pedidos reales de los últimos ${D.flujos.dias} días (${D.flujos.total}). Línea más gruesa = más pedidos.` : 'Cómo se comunican las oficinas (aún no hay pedidos entre áreas en SIGSO).', 5200);
+};
+
+// ---------- 6: modo auditor ISO — recorrer cada oficina con su evidencia ----------
+// Procesos, indicadores, documentos, NC abiertas y competencia del personal,
+// leídos del módulo Calidad (getAuditoriaOficina). Solo para quien ve todo el SGC.
+let auditor = null;
+async function cargarAuditoria() {
+  if (D.auditoria) return D.auditoria;
+  const r = await window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'getAuditoriaOficina', {}).catch(() => null);
+  if (!r || !r.ok) { toast('No se pudo leer la evidencia', (r && r.message) || 'Sin conexión con SIGSO'); return null; }
+  return (D.auditoria = r.data);
+}
+function terminarAuditoria() {
+  auditor = null; document.getElementById('bAuditor')?.classList.remove('on');
+  cerrarPanel(); volarGeneral(); toast('Recorrido de auditoría terminado');
+}
+const audChip = (txt, mal) => `<span class="aud-chip${mal ? ' mal' : ''}">${txt}</span>`;
+const audVacio = t => `<p class="sin-desc">${t}</p>`;
+const audLista = (arr, fila, vacio) => arr.length ? `<ul class="aud-lista">${arr.map(fila).join('')}</ul>` : audVacio(vacio);
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+async function abrirAuditoria(i = 0) {
+  terminarControl(); detenerTour(true);
+  if (!(await cargarAuditoria())) return;
+  i = Math.max(0, Math.min(SALAS_AUDITOR.length - 1, i));
+  auditor = { i }; document.getElementById('bAuditor')?.classList.add('on');
+  const id = SALAS_AUDITOR[i], s = salaPorId[id], a = D.auditoria.salas[id] || {};
+  const procesos = a.procesos || [], ind = a.indicadores || [], docs = a.documentos || [], nc = a.nc || [], gente = a.personas || [];
+  const ncVenc = nc.filter(x => x.vencida).length, docVenc = docs.filter(x => x.revision_vencida).length;
+  const indMal = ind.filter(x => x.ultimo && x.ultimo.cumple === false).length, sinDesc = gente.filter(p => !p.descriptor).length;
+  salaActual = id; personaActual = null;
+  const sig = SALAS_AUDITOR[i + 1];
+  panel.innerHTML = `
+    <div class="cab"><span class="chip" style="background:${s.color}"></span>
+      <div><h2>🔍 ${esc(s.nombre)}</h2><small>Auditoría ISO 9001 · oficina ${i + 1} de ${SALAS_AUDITOR.length}</small></div>
+      <button class="escuchar" data-escuchar title="Escuchar">🔊</button>
+      <button class="cerrar" data-aud-fin aria-label="Terminar">×</button></div>
+    <div class="cuerpo aud">
+      <div class="aud-resumen">
+        ${audChip(plural(procesos.length, 'proceso', 'procesos'))}
+        ${audChip(plural(ind.length, 'indicador', 'indicadores') + (indMal ? ` · ${indMal} no cumple` : ''), indMal)}
+        ${audChip(plural(docs.length, 'documento', 'documentos') + (docVenc ? ` · ${docVenc} por revisar` : ''), docVenc)}
+        ${audChip(plural(nc.length, 'NC abierta', 'NC abiertas') + (ncVenc ? ` · ${ncVenc} vencida${ncVenc > 1 ? 's' : ''}` : ''), ncVenc)}
+      </div>
+      <h3>Procesos</h3>${audLista(procesos, p => `<li><b>${esc(p.codigo)}</b> ${esc(p.nombre)}${p.responsable ? `<small>Dueño: ${esc(p.responsable)}</small>` : ''}</li>`, 'Sin procesos asociados a esta oficina.')}
+      <h3>Indicadores</h3>${audLista(ind, x => `<li class="${x.ultimo && x.ultimo.cumple === false ? 'mal' : ''}"><b>${esc(x.codigo)}</b> ${esc(x.nombre)}<small>${x.ultimo ? `Último: ${esc(x.ultimo.valor)} (${esc(x.ultimo.periodo)}) ${x.ultimo.cumple === true ? '✅' : x.ultimo.cumple === false ? '❌' : ''}` : 'Sin mediciones'}${x.meta !== '' && x.meta != null ? ` · meta ${esc(x.meta)}` : ''}</small></li>`, 'Sin indicadores de sus procesos.')}
+      <h3>Documentos vigentes</h3>${audLista(docs, d => `<li class="${d.revision_vencida ? 'mal' : ''}"><b>${esc(d.codigo)}</b> ${esc(d.nombre)}<small>v${esc(d.version) || '—'}${d.proxima_revision ? ` · revisión ${esc(fechaCorta(d.proxima_revision))}` : ''}${d.revision_vencida ? ' · ⚠ revisión vencida' : ''}</small></li>`, 'Sin documentos de sus procesos.')}
+      <h3>No conformidades abiertas</h3>${audLista(nc, n => `<li class="${n.vencida ? 'mal' : ''}"><b>${esc(n.correlativo)}</b> ${esc(n.descripcion)}<small>${esc(String(n.estado || '').replace(/_/g, ' ').toLowerCase())}${n.responsable ? ` · ${esc(n.responsable)}` : ''}${n.plazo ? ` · plazo ${esc(fechaCorta(n.plazo))}` : ''}${n.vencida ? ' · vencida' : ''}</small></li>`, 'Sin NC abiertas ✅')}
+      <h3>Competencia del personal</h3>${audLista(gente, p => `<li class="${p.descriptor ? '' : 'mal'}"><b>${esc(p.nombre)}</b> ${esc(p.cargo)}<small>Descriptor ${p.descriptor ? '✅' : '❌ falta'}${p.induccion ? ` · inducción ${esc(p.induccion)}` : ''}</small></li>`, 'Sin personal asignado (espacio común).')}
+      <button class="enlace-pizarra" data-abrir-modulo="calidad">Abrir Calidad en SIGSO ›</button>
+      <div class="aud-nav">
+        <button class="btn-guardar" data-aud-ir="${i - 1}" ${i === 0 ? 'disabled' : ''}>← Anterior</button>
+        ${sig ? `<button class="btn-guardar" data-aud-ir="${i + 1}">${esc(salaPorId[sig].nombre)} →</button>` : '<button class="btn-guardar" data-aud-fin>Terminar recorrido</button>'}
+      </div>
+    </div>`;
+  panel.classList.add('abierto');
+  resaltar(); mostrarFlujos();
+  const v = vistaSala(id); volarA(v.t, v.dist);
+  const alertas = [
+    indMal && plural(indMal, 'indicador que no cumple', 'indicadores que no cumplen'),
+    docVenc && plural(docVenc, 'documento por revisar', 'documentos por revisar'),
+    ncVenc && plural(ncVenc, 'no conformidad vencida', 'no conformidades vencidas'),
+    sinDesc && plural(sinDesc, 'persona sin descriptor', 'personas sin descriptor')
+  ].filter(Boolean);
+  panel._texto = `${s.nombre}. ${plural(procesos.length, 'proceso', 'procesos')} y ${plural(nc.length, 'no conformidad abierta', 'no conformidades abiertas')}. ${alertas.length ? 'Atención: ' + alertas.join(', ') + '.' : 'Sin alertas.'}`;
+  hablar(panel._texto);
+}
+{
+  const b = document.getElementById('bAuditor');
+  if (b && D.puede_auditar) { b.hidden = false; b.onclick = () => auditor ? terminarAuditoria() : abrirAuditoria(0); }
+}
 
 // ---------- avisos breves ----------
 const toastEl = document.getElementById('toast');
