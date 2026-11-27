@@ -145,7 +145,8 @@ window.OFICINA = {
 // TECNICO = Soporte de plataformas). Sirve para «Pedirle algo» y las pizarras.
 window.OFICINA.deptos_de_sala = {
   recepcion: ['COBRANZAS'], operativo: ['RRHH', 'CONTABILIDAD'], jefaturas: ['ADMINISTRACION'],
-  prevencion: ['PREVENCION'], plataformas: ['TECNICO'], podcast: ['MARKETING']
+  prevencion: ['PREVENCION'], plataformas: ['TECNICO']
+  // podcast: sin departamento por ahora (el dueño lo define después)
 };
 // Rótulo corto sobre la cabeza (mientras no haya nombres reales).
 {

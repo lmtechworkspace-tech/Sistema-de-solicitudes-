@@ -185,7 +185,8 @@ function listaJson_(v) { if (Array.isArray(v)) return v; try { const p = JSON.pa
 // ===========================================================================
 const DEPTOS_DE_SALA = {
   recepcion: ['COBRANZAS'], operativo: ['RRHH', 'CONTABILIDAD'], jefaturas: ['ADMINISTRACION'],
-  prevencion: ['PREVENCION'], plataformas: ['TECNICO'], podcast: ['MARKETING']
+  prevencion: ['PREVENCION'], plataformas: ['TECNICO']
+  // podcast: sin departamento por ahora (el dueño lo define después, 2026-11-26)
 };
 const ITEMS_RECORRIDO = ['Organigrama', 'Descriptor de cargo']; // lo que cubre el recorrido virtual
 const CERRADOS = ['S08', 'S09', 'S10', 'S11']; // Resuelta, Cerrada, Rechazada, Cancelada
