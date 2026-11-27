@@ -348,6 +348,20 @@ function ingresar_(db, data, contexto, activando) {
   registrar_({ cuenta_id: cuenta.cuenta_id, nombre, accion: 'ENTRAR', ip, equipo });
   return { boveda_token: token, inactividad_min: INACTIVIDAD_MS / 60000 };
 }
+/**
+ * Herramienta del servidor (backend/scripts/credenciales-boveda.js): borra el
+ * autenticador de una cuenta (cambió o perdió el teléfono) y cierra sus
+ * sesiones. A propósito NO tiene pantalla: quien perdió el teléfono no puede
+ * abrir la bóveda, y la contraseña de SIGSO sola no debe bastar.
+ */
+function reiniciarAutenticador_(cuentaId, motivo, nombre) {
+  const d = dbCred();
+  const r = d.prepare('DELETE FROM CRED_AUTENTICADOR WHERE cuenta_id = ?').run(String(cuentaId));
+  d.prepare('UPDATE CRED_SESIONES SET cerrada = 1 WHERE cuenta_id = ?').run(String(cuentaId));
+  fallos_.delete(String(cuentaId));
+  registrar_({ cuenta_id: cuentaId, nombre: nombre || '', accion: 'AUTENTICADOR_REINICIADO', detalle: String(motivo || 'desde el servidor') });
+  return r.changes;
+}
 function activarAutenticador(db, data, contexto) { return ingresar_(db, data, contexto, true); }
 function entrar(db, data, contexto) { return ingresar_(db, data, contexto, false); }
 function salir(db, data, contexto) {
@@ -497,5 +511,5 @@ module.exports = {
   // las usa credencialesClientes.js
   CAT_CLIENTES, conBoveda, puedeCategoria_, cifrar, descifrar, linea_, texto_, url_, hoy_, json_,
   // pruebas / herramientas
-  dbCred, verificarCadena_, reiniciarParaPruebas_, rutaDb_, llave_
+  dbCred, verificarCadena_, reiniciarAutenticador_, reiniciarParaPruebas_, rutaDb_, llave_
 };

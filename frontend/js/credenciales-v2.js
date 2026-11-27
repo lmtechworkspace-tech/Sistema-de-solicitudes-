@@ -33,7 +33,7 @@
   var ACCIONES = {
     ENTRAR: ['Abrió la bóveda', 'ok'], SALIR: ['Cerró la bóveda', 'neutro'], CODIGO_INCORRECTO: ['Código incorrecto', 'alerta'],
     AUTENTICADOR_PREPARADO: ['Generó la clave del autenticador', 'info'], AUTENTICADOR_ACTIVADO: ['Activó su autenticador', 'ok'],
-    AUTENTICADOR_CLAVE_INCORRECTA: ['Contraseña incorrecta al registrar', 'alerta'], VER_CLAVE: ['Vio una clave', 'alerta'],
+    AUTENTICADOR_CLAVE_INCORRECTA: ['Contraseña incorrecta al registrar', 'alerta'], AUTENTICADOR_REINICIADO: ['Autenticador reiniciado en el servidor', 'alerta'], VER_CLAVE: ['Vio una clave', 'alerta'],
     CREAR: ['Agregó una credencial', 'ok'], EDITAR: ['Editó una credencial', 'info'], CAMBIAR_CLAVE: ['Cambió una clave', 'ok'],
     MOVER: ['Cambió de categoría', 'info'], RETIRAR: ['Retiró una credencial', 'alerta'], REACTIVAR: ['Reactivó una credencial', 'info'],
     CREAR_CATEGORIA: ['Creó una categoría', 'info'], EDITAR_CATEGORIA: ['Editó una categoría', 'info'],

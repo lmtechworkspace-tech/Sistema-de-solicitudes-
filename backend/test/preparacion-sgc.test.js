@@ -76,7 +76,11 @@ test('la recomendación global', () => {
   assert.equal(P.recomendacion_([a('SIN_EVALUAR')]).codigo, 'SIN_EVALUAR');
 });
 
-test('entrevista y muestras alimentan el área; la brecha se vuelve tarea; emitir congela', async () => {
+test('entrevista y muestras alimentan el área; la brecha se vuelve tarea; emitir congela', async (ctx) => {
+  // El índice de cumplimiento del área es el del mes en curso y cambia con el
+  // día (a fin de mes vence lo del mes y baja a 0 %): se fija el reloj en el
+  // día en que se escribió la prueba, así el resultado no depende de la fecha.
+  ctx.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-13T15:00:00-03:00') });
   const db = crear();
   const { informe } = P.crear(db, { titulo: 'Versión 1', fecha_auditoria: '2027-01-18' }, SGC);
   const en = P.guardarEntrevista(db, { informe_id: informe.informe_id, area: 'CONTABILIDAD', persona_email: FRAN, respuestas: respuestas([3, 2, 3, 2, 3, 3, 2, 3]), autoevaluacion: 'CON_RIESGOS' }, SGC);
