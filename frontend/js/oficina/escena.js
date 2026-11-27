@@ -9,6 +9,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const K = await import('./modelos.js' + new URL(import.meta.url).search); // misma versión que la página
 const { MAT, malla, rbox, pon } = K;
 
@@ -1799,7 +1800,12 @@ function actualizarEstado() {
 
 // ---------- mouse ----------
 const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(), tip = document.getElementById('tip');
-const clicables = [...pisos, ...Object.values(PIZARRAS).map(p => p.malla)]; for (const pj of Object.values(personas3D)) pj.traverse(o => { if (o.isMesh) clicables.push(o); });
+const clicables = [];
+function armarClicables() {
+  clicables.length = 0; clicables.push(...pisos, ...Object.values(PIZARRAS).map(p => p.malla));
+  for (const pj of Object.values(personas3D)) pj.traverse(o => { if (o.isMesh) clicables.push(o); });
+}
+armarClicables();
 let abajo = null, hover = null;
 function tocado(e) {
   mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
@@ -1857,18 +1863,105 @@ document.getElementById('bMiEstado').onclick = abrirMiEstado;
 pintarPizarras();                              // pizarras con lo pendiente real de cada área
 setInterval(refrescarPizarras, 5 * 60 * 1000); // y se actualizan solas cada 5 minutos
 mostrarFlujos();
+// ---------- rendimiento: juntar lo que no se mueve ----------
+// La oficina tiene ~2.400 piezas (sillas, estantes, muebles…) y cada una era un dibujo
+// aparte, tres veces por cuadro (escena, sombra y sombra ambiental). Lo que nunca se
+// mueve ni cambia se junta en un dibujo por material: misma vista, muchísimo menos trabajo.
+// Queda aparte lo que se anima, se hace translúcido o se puede tocar con el mouse.
+function fusionarEstaticos() {
+  const vivos = new Set([
+    ...Object.values(personas3D), ...fantasmas.map(f => f.pj), ...mensajeros.map(m => m.pj), arcos,
+    ...ventiladores, ...camaras, ...pisos, ...piezas.flatMap(p => p.mallas),
+    ...Object.values(PIZARRAS).map(p => p.malla), marcaDestino
+  ].filter(Boolean));
+  const esVivo = o => { for (let x = o; x && x !== scene; x = x.parent) if (vivos.has(x)) return true; return false; };
+  scene.updateMatrixWorld(true);
+  const grupos = new Map(), quitar = [];
+  scene.traverse(o => {
+    if (!o.isMesh || o.isSkinnedMesh || o.isInstancedMesh || Array.isArray(o.material) || !o.visible || esVivo(o)) return;
+    const m = o.material; if (m.transparent) return; // los vidrios se ordenan por distancia: quedan aparte
+    const g = o.geometry; if (!g.attributes.position || !g.attributes.normal) return;
+    const clave = m.uuid + (o.castShadow ? 'S' : '') + (o.receiveShadow ? 'R' : '');
+    if (!grupos.has(clave)) grupos.set(clave, { m, cast: o.castShadow, recv: o.receiveShadow, geos: [] });
+    const c = g.clone(); c.applyMatrix4(o.matrixWorld);
+    for (const k of Object.keys(c.attributes)) if (!['position', 'normal', 'uv'].includes(k)) c.deleteAttribute(k);
+    if (!c.attributes.uv) c.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(c.attributes.position.count * 2), 2));
+    if (!c.index) c.setIndex([...Array(c.attributes.position.count).keys()]);
+    c.morphAttributes = {};
+    grupos.get(clave).geos.push(c); quitar.push(o);
+  });
+  let antes = quitar.length, despues = 0;
+  for (const { m, cast, recv, geos } of grupos.values()) {
+    const geo = mergeGeometries(geos, false); if (!geo) { antes -= geos.length; continue; }
+    geos.forEach(x => x.dispose());
+    const junta = new THREE.Mesh(geo, m); junta.castShadow = cast; junta.receiveShadow = recv;
+    junta.matrixAutoUpdate = false; scene.add(junta); despues++;
+  }
+  for (const o of quitar) { o.parent.remove(o); o.geometry.dispose(); }
+  return { antes, despues };
+}
+// Prepara una geometría para juntarla (mismos atributos e índice en todas).
+function aJuntar(g, matriz) {
+  const c = g.clone(); c.applyMatrix4(matriz);
+  for (const k of Object.keys(c.attributes)) if (!['position', 'normal', 'uv'].includes(k)) c.deleteAttribute(k);
+  if (!c.attributes.uv) c.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(c.attributes.position.count * 2), 2));
+  if (!c.index) c.setIndex([...Array(c.attributes.position.count).keys()]);
+  c.morphAttributes = {};
+  return c;
+}
+// Cada mono tenía ~26 piezas. Las que se mueven juntas (las de la cabeza, las de un
+// brazo…) se juntan dentro de su parte por material; las partes siguen animándose igual.
+function fusionarPersonaje(pj) {
+  const fijas = new Set(Object.values(pj.userData.partes || {}).flat().filter(x => x && x.isMesh));
+  let antes = 0, despues = 0;
+  const nodos = []; pj.traverse(n => { if (!n.isMesh) nodos.push(n); });
+  for (const n of nodos) {
+    const grupos = new Map();
+    for (const h of n.children) {
+      if (!h.isMesh || h.children.length || fijas.has(h) || Array.isArray(h.material) || !h.visible) continue;
+      const clave = h.material.uuid + (h.castShadow ? 'S' : '') + (h.receiveShadow ? 'R' : '');
+      if (!grupos.has(clave)) grupos.set(clave, []);
+      grupos.get(clave).push(h);
+    }
+    for (const hs of grupos.values()) {
+      if (hs.length < 2) continue;
+      const geos = hs.map(h => { h.updateMatrix(); return aJuntar(h.geometry, h.matrix); });
+      const geo = mergeGeometries(geos, false); geos.forEach(x => x.dispose()); if (!geo) continue;
+      const junta = new THREE.Mesh(geo, hs[0].material);
+      junta.castShadow = hs[0].castShadow; junta.receiveShadow = hs[0].receiveShadow;
+      junta.userData = { ...hs[0].userData }; junta.renderOrder = hs[0].renderOrder;
+      n.add(junta);
+      for (const h of hs) { n.remove(h); h.geometry.dispose(); }
+      antes += hs.length; despues++;
+    }
+  }
+  return { antes, despues };
+}
+const fusion = fusionarEstaticos();
+fusion.personas = [...Object.values(personas3D), ...fantasmas.map(f => f.pj)].filter(Boolean)
+  .reduce((acc, pj) => { const r = fusionarPersonaje(pj); acc.antes += r.antes; acc.despues += r.despues; return acc; }, { antes: 0, despues: 0 });
+armarClicables(); // los monos cambiaron de piezas: el mouse debe tocar las nuevas
 const reloj = new THREE.Clock();
 // Calidad automática: en un computador lento se apaga la sombra ambiental (lo más pesado)
 // y se baja un poco la resolución, para que caminar se sienta fluido.
-const medidor = { cuadros: 0, desde: 0, listo: false };
+// Mide siempre (no solo al abrir) y baja un escalón cada vez que va lento:
+// 1) sin sombra ambiental · 2) sombras más livianas y recalculadas día por medio
+// · 3) menos resolución. Nunca vuelve a subir, para no ir y venir.
+const medidor = { cuadros: 0, desde: 0, nivel: 0, cada: 1 };
+renderer.shadowMap.autoUpdate = false; // la sombra se recalcula a mano (ver «cada»)
+let cuadro = 0;
 function ajustarCalidad(ahora) {
-  if (medidor.listo || document.hidden) return;
-  if (!medidor.desde) { medidor.desde = ahora; return; }
-  medidor.cuadros++;
-  if (ahora - medidor.desde < 3000) return;
+  if (document.hidden || medidor.nivel >= 3) { medidor.desde = 0; return; }
+  if (!medidor.desde || ahora - medidor.ultimo > 500) { medidor.desde = ahora; medidor.cuadros = 0; medidor.ultimo = ahora; return; } // volvió de otra pestaña: medir de nuevo
+  medidor.cuadros++; medidor.ultimo = ahora;
+  if (ahora - medidor.desde < 2500) return;
   const fps = medidor.cuadros / ((ahora - medidor.desde) / 1000);
-  medidor.listo = true;
-  if (fps < 28) { ao.enabled = false; renderer.setPixelRatio(1); composer.setPixelRatio(1); sol.shadow.mapSize.set(2048, 2048); sol.shadow.map?.dispose(); sol.shadow.map = null; }
+  medidor.desde = ahora; medidor.cuadros = 0;
+  if (fps >= 45) return;
+  medidor.nivel++;
+  if (medidor.nivel === 1) ao.enabled = false;
+  if (medidor.nivel === 2) { medidor.cada = 2; sol.shadow.mapSize.set(2048, 2048); sol.shadow.map?.dispose(); sol.shadow.map = null; }
+  if (medidor.nivel === 3) { renderer.setPixelRatio(1); composer.setPixelRatio(1); }
 }
 renderer.setAnimationLoop(() => {
   const dt = Math.min(0.05, reloj.getDelta()), t = reloj.elapsedTime, ahora = performance.now();
@@ -1894,6 +1987,7 @@ renderer.setAnimationLoop(() => {
   for (const c of camaras) c.userData.luz.visible = Math.sin(t * 4) > -0.3; // grabando
   actualizarMuros();
   controls.update();
+  if (++cuadro % medidor.cada === 0) renderer.shadowMap.needsUpdate = true;
   composer.render();
   css2d.render(scene, camera);
 });
