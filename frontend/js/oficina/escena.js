@@ -719,6 +719,7 @@ function abrirSala(id, { volar = true } = {}) {
       <h3>Qué hace</h3><p>${esc(s.que_hace)}</p>
       ${bloquePedir(id)}
       ${PIZARRAS[id] && D.pizarras ? `<button class="enlace-pizarra" data-pendientes="${id}">📋 Ver lo pendiente del área</button>` : ''}
+      ${bloqueReservas(id)}
       ${s.procesos.length ? `<h3>Procesos</h3><div class="etiquetas">${s.procesos.map(x => `<span>${esc(x)}</span>`).join('')}</div>` : ''}
       ${s.comunica.length ? `<h3>Cómo se comunica</h3><ul class="flujo">${s.comunica.map(c => filaFlujo(c, s)).join('')}</ul>` : ''}
       ${ids.length ? `<h3>Quiénes trabajan aquí</h3><div class="gente">${ids.map(pid => { const p = personaPorId[pid]; return `
@@ -846,6 +847,120 @@ function finalizarInduccion() {
       : '<p>Para que quede registrado necesitas tu ficha en Calidad → Personas (y entrar con tu cuenta de SIGSO).</p>'}</div>`);
   panel._induccion = ind;
 }
+// ---------- 4: estado de cada persona ----------
+// Lo pone cada uno; si no está en su puesto, su escritorio queda vacío con un
+// cartel («🌴 Carla · Fuera hasta el 5 dic»). Quien está en una reserva en curso
+// aparece «En reunión» solo, mientras dure.
+const ESTADO_INFO = {
+  DISPONIBLE: { ico: '🟢', txt: 'Disponible' }, REUNION: { ico: '📅', txt: 'En reunión' }, TERRENO: { ico: '🚗', txt: 'En terreno' },
+  TELETRABAJO: { ico: '🏠', txt: 'Teletrabajo' }, COLACION: { ico: '🍽️', txt: 'Colación' }, FUERA: { ico: '🌴', txt: 'Fuera (vacaciones o permiso)' }
+};
+D.vivo = D.vivo || { estados: {}, reservas: [] };
+const carteles = {};
+const horaCorta = f => new Date(f).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false });
+function hastaTexto(f) {
+  if (!f) return '';
+  const d = new Date(f);
+  return d.toDateString() === new Date().toDateString() ? 'hasta las ' + horaCorta(f) : 'hasta el ' + d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' });
+}
+const estadoDe = pid => (D.vivo.estados || {})[pid] || null;
+function textoEstado(e) {
+  if (!e) return '🟢 Disponible';
+  const i = ESTADO_INFO[e.estado] || {};
+  return `${i.ico || ''} ${i.txt || e.estado}${e.hasta ? ' ' + hastaTexto(e.hasta) : ''}`;
+}
+function aplicarEstados() {
+  for (const [pid, pj] of Object.entries(personas3D)) {
+    const p = personaPorId[pid]; if (!p || p.fantasma || pj.userData.fantasma || !pj.parent) continue;
+    const e = estadoDe(pid), fuera = !!e && e.estado !== 'DISPONIBLE';
+    pj.userData.ausente = fuera;
+    if (!pj.userData.levantado) { pj.visible = !fuera; pj.traverse(o => { if (o.isCSS2DObject) o.visible = !fuera; }); }
+    let c = carteles[pid];
+    if (fuera && !c) {
+      const el = document.createElement('div'); el.className = 'cartel';
+      el.addEventListener('click', ev => { ev.stopPropagation(); abrirPersona(pid); });
+      c = new CSS2DObject(el); c.position.copy(pj.position).setY(1.35); pj.parent.add(c); carteles[pid] = c;
+    }
+    if (c) {
+      c.visible = fuera && !pj.userData.levantado;
+      if (fuera) { const i = ESTADO_INFO[e.estado] || {}; c.element.textContent = `${i.ico || ''} ${p.corto || p.nombre.split(' ')[0]} · ${i.txt || ''}${e.hasta ? ' ' + hastaTexto(e.hasta) : ''}`; }
+    }
+  }
+  pintarReservasEnRotulos();
+  actualizarMiEstado();
+}
+function bloqueEstado(pid, editable) {
+  const e = estadoDe(pid);
+  if (!editable) return `<div class="estado-persona">${esc(textoEstado(e))}${e && e.nota ? ` · <i>${esc(e.nota)}</i>` : ''}${e && e.auto ? ' <small>(por su reserva)</small>' : ''}</div>`;
+  const actual = e && !e.auto ? e.estado : 'DISPONIBLE';
+  return `<div class="estado-editor" data-pid="${esc(pid)}">
+    <div class="estado-actual">Ahora: <b>${esc(textoEstado(e))}</b>${e && e.auto ? ' <small>(por una reserva)</small>' : ''}</div>
+    <div class="estado-opciones">${Object.entries(ESTADO_INFO).map(([k, i]) => `<button data-estado="${k}" class="${k === actual ? 'sel' : ''}">${i.ico} ${i.txt}</button>`).join('')}</div>
+    <div class="estado-fila"><label>Hasta <select id="estDur"><option value="">Sin hora</option><option value="30">30 minutos</option><option value="60">1 hora</option><option value="120">2 horas</option><option value="dia">El fin del día</option><option value="fecha">Una fecha…</option></select></label>
+      <input type="date" id="estFecha" hidden></div>
+    <input id="estNota" maxlength="60" placeholder="Nota (opcional), p. ej. «visita a obra»" value="${esc(e && !e.auto ? e.nota : '')}">
+    <button class="btn-guardar" data-guardar-estado>Guardar</button></div>`;
+}
+function abrirMiEstado() {
+  const pid = D.yo && D.yo.persona_id;
+  if (!pid) { toast('Tu estado', D.modo === 'real' ? 'Necesitas tu ficha en Calidad → Personas.' : 'Ingresa a SIGSO para poner tu estado.'); return; }
+  detenerTour(true); salaActual = personaActual = null; resaltar();
+  panel.innerHTML = `<div class="cab"><span class="chip" style="background:#16a34a"></span><div><h2>Mi estado</h2><small>Lo ve todo el equipo en la oficina</small></div><button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
+    <div class="cuerpo">${bloqueEstado(pid, true)}<p class="pend-nota">Si estás en una reserva de sala, apareces «En reunión» solo mientras dure. Con «Hasta», vuelves a «Disponible» solo.</p></div>`;
+  panel.classList.add('abierto');
+}
+function actualizarMiEstado() {
+  const b = document.getElementById('bMiEstado'); if (!b) return;
+  const pid = D.yo && D.yo.persona_id;
+  b.hidden = D.modo !== 'real' || !pid;
+  if (pid) b.querySelector('span').textContent = textoEstado(estadoDe(pid));
+}
+async function refrescarVivo() {
+  if (D.modo !== 'real') return;
+  try { const r = await window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'getEstadoOficina', {}); if (r && r.ok) { D.vivo = r.data; aplicarEstados(); } } catch (e) { /* se reintenta luego */ }
+}
+
+// ---------- 5: reservas de la sala de reuniones y del podcast ----------
+const SALAS_RES = ['reuniones', 'podcast'];
+const reservasDe = sala => (D.vivo.reservas || []).filter(r => r.sala_id === sala);
+const esMia = r => !!(D.yo && D.yo.persona_id && r.organizador_id === D.yo.persona_id);
+function estadoSala(sala) {
+  const ahora = Date.now(), rs = reservasDe(sala);
+  const actual = rs.find(r => new Date(r.inicio).getTime() <= ahora && new Date(r.fin).getTime() > ahora);
+  if (actual) return { ocupada: true, txt: `Ocupada hasta las ${horaCorta(actual.fin)} · ${actual.titulo}` };
+  const prox = rs.find(r => new Date(r.inicio).getTime() > ahora && new Date(r.inicio).toDateString() === new Date().toDateString());
+  return { ocupada: false, txt: prox ? `Libre · ${horaCorta(prox.inicio)} ${prox.titulo}` : 'Libre por hoy' };
+}
+function pintarReservasEnRotulos() {
+  for (const sala of SALAS_RES) {
+    const s = salaPorId[sala]; if (!s || !s._rotulo) continue;
+    let em = s._rotulo.querySelector('.rot-res');
+    if (!em) { em = document.createElement('em'); em.className = 'rot-res'; s._rotulo.appendChild(em); }
+    const st = estadoSala(sala); em.textContent = st.ocupada ? '● Ocupada' : '● Libre'; em.classList.toggle('ocupada', st.ocupada); em.title = st.txt;
+  }
+}
+function bloqueReservas(sala) {
+  if (!SALAS_RES.includes(sala)) return '';
+  const ahora = Date.now(), rs = reservasDe(sala).filter(r => new Date(r.fin).getTime() > ahora).slice(0, 8), st = estadoSala(sala);
+  const dia = f => {
+    const d = new Date(f), h = new Date(), m = new Date(); m.setDate(h.getDate() + 1);
+    return d.toDateString() === h.toDateString() ? 'Hoy' : d.toDateString() === m.toDateString() ? 'Mañana' : d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
+  const nombreDe = pid => { const p = personaPorId[pid]; return p ? p.nombre.split(' ')[0] : ''; };
+  const ini = new Date(Math.ceil(ahora / 1800000) * 1800000), fin = new Date(ini.getTime() + 3600000);
+  const hhmm = d => d.toTimeString().slice(0, 5), ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const invitables = D.personas.filter(p => p.real && !p.fantasma && p.id !== (D.yo && D.yo.persona_id)).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  return `<h3>📅 Reservas</h3>
+    <div class="sala-estado ${st.ocupada ? 'ocupada' : ''}">${esc(st.txt)}</div>
+    <ul class="reservas">${rs.length ? rs.map(r => `<li><div><b>${dia(r.inicio)} ${horaCorta(r.inicio)}–${horaCorta(r.fin)}</b> ${esc(r.titulo)}
+        <small>${esc(r.organizador_nombre || '')}${r.asistentes.length ? ' con ' + esc(r.asistentes.map(nombreDe).filter(Boolean).join(', ')) : ''}</small></div>
+        ${(esMia(r) || D.puede_ordenar) ? `<button data-cancelar-reserva="${esc(r.reserva_id)}">Cancelar</button>` : ''}</li>`).join('') : '<li class="vacia">No hay reservas próximas.</li>'}</ul>
+    ${D.modo === 'real' ? `<div class="reservar">
+      <div class="res-fila"><input type="date" id="resFecha" value="${ymd(ini)}"><input type="time" id="resDesde" value="${hhmm(ini)}" step="900"><span>a</span><input type="time" id="resHasta" value="${hhmm(fin)}" step="900"></div>
+      <input id="resTitulo" maxlength="80" placeholder="Para qué es (p. ej. «Reunión con cliente»)">
+      ${invitables.length ? `<details><summary>Invitar personas</summary><div class="invitados">${invitables.map(p => `<label><input type="checkbox" value="${esc(p.id)}"> ${esc(p.nombre)}</label>`).join('')}</div></details>` : ''}
+      <button class="btn-guardar" data-reservar="${sala}">Reservar ${sala === 'podcast' ? 'el estudio' : 'la sala'}</button></div>` : '<p class="pend-nota">Ingresa a SIGSO para reservar.</p>'}`;
+}
 const SALA_FANTASMA = { id: '', nombre: 'Recorre la oficina', color: '#8fb6ff', comunica: [] };
 function textoPersona(p) { // lo que se lee en voz alta
   const d = p.descriptor || {}, f = (d.funciones || []).slice(0, 3);
@@ -865,6 +980,7 @@ function abrirPersona(pid, { volar = true } = {}) {
     <div class="cuerpo">
       ${s.id ? `<button class="volver" data-ir="${s.id}">← Volver a ${esc(s.nombre)}</button>` : ''}
       ${p.fantasma ? `<div class="ahora fantasma"><span></span>Fantasma: no tiene puesto fijo, recorre la oficina</div>` : `<div class="ahora"><span></span>${esc(p.tarea || '')}</div>`}
+      ${p.real ? bloqueEstado(p.id, p.id === (D.yo && D.yo.persona_id) || !!D.puede_ordenar) : ''}
       <dl class="dato">
         <dt>Reporta a</dt><dd>${jefe ? `<span class="enlace" data-persona="${jefe.id}">${esc(jefe.nombre)}</span><br><small>${esc(jefe.cargo)}</small>` : 'Directorio'}</dd>
         <dt>A su cargo</dt><dd>${aCargo.length ? aCargo.map(x => `<span class="enlace" data-persona="${x.id}">${esc(x.nombre)}</span>`).join(', ') : '—'}</dd>
@@ -887,6 +1003,61 @@ function abrirPersona(pid, { volar = true } = {}) {
 }
 panel.addEventListener('click', e => {
   if (e.target.closest('[data-escuchar]')) { hablar(panel._texto || '', { forzar: true }); return; }
+  const opc = e.target.closest('[data-estado]');
+  if (opc) { opc.parentElement.querySelectorAll('[data-estado]').forEach(b => b.classList.toggle('sel', b === opc)); return; }
+  const guardarEst = e.target.closest('[data-guardar-estado]');
+  if (guardarEst) { // guarda el estado elegido, con su «hasta»
+    const ed = guardarEst.closest('.estado-editor'), pid = ed.dataset.pid;
+    const estado = (ed.querySelector('[data-estado].sel') || {}).dataset?.estado || 'DISPONIBLE';
+    const dur = ed.querySelector('#estDur').value, ahoraD = new Date();
+    let hasta = '';
+    if (estado !== 'DISPONIBLE') {
+      if (/^\d+$/.test(dur)) hasta = new Date(ahoraD.getTime() + Number(dur) * 60000).toISOString();
+      else if (dur === 'dia') { const f = new Date(); f.setHours(23, 59, 0, 0); hasta = f.toISOString(); }
+      else if (dur === 'fecha') {
+        const v = ed.querySelector('#estFecha').value; if (!v) { toast('Elige la fecha', 'Hasta qué día'); return; }
+        hasta = new Date(v + 'T23:59:00').toISOString();
+      }
+    }
+    guardarEst.disabled = true;
+    window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'ponerEstadoOficina', { persona_id: pid, estado, hasta, nota: ed.querySelector('#estNota').value })
+      .then(async r => {
+        guardarEst.disabled = false;
+        if (!r || !r.ok) { toast('No se pudo guardar', (r && r.message) || ''); return; }
+        await refrescarVivo();
+        toast('Estado guardado', textoEstado(estadoDe(pid)));
+        if (personaActual === pid) abrirPersona(pid, { volar: false }); else abrirMiEstado();
+      }).catch(() => { guardarEst.disabled = false; toast('No se pudo conectar con SIGSO'); });
+    return;
+  }
+  const reservar = e.target.closest('[data-reservar]');
+  if (reservar) {
+    const sala = reservar.dataset.reservar, q = s => panel.querySelector(s);
+    const fecha = q('#resFecha').value, desde = q('#resDesde').value, hasta = q('#resHasta').value;
+    if (!fecha || !desde || !hasta) { toast('Faltan datos', 'Indica el día y las horas'); return; }
+    const asistentes = [...panel.querySelectorAll('.invitados input:checked')].map(x => x.value);
+    reservar.disabled = true;
+    window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'crearReservaOficina', {
+      sala_id: sala, titulo: q('#resTitulo').value, inicio: new Date(`${fecha}T${desde}`).toISOString(), fin: new Date(`${fecha}T${hasta}`).toISOString(), asistentes
+    }).then(async r => {
+      reservar.disabled = false;
+      if (!r || !r.ok) { toast('No se pudo reservar', (r && r.message) || ''); return; }
+      await refrescarVivo(); toast('Reserva lista', `${salaPorId[sala].nombre} · ${horaCorta(r.data.inicio)} a ${horaCorta(r.data.fin)}`);
+      abrirSala(sala, { volar: false });
+    }).catch(() => { reservar.disabled = false; toast('No se pudo conectar con SIGSO'); });
+    return;
+  }
+  const cancelarRes = e.target.closest('[data-cancelar-reserva]');
+  if (cancelarRes) {
+    if (!confirm('¿Cancelar esta reserva?')) return;
+    const sala = salaActual;
+    window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'cancelarReservaOficina', { reserva_id: cancelarRes.dataset.cancelarReserva })
+      .then(async r => {
+        if (!r || !r.ok) { toast('No se pudo cancelar', (r && r.message) || ''); return; }
+        await refrescarVivo(); toast('Reserva cancelada'); if (sala) abrirSala(sala, { volar: false });
+      });
+    return;
+  }
   const pedir = e.target.closest('[data-pedir]'); if (pedir) { pedirA(pedir.dataset.pedir); return; }
   const mod = e.target.closest('[data-abrir-modulo]'); if (mod) { abrirEnSigso(mod.dataset.abrirModulo); return; }
   const pend = e.target.closest('[data-pendientes]'); if (pend) { abrirPendientes(pend.dataset.pendientes, { volar: false }); return; }
@@ -933,6 +1104,7 @@ async function guardarYRecargar(accion, datos, control) {
   } catch (err) { alert('No se pudo conectar con SIGSO.'); control.disabled = false; }
 }
 panel.addEventListener('change', async e => {
+  if (e.target.id === 'estDur') { const f = panel.querySelector('#estFecha'); if (f) f.hidden = e.target.value !== 'fecha'; return; }
   const chk = e.target.closest('[data-fantasma]');
   if (chk) return guardarYRecargar('marcarFantasmaOficina', { persona_id: chk.dataset.fantasma, fantasma: chk.checked }, chk);
   const nuevo = e.target.closest('[data-nuevo-fantasma]');
@@ -1087,6 +1259,7 @@ function iniciarControl() {
     sentadoPj = personas3D[p.id];
     const w = new THREE.Vector3(); sentadoPj.getWorldPosition(w); w.y = 0;
     sentadoPj.visible = false; // se levanta de su silla (los rótulos 2D no heredan la visibilidad: se ocultan aparte)
+    sentadoPj.userData.levantado = true; if (carteles[p.id]) carteles[p.id].visible = false;
     sentadoPj.traverse(o => { if (o.isCSS2DObject) o.visible = false; });
     pj = K.personaje({ semilla: K.hash(p.id + p.nombre), camisa: (salaPorId[p.sala] || {}).color || '#64748b', sentado: false, genero: p.genero, audifonos: p.audifonos });
     const c = PLANO[p.sala] ? centro(p.sala) : w.clone(), dir = c.sub(w).setY(0);
@@ -1114,7 +1287,7 @@ function terminarControl() {
   pj.remove(et);
   if (origen === 'fantasma') { pj.traverse(o => { if (o.isCSS2DObject) o.visible = true; }); f.controlado = false; f.pausa = 1.5; f.sala = salaEn(pj.position.x, pj.position.z) || f.sala || 'recepcion'; }
   else scene.remove(pj);
-  if (sentadoPj) { sentadoPj.visible = true; sentadoPj.traverse(o => { if (o.isCSS2DObject) o.visible = true; }); } // vuelve a su silla
+  if (sentadoPj) { sentadoPj.userData.levantado = false; sentadoPj.visible = true; sentadoPj.traverse(o => { if (o.isCSS2DObject) o.visible = true; }); aplicarEstados(); } // vuelve a su silla (o a su cartel, si está «Fuera»)
   control = null; teclas.clear(); marcaDestino.material.opacity = 0;
   if (D.modo === 'real') window.llamarApi(window.SIGSO_CONFIG.NODE_API_URL, 'presenciaOficina', { fin: true }).catch(() => {}); // los demás dejan de verte
   document.body.classList.remove('controlando');
@@ -1268,6 +1441,7 @@ function crearRemoto(o) {
     f.controlado = true; pj = f.pj; base = 'fantasma'; ocultarRotulos(pj, true);
   } else if (p && personas3D[p.id]) {
     sentadoPj = personas3D[p.id]; sentadoPj.visible = false; ocultarRotulos(sentadoPj, true);
+    sentadoPj.userData.levantado = true; if (carteles[p.id]) carteles[p.id].visible = false;
     pj = K.personaje({ semilla: K.hash(p.id + p.nombre), camisa: (salaPorId[p.sala] || {}).color || '#64748b', sentado: false, genero: p.genero, audifonos: p.audifonos });
     base = 'sentado';
   } else pj = K.personaje({ semilla: K.hash(o.clave), camisa: '#0ea5e9', sentado: false });
@@ -1282,7 +1456,7 @@ function quitarRemoto(r) {
   r.pj.remove(r.et); r.pj.remove(r.og);
   if (r.base === 'fantasma') { ocultarRotulos(r.pj, false); r.f.controlado = false; r.f.pausa = 1; r.f.sala = salaEn(r.pj.position.x, r.pj.position.z) || r.f.sala || 'recepcion'; }
   else scene.remove(r.pj);
-  if (r.sentadoPj) { r.sentadoPj.visible = true; ocultarRotulos(r.sentadoPj, false); }
+  if (r.sentadoPj) { r.sentadoPj.userData.levantado = false; r.sentadoPj.visible = true; ocultarRotulos(r.sentadoPj, false); aplicarEstados(); }
 }
 function decirRemoto(r, texto) {
   r.gl.textContent = texto; r.gl.classList.add('visible', 'hablando'); clearTimeout(r.gl._t);
@@ -1571,6 +1745,9 @@ if (D.puede_ordenar && (D.sin_oficina || []).length) {
   b.onclick = abrirSinOficina;
 }
 if (D.puede_ordenar) { const b = document.getElementById('bFantasmas'); b.hidden = false; b.onclick = abrirFantasmas; }
+aplicarEstados();                              // estado de cada persona y si las salas están ocupadas
+setInterval(refrescarVivo, 60 * 1000);         // se actualiza cada minuto (y al cambiar algo)
+document.getElementById('bMiEstado').onclick = abrirMiEstado;
 pintarPizarras();                              // pizarras con lo pendiente real de cada área
 setInterval(refrescarPizarras, 5 * 60 * 1000); // y se actualizan solas cada 5 minutos
 mostrarFlujos();

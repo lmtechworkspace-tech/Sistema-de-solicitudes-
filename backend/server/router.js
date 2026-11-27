@@ -517,6 +517,11 @@ const ACCIONES = {
   // Pizarras (conteos de lo pendiente por área) y recorrido de inducción confirmado.
   getPizarrasOficina: (db, data, contexto) => OficinaVirtual.getPizarras(db, data, contexto),
   registrarRecorridoOficina: (db, data, contexto) => OficinaVirtual.registrarRecorrido(db, data, contexto),
+  // Estado de cada persona y reservas de la sala de reuniones y del podcast.
+  getEstadoOficina: (db, data, contexto) => OficinaVirtual.estadoOficina(db, data, contexto),
+  ponerEstadoOficina: (db, data, contexto) => OficinaVirtual.ponerEstado(db, data, contexto),
+  crearReservaOficina: (db, data, contexto) => OficinaVirtual.crearReserva(db, data, contexto),
+  cancelarReservaOficina: (db, data, contexto) => OficinaVirtual.cancelarReserva(db, data, contexto),
   getFichaPersonaSgc: (db, data, contexto) => Personas.getFicha(db, data, contexto),
   guardarPersonaSgc: (db, data, contexto) => Personas.guardarPersona(db, data, contexto),
   desvincularPersonaSgc: (db, data, contexto) => Personas.desvincular(db, data, contexto),

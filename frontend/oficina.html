@@ -102,6 +102,29 @@
   [hidden] { display:none !important; }
   /* fantasmas, control del mono, voz, búsqueda, minimapa */
   .nombre.fantasma { background:rgba(120,160,230,.75); }
+  .cartel { pointer-events:auto; cursor:pointer; font-size:11.5px; font-weight:600; background:rgba(255,255,255,.95); color:#1b1f24; border:1px dashed #94a3b8; border-radius:10px; padding:4px 9px; white-space:nowrap; box-shadow:0 2px 8px rgba(30,40,60,.12); }
+  .estado-persona { margin-top:8px; font-size:13px; background:#f6f8fa; border-radius:10px; padding:7px 10px; }
+  .estado-editor { margin-top:10px; border:1px solid var(--borde); border-radius:12px; padding:10px 12px; display:grid; gap:8px; background:#fff; font-size:13px; }
+  .estado-opciones { display:flex; flex-wrap:wrap; gap:5px; }
+  .estado-opciones button { font:inherit; font-size:12.5px; border:1px solid var(--borde); background:#fff; border-radius:999px; padding:5px 10px; cursor:pointer; }
+  .estado-opciones button.sel { background:#1b1f24; color:#fff; border-color:#1b1f24; }
+  .estado-fila { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .estado-editor select, .estado-editor input, .reservar input { font:inherit; font-size:13px; border:1px solid var(--borde); border-radius:8px; padding:6px 8px; background:#fff; }
+  .btn-guardar { font:inherit; font-size:13px; font-weight:600; border:0; border-radius:10px; padding:9px 12px; cursor:pointer; background:#1b1f24; color:#fff; justify-self:start; }
+  .btn-guardar:disabled { opacity:.6; }
+  .rot-res { font-style:normal; font-size:11px; font-weight:700; color:#15803d; background:#dcfce7; border-radius:999px; padding:1px 7px; }
+  .rot-res.ocupada { color:#b91c1c; background:#fee2e2; }
+  .sala-estado { font-size:13px; font-weight:600; color:#15803d; background:#f0fdf4; border-radius:10px; padding:7px 10px; }
+  .sala-estado.ocupada { color:#b91c1c; background:#fef2f2; }
+  .reservas { list-style:none; margin:8px 0 0; padding:0; display:grid; gap:6px; }
+  .reservas li { display:flex; gap:8px; align-items:center; justify-content:space-between; border:1px solid var(--borde); border-radius:10px; padding:7px 10px; font-size:13px; background:#fff; }
+  .reservas li small { display:block; color:var(--suave); font-size:12px; }
+  .reservas li.vacia { color:var(--suave); justify-content:flex-start; }
+  .reservas button { font:inherit; font-size:12px; border:1px solid #fecaca; color:#b91c1c; background:#fff; border-radius:8px; padding:4px 8px; cursor:pointer; flex:none; }
+  .reservar { margin-top:10px; display:grid; gap:8px; border:1px dashed var(--borde); border-radius:12px; padding:10px 12px; }
+  .res-fila { display:flex; gap:6px; align-items:center; flex-wrap:wrap; font-size:13px; }
+  .reservar details summary { font-size:13px; cursor:pointer; color:#0b5cc2; }
+  .invitados { display:grid; gap:4px; max-height:160px; overflow:auto; margin-top:6px; font-size:13px; }
   .pedir { display:flex; flex-wrap:wrap; gap:6px; margin:14px 0 4px; }
   .btn-pedir { font:inherit; font-size:13px; font-weight:600; border:0; border-radius:10px; padding:8px 12px; cursor:pointer; background:#eef4ff; color:#1e40af; }
   .btn-pedir:hover { background:#dbe7ff; }
@@ -172,6 +195,7 @@
     <button class="btn" id="bGeneral">⌂ Vista general</button>
     <button class="btn" id="bComu">⇄ Ver comunicaciones</button>
     <button class="btn" id="bMover" title="Tomar el control de tu mono (tecla M)">🎮 <span>Moverme</span></button>
+    <button class="btn" id="bMiEstado" title="Tu estado: disponible, en reunión, en terreno…" hidden><span>🟢 Disponible</span></button>
     <button class="btn" id="bVoz">🔈 <span>Voz</span></button><button class="btn mini" id="bVozAjustes" title="Elegir voz y velocidad">▾</button>
     <button class="btn" id="bMic" title="Háblale a la oficina: «llévame a Prevención»">🎤</button>
   </div>

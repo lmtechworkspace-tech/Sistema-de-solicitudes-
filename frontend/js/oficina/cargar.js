@@ -69,6 +69,7 @@ async function cargar() {
   D.yo = r.data.yo || { persona_id: '', nombre: '' };          // a quién controla «Moverme»
   D.candidatos_fantasma = r.data.candidatos_fantasma || [];
   D.pizarras = r.data.pizarras || null;            // pendientes de cada área (conteos)
+  D.vivo = r.data.vivo || { estados: {}, reservas: [] }; // estado de cada persona y reservas de salas
   if (r.data.deptos_de_sala) D.deptos_de_sala = r.data.deptos_de_sala;
   return 'Datos de SIGSO · Calidad → Personas';
 }

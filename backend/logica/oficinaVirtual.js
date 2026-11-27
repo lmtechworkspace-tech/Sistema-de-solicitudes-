@@ -172,7 +172,8 @@ function getOficina(db, data, contexto) {
     personas, puede_ordenar: ordenar, sin_oficina: ordenar ? sinOficina : [], salas: SALAS_OFICINA,
     yo: { persona_id: yoId, nombre: (miCuenta && miCuenta.nombre) || '' },
     candidatos_fantasma: candidatos,
-    pizarras: pizarras_(db), deptos_de_sala: DEPTOS_DE_SALA
+    pizarras: pizarras_(db), deptos_de_sala: DEPTOS_DE_SALA,
+    vivo: estadoOficina(db, {}, contexto) // estados de las personas y reservas de las salas
   };
 }
 function listaJson_(v) { if (Array.isArray(v)) return v; try { const p = JSON.parse(v || '[]'); return Array.isArray(p) ? p : []; } catch (err) { return []; } }
@@ -418,4 +419,111 @@ function presencia(db, data, contexto, ahora = Date.now()) {
 }
 function reiniciarPresencia_() { PRESENCIA.clear(); BUZON.clear(); YO_CACHE.clear(); SUSCRIPTORES.clear(); } // pruebas
 
-module.exports = { getOficina, getPizarras, registrarRecorrido, asignarPuesto, marcarFantasma, presencia, suscribir, reiniciarPresencia_, activarModuloEnCuentas_, salaSugerida_, SALAS_OFICINA };
+// ===========================================================================
+// 4 · Estado de cada persona (2026-11-26). Lo pone cada uno (o quien ordena la
+// oficina). Con «hasta», vuelve solo a disponible. Sin datos sensibles: no hay
+// «licencia médica», solo «Fuera (vacaciones o permiso)».
+// 5 · Reservas de la sala de reuniones y del podcast, sin topes. Quien está en
+// una reserva en curso aparece «En reunión» solo, sin tener que ponerlo.
+// ===========================================================================
+const ESTADOS_PERSONA = ['DISPONIBLE', 'REUNION', 'TERRENO', 'TELETRABAJO', 'COLACION', 'FUERA'];
+const SALAS_RESERVABLES = ['reuniones', 'podcast'];
+const DIA_MS = 86400000;
+function organizador_(db, contexto) {
+  const yo = yoCacheado_(db, contexto);
+  if (yo.persona_id) return yo;
+  const c = leerSeguro_(db, 'CUENTAS_PORTAL').find((x) => String(x.cuenta_id) === String(contexto.cuenta_id || ''));
+  return { persona_id: contexto.cuenta_id ? 'cuenta:' + contexto.cuenta_id : '', nombre: (c && c.nombre) || '' };
+}
+function horaChile_(iso) { return new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)); }
+function reservasActivas_(db) { return leerSeguro_(db, 'OFICINA_RESERVAS').filter((r) => esVerdadero_(r.activa)); }
+
+/** Estados vigentes y reservas próximas (para pintar la oficina y sus salas). */
+function estadoOficina(db, data, contexto, ahora = Date.now()) {
+  if (!contexto) return { _validationError: true, message: 'Ingresa a SIGSO para ver la oficina.' };
+  const estados = {};
+  for (const e of leerSeguro_(db, 'OFICINA_ESTADOS')) {
+    if (!esVerdadero_(e.activa) || (e.hasta && new Date(e.hasta).getTime() < ahora)) continue;
+    estados[e.persona_id] = { estado: e.estado, nota: e.nota || '', hasta: e.hasta || '' };
+  }
+  const reservas = reservasActivas_(db)
+    .filter((r) => new Date(r.fin).getTime() > ahora - 3600000 && new Date(r.inicio).getTime() < ahora + 14 * DIA_MS)
+    .sort((a, b) => String(a.inicio).localeCompare(String(b.inicio)))
+    .map((r) => ({ reserva_id: r.reserva_id, sala_id: r.sala_id, titulo: r.titulo, inicio: r.inicio, fin: r.fin,
+      organizador_id: r.organizador_id, organizador_nombre: r.organizador_nombre, asistentes: listaJson_(r.asistentes) }));
+  // En una reserva en curso = «En reunión», si no puso otra cosa.
+  for (const r of reservas) {
+    const ini = new Date(r.inicio).getTime(), fin = new Date(r.fin).getTime();
+    if (ini > ahora || fin <= ahora) continue;
+    for (const pid of [r.organizador_id].concat(r.asistentes)) {
+      if (!pid || (estados[pid] && estados[pid].estado !== 'DISPONIBLE')) continue;
+      estados[pid] = { estado: 'REUNION', nota: r.sala_id === 'podcast' ? 'Grabando en el podcast' : 'En la sala de reuniones', hasta: r.fin, auto: true };
+    }
+  }
+  return { estados, reservas };
+}
+
+function ponerEstado(db, data, contexto) {
+  if (!contexto) return { _validationError: true, message: 'Ingresa a SIGSO para ver la oficina.' };
+  const yo = organizador_(db, contexto);
+  const destino = String((data && data.persona_id) || yo.persona_id || '');
+  if (!destino) return { _validationError: true, message: 'Necesitas tu ficha en Calidad → Personas (o una cuenta) para poner tu estado.' };
+  if (destino !== yo.persona_id && !puedeOrdenar_(db, contexto)) return { _validationError: true, message: 'Solo puedes cambiar tu propio estado.' };
+  const estado = String((data && data.estado) || 'DISPONIBLE').toUpperCase();
+  if (ESTADOS_PERSONA.indexOf(estado) === -1) return { _validationError: true, campo: 'estado', message: 'Estado no válido.' };
+  let hasta = '';
+  if (data && data.hasta) {
+    const t = new Date(data.hasta).getTime();
+    if (isNaN(t) || t <= Date.now()) return { _validationError: true, campo: 'hasta', message: 'La hora de término tiene que ser futura.' };
+    if (t > Date.now() + 62 * DIA_MS) return { _validationError: true, campo: 'hasta', message: 'Como máximo, dos meses.' };
+    hasta = new Date(t).toISOString();
+  }
+  const nota = String((data && data.nota) || '').trim().slice(0, 60);
+  leerSeguro_(db, 'OFICINA_ESTADOS').filter((e) => e.persona_id === destino && esVerdadero_(e.activa))
+    .forEach((e) => actualizarFilaPorId_(db, 'OFICINA_ESTADOS', 'estado_id', e.estado_id, { activa: false }));
+  if (estado !== 'DISPONIBLE') {
+    agregarFila_(db, 'OFICINA_ESTADOS', { estado_id: crypto.randomUUID(), persona_id: destino, estado, nota, hasta,
+      actualizado_por: contexto.email || '', fecha: new Date().toISOString(), activa: true });
+  }
+  return { persona_id: destino, estado, nota, hasta };
+}
+
+function crearReserva(db, data, contexto) {
+  if (!contexto) return { _validationError: true, message: 'Ingresa a SIGSO para ver la oficina.' };
+  data = data || {};
+  const sala = String(data.sala_id || '');
+  if (SALAS_RESERVABLES.indexOf(sala) === -1) return { _validationError: true, campo: 'sala_id', message: 'Esa sala no se reserva.' };
+  const titulo = String(data.titulo || '').trim().slice(0, 80);
+  if (!titulo) return { _validationError: true, campo: 'titulo', message: 'Ponle un título a la reserva (para qué es).' };
+  const ini = new Date(data.inicio).getTime(), fin = new Date(data.fin).getTime(), ahora = Date.now();
+  if (isNaN(ini) || isNaN(fin)) return { _validationError: true, campo: 'inicio', message: 'Indica el día y las horas.' };
+  if (fin <= ini) return { _validationError: true, campo: 'fin', message: 'La hora de término tiene que ser después de la de inicio.' };
+  if (fin - ini > 10 * 3600000) return { _validationError: true, campo: 'fin', message: 'Una reserva dura como máximo 10 horas.' };
+  if (ini < ahora - 5 * 60000) return { _validationError: true, campo: 'inicio', message: 'No se puede reservar en el pasado.' };
+  if (ini > ahora + 90 * DIA_MS) return { _validationError: true, campo: 'inicio', message: 'Se reserva con hasta tres meses de anticipación.' };
+  const tope = reservasActivas_(db).find((r) => r.sala_id === sala && new Date(r.inicio).getTime() < fin && new Date(r.fin).getTime() > ini);
+  if (tope) return { _validationError: true, campo: 'inicio', message: `Choca con «${tope.titulo}» (${horaChile_(tope.inicio)} a ${horaChile_(tope.fin)}).` };
+  const yo = organizador_(db, contexto);
+  const asistentes = [...new Set(listaJson_(data.asistentes).map(String))].filter((x) => x && x !== yo.persona_id).slice(0, 30);
+  const fila = {
+    reserva_id: crypto.randomUUID(), sala_id: sala, titulo, inicio: new Date(ini).toISOString(), fin: new Date(fin).toISOString(),
+    organizador_id: yo.persona_id, organizador_nombre: yo.nombre || '', asistentes: JSON.stringify(asistentes),
+    creado_por: normalizarEmail_(contexto.email), fecha_creacion: new Date().toISOString(), activa: true
+  };
+  agregarFila_(db, 'OFICINA_RESERVAS', fila);
+  return { reserva_id: fila.reserva_id, sala_id: sala, titulo, inicio: fila.inicio, fin: fila.fin };
+}
+
+function cancelarReserva(db, data, contexto) {
+  if (!contexto) return { _validationError: true, message: 'Ingresa a SIGSO para ver la oficina.' };
+  const r = reservasActivas_(db).find((x) => x.reserva_id === String((data && data.reserva_id) || ''));
+  if (!r) return { _validationError: true, campo: 'reserva_id', message: 'Esa reserva ya no existe.' };
+  const yo = organizador_(db, contexto);
+  const suya = (yo.persona_id && r.organizador_id === yo.persona_id) || normalizarEmail_(r.creado_por) === normalizarEmail_(contexto.email);
+  if (!suya && !puedeOrdenar_(db, contexto)) return { _validationError: true, message: 'Solo quien reservó (o quien ordena la oficina) puede cancelarla.' };
+  actualizarFilaPorId_(db, 'OFICINA_RESERVAS', 'reserva_id', r.reserva_id, { activa: false });
+  return { reserva_id: r.reserva_id, cancelada: true };
+}
+
+module.exports = { estadoOficina, ponerEstado, crearReserva, cancelarReserva, ESTADOS_PERSONA, SALAS_RESERVABLES,
+  getOficina, getPizarras, registrarRecorrido, asignarPuesto, marcarFantasma, presencia, suscribir, reiniciarPresencia_, activarModuloEnCuentas_, salaSugerida_, SALAS_OFICINA };

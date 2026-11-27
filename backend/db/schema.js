@@ -473,6 +473,16 @@ const COLUMNAS = {
   // Recorrido de inducción en la oficina virtual: la persona lo confirma al
   // terminar (evidencia ISO 7.2/7.3); los ítems de SGC_INDUCCIONES los sigue
   // registrando su jefatura o el Encargado SGC.
+  // Estado de cada persona en la oficina virtual (disponible, en reunión, en
+  // terreno…), puesto por ella misma; con «hasta» vuelve solo a disponible.
+  OFICINA_ESTADOS: [
+    'estado_id', 'persona_id', 'estado', 'nota', 'hasta', 'actualizado_por', 'fecha', 'activa'
+  ],
+  // Reservas de la sala de reuniones y del estudio de podcast.
+  OFICINA_RESERVAS: [
+    'reserva_id', 'sala_id', 'titulo', 'inicio', 'fin', 'organizador_id', 'organizador_nombre',
+    'asistentes', 'creado_por', 'fecha_creacion', 'activa'
+  ],
   OFICINA_RECORRIDOS: [
     'recorrido_id', 'persona_id', 'usuario_email', 'fecha', 'salas', 'duracion_seg', 'confirmado', 'observaciones'
   ],

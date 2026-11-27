@@ -324,6 +324,62 @@ test('recorrido de inducción: lo confirma la persona, se avisa a su jefatura y 
   assert.ok(!deOtra.puede_registrar_induccion && !deOtra.inducciones, 'los ítems solo su jefatura o Calidad');
 });
 
+test('estado de cada persona: lo pone ella, vence solo y no puede tocar el de otros', () => {
+  Oficina.reiniciarPresencia_();
+  const db = db_();
+  ['OFICINA_ESTADOS', 'OFICINA_RESERVAS', 'CUENTAS_PORTAL'].forEach((h) => sembrarTabla_(db, h, COLUMNAS[h], []));
+  const carla = { email: 'con@homepymes.cl', emails: ['con@homepymes.cl'], cuenta_id: 'c-carla', rol: 'DEV' };
+  const en = (min) => new Date(Date.now() + min * 60000).toISOString();
+
+  assert.equal(Oficina.ponerEstado(db, { estado: 'TERRENO', hasta: en(60), nota: 'Visita a obra' }, carla).estado, 'TERRENO');
+  let e = Oficina.estadoOficina(db, {}, carla).estados.con;
+  assert.equal(e.estado, 'TERRENO'); assert.equal(e.nota, 'Visita a obra');
+  // vence solo
+  assert.equal(Oficina.estadoOficina(db, {}, carla, Date.now() + 61 * 60000).estados.con, undefined);
+  // volver a disponible borra el estado; no se puede poner a otra persona; ni estados raros, ni fechas pasadas
+  Oficina.ponerEstado(db, { estado: 'DISPONIBLE' }, carla);
+  assert.equal(Oficina.estadoOficina(db, {}, carla).estados.con, undefined);
+  assert.ok(Oficina.ponerEstado(db, { persona_id: 'pre', estado: 'FUERA' }, carla)._validationError);
+  assert.ok(Oficina.ponerEstado(db, { estado: 'LICENCIA' }, carla)._validationError);
+  assert.ok(Oficina.ponerEstado(db, { estado: 'FUERA', hasta: en(-5) }, carla)._validationError);
+  // quien ordena la oficina sí puede ponerle el estado a otra persona
+  assert.equal(Oficina.ponerEstado(db, { persona_id: 'pre', estado: 'FUERA' }, CTX_ADM).estado, 'FUERA');
+});
+
+test('reservas: sin topes, cancela quien reservó, y quien está en la reserva aparece «En reunión»', () => {
+  Oficina.reiniciarPresencia_();
+  const db = db_();
+  ['OFICINA_ESTADOS', 'OFICINA_RESERVAS', 'CUENTAS_PORTAL'].forEach((h) => sembrarTabla_(db, h, COLUMNAS[h], []));
+  const carla = { email: 'con@homepymes.cl', emails: ['con@homepymes.cl'], cuenta_id: 'c-carla', rol: 'DEV' };
+  const vale = { email: 'pre@homepymes.cl', emails: ['pre@homepymes.cl'], cuenta_id: 'c-vale', rol: 'DEV' };
+  const en = (min) => new Date(Date.now() + min * 60000).toISOString();
+
+  const r1 = Oficina.crearReserva(db, { sala_id: 'reuniones', titulo: 'Cierre de mes', inicio: en(-1), fin: en(60), asistentes: ['gaf'] }, carla);
+  assert.ok(r1.reserva_id);
+  // tope en la misma sala; otra sala, sin problema
+  const tope = Oficina.crearReserva(db, { sala_id: 'reuniones', titulo: 'Otra', inicio: en(30), fin: en(90) }, vale);
+  assert.match(tope.message, /Choca con «Cierre de mes»/);
+  assert.ok(Oficina.crearReserva(db, { sala_id: 'podcast', titulo: 'Capítulo 6', inicio: en(30), fin: en(90) }, vale).reserva_id);
+  // validaciones
+  assert.ok(Oficina.crearReserva(db, { sala_id: 'comedor', titulo: 'x', inicio: en(5), fin: en(10) }, carla)._validationError);
+  assert.ok(Oficina.crearReserva(db, { sala_id: 'reuniones', titulo: '', inicio: en(200), fin: en(210) }, carla)._validationError);
+  assert.ok(Oficina.crearReserva(db, { sala_id: 'reuniones', titulo: 'x', inicio: en(300), fin: en(290) }, carla)._validationError);
+
+  // en curso → Carla (organizadora) y Paula (asistente) aparecen en reunión
+  const v = Oficina.estadoOficina(db, {}, vale);
+  assert.equal(v.estados.con.estado, 'REUNION'); assert.equal(v.estados.con.auto, true);
+  assert.equal(v.estados.gaf.estado, 'REUNION');
+  assert.equal(v.reservas.length, 2);
+  // un estado puesto a mano manda sobre la reserva
+  Oficina.ponerEstado(db, { estado: 'COLACION' }, carla);
+  assert.equal(Oficina.estadoOficina(db, {}, vale).estados.con.estado, 'COLACION');
+
+  // solo quien reservó cancela
+  assert.ok(Oficina.cancelarReserva(db, { reserva_id: r1.reserva_id }, vale)._validationError);
+  assert.equal(Oficina.cancelarReserva(db, { reserva_id: r1.reserva_id }, carla).cancelada, true);
+  assert.equal(Oficina.estadoOficina(db, {}, vale).reservas.length, 1);
+});
+
 test('las acciones están en el router y piden sesión', async () => {
   assert.equal(typeof ACCIONES.getOficinaVirtual, 'function');
   assert.equal(typeof ACCIONES.asignarPuestoOficina, 'function');
