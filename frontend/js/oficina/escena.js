@@ -1868,6 +1868,16 @@ mostrarFlujos();
 // aparte, tres veces por cuadro (escena, sombra y sombra ambiental). Lo que nunca se
 // mueve ni cambia se junta en un dibujo por material: misma vista, muchísimo menos trabajo.
 // Queda aparte lo que se anima, se hace translúcido o se puede tocar con el mouse.
+// Dos materiales que se ven igual (mismo color, brillo, textura…) cuentan como uno: los
+// modelos crean un material nuevo por pieza, y así se pueden juntar muchas más.
+const CAMPOS_MAT = ['type', 'roughness', 'metalness', 'emissiveIntensity', 'transparent', 'opacity', 'side', 'flatShading', 'depthWrite', 'toneMapped', 'envMapIntensity'];
+const firmasMat = new WeakMap();
+function firma(m) {
+  if (firmasMat.has(m)) return firmasMat.get(m);
+  const f = CAMPOS_MAT.map(k => m[k]).join('|') + '|' + (m.color ? m.color.getHexString() : '') + '|' + (m.emissive ? m.emissive.getHexString() : '')
+    + '|' + [m.map, m.normalMap, m.roughnessMap, m.alphaMap, m.emissiveMap].map(t => t ? t.uuid : '').join(',');
+  firmasMat.set(m, f); return f;
+}
 function fusionarEstaticos() {
   const vivos = new Set([
     ...Object.values(personas3D), ...fantasmas.map(f => f.pj), ...mensajeros.map(m => m.pj), arcos,
@@ -1881,7 +1891,7 @@ function fusionarEstaticos() {
     if (!o.isMesh || o.isSkinnedMesh || o.isInstancedMesh || Array.isArray(o.material) || !o.visible || esVivo(o)) return;
     const m = o.material; if (m.transparent) return; // los vidrios se ordenan por distancia: quedan aparte
     const g = o.geometry; if (!g.attributes.position || !g.attributes.normal) return;
-    const clave = m.uuid + (o.castShadow ? 'S' : '') + (o.receiveShadow ? 'R' : '');
+    const clave = firma(m) + (o.castShadow ? 'S' : '') + (o.receiveShadow ? 'R' : '');
     if (!grupos.has(clave)) grupos.set(clave, { m, cast: o.castShadow, recv: o.receiveShadow, geos: [] });
     const c = g.clone(); c.applyMatrix4(o.matrixWorld);
     for (const k of Object.keys(c.attributes)) if (!['position', 'normal', 'uv'].includes(k)) c.deleteAttribute(k);
@@ -1919,7 +1929,7 @@ function fusionarPersonaje(pj) {
     const grupos = new Map();
     for (const h of n.children) {
       if (!h.isMesh || h.children.length || fijas.has(h) || Array.isArray(h.material) || !h.visible) continue;
-      const clave = h.material.uuid + (h.castShadow ? 'S' : '') + (h.receiveShadow ? 'R' : '');
+      const clave = firma(h.material) + (h.castShadow ? 'S' : '') + (h.receiveShadow ? 'R' : '');
       if (!grupos.has(clave)) grupos.set(clave, []);
       grupos.get(clave).push(h);
     }

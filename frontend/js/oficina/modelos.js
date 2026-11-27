@@ -7,7 +7,10 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 const cacheGeo = new Map();
 export function rbox(w, h, d, r = 0.02, seg = 2) {
   const k = `rb${w}|${h}|${d}|${r}`;
-  if (!cacheGeo.has(k)) cacheGeo.set(k, new RoundedBoxGeometry(w, h, d, seg, Math.min(r, w / 2, h / 2, d / 2)));
+  // Bordes de menos de 1 cm no se ven a la distancia de la oficina: caja simple (12 triángulos
+  // en vez de ~300); hasta 1,5 cm, un solo segmento de redondeo.
+  if (!cacheGeo.has(k)) cacheGeo.set(k, r < 0.01 ? new THREE.BoxGeometry(w, h, d)
+    : new RoundedBoxGeometry(w, h, d, r <= 0.015 ? 1 : seg, Math.min(r, w / 2, h / 2, d / 2)));
   return cacheGeo.get(k);
 }
 export function malla(geo, mat, x = 0, y = 0, z = 0, sombra = true) {
